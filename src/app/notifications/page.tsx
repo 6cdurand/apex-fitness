@@ -1,0 +1,158 @@
+'use client';
+
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore, useSocialStore } from '@/lib/store';
+import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { 
+  Bell, 
+  Trophy, 
+  Dumbbell, 
+  Users, 
+  Heart, 
+  MessageCircle,
+  Calendar,
+  CheckCheck,
+  Trash2
+} from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { Notification } from '@/types';
+
+export default function NotificationsPage() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
+  const { notifications, markNotificationRead, markAllNotificationsRead } = useSocialStore();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) return null;
+
+  const userNotifications = notifications
+    .filter(n => n.userId === user?.id)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const unreadCount = userNotifications.filter(n => !n.read).length;
+
+  const getNotificationIcon = (type: Notification['type']) => {
+    switch (type) {
+      case 'weekly_report': return <Calendar className="w-5 h-5 text-blue-400" />;
+      case 'workout_assigned': return <Dumbbell className="w-5 h-5 text-emerald-400" />;
+      case 'friend_request': return <Users className="w-5 h-5 text-purple-400" />;
+      case 'trainer_request': return <Users className="w-5 h-5 text-rose-400" />;
+      case 'achievement': return <Trophy className="w-5 h-5 text-amber-400" />;
+      case 'pb_achieved': return <Trophy className="w-5 h-5 text-amber-400" />;
+      case 'comment': return <MessageCircle className="w-5 h-5 text-blue-400" />;
+      case 'like': return <Heart className="w-5 h-5 text-red-400" />;
+      default: return <Bell className="w-5 h-5 text-gray-400" />;
+    }
+  };
+
+  const getNotificationBg = (type: Notification['type']) => {
+    switch (type) {
+      case 'weekly_report': return 'bg-blue-500/20';
+      case 'workout_assigned': return 'bg-emerald-500/20';
+      case 'friend_request': return 'bg-purple-500/20';
+      case 'trainer_request': return 'bg-rose-500/20';
+      case 'achievement': return 'bg-amber-500/20';
+      case 'pb_achieved': return 'bg-amber-500/20';
+      case 'comment': return 'bg-blue-500/20';
+      case 'like': return 'bg-red-500/20';
+      default: return 'bg-gray-500/20';
+    }
+  };
+
+  return (
+    <MainLayout>
+      <PageHeader 
+        title="Notifications" 
+        subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
+        showBack
+        action={
+          unreadCount > 0 && (
+            <Button 
+              size="sm" 
+              variant="ghost"
+              onClick={markAllNotificationsRead}
+              className="text-emerald-400"
+            >
+              <CheckCheck className="w-4 h-4 mr-2" />
+              Mark all read
+            </Button>
+          )
+        }
+      />
+
+      <ScrollArea className="flex-1">
+        <div className="px-4 py-4">
+          {userNotifications.length === 0 ? (
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="py-16 text-center">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                  <Bell className="w-10 h-10 text-gray-600" />
+                </div>
+                <h3 className="font-semibold text-gray-400 mb-2">No notifications</h3>
+                <p className="text-sm text-gray-500">
+                  You&apos;re all caught up! Check back later.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {userNotifications.map((notification) => (
+                <Card 
+                  key={notification.id}
+                  className={cn(
+                    "bg-gray-900 border-gray-800 cursor-pointer transition-colors",
+                    !notification.read && "bg-gray-900/80 border-l-2 border-l-emerald-500"
+                  )}
+                  onClick={() => {
+                    markNotificationRead(notification.id);
+                    if (notification.actionUrl) {
+                      router.push(notification.actionUrl);
+                    }
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0",
+                        getNotificationBg(notification.type)
+                      )}>
+                        {getNotificationIcon(notification.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "font-medium",
+                          notification.read ? "text-gray-300" : "text-white"
+                        )}>
+                          {notification.title}
+                        </p>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {notification.message}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                        </p>
+                      </div>
+                      {!notification.read && (
+                        <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 mt-2" />
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </MainLayout>
+  );
+}

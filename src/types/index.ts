@@ -1,0 +1,795 @@
+// User Types
+export type Gender = 'male' | 'female' | 'other';
+export type UserMode = 'user' | 'trainer';
+export type WeightUnit = 'kg' | 'lb';
+
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+  displayName: string;
+  gender: Gender;
+  dateOfBirth?: string;
+  height?: number; // in cm
+  weight?: number; // in kg
+  profilePhoto?: string;
+  bio?: string;
+  mode: UserMode;
+  isTrainer: boolean;
+  isVerifiedTrainer: boolean;
+  trainerSpecializations?: string[];
+  preferredUnit: WeightUnit;
+  createdAt: string;
+  followers: string[];
+  following: string[];
+  trainerId?: string; // If user has a trainer
+}
+
+// Exercise Types
+export type MuscleGroup = 
+  | 'chest' | 'back' | 'shoulders' | 'biceps' | 'triceps' 
+  | 'forearms' | 'abs' | 'obliques' | 'quads' | 'hamstrings' 
+  | 'glutes' | 'calves' | 'traps' | 'lats' | 'lower_back';
+
+export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching';
+export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bands' | 'other';
+
+export interface Exercise {
+  id: string;
+  name: string;
+  primaryMuscles: MuscleGroup[];
+  secondaryMuscles: MuscleGroup[];
+  category: ExerciseCategory;
+  equipment: Equipment;
+  instructions?: string;
+  videoUrl?: string;
+  isCustom?: boolean;
+  createdBy?: string;
+}
+
+// Set Types
+export type SetType = 'normal' | 'warmup' | 'dropset' | 'failure';
+
+// Drop set within a main set
+export interface DropSet {
+  id: string;
+  weight: number;
+  reps: number;
+  rpe?: number;
+}
+
+export interface WorkoutSet {
+  id: string;
+  setNumber: number;
+  type: SetType;
+  weight?: number;
+  reps?: number;
+  completed: boolean;
+  previousWeight?: number;
+  previousReps?: number;
+  restTime?: number; // seconds - override default rest for this set
+  notes?: string;
+  rpe?: number; // Rate of Perceived Exertion 1-10
+  drops?: DropSet[]; // Drop sets attached to this set
+}
+
+// Superset grouping
+export type SupersetGroupType = 'superset' | 'triset' | 'giant_set';
+
+// Workout Exercise (exercise within a workout)
+export interface WorkoutExercise {
+  id: string;
+  exerciseId: string;
+  exercise: Exercise;
+  sets: WorkoutSet[];
+  supersetWith?: string; // ID of another workout exercise (legacy)
+  notes?: string;
+  restTimerSeconds: number;
+  isWarmup?: boolean;
+  trainerNotes?: string; // PT notes for client
+  // Superset grouping (new)
+  groupId?: string; // Nullable - exercises with same groupId are grouped
+  groupType?: SupersetGroupType;
+  groupOrder?: string; // A1, A2, A3, B1, B2, etc.
+  miniRestSeconds?: number; // Optional rest between exercises in superset
+}
+
+// Workout Template
+export interface WorkoutTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  exercises: WorkoutExercise[];
+  createdBy: string;
+  isPublic: boolean;
+  category?: string;
+  estimatedDuration?: number; // minutes
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Active/Completed Workout
+export interface Workout {
+  id: string;
+  templateId?: string;
+  name: string;
+  exercises: WorkoutExercise[];
+  startTime: string;
+  endTime?: string;
+  duration?: number; // seconds
+  totalVolume: number; // kg
+  userId: string;
+  notes?: string;
+  status: 'active' | 'completed' | 'cancelled';
+  assignedBy?: string; // Trainer ID if assigned
+  scheduledDate?: string;
+}
+
+// Personal Best / Records
+export interface PersonalBest {
+  id: string;
+  exerciseId: string;
+  userId: string;
+  oneRepMax: number; // Calculated or actual
+  bestWeight: number;
+  bestReps: number;
+  bestVolume: number; // Single exercise total volume
+  achievedAt: string;
+  workoutId: string;
+}
+
+// Strength Rating Tier
+export type StrengthTier = 'beginner' | 'novice' | 'intermediate' | 'advanced' | 'elite';
+
+// Tier ranges for each lift (kg) - Male standards
+export interface TierRange {
+  beginner: [number, number];
+  novice: [number, number];
+  intermediate: [number, number];
+  advanced: [number, number];
+  elite: [number, number];
+}
+
+// A slice is a sub-component of a category (e.g., "Middle Chest" within "Chest")
+export interface StrengthSlice {
+  id: string;
+  name: string;
+  weight: number; // percentage weight (e.g., 40 for 40%)
+  contributingLift: string; // exercise ID
+  liftName: string;
+  oneRM: number;
+  bestWeight?: number; // actual weight lifted for 1RM calculation
+  bestReps?: number; // actual reps performed for 1RM calculation
+  tier: StrengthTier;
+  progressPercent: number; // 0-100 within current tier
+  points: number; // weight × progressPercent / 100
+}
+
+// A category is a major muscle group (Chest, Back, Shoulders, Legs)
+export interface StrengthCategory {
+  id: string;
+  name: string;
+  icon: string;
+  tier: StrengthTier;
+  totalPoints: number; // sum of all slice points (0-100)
+  slices: StrengthSlice[];
+}
+
+// Full strength rating with all categories
+export interface StrengthRating {
+  overall: number;
+  overallTier: StrengthTier;
+  categories: {
+    chest: StrengthCategory;
+    back: StrengthCategory;
+    shoulders: StrengthCategory;
+    legs: StrengthCategory;
+  };
+  lastUpdated: string;
+  // Legacy fields for backward compatibility
+  push: number;
+  pull: number;
+  legs: number;
+  core: number;
+  tier: StrengthTier;
+  breakdown: {
+    muscleGroup: MuscleGroup;
+    score: number;
+    tier: string;
+  }[];
+}
+
+// Medals & Achievements
+export type MedalTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special';
+export type MedalRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export interface MedalDefinition {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  tier: MedalTier;
+  category: MedalCategory;
+  rarity: MedalRarity;
+  requirement: string;
+  target?: number;
+}
+
+export interface Medal {
+  id: string;
+  userId: string;
+  definitionId: string;
+  name: string;
+  description: string;
+  icon: string;
+  tier: MedalTier;
+  category: MedalCategory;
+  rarity: MedalRarity;
+  earned: boolean;
+  earnedAt?: string;
+  progress: number;
+  target: number;
+  // For evolving medals
+  isEvolving?: boolean;
+  currentEvolutionTier?: MedalTier;
+  nextEvolutionTarget?: number;
+}
+
+// Social / Feed
+export type PostType = 'workout_complete' | 'pb_achieved' | 'medal_earned' | 'milestone' | 'general';
+
+export interface FeedPost {
+  id: string;
+  userId: string;
+  user?: User;
+  type: PostType;
+  content: string;
+  mediaUrls?: string[];
+  workoutId?: string;
+  medalId?: string;
+  likes: string[];
+  comments: Comment[];
+  createdAt: string;
+}
+
+export interface Comment {
+  id: string;
+  userId: string;
+  user?: User;
+  content: string;
+  createdAt: string;
+}
+
+// Trainer-Client Relationship
+export interface TrainerClient {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  client?: User;
+  status: 'pending' | 'active' | 'paused' | 'ended';
+  startDate: string;
+  endDate?: string;
+  sessionsTotal?: number;
+  sessionsUsed?: number;
+  goals?: string[];
+  injuryHistory?: string;
+  exercisePreferences?: string;
+  notes?: string;
+  onboardingComplete: boolean;
+}
+
+// Client Onboarding
+export interface ClientOnboarding {
+  id: string;
+  clientId: string;
+  trainerId: string;
+  goals: string[];
+  injuryHistory: string;
+  medicalConditions?: string;
+  exerciseLikes: string[];
+  exerciseDislikes: string[];
+  availability: {
+    days: string[];
+    preferredTimes: string[];
+  };
+  experienceLevel: 'beginner' | 'intermediate' | 'advanced';
+  submittedAt: string;
+}
+
+// Training Program
+export interface TrainingProgram {
+  id: string;
+  name: string;
+  description?: string;
+  trainerId: string;
+  clientId: string;
+  startDate: string;
+  endDate?: string;
+  weeks: number;
+  workouts: {
+    weekNumber: number;
+    dayOfWeek: number;
+    templateId: string;
+    completed: boolean;
+    completedAt?: string;
+  }[];
+  status: 'active' | 'completed' | 'paused';
+}
+
+// Calendar Event
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  type: 'workout' | 'session' | 'consultation' | 'assessment' | 'rest';
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  duration?: number; // in minutes
+  clientId?: string;
+  trainerId?: string;
+  workoutId?: string;
+  notes?: string;
+  status: 'scheduled' | 'completed' | 'cancelled';
+  color?: string;
+  clientConfirmed?: boolean; // Client has confirmed this session
+  clientConfirmedAt?: string;
+}
+
+// Booking Request (for trainer-client scheduling)
+export interface BookingRequest {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  type: 'pt_session' | 'consultation' | 'assessment';
+  status: 'pending' | 'confirmed' | 'declined' | 'cancelled';
+  requestedBy: 'trainer' | 'client';
+  confirmedBy?: 'trainer' | 'client' | 'auto';
+  notes?: string;
+  location?: string;
+  createdAt: string;
+  respondedAt?: string;
+  calendarEventId?: string; // Links to CalendarEvent when confirmed
+}
+
+// Weekly Report
+export interface WeeklyReport {
+  id: string;
+  userId: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  totalWorkouts: number;
+  totalVolume: number;
+  totalDuration: number; // minutes
+  volumeByMuscleGroup: Record<MuscleGroup, number>;
+  volumeChangeFromLastWeek: Record<MuscleGroup, number>; // percentage
+  newPBs: PersonalBest[];
+  consistencyScore: number; // 0-100
+  generatedAt: string;
+}
+
+// Notifications
+export type NotificationType = 
+  | 'weekly_report' | 'workout_assigned' | 'friend_request' 
+  | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  read: boolean;
+  actionUrl?: string;
+  createdAt: string;
+}
+
+// Timer State
+export interface TimerState {
+  isRunning: boolean;
+  seconds: number;
+  type: 'workout' | 'rest';
+  exerciseId?: string;
+}
+
+// ============ CLIENT SESSION & PAYMENT TRACKING ============
+
+// Individual training session record
+export interface ClientSession {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  duration: number; // minutes
+  type: 'pt_session' | 'assessment' | 'consultation' | 'group';
+  status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
+  workoutId?: string;
+  notes?: string;
+  rating?: number; // Client rating 1-5
+  feedback?: string;
+  paid: boolean;
+  paymentId?: string;
+}
+
+// Payment record
+export interface ClientPayment {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  amount: number;
+  currency: string;
+  type: 'session_pack' | 'single_session' | 'monthly' | 'other';
+  sessionsIncluded?: number;
+  description: string;
+  status: 'pending' | 'paid' | 'overdue' | 'refunded';
+  dueDate?: string;
+  paidAt?: string;
+  method?: 'cash' | 'card' | 'bank_transfer' | 'other';
+  invoiceNumber?: string;
+  createdAt: string;
+}
+
+// Session package (e.g., "10 sessions for $500")
+export interface SessionPackage {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  name: string;
+  totalSessions: number;
+  usedSessions: number;
+  remainingSessions: number;
+  priceTotal: number;
+  pricePerSession: number;
+  purchaseDate: string;
+  expiryDate?: string;
+  paymentId: string;
+  status: 'active' | 'expired' | 'completed';
+}
+
+// ============ TRAINER PROGRAMMING SYSTEM ============
+
+// Training Phases
+export type TrainingPhase = 'foundation' | 'strength' | 'performance' | 'return';
+
+// Goal types for filtering
+export type TrainingGoal = 
+  | 'fat_loss' 
+  | 'hypertrophy' 
+  | 'strength' 
+  | 'conditioning' 
+  | 'mobility' 
+  | 'general'
+  | 'powerlifting'
+  | 'athletic_performance'
+  | 'pain_reduction';
+
+// Injury/limitation flags
+export type InjuryFlag = 'shoulder' | 'knee' | 'back' | 'hip' | 'ankle' | 'wrist' | 'neck' | 'none';
+
+// Experience levels
+export type ExperienceLevel = 'new' | 'some' | 'confident' | 'advanced';
+
+// Movement patterns
+export type MovementPattern = 'squat' | 'hinge' | 'push' | 'pull' | 'carry' | 'core' | 'lunge' | 'rotation';
+
+// Template structure types
+export type TemplateStructure = 'full_body' | 'upper_lower' | 'push_pull_legs' | 'split' | 'circuit';
+
+// Block types for workout structure
+export type BlockType = 'warmup' | 'work' | 'cooldown' | 'cardio' | 'circuit';
+
+// Block color scheme
+export const BLOCK_COLORS: Record<BlockType, { bg: string; border: string; text: string }> = {
+  warmup: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-500' },
+  work: { bg: 'bg-primary/10', border: 'border-primary/30', text: 'text-primary' },
+  cooldown: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', text: 'text-blue-500' },
+  cardio: { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-500' },
+  circuit: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-500' },
+};
+
+// ============ CARDIO BLOCK TYPES ============
+
+// Cardio block modes
+export type CardioMode = 'steady' | 'intervals' | 'circuit' | 'emom' | 'amrap' | 'for_time';
+
+// Activity types for steady cardio
+export type CardioActivityType = 'walk' | 'run' | 'bike' | 'row' | 'swim' | 'yoga' | 'stretching' | 'other';
+
+// Intensity levels
+export type IntensityLevel = 'easy' | 'moderate' | 'hard';
+
+// HR Zone (1-5)
+export type HRZone = 1 | 2 | 3 | 4 | 5;
+
+// Steady state cardio config
+export interface SteadyCardioConfig {
+  activityType: CardioActivityType;
+  duration?: number; // seconds
+  distance?: number; // meters
+  distanceUnit?: 'km' | 'miles' | 'meters';
+  intensity: IntensityLevel;
+  hrZone?: HRZone;
+  notes?: string;
+}
+
+// Interval training config
+export interface IntervalConfig {
+  workSeconds: number;
+  restSeconds: number;
+  rounds: number;
+  warmupSeconds?: number;
+  cooldownSeconds?: number;
+  notes?: string;
+}
+
+// Circuit exercise (for circuit mode)
+export interface CircuitExercise {
+  id: string;
+  exerciseId?: string;
+  exerciseName: string;
+  duration?: number; // seconds (time-based)
+  reps?: number; // rep-based
+  notes?: string;
+}
+
+// Circuit training config
+export interface CircuitConfig {
+  rounds: number;
+  exercises: CircuitExercise[];
+  restBetweenStations: number; // seconds
+  restBetweenRounds: number; // seconds
+  notes?: string;
+}
+
+// EMOM config
+export interface EMOMConfig {
+  totalMinutes: number;
+  exercises: CircuitExercise[]; // rotate through these each minute
+  notes?: string;
+}
+
+// AMRAP config
+export interface AMRAPConfig {
+  totalMinutes: number;
+  exercises: CircuitExercise[];
+  notes?: string;
+}
+
+// For Time config
+export interface ForTimeConfig {
+  exercises: CircuitExercise[];
+  timeCap?: number; // seconds
+  notes?: string;
+}
+
+// Timer state for cardio blocks
+export interface CardioTimerState {
+  status: 'idle' | 'running' | 'paused' | 'completed';
+  elapsedSeconds: number;
+  currentRound?: number;
+  currentStation?: number;
+  workPhase?: boolean; // For intervals: true = work, false = rest
+}
+
+// Complete Cardio Block
+export interface CardioBlock {
+  id: string;
+  mode: CardioMode;
+  name: string;
+  
+  // Config based on mode
+  steadyConfig?: SteadyCardioConfig;
+  intervalConfig?: IntervalConfig;
+  circuitConfig?: CircuitConfig;
+  emomConfig?: EMOMConfig;
+  amrapConfig?: AMRAPConfig;
+  forTimeConfig?: ForTimeConfig;
+  
+  // Timer state
+  timerState: CardioTimerState;
+  
+  // Completion data
+  completedAt?: string;
+  actualDuration?: number; // seconds
+  completedRounds?: number;
+  notes?: string;
+}
+
+// Calendar Activity (non-gym activities like Yoga, Walk, Run)
+export interface CalendarActivity {
+  id: string;
+  userId: string;
+  trainerId?: string;
+  activityType: CardioActivityType;
+  scheduledDate: string;
+  scheduledTime?: string;
+  cardioBlock: CardioBlock;
+  status: 'scheduled' | 'completed' | 'skipped';
+  completedAt?: string;
+  notes?: string;
+}
+
+// Extended Client Onboarding for programming
+export interface ClientProgrammingProfile {
+  id: string;
+  clientId: string;
+  trainerId: string;
+  
+  // Goals
+  primaryGoal: TrainingGoal;
+  secondaryGoal?: TrainingGoal;
+  customGoalText?: string;
+  
+  // Training preferences
+  trainingPreference: '1:1' | 'group' | 'solo' | 'mixed';
+  experienceLevel: ExperienceLevel;
+  
+  // Injury/pain flags
+  injuryFlags: InjuryFlag[];
+  injuryNotes?: string;
+  
+  // Availability
+  daysPerWeek: number;
+  sessionLength: number; // minutes
+  trainAloneOutsidePT: 'yes' | 'maybe' | 'no';
+  
+  // Movement confidence (1-5)
+  movementConfidence: {
+    squat: number;
+    hinge: number;
+    push: number;
+    pull: number;
+    core: number;
+  };
+  
+  // Class readiness
+  wantsClasses: 'yes_asap' | 'later' | 'maybe' | 'no';
+  classReady: boolean;
+  
+  // Lifestyle
+  sleepQuality: 1 | 2 | 3 | 4 | 5;
+  stressLevel: 1 | 2 | 3 | 4 | 5;
+  jobActivity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+  
+  // Current phase (trainer-selected)
+  currentPhase: TrainingPhase;
+  
+  // Progression plan
+  progressionPlan?: {
+    weeks: number;
+    phases: { phase: TrainingPhase; startWeek: number; endWeek: number }[];
+  };
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Program Template (the ~20 base templates)
+export interface ProgramTemplate {
+  id: string;
+  name: string;
+  description: string;
+  
+  // Filtering tags
+  phases: TrainingPhase[];
+  goals: TrainingGoal[];
+  frequencyOptions: number[];
+  structure: TemplateStructure;
+  classSafe: boolean;
+  
+  // Workout days
+  days: TemplateDay[];
+}
+
+// A day within a template
+export interface TemplateDay {
+  id: string;
+  dayLabel: string; // "Day A", "Upper", "Push"
+  dayNumber: number;
+  blocks: TemplateBlock[];
+}
+
+// A block within a workout day
+export interface TemplateBlock {
+  id: string;
+  type: BlockType;
+  name: string; // "Activation", "Main Lifts", "Accessory", "Finisher"
+  exercises: TemplateExercise[];
+}
+
+// An exercise slot within a block
+export interface TemplateExercise {
+  id: string;
+  slot: string; // "Squat Pattern", "Horizontal Push" — movement pattern placeholder
+  defaultExerciseId: string; // The suggested default exercise
+  defaultExerciseName: string;
+  movementPattern: MovementPattern;
+  sets: number;
+  reps: string; // "8-12" or "3-5"
+  rest: string; // "90s" or "60s"
+  tempo?: string; // "3010" etc
+  notes?: string;
+  injuryFlags: InjuryFlag[]; // Which injuries this exercise may aggravate
+}
+
+// Client's assigned program (instance of a template)
+export interface ClientProgram {
+  id: string;
+  clientId: string;
+  trainerId: string;
+  templateId: string;
+  templateName: string;
+  
+  phase: TrainingPhase;
+  goal: TrainingGoal;
+  
+  // Customized weekly plan
+  weeklyPlan: ClientWorkoutDay[];
+  
+  startDate: string;
+  endDate?: string;
+  status: 'active' | 'completed' | 'paused';
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A workout day in the client's program
+export interface ClientWorkoutDay {
+  id: string;
+  dayLabel: string;
+  scheduledDay?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+  blocks: ClientWorkoutBlock[];
+}
+
+// A block in the client's workout
+export interface ClientWorkoutBlock {
+  id: string;
+  type: BlockType;
+  name: string;
+  exercises: ClientProgramExercise[];
+}
+
+// An exercise in the client's program (fully specified, not just a slot)
+export interface ClientProgramExercise {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  movementPattern: MovementPattern;
+  sets: number;
+  reps: string;
+  rest: string;
+  tempo?: string;
+  notes?: string;
+  trainerNotes?: string;
+}
+
+// Exercise with regressions/progressions
+export interface ExerciseVariation {
+  id: string;
+  exerciseId: string;
+  exerciseName: string;
+  movementPattern: MovementPattern;
+  phases: TrainingPhase[];
+  injuryFlags: InjuryFlag[]; // Which injuries this exercise may aggravate
+  classSafe: boolean;
+  
+  regressions: {
+    exerciseId: string;
+    exerciseName: string;
+    whenToUse: string;
+    coachingCue: string;
+  }[];
+  
+  progressions: {
+    exerciseId: string;
+    exerciseName: string;
+    whenToUse: string;
+    coachingCue: string;
+  }[];
+}

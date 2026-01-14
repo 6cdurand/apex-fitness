@@ -1,0 +1,902 @@
+import { Exercise, MuscleGroup, Equipment } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
+
+// Comprehensive exercise library with muscle targeting
+export const exerciseLibrary: Exercise[] = [
+  // CHEST
+  {
+    id: 'bench-press',
+    name: 'Barbell Bench Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+    instructions: 'Lie on bench, grip bar slightly wider than shoulder width, lower to chest, press up.',
+  },
+  {
+    id: 'incline-bench-press',
+    name: 'Incline Barbell Bench Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+    instructions: 'Set bench to 30-45 degrees, perform bench press motion.',
+  },
+  {
+    id: 'decline-bench-press',
+    name: 'Decline Barbell Bench Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'dumbbell-bench-press',
+    name: 'Dumbbell Bench Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'incline-dumbbell-press',
+    name: 'Incline Dumbbell Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'dumbbell-flyes',
+    name: 'Dumbbell Flyes',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'cable-flyes',
+    name: 'Cable Flyes',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'chest-dips',
+    name: 'Chest Dips',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'push-ups',
+    name: 'Push-Ups',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'machine-chest-press',
+    name: 'Machine Chest Press',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: ['triceps', 'shoulders'],
+    category: 'compound',
+    equipment: 'machine',
+  },
+  {
+    id: 'pec-deck',
+    name: 'Pec Deck Machine',
+    primaryMuscles: ['chest'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+
+  // BACK
+  {
+    id: 'deadlift',
+    name: 'Conventional Deadlift',
+    primaryMuscles: ['back', 'lower_back', 'glutes', 'hamstrings'],
+    secondaryMuscles: ['traps', 'forearms'],
+    category: 'compound',
+    equipment: 'barbell',
+    instructions: 'Stand with feet hip-width, grip bar, keep back straight, lift by extending hips and knees.',
+  },
+  {
+    id: 'sumo-deadlift',
+    name: 'Sumo Deadlift',
+    primaryMuscles: ['back', 'glutes', 'quads'],
+    secondaryMuscles: ['hamstrings', 'lower_back'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'romanian-deadlift',
+    name: 'Romanian Deadlift',
+    primaryMuscles: ['hamstrings', 'glutes', 'lower_back'],
+    secondaryMuscles: ['back'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'barbell-row',
+    name: 'Barbell Bent-Over Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps', 'traps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'pendlay-row',
+    name: 'Pendlay Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps', 'traps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'dumbbell-row',
+    name: 'Dumbbell Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'pull-ups',
+    name: 'Pull-Ups',
+    primaryMuscles: ['lats', 'back'],
+    secondaryMuscles: ['biceps', 'forearms'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'chin-ups',
+    name: 'Chin-Ups',
+    primaryMuscles: ['lats', 'biceps'],
+    secondaryMuscles: ['back', 'forearms'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'lat-pulldown',
+    name: 'Lat Pulldown',
+    primaryMuscles: ['lats'],
+    secondaryMuscles: ['biceps', 'back'],
+    category: 'compound',
+    equipment: 'cable',
+  },
+  {
+    id: 'close-grip-pulldown',
+    name: 'Close-Grip Lat Pulldown',
+    primaryMuscles: ['lats'],
+    secondaryMuscles: ['biceps', 'back'],
+    category: 'compound',
+    equipment: 'cable',
+  },
+  {
+    id: 'cable-row',
+    name: 'Seated Cable Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps'],
+    category: 'compound',
+    equipment: 'cable',
+  },
+  {
+    id: 't-bar-row',
+    name: 'T-Bar Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps', 'traps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'machine-row',
+    name: 'Machine Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps'],
+    category: 'compound',
+    equipment: 'machine',
+  },
+  {
+    id: 'face-pulls',
+    name: 'Face Pulls',
+    primaryMuscles: ['back', 'shoulders'],
+    secondaryMuscles: ['traps'],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'straight-arm-pulldown',
+    name: 'Straight-Arm Pulldown',
+    primaryMuscles: ['lats'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'hyperextensions',
+    name: 'Back Extensions (Hyperextensions)',
+    primaryMuscles: ['lower_back'],
+    secondaryMuscles: ['glutes', 'hamstrings'],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+
+  // SHOULDERS
+  {
+    id: 'overhead-press',
+    name: 'Barbell Overhead Press',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: ['triceps', 'traps'],
+    category: 'compound',
+    equipment: 'barbell',
+    instructions: 'Stand with bar at shoulder height, press overhead, fully extend arms.',
+  },
+  {
+    id: 'seated-overhead-press',
+    name: 'Seated Barbell Overhead Press',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: ['triceps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'dumbbell-shoulder-press',
+    name: 'Dumbbell Shoulder Press',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: ['triceps'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'arnold-press',
+    name: 'Arnold Press',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: ['triceps'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'lateral-raises',
+    name: 'Dumbbell Lateral Raises',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'cable-lateral-raises',
+    name: 'Cable Lateral Raises',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'front-raises',
+    name: 'Front Raises',
+    primaryMuscles: ['shoulders'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'rear-delt-flyes',
+    name: 'Rear Delt Flyes',
+    primaryMuscles: ['shoulders', 'back'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'reverse-pec-deck',
+    name: 'Reverse Pec Deck',
+    primaryMuscles: ['shoulders', 'back'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'upright-rows',
+    name: 'Barbell Upright Rows',
+    primaryMuscles: ['shoulders', 'traps'],
+    secondaryMuscles: ['biceps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'shrugs',
+    name: 'Barbell Shrugs',
+    primaryMuscles: ['traps'],
+    secondaryMuscles: ['shoulders'],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'dumbbell-shrugs',
+    name: 'Dumbbell Shrugs',
+    primaryMuscles: ['traps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+
+  // BICEPS
+  {
+    id: 'barbell-curl',
+    name: 'Barbell Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'ez-bar-curl',
+    name: 'EZ Bar Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'dumbbell-curl',
+    name: 'Dumbbell Bicep Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: ['forearms'],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'hammer-curls',
+    name: 'Hammer Curls',
+    primaryMuscles: ['biceps', 'forearms'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'incline-dumbbell-curl',
+    name: 'Incline Dumbbell Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'preacher-curl',
+    name: 'Preacher Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'concentration-curl',
+    name: 'Concentration Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'cable-curl',
+    name: 'Cable Bicep Curl',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'spider-curls',
+    name: 'Spider Curls',
+    primaryMuscles: ['biceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+
+  // TRICEPS
+  {
+    id: 'close-grip-bench',
+    name: 'Close-Grip Bench Press',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: ['chest', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'tricep-dips',
+    name: 'Tricep Dips',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: ['chest', 'shoulders'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'skull-crushers',
+    name: 'Skull Crushers (Lying Tricep Extension)',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'tricep-pushdown',
+    name: 'Tricep Pushdown',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'rope-pushdown',
+    name: 'Rope Tricep Pushdown',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'overhead-tricep-extension',
+    name: 'Overhead Tricep Extension',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'cable-overhead-extension',
+    name: 'Cable Overhead Tricep Extension',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'kickbacks',
+    name: 'Tricep Kickbacks',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'diamond-pushups',
+    name: 'Diamond Push-Ups',
+    primaryMuscles: ['triceps'],
+    secondaryMuscles: ['chest'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+
+  // LEGS - QUADS
+  {
+    id: 'back-squat',
+    name: 'Barbell Back Squat',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings', 'lower_back'],
+    category: 'compound',
+    equipment: 'barbell',
+    instructions: 'Bar on upper back, feet shoulder-width, squat down keeping chest up, drive through heels.',
+  },
+  {
+    id: 'front-squat',
+    name: 'Front Squat',
+    primaryMuscles: ['quads'],
+    secondaryMuscles: ['glutes', 'abs'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'goblet-squat',
+    name: 'Goblet Squat',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['abs'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'leg-press',
+    name: 'Leg Press',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'machine',
+  },
+  {
+    id: 'hack-squat',
+    name: 'Hack Squat',
+    primaryMuscles: ['quads'],
+    secondaryMuscles: ['glutes'],
+    category: 'compound',
+    equipment: 'machine',
+  },
+  {
+    id: 'leg-extension',
+    name: 'Leg Extension',
+    primaryMuscles: ['quads'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'lunges',
+    name: 'Barbell Lunges',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'walking-lunges',
+    name: 'Walking Lunges',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'bulgarian-split-squat',
+    name: 'Bulgarian Split Squat',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'step-ups',
+    name: 'Step-Ups',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: [],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
+    id: 'sissy-squat',
+    name: 'Sissy Squat',
+    primaryMuscles: ['quads'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+
+  // LEGS - HAMSTRINGS & GLUTES
+  {
+    id: 'leg-curl',
+    name: 'Lying Leg Curl',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'seated-leg-curl',
+    name: 'Seated Leg Curl',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'stiff-leg-deadlift',
+    name: 'Stiff-Leg Deadlift',
+    primaryMuscles: ['hamstrings', 'glutes'],
+    secondaryMuscles: ['lower_back'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'good-mornings',
+    name: 'Good Mornings',
+    primaryMuscles: ['hamstrings', 'lower_back'],
+    secondaryMuscles: ['glutes'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'hip-thrust',
+    name: 'Barbell Hip Thrust',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'glute-bridge',
+    name: 'Glute Bridge',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'cable-kickbacks',
+    name: 'Cable Glute Kickbacks',
+    primaryMuscles: ['glutes'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'glute-ham-raise',
+    name: 'Glute-Ham Raise',
+    primaryMuscles: ['hamstrings', 'glutes'],
+    secondaryMuscles: ['lower_back'],
+    category: 'compound',
+    equipment: 'machine',
+  },
+  {
+    id: 'nordic-curl',
+    name: 'Nordic Hamstring Curl',
+    primaryMuscles: ['hamstrings'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+
+  // CALVES
+  {
+    id: 'standing-calf-raise',
+    name: 'Standing Calf Raise',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'seated-calf-raise',
+    name: 'Seated Calf Raise',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'donkey-calf-raise',
+    name: 'Donkey Calf Raise',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+  {
+    id: 'leg-press-calf-raise',
+    name: 'Leg Press Calf Raise',
+    primaryMuscles: ['calves'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'machine',
+  },
+
+  // ABS & CORE
+  {
+    id: 'crunches',
+    name: 'Crunches',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'sit-ups',
+    name: 'Sit-Ups',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'leg-raises',
+    name: 'Hanging Leg Raises',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'lying-leg-raises',
+    name: 'Lying Leg Raises',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'plank',
+    name: 'Plank',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['obliques'],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'side-plank',
+    name: 'Side Plank',
+    primaryMuscles: ['obliques'],
+    secondaryMuscles: ['abs'],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'russian-twists',
+    name: 'Russian Twists',
+    primaryMuscles: ['obliques'],
+    secondaryMuscles: ['abs'],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'cable-crunches',
+    name: 'Cable Crunches',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'ab-wheel-rollout',
+    name: 'Ab Wheel Rollout',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['shoulders'],
+    category: 'compound',
+    equipment: 'other',
+  },
+  {
+    id: 'mountain-climbers',
+    name: 'Mountain Climbers',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: ['shoulders'],
+    category: 'compound',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'bicycle-crunches',
+    name: 'Bicycle Crunches',
+    primaryMuscles: ['abs', 'obliques'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'dead-bug',
+    name: 'Dead Bug',
+    primaryMuscles: ['abs'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'bodyweight',
+  },
+  {
+    id: 'pallof-press',
+    name: 'Pallof Press',
+    primaryMuscles: ['abs', 'obliques'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+  {
+    id: 'woodchoppers',
+    name: 'Cable Woodchoppers',
+    primaryMuscles: ['obliques'],
+    secondaryMuscles: ['abs'],
+    category: 'isolation',
+    equipment: 'cable',
+  },
+
+  // FOREARMS
+  {
+    id: 'wrist-curls',
+    name: 'Wrist Curls',
+    primaryMuscles: ['forearms'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'reverse-wrist-curls',
+    name: 'Reverse Wrist Curls',
+    primaryMuscles: ['forearms'],
+    secondaryMuscles: [],
+    category: 'isolation',
+    equipment: 'barbell',
+  },
+  {
+    id: 'farmers-walk',
+    name: "Farmer's Walk",
+    primaryMuscles: ['forearms', 'traps'],
+    secondaryMuscles: ['abs'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+];
+
+// Get exercise by ID
+export function getExerciseById(id: string): Exercise | undefined {
+  return exerciseLibrary.find(e => e.id === id);
+}
+
+// Search exercises
+export function searchExercises(query: string): Exercise[] {
+  const lowerQuery = query.toLowerCase();
+  return exerciseLibrary.filter(e => 
+    e.name.toLowerCase().includes(lowerQuery) ||
+    e.primaryMuscles.some(m => m.toLowerCase().includes(lowerQuery)) ||
+    e.equipment.toLowerCase().includes(lowerQuery)
+  );
+}
+
+// Get exercises by muscle group
+export function getExercisesByMuscle(muscle: MuscleGroup): Exercise[] {
+  return exerciseLibrary.filter(e => 
+    e.primaryMuscles.includes(muscle) || e.secondaryMuscles.includes(muscle)
+  );
+}
+
+// Get exercises by equipment
+export function getExercisesByEquipment(equipment: Equipment): Exercise[] {
+  return exerciseLibrary.filter(e => e.equipment === equipment);
+}
+
+// Calculate estimated 1RM
+// Uses Brzycki formula for 1-6 reps (most accurate for strength sets)
+// Uses Epley formula for 7+ reps
+export function calculate1RM(weight: number, reps: number): number {
+  if (reps === 1) return weight; // Actual 1RM, no calculation needed
+  if (reps <= 6) {
+    // Brzycki formula: weight × (36 / (37 - reps))
+    return Math.round(weight * (36 / (37 - reps)));
+  }
+  // Epley formula for higher reps: weight × (1 + reps / 30)
+  return Math.round(weight * (1 + reps / 30));
+}
+
+// Calculate weight for target reps from 1RM
+export function calculateWeightFromRM(oneRM: number, targetReps: number): number {
+  if (targetReps === 1) return oneRM;
+  return Math.round(oneRM / (1 + targetReps / 30));
+}
+
+// Get muscle group display name
+export function getMuscleDisplayName(muscle: MuscleGroup): string {
+  const names: Record<MuscleGroup, string> = {
+    chest: 'Chest',
+    back: 'Back',
+    shoulders: 'Shoulders',
+    biceps: 'Biceps',
+    triceps: 'Triceps',
+    forearms: 'Forearms',
+    abs: 'Abs',
+    obliques: 'Obliques',
+    quads: 'Quads',
+    hamstrings: 'Hamstrings',
+    glutes: 'Glutes',
+    calves: 'Calves',
+    traps: 'Traps',
+    lats: 'Lats',
+    lower_back: 'Lower Back',
+  };
+  return names[muscle] || muscle;
+}
+
+// Create custom exercise
+export function createCustomExercise(
+  name: string,
+  primaryMuscles: MuscleGroup[],
+  secondaryMuscles: MuscleGroup[],
+  equipment: Equipment,
+  createdBy: string
+): Exercise {
+  return {
+    id: uuidv4(),
+    name,
+    primaryMuscles,
+    secondaryMuscles,
+    category: 'isolation',
+    equipment,
+    isCustom: true,
+    createdBy,
+  };
+}
