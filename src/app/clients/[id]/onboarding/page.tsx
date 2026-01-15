@@ -162,16 +162,22 @@ export default function ClientOnboardingPage() {
     }
   };
   
+  // Get client name from client object or localStorage
+  const getClientName = () => {
+    if (client?.client?.displayName) return client.client.displayName;
+    // Fallback: look up in localStorage
+    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const storedUser = storedUsers.find((u: any) => u.id === clientId);
+    if (storedUser?.displayName) return storedUser.displayName;
+    // Last fallback: use clientId
+    return `Client-${clientId.slice(0, 6)}`;
+  };
+  
   // Create account and sync to Supabase
   const handleCreateAccount = async () => {
-    if (!client?.client?.displayName) {
-      toast.error('Client name not found');
-      return;
-    }
+    const clientName = getClientName();
     
     setIsCreatingAccount(true);
-    
-    const clientName = client.client.displayName;
     const clientIdSuffix = clientId.split('-')[1] || Date.now().toString().slice(-6);
     const email = accountEmail || `${clientName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
     
