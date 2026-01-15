@@ -11,7 +11,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
-import { useTrainerStore } from '@/lib/store';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useTrainerStore, useAuthStore } from '@/lib/store';
+import { registerUserToSupabase } from '@/lib/supabaseSync';
+import { toast } from 'sonner';
 import { 
   TrainingGoal, 
   InjuryFlag, 
@@ -29,7 +33,11 @@ import {
   Calendar, 
   Dumbbell,
   Heart,
-  Zap
+  Zap,
+  User,
+  Mail,
+  Lock,
+  CheckCircle2
 } from 'lucide-react';
 
 const GOALS: { value: TrainingGoal; label: string; description: string }[] = [
@@ -97,15 +105,23 @@ interface OnboardingData {
   currentPhase: TrainingPhase | '';
 }
 
-const TOTAL_STEPS = 6;
+const TOTAL_STEPS = 7;
 
 export default function ClientOnboardingPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = params.id as string;
   
+  const { user } = useAuthStore();
   const { clients, updateClient, saveClientProfile } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
+  
+  // Account creation state
+  const [accountEmail, setAccountEmail] = useState('');
+  const [accountPassword, setAccountPassword] = useState('client123');
+  const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<OnboardingData>({
@@ -135,14 +151,72 @@ export default function ClientOnboardingPage() {
 
   const canProceed = () => {
     switch (currentStep) {
-      case 1: return data.primaryGoal !== '';
-      case 2: return data.experienceLevel !== '' && data.trainingPreference !== '';
-      case 3: return data.injuryFlags.length > 0;
-      case 4: return data.ptSessionsPerWeek > 0 && data.trainAloneOutsidePT !== '';
-      case 5: return data.jobActivity !== '';
-      case 6: return data.currentPhase !== '';
+      case 1: return accountCreated; // Account must be created first
+      case 2: return data.primaryGoal !== '';
+      case 3: return data.experienceLevel !== '' && data.trainingPreference !== '';
+      case 4: return data.injuryFlags.length > 0;
+      case 5: return data.ptSessionsPerWeek > 0 && data.trainAloneOutsidePT !== '';
+      case 6: return data.jobActivity !== '';
+      case 7: return data.currentPhase !== '';
       default: return true;
     }
+  };
+  
+  // Create account and sync to Supabase
+  const handleCreateAccount = async () => {
+    if (!client?.client?.displayName) {
+      toast.error('Client name not found');
+      return;
+    }
+    
+    setIsCreatingAccount(true);
+    
+    const clientName = client.client.displayName;
+    const clientIdSuffix = clientId.split('-')[1] || Date.now().toString().slice(-6);
+    const email = accountEmail || `${clientName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
+    
+    const newClientUser = {
+      id: clientId,
+      email: email,
+      username: clientName.toLowerCase().replace(/\s+/g, '_'),
+      displayName: clientName,
+      gender: accountGender,
+      mode: 'user' as const,
+      isTrainer: false,
+      isVerifiedTrainer: false,
+      preferredUnit: 'kg' as const,
+      createdAt: new Date().toISOString(),
+      followers: [],
+      following: [],
+      trainerId: user?.id,
+    };
+    
+    // Save to localStorage
+    const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const userExists = existingUsers.find((u: any) => u.id === clientId);
+    if (!userExists) {
+      localStorage.setItem('apex-users', JSON.stringify([...existingUsers, { ...newClientUser, password: accountPassword }]));
+    }
+    
+    // Sync to Supabase
+    try {
+      const synced = await registerUserToSupabase(newClientUser as any, accountPassword);
+      if (synced) {
+        toast.success(`Account created! Login: ${email}`);
+        setAccountEmail(email);
+        setAccountCreated(true);
+      } else {
+        // Still mark as created if local storage worked
+        toast.success(`Account saved locally. Login: ${email}`);
+        setAccountEmail(email);
+        setAccountCreated(true);
+      }
+    } catch (e) {
+      console.error('Account creation error:', e);
+      toast.error('Failed to create account');
+    }
+    
+    setIsCreatingAccount(false);
   };
 
   const handleNext = () => {
@@ -245,8 +319,108 @@ export default function ClientOnboardingPage() {
         <p className="text-sm text-muted-foreground mt-2">Step {currentStep} of {TOTAL_STEPS}</p>
       </div>
 
-      {/* Step 1: Goals */}
+      {/* Step 1: Account Creation */}
       {currentStep === 1 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" /> Create Client Account
+            </CardTitle>
+            <CardDescription>
+              Set up login credentials for {client.client?.displayName || 'this client'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {!accountCreated ? (
+              <>
+                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                  <p className="text-sm text-emerald-400 font-medium mb-1">
+                    This creates a login account for your client
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    They'll be able to log in and see their workouts, track progress, and communicate with you.
+                  </p>
+                </div>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="email" className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Email (optional)
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder={`${(client.client?.displayName || 'client').toLowerCase().replace(/\s+/g, '.')}@client.apex`}
+                      value={accountEmail}
+                      onChange={(e) => setAccountEmail(e.target.value)}
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Leave blank to auto-generate
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="password" className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" /> Password
+                    </Label>
+                    <Input
+                      id="password"
+                      type="text"
+                      value={accountPassword}
+                      onChange={(e) => setAccountPassword(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label className="flex items-center gap-2">
+                      <User className="h-4 w-4" /> Gender
+                    </Label>
+                    <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other / Prefer not to say</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={handleCreateAccount} 
+                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  disabled={isCreatingAccount}
+                >
+                  {isCreatingAccount ? 'Creating Account...' : 'Create Account'}
+                </Button>
+              </>
+            ) : (
+              <div className="text-center py-6">
+                <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-emerald-400 mb-2">Account Created!</h3>
+                <div className="p-4 bg-muted rounded-lg text-left space-y-2">
+                  <p className="text-sm">
+                    <strong>Email:</strong> {accountEmail}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Password:</strong> {accountPassword}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Share these credentials with your client so they can log in.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: Goals */}
+      {currentStep === 2 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -310,8 +484,8 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 2: Experience & Preferences */}
-      {currentStep === 2 && (
+      {/* Step 3: Experience & Preferences */}
+      {currentStep === 3 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -382,8 +556,8 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 3: Injuries & Limitations */}
-      {currentStep === 3 && (
+      {/* Step 4: Injuries & Limitations */}
+      {currentStep === 4 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -454,8 +628,8 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 4: Availability */}
-      {currentStep === 4 && (
+      {/* Step 5: Availability */}
+      {currentStep === 5 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -599,8 +773,8 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 5: Lifestyle */}
-      {currentStep === 5 && (
+      {/* Step 6: Lifestyle */}
+      {currentStep === 6 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -680,8 +854,8 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 6: Phase Selection */}
-      {currentStep === 6 && (
+      {/* Step 7: Phase Selection */}
+      {currentStep === 7 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

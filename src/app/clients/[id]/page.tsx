@@ -764,6 +764,50 @@ export default function ClientDetailPage() {
               </Card>
             </div>
             
+            {/* Full Workout History */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-white flex items-center gap-2">
+                  <Dumbbell className="w-5 h-5 text-emerald-400" />
+                  All Workouts ({clientWorkoutHistory.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clientWorkoutHistory.length === 0 ? (
+                  <p className="text-gray-500 text-sm text-center py-4">No workouts recorded yet</p>
+                ) : (
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {clientWorkoutHistory
+                      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+                      .map(workout => (
+                        <div
+                          key={workout.id}
+                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
+                          onClick={() => router.push(`/workout/${workout.id}`)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                            <p className="text-xs text-gray-500">
+                              {format(new Date(workout.startTime), 'MMM d, yyyy')} • {workout.exercises.length} exercises
+                              {workout.assignedBy && <span className="text-blue-400 ml-1">• PT Session</span>}
+                              {workout.notes && ' • Has notes'}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className="text-emerald-400 font-medium text-sm">
+                              {Math.round(workout.totalVolume).toLocaleString()} kg
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
             <WorkoutStatsCharts 
               workoutHistory={clientWorkoutHistory} 
               personalBests={clientPersonalBests} 
