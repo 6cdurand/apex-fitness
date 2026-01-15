@@ -117,7 +117,8 @@ export default function ClientOnboardingPage() {
   const client = clients.find(c => c.clientId === clientId);
   
   // Account creation state
-  const [accountEmail, setAccountEmail] = useState('');
+  const [accountName, setAccountName] = useState('');
+  const [accountUsername, setAccountUsername] = useState('');
   const [accountPassword, setAccountPassword] = useState('client123');
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
   const [accountCreated, setAccountCreated] = useState(false);
@@ -162,30 +163,25 @@ export default function ClientOnboardingPage() {
     }
   };
   
-  // Get client name from client object or localStorage
-  const getClientName = () => {
-    if (client?.client?.displayName) return client.client.displayName;
-    // Fallback: look up in localStorage
-    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const storedUser = storedUsers.find((u: any) => u.id === clientId);
-    if (storedUser?.displayName) return storedUser.displayName;
-    // Last fallback: use clientId
-    return `Client-${clientId.slice(0, 6)}`;
-  };
-  
   // Create account and sync to Supabase
   const handleCreateAccount = async () => {
-    const clientName = getClientName();
+    if (!accountName.trim()) {
+      toast.error('Please enter client name');
+      return;
+    }
+    if (!accountUsername.trim()) {
+      toast.error('Please enter a username');
+      return;
+    }
     
     setIsCreatingAccount(true);
-    const clientIdSuffix = clientId.split('-')[1] || Date.now().toString().slice(-6);
-    const email = accountEmail || `${clientName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
+    const email = `${accountUsername.toLowerCase()}@client.apex`;
     
     const newClientUser = {
       id: clientId,
       email: email,
-      username: clientName.toLowerCase().replace(/\s+/g, '_'),
-      displayName: clientName,
+      username: accountUsername.toLowerCase(),
+      displayName: accountName,
       gender: accountGender,
       mode: 'user' as const,
       isTrainer: false,
@@ -208,13 +204,11 @@ export default function ClientOnboardingPage() {
     try {
       const synced = await registerUserToSupabase(newClientUser as any, accountPassword);
       if (synced) {
-        toast.success(`Account created! Login: ${email}`);
-        setAccountEmail(email);
+        toast.success(`Account created! Username: ${accountUsername}`);
         setAccountCreated(true);
       } else {
         // Still mark as created if local storage worked
-        toast.success(`Account saved locally. Login: ${email}`);
-        setAccountEmail(email);
+        toast.success(`Account saved locally. Username: ${accountUsername}`);
         setAccountCreated(true);
       }
     } catch (e) {
@@ -350,19 +344,33 @@ export default function ClientOnboardingPage() {
                 
                 <div className="space-y-4">
                   <div>
-                    <Label htmlFor="email" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Email (optional)
+                    <Label htmlFor="name" className="flex items-center gap-2">
+                      <User className="h-4 w-4" /> Client Name *
                     </Label>
                     <Input
-                      id="email"
-                      type="email"
-                      placeholder={`${(client.client?.displayName || 'client').toLowerCase().replace(/\s+/g, '.')}@client.apex`}
-                      value={accountEmail}
-                      onChange={(e) => setAccountEmail(e.target.value)}
+                      id="name"
+                      type="text"
+                      placeholder="e.g. John Smith"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="username" className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Username *
+                    </Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      placeholder="e.g. john.smith"
+                      value={accountUsername}
+                      onChange={(e) => setAccountUsername(e.target.value)}
                       className="mt-2"
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Leave blank to auto-generate
+                      This will be their login username
                     </p>
                   </div>
                   
@@ -410,7 +418,10 @@ export default function ClientOnboardingPage() {
                 <h3 className="text-lg font-semibold text-emerald-400 mb-2">Account Created!</h3>
                 <div className="p-4 bg-muted rounded-lg text-left space-y-2">
                   <p className="text-sm">
-                    <strong>Email:</strong> {accountEmail}
+                    <strong>Name:</strong> {accountName}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Username:</strong> {accountUsername}
                   </p>
                   <p className="text-sm">
                     <strong>Password:</strong> {accountPassword}
