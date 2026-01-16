@@ -86,18 +86,30 @@ export default function ClientsPage() {
     setAllUsers(stored);
   }, []);
 
+  // Generate a proper UUID for Supabase
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   const handleAddClient = async () => {
     if (!newClientName.trim()) {
       toast.error('Please enter a client name');
       return;
     }
+    if (!newClientEmail.trim()) {
+      toast.error('Please enter client email');
+      return;
+    }
 
-    // Create a new client ID with timestamp for uniqueness
-    const clientIdSuffix = Date.now().toString().slice(-6);
-    const newClientId = `client-${clientIdSuffix}`;
+    // Generate proper UUID for Supabase (not client-XXXX format)
+    const newClientId = generateUUID();
     
-    // Generate email if not provided - include user ID for easy identification
-    const clientEmail = newClientEmail || `${newClientName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
+    // Use provided email
+    const clientEmail = newClientEmail.toLowerCase().trim();
     
     // Create a user entry for the client
     const newClientUser = {

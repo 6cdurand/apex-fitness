@@ -119,6 +119,7 @@ export default function ClientOnboardingPage() {
   // Account creation state
   const [accountMode, setAccountMode] = useState<'create' | 'link'>('create');
   const [accountName, setAccountName] = useState('');
+  const [accountEmail, setAccountEmail] = useState('');
   const [accountUsername, setAccountUsername] = useState('');
   const [accountPassword, setAccountPassword] = useState('client123');
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
@@ -166,10 +167,23 @@ export default function ClientOnboardingPage() {
     }
   };
   
+  // Generate a proper UUID
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   // Create account and sync to Supabase - SAME FLOW AS clients/page.tsx handleAddClient
   const handleCreateAccount = async () => {
     if (!accountName.trim()) {
       toast.error('Please enter client name');
+      return;
+    }
+    if (!accountEmail.trim()) {
+      toast.error('Please enter client email');
       return;
     }
     if (!accountUsername.trim()) {
@@ -179,14 +193,13 @@ export default function ClientOnboardingPage() {
     
     setIsCreatingAccount(true);
     
-    // Generate email same way as clients page
-    const clientIdSuffix = clientId.split('-')[1] || Date.now().toString().slice(-6);
-    const clientEmail = `${accountName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
+    // Generate proper UUID for Supabase (not client-XXXX format)
+    const newClientId = generateUUID();
     
-    // Create user entry - EXACTLY like clients/page.tsx
+    // Create user entry with proper UUID
     const newClientUser = {
-      id: clientId,
-      email: clientEmail,
+      id: newClientId,
+      email: accountEmail.toLowerCase().trim(),
       username: accountUsername.toLowerCase().replace(/\s+/g, '_'),
       displayName: accountName,
       phone: '',
@@ -202,29 +215,29 @@ export default function ClientOnboardingPage() {
       password: accountPassword,
     };
     
-    // Add to localStorage - SAME as clients page
+    // Add to localStorage
     const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const filteredUsers = existingUsers.filter((u: any) => u.id !== clientId);
+    const filteredUsers = existingUsers.filter((u: any) => u.id !== newClientId);
     localStorage.setItem('apex-users', JSON.stringify([...filteredUsers, newClientUser]));
     
-    // Sync to Supabase - SAME as clients page
+    // Sync to Supabase
     try {
-      console.log('[Onboarding] Syncing new client to Supabase:', clientEmail);
+      console.log('[Onboarding] Syncing new client to Supabase:', newClientUser.email);
       const synced = await registerUserToSupabase(newClientUser as any, accountPassword);
       if (synced) {
-        console.log('[Onboarding] ✅ Client synced to Supabase:', clientEmail);
-        toast.success(`Account created! Login: ${clientEmail} / ${accountPassword}`);
+        console.log('[Onboarding] ✅ Client synced to Supabase:', newClientUser.email);
+        toast.success(`Account created! Login: ${newClientUser.email} / ${accountPassword}`);
       } else {
         console.log('[Onboarding] ⚠️ Client saved locally only (Supabase sync failed)');
-        toast.success(`Account saved locally. Login: ${clientEmail} / ${accountPassword}`);
+        toast.success(`Account saved locally. Login: ${newClientUser.email} / ${accountPassword}`);
       }
     } catch (e) {
       console.error('[Onboarding] Error syncing to Supabase:', e);
-      toast.success(`Account saved locally. Login: ${clientEmail} / ${accountPassword}`);
+      toast.success(`Account saved locally. Login: ${newClientUser.email} / ${accountPassword}`);
     }
     
-    // Update the client relationship with the new user data
-    updateClient(clientId, { client: newClientUser as any });
+    // Update the client relationship with the new user data and new ID
+    updateClient(clientId, { clientId: newClientId, client: newClientUser as any });
     
     setAccountCreated(true);
     setIsCreatingAccount(false);
@@ -424,6 +437,23 @@ export default function ClientOnboardingPage() {
                       </div>
                       
                       <div>
+                        <Label htmlFor="email" className="flex items-center gap-2">
+                          <Mail className="h-4 w-4" /> Email *
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="e.g. john@example.com"
+                          value={accountEmail}
+                          onChange={(e) => setAccountEmail(e.target.value)}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This will be their login email
+                        </p>
+                      </div>
+                      
+                      <div>
                         <Label htmlFor="username" className="flex items-center gap-2">
                           <User className="h-4 w-4" /> Username *
                         </Label>
@@ -436,7 +466,7 @@ export default function ClientOnboardingPage() {
                           className="mt-2"
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          This will be their login username
+                          Display name in the app
                         </p>
                       </div>
                       
