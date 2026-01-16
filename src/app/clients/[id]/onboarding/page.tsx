@@ -348,14 +348,6 @@ export default function ClientOnboardingPage() {
     }
   };
 
-  if (!client) {
-    return (
-      <div className="container mx-auto p-6">
-        <p>Client not found</p>
-      </div>
-    );
-  }
-
   const handleSkipOnboarding = () => {
     updateClient(clientId, { onboardingComplete: true });
     router.push(`/clients/${clientId}`);
@@ -373,7 +365,7 @@ export default function ClientOnboardingPage() {
           </Button>
         </div>
         <h1 className="text-2xl font-bold">Client Onboarding</h1>
-        <p className="text-muted-foreground">{client.client?.displayName || 'Client'}</p>
+        <p className="text-muted-foreground">{client?.client?.displayName || 'New Client'}</p>
         <Progress value={progress} className="mt-4" />
         <p className="text-sm text-muted-foreground mt-2">Step {currentStep} of {TOTAL_STEPS}</p>
       </div>
@@ -604,7 +596,7 @@ export default function ClientOnboardingPage() {
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" /> Goals
             </CardTitle>
-            <CardDescription>What does {(client.client?.displayName || 'this client').split(' ')[0]} want to achieve?</CardDescription>
+            <CardDescription>What does {(client?.client?.displayName || 'this client').split(' ')[0]} want to achieve?</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
