@@ -271,6 +271,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           totalVolume: 0,
           userId: targetUserId,
           status: 'active',
+          // Mark as PT session if training a client (assignedBy = trainer's ID)
+          assignedBy: clientId ? loggedInUserId : undefined,
         };
         set({ 
           activeWorkout: workout,
@@ -318,6 +320,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           totalVolume: 0,
           userId: targetUserId,
           status: 'active',
+          // Mark as PT session if training a client
+          assignedBy: clientId ? loggedInUserId : undefined,
         };
         set({ 
           activeWorkout: workout,
