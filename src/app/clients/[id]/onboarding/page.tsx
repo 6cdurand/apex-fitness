@@ -125,6 +125,7 @@ export default function ClientOnboardingPage() {
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
   const [accountCreated, setAccountCreated] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [createdClientId, setCreatedClientId] = useState<string | null>(null); // Track the new UUID
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExistingUser, setSelectedExistingUser] = useState<any>(null);
   
@@ -236,9 +237,16 @@ export default function ClientOnboardingPage() {
       toast.success(`Account saved locally. Login: ${newClientUser.email} / ${accountPassword}`);
     }
     
-    // Update the client relationship with the new user data and new ID
-    updateClient(clientId, { clientId: newClientId, client: newClientUser as any });
+    // Add the new client to trainer's client list with proper UUID
+    const { addClient } = useTrainerStore.getState();
+    addClient(newClientId, {
+      goals: [],
+      onboardingComplete: false,
+      status: 'active',
+    });
     
+    // Track the new client ID for use in onboarding completion
+    setCreatedClientId(newClientId);
     setAccountCreated(true);
     setIsCreatingAccount(false);
   };
@@ -293,12 +301,19 @@ export default function ClientOnboardingPage() {
   };
 
   const handleComplete = () => {
-    if (!client) return;
+    // Use the created client ID (UUID) or fall back to URL param
+    const actualClientId = createdClientId || clientId;
+    const trainerId = user?.id || '';
+    
+    if (!accountCreated) {
+      toast.error('Please create an account first');
+      return;
+    }
     
     const profile: ClientProgrammingProfile = {
-      id: `profile-${clientId}`,
-      clientId,
-      trainerId: client.trainerId,
+      id: `profile-${actualClientId}`,
+      clientId: actualClientId,
+      trainerId,
       primaryGoal: data.primaryGoal as TrainingGoal,
       secondaryGoal: data.secondaryGoal as TrainingGoal || undefined,
       customGoalText: data.customGoalText || undefined,
@@ -323,16 +338,18 @@ export default function ClientOnboardingPage() {
     // Save full profile to store
     saveClientProfile(profile);
 
-    // Update client with onboarding data
-    updateClient(clientId, {
+    // Update client with onboarding data using the actual UUID
+    updateClient(actualClientId, {
       goals: data.primaryGoal ? [data.primaryGoal, data.secondaryGoal].filter(Boolean) as string[] : [],
       injuryHistory: data.injuryFlags.filter(i => i !== 'none').join(', ') + (data.injuryNotes ? ` - ${data.injuryNotes}` : ''),
       notes: data.customGoalText,
       onboardingComplete: true,
     });
 
-    // Navigate to template selection
-    router.push(`/clients/${clientId}/program/select`);
+    toast.success('Onboarding complete!');
+    
+    // Navigate to template selection using actual UUID
+    router.push(`/clients/${actualClientId}/program/select`);
   };
 
   const toggleInjury = (injury: InjuryFlag) => {
