@@ -34,12 +34,15 @@ import {
   Target,
   Trophy,
   Award,
-  X
+  X,
+  Link2,
+  ArrowLeft,
+  Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { evolvingMedals } from '@/lib/medals';
-import { registerUserToSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -55,11 +58,18 @@ export default function ClientsPage() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
   // New client form
+  const [clientMode, setClientMode] = useState<'create' | 'link' | null>(null);
   const [newClientName, setNewClientName] = useState('');
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientGender, setNewClientGender] = useState<'male' | 'female' | 'other'>('other');
   const [newClientPassword, setNewClientPassword] = useState('client123');
+  
+  // Link existing account state
+  const [supabaseUsers, setSupabaseUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [linkSearchQuery, setLinkSearchQuery] = useState('');
+  const [selectedLinkUser, setSelectedLinkUser] = useState<any>(null);
 
   // Assign workout form
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
@@ -86,6 +96,28 @@ export default function ClientsPage() {
     setAllUsers(stored);
   }, []);
 
+  // Fetch Supabase users when link mode is selected
+  useEffect(() => {
+    if (clientMode === 'link' && supabaseUsers.length === 0) {
+      setIsLoadingUsers(true);
+      fetchAllUsersFromSupabase()
+        .then(users => {
+          setSupabaseUsers(users);
+          console.log('[Clients] Loaded', users.length, 'users from Supabase for linking');
+        })
+        .finally(() => setIsLoadingUsers(false));
+    }
+  }, [clientMode, supabaseUsers.length]);
+
+  // Filter Supabase users by search
+  const filteredLinkUsers = linkSearchQuery.trim()
+    ? supabaseUsers.filter((u: any) => 
+        u.displayName?.toLowerCase().includes(linkSearchQuery.toLowerCase()) || 
+        u.username?.toLowerCase().includes(linkSearchQuery.toLowerCase()) ||
+        u.email?.toLowerCase().includes(linkSearchQuery.toLowerCase())
+      )
+    : supabaseUsers;
+
   // Generate a proper UUID for Supabase
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -95,13 +127,60 @@ export default function ClientsPage() {
     });
   };
 
+  // Link existing Supabase account as client
+  const handleLinkExistingAccount = () => {
+    if (!selectedLinkUser) {
+      toast.error('Please select a user to link');
+      return;
+    }
+    
+    // Add to trainer's client list
+    addClient(selectedLinkUser.id, {
+      goals: [],
+      onboardingComplete: false,
+      status: 'active',
+    });
+    
+    // Save to localStorage for local login
+    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    if (!existingLocalUsers.find((u: any) => u.id === selectedLinkUser.id)) {
+      localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers, selectedLinkUser]));
+      setAllUsers([...existingLocalUsers, selectedLinkUser]);
+    }
+    
+    toast.success(`Linked ${selectedLinkUser.displayName || selectedLinkUser.email} as your client`);
+    
+    // Reset and close
+    setShowAddClient(false);
+    setClientMode(null);
+    setSelectedLinkUser(null);
+    setLinkSearchQuery('');
+    
+    return selectedLinkUser.id;
+  };
+
+  const handleLinkAndOnboard = () => {
+    const clientId = handleLinkExistingAccount();
+    if (clientId) {
+      router.push(`/clients/${clientId}/onboarding`);
+    }
+  };
+
+  const handleLinkSkipOnboarding = () => {
+    const clientId = handleLinkExistingAccount();
+    if (clientId) {
+      updateClient(clientId, { onboardingComplete: true });
+      router.push(`/clients/${clientId}`);
+    }
+  };
+
   const handleAddClient = async () => {
     if (!newClientName.trim()) {
       toast.error('Please enter a client name');
       return;
     }
     if (!newClientEmail.trim()) {
-      toast.error('Please enter client email');
+      toast.error('Please enter client email for login');
       return;
     }
 
@@ -236,84 +315,209 @@ export default function ClientsPage() {
             </DialogTrigger>
             <DialogContent className="bg-gray-900 border-gray-800">
               <DialogHeader>
-                <DialogTitle className="text-white">Add New Client</DialogTitle>
+                <DialogTitle className="text-white">Add Client</DialogTitle>
                 <DialogDescription>
-                  Enter your client's details to add them
+                  {clientMode === null ? 'Does this client already have an account?' : 
+                   clientMode === 'create' ? 'Create a new account for your client' :
+                   'Link an existing account from Supabase'}
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Client Name *</Label>
-                  <Input
-                    type="text"
-                    placeholder="John Smith"
-                    value={newClientName}
-                    onChange={(e) => setNewClientName(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Email (optional)</Label>
-                  <Input
-                    type="email"
-                    placeholder="client@example.com"
-                    value={newClientEmail}
-                    onChange={(e) => setNewClientEmail(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Phone (optional)</Label>
-                  <Input
-                    type="tel"
-                    placeholder="021 123 4567"
-                    value={newClientPhone}
-                    onChange={(e) => setNewClientPhone(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Gender *</Label>
-                  <Select value={newClientGender} onValueChange={(v) => setNewClientGender(v as 'male' | 'female' | 'other')}>
-                    <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
-                      <SelectValue placeholder="Select gender" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="other">Other / Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Login Password</Label>
-                  <Input
-                    type="text"
-                    placeholder="client123"
-                    value={newClientPassword}
-                    onChange={(e) => setNewClientPassword(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white"
-                  />
-                  <p className="text-xs text-gray-500">Password for client to log into their account</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={handleAddClientAndOnboard}
-                    className="flex-1 bg-rose-500 hover:bg-rose-600"
-                    disabled={!newClientName.trim()}
+              
+              {/* Step 1: Choose Create or Link */}
+              {clientMode === null && (
+                <div className="grid grid-cols-2 gap-4 py-4">
+                  <Card 
+                    className="cursor-pointer hover:border-emerald-500 transition-colors bg-gray-800 border-gray-700"
+                    onClick={() => setClientMode('create')}
                   >
-                    Add & Onboard
-                  </Button>
-                  <Button 
-                    onClick={handleAddClientSkipOnboarding}
-                    variant="outline"
-                    className="flex-1"
-                    disabled={!newClientName.trim()}
+                    <CardContent className="p-4 text-center space-y-2">
+                      <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
+                        <UserPlus className="h-6 w-6 text-emerald-400" />
+                      </div>
+                      <h3 className="font-semibold text-white">Create New</h3>
+                      <p className="text-xs text-gray-400">New client, no account yet</p>
+                    </CardContent>
+                  </Card>
+                  <Card 
+                    className="cursor-pointer hover:border-blue-500 transition-colors bg-gray-800 border-gray-700"
+                    onClick={() => setClientMode('link')}
                   >
-                    Skip Onboarding
-                  </Button>
+                    <CardContent className="p-4 text-center space-y-2">
+                      <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto">
+                        <Link2 className="h-6 w-6 text-blue-400" />
+                      </div>
+                      <h3 className="font-semibold text-white">Link Existing</h3>
+                      <p className="text-xs text-gray-400">Has account from another device</p>
+                    </CardContent>
+                  </Card>
                 </div>
-              </div>
+              )}
+              
+              {/* Create New Account Form */}
+              {clientMode === 'create' && (
+                <div className="space-y-4">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setClientMode(null)}
+                    className="text-gray-400"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                  </Button>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Client Name *</Label>
+                    <Input
+                      type="text"
+                      placeholder="John Smith"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Email * (for login)</Label>
+                    <Input
+                      type="email"
+                      placeholder="client@example.com"
+                      value={newClientEmail}
+                      onChange={(e) => setNewClientEmail(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Phone (optional)</Label>
+                    <Input
+                      type="tel"
+                      placeholder="021 123 4567"
+                      value={newClientPhone}
+                      onChange={(e) => setNewClientPhone(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Gender *</Label>
+                    <Select value={newClientGender} onValueChange={(v) => setNewClientGender(v as 'male' | 'female' | 'other')}>
+                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-800 border-gray-700">
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other / Prefer not to say</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Login Password</Label>
+                    <Input
+                      type="text"
+                      placeholder="client123"
+                      value={newClientPassword}
+                      onChange={(e) => setNewClientPassword(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                    <p className="text-xs text-gray-500">Password for client to log into their account</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleAddClientAndOnboard}
+                      className="flex-1 bg-rose-500 hover:bg-rose-600"
+                      disabled={!newClientName.trim() || !newClientEmail.trim()}
+                    >
+                      Add & Onboard
+                    </Button>
+                    <Button 
+                      onClick={handleAddClientSkipOnboarding}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={!newClientName.trim() || !newClientEmail.trim()}
+                    >
+                      Skip Onboarding
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Link Existing Account */}
+              {clientMode === 'link' && (
+                <div className="space-y-4">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setClientMode(null);
+                      setSelectedLinkUser(null);
+                      setLinkSearchQuery('');
+                    }}
+                    className="text-gray-400"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" /> Back
+                  </Button>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Search Supabase accounts</Label>
+                    <Input
+                      type="text"
+                      placeholder="Search by name or email..."
+                      value={linkSearchQuery}
+                      onChange={(e) => {
+                        setLinkSearchQuery(e.target.value);
+                        setSelectedLinkUser(null);
+                      }}
+                      className="bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  
+                  {isLoadingUsers ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                      <span className="ml-2 text-gray-400">Loading accounts...</span>
+                    </div>
+                  ) : filteredLinkUsers.length === 0 ? (
+                    <p className="text-center text-gray-500 py-4">
+                      {supabaseUsers.length === 0 ? 'No accounts found in Supabase' : 'No matching accounts'}
+                    </p>
+                  ) : (
+                    <ScrollArea className="h-48">
+                      <div className="space-y-2">
+                        {filteredLinkUsers.map((u: any) => (
+                          <div
+                            key={u.id}
+                            onClick={() => setSelectedLinkUser(u)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                              selectedLinkUser?.id === u.id
+                                ? 'border-blue-500 bg-blue-500/10'
+                                : 'border-gray-700 hover:border-gray-600 bg-gray-800'
+                            }`}
+                          >
+                            <p className="font-medium text-white">{u.displayName || u.username}</p>
+                            <p className="text-sm text-gray-400">{u.email}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  )}
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={handleLinkAndOnboard}
+                      className="flex-1 bg-blue-500 hover:bg-blue-600"
+                      disabled={!selectedLinkUser}
+                    >
+                      Link & Onboard
+                    </Button>
+                    <Button 
+                      onClick={handleLinkSkipOnboarding}
+                      variant="outline"
+                      className="flex-1"
+                      disabled={!selectedLinkUser}
+                    >
+                      Skip Onboarding
+                    </Button>
+                  </div>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
         }
