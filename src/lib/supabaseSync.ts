@@ -698,6 +698,38 @@ export async function fetchAllUserDataFromSupabase(userId: string): Promise<{
   }
 }
 
+// Delete a single user from Supabase
+export async function deleteUserFromSupabase(userId: string): Promise<boolean> {
+  console.log('[Supabase Delete] === Deleting User ===', userId);
+  
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase Delete] ❌ Supabase not configured');
+    return false;
+  }
+  
+  try {
+    // Delete related data first (foreign key constraints)
+    await supabase.from('workouts').delete().eq('user_id', userId);
+    await supabase.from('personal_bests').delete().eq('user_id', userId);
+    await supabase.from('medals').delete().eq('user_id', userId);
+    await supabase.from('strength_ratings').delete().eq('user_id', userId);
+    
+    // Delete the user
+    const { error } = await supabase.from('users').delete().eq('id', userId);
+    
+    if (error) {
+      console.error('[Supabase Delete] ❌ Error:', error.message);
+      return false;
+    }
+    
+    console.log('[Supabase Delete] ✅ User deleted from Supabase:', userId);
+    return true;
+  } catch (e) {
+    console.error('[Supabase Delete] ❌ Exception:', e);
+    return false;
+  }
+}
+
 // Delete ALL users from Supabase (for fresh start)
 export async function deleteAllUsersFromSupabase(): Promise<boolean> {
   console.log('[Supabase Cleanup] === Deleting All Users ===');

@@ -166,7 +166,7 @@ export default function ClientOnboardingPage() {
     }
   };
   
-  // Create account and sync to Supabase
+  // Create account and sync to Supabase - SAME FLOW AS clients/page.tsx handleAddClient
   const handleCreateAccount = async () => {
     if (!accountName.trim()) {
       toast.error('Please enter client name');
@@ -178,13 +178,18 @@ export default function ClientOnboardingPage() {
     }
     
     setIsCreatingAccount(true);
-    const email = `${accountUsername.toLowerCase()}@client.apex`;
     
+    // Generate email same way as clients page
+    const clientIdSuffix = clientId.split('-')[1] || Date.now().toString().slice(-6);
+    const clientEmail = `${accountName.toLowerCase().replace(/\s+/g, '.')}.${clientIdSuffix}@client.apex`;
+    
+    // Create user entry - EXACTLY like clients/page.tsx
     const newClientUser = {
       id: clientId,
-      email: email,
-      username: accountUsername.toLowerCase(),
+      email: clientEmail,
+      username: accountUsername.toLowerCase().replace(/\s+/g, '_'),
       displayName: accountName,
+      phone: '',
       gender: accountGender,
       mode: 'user' as const,
       isTrainer: false,
@@ -194,31 +199,34 @@ export default function ClientOnboardingPage() {
       followers: [],
       following: [],
       trainerId: user?.id,
+      password: accountPassword,
     };
     
-    // Save to localStorage
+    // Add to localStorage - SAME as clients page
     const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const userExists = existingUsers.find((u: any) => u.id === clientId);
-    if (!userExists) {
-      localStorage.setItem('apex-users', JSON.stringify([...existingUsers, { ...newClientUser, password: accountPassword }]));
-    }
+    const filteredUsers = existingUsers.filter((u: any) => u.id !== clientId);
+    localStorage.setItem('apex-users', JSON.stringify([...filteredUsers, newClientUser]));
     
-    // Sync to Supabase
+    // Sync to Supabase - SAME as clients page
     try {
+      console.log('[Onboarding] Syncing new client to Supabase:', clientEmail);
       const synced = await registerUserToSupabase(newClientUser as any, accountPassword);
       if (synced) {
-        toast.success(`Account created! Username: ${accountUsername}`);
-        setAccountCreated(true);
+        console.log('[Onboarding] ✅ Client synced to Supabase:', clientEmail);
+        toast.success(`Account created! Login: ${clientEmail} / ${accountPassword}`);
       } else {
-        // Still mark as created if local storage worked
-        toast.success(`Account saved locally. Username: ${accountUsername}`);
-        setAccountCreated(true);
+        console.log('[Onboarding] ⚠️ Client saved locally only (Supabase sync failed)');
+        toast.success(`Account saved locally. Login: ${clientEmail} / ${accountPassword}`);
       }
     } catch (e) {
-      console.error('Account creation error:', e);
-      toast.error('Failed to create account');
+      console.error('[Onboarding] Error syncing to Supabase:', e);
+      toast.success(`Account saved locally. Login: ${clientEmail} / ${accountPassword}`);
     }
     
+    // Update the client relationship with the new user data
+    updateClient(clientId, { client: newClientUser as any });
+    
+    setAccountCreated(true);
     setIsCreatingAccount(false);
   };
   

@@ -40,7 +40,7 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
-import { registerUserToSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, deleteUserFromSupabase } from '@/lib/supabaseSync';
 
 export default function ClientDetailPage() {
   const router = useRouter();
@@ -173,8 +173,26 @@ export default function ClientDetailPage() {
     toast.success('Payment marked as paid');
   };
 
-  const handleDeleteClient = () => {
+  const handleDeleteClient = async () => {
     if (confirm(`Are you sure you want to delete ${clientUser?.displayName || 'this client'}? This will remove all their sessions, payments, and data.`)) {
+      // Delete from Supabase first
+      try {
+        const deleted = await deleteUserFromSupabase(clientId);
+        if (deleted) {
+          console.log('[Delete Client] ✅ Deleted from Supabase:', clientId);
+        } else {
+          console.log('[Delete Client] ⚠️ Supabase delete failed or not configured');
+        }
+      } catch (e) {
+        console.error('[Delete Client] Error deleting from Supabase:', e);
+      }
+      
+      // Remove from localStorage
+      const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      const filteredUsers = existingUsers.filter((u: any) => u.id !== clientId);
+      localStorage.setItem('apex-users', JSON.stringify(filteredUsers));
+      
+      // Remove from trainer store
       removeClient(clientId);
       toast.success('Client deleted');
       router.push('/clients');
