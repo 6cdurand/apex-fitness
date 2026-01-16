@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -117,12 +117,15 @@ export default function ClientOnboardingPage() {
   const client = clients.find(c => c.clientId === clientId);
   
   // Account creation state
+  const [accountMode, setAccountMode] = useState<'create' | 'link'>('create');
   const [accountName, setAccountName] = useState('');
   const [accountUsername, setAccountUsername] = useState('');
   const [accountPassword, setAccountPassword] = useState('client123');
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
   const [accountCreated, setAccountCreated] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedExistingUser, setSelectedExistingUser] = useState<any>(null);
   
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<OnboardingData>({
@@ -217,6 +220,41 @@ export default function ClientOnboardingPage() {
     }
     
     setIsCreatingAccount(false);
+  };
+  
+  // Get existing users for search
+  const existingUsers = useMemo(() => {
+    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    return stored.filter((u: any) => !u.isTrainer && u.id !== clientId);
+  }, [clientId]);
+  
+  // Filter users by search query
+  const filteredUsers = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return existingUsers.filter((u: any) => 
+      u.displayName?.toLowerCase().includes(query) || 
+      u.username?.toLowerCase().includes(query)
+    ).slice(0, 5);
+  }, [searchQuery, existingUsers]);
+  
+  // Link existing user to this client slot
+  const handleLinkExisting = () => {
+    if (!selectedExistingUser) {
+      toast.error('Please select a user to link');
+      return;
+    }
+    
+    // Update the client relationship to point to existing user
+    updateClient(clientId, { 
+      clientId: selectedExistingUser.id,
+      client: selectedExistingUser 
+    });
+    
+    toast.success(`Linked to ${selectedExistingUser.displayName}`);
+    setAccountCreated(true);
+    setAccountName(selectedExistingUser.displayName);
+    setAccountUsername(selectedExistingUser.username);
   };
 
   const handleNext = () => {
@@ -324,93 +362,178 @@ export default function ClientOnboardingPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" /> Create Client Account
+              <User className="h-5 w-5" /> Client Account
             </CardTitle>
             <CardDescription>
-              Set up login credentials for {client.client?.displayName || 'this client'}
+              Create a new account or link an existing one
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {!accountCreated ? (
               <>
-                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                  <p className="text-sm text-emerald-400 font-medium mb-1">
-                    This creates a login account for your client
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    They'll be able to log in and see their workouts, track progress, and communicate with you.
-                  </p>
+                {/* Mode Toggle */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={accountMode === 'create' ? 'default' : 'outline'}
+                    onClick={() => setAccountMode('create')}
+                    className="flex-1"
+                  >
+                    Create New Account
+                  </Button>
+                  <Button
+                    variant={accountMode === 'link' ? 'default' : 'outline'}
+                    onClick={() => setAccountMode('link')}
+                    className="flex-1"
+                  >
+                    Link Existing
+                  </Button>
                 </div>
                 
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name" className="flex items-center gap-2">
-                      <User className="h-4 w-4" /> Client Name *
-                    </Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="e.g. John Smith"
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="username" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Username *
-                    </Label>
-                    <Input
-                      id="username"
-                      type="text"
-                      placeholder="e.g. john.smith"
-                      value={accountUsername}
-                      onChange={(e) => setAccountUsername(e.target.value)}
-                      className="mt-2"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This will be their login username
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="password" className="flex items-center gap-2">
-                      <Lock className="h-4 w-4" /> Password
-                    </Label>
-                    <Input
-                      id="password"
-                      type="text"
-                      value={accountPassword}
-                      onChange={(e) => setAccountPassword(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label className="flex items-center gap-2">
-                      <User className="h-4 w-4" /> Gender
-                    </Label>
-                    <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
-                      <SelectTrigger className="mt-2">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other / Prefer not to say</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                
-                <Button 
-                  onClick={handleCreateAccount} 
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
-                  disabled={isCreatingAccount}
-                >
-                  {isCreatingAccount ? 'Creating Account...' : 'Create Account'}
-                </Button>
+                {accountMode === 'create' ? (
+                  <>
+                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                      <p className="text-sm text-emerald-400 font-medium mb-1">
+                        Create a new login account for your client
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        They'll be able to log in and see their workouts, track progress, and communicate with you.
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="name" className="flex items-center gap-2">
+                          <User className="h-4 w-4" /> Client Name *
+                        </Label>
+                        <Input
+                          id="name"
+                          type="text"
+                          placeholder="e.g. John Smith"
+                          value={accountName}
+                          onChange={(e) => setAccountName(e.target.value)}
+                          className="mt-2"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="username" className="flex items-center gap-2">
+                          <User className="h-4 w-4" /> Username *
+                        </Label>
+                        <Input
+                          id="username"
+                          type="text"
+                          placeholder="e.g. john.smith"
+                          value={accountUsername}
+                          onChange={(e) => setAccountUsername(e.target.value)}
+                          className="mt-2"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          This will be their login username
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <Label htmlFor="password" className="flex items-center gap-2">
+                          <Lock className="h-4 w-4" /> Password
+                        </Label>
+                        <Input
+                          id="password"
+                          type="text"
+                          value={accountPassword}
+                          onChange={(e) => setAccountPassword(e.target.value)}
+                          className="mt-2"
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label className="flex items-center gap-2">
+                          <User className="h-4 w-4" /> Gender
+                        </Label>
+                        <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
+                          <SelectTrigger className="mt-2">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">Male</SelectItem>
+                            <SelectItem value="female">Female</SelectItem>
+                            <SelectItem value="other">Other / Prefer not to say</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      onClick={handleCreateAccount} 
+                      className="w-full bg-emerald-500 hover:bg-emerald-600"
+                      disabled={isCreatingAccount}
+                    >
+                      {isCreatingAccount ? 'Creating Account...' : 'Create Account'}
+                    </Button>
+                  </>
+                ) : (
+                  /* Link Existing Account Mode */
+                  <>
+                    <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-sm text-blue-400 font-medium mb-1">
+                        Link an existing account
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Search for a client who already has an account in the system.
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <Label htmlFor="search" className="flex items-center gap-2">
+                        <User className="h-4 w-4" /> Search by name or username
+                      </Label>
+                      <Input
+                        id="search"
+                        type="text"
+                        placeholder="Start typing to search..."
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setSelectedExistingUser(null);
+                        }}
+                        className="mt-2"
+                      />
+                    </div>
+                    
+                    {filteredUsers.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Select a user:</Label>
+                        {filteredUsers.map((u: any) => (
+                          <div
+                            key={u.id}
+                            onClick={() => setSelectedExistingUser(u)}
+                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                              selectedExistingUser?.id === u.id
+                                ? 'border-emerald-500 bg-emerald-500/10'
+                                : 'border-border hover:border-muted-foreground'
+                            }`}
+                          >
+                            <p className="font-medium">{u.displayName}</p>
+                            <p className="text-sm text-muted-foreground">@{u.username}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    {searchQuery && filteredUsers.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No users found matching "{searchQuery}"
+                      </p>
+                    )}
+                    
+                    <Button 
+                      onClick={handleLinkExisting} 
+                      className="w-full bg-blue-500 hover:bg-blue-600"
+                      disabled={!selectedExistingUser}
+                    >
+                      Link Account
+                    </Button>
+                  </>
+                )}
               </>
             ) : (
               <div className="text-center py-6">
