@@ -26,9 +26,8 @@ export async function registerUserToSupabase(user: User, password: string): Prom
   console.log('[Supabase Register] Config check:', { 
     hasUrl: !!url, 
     hasKey: !!key,
-    urlFull: url,
+    urlPrefix: url?.substring(0, 30),
     keyPrefix: key?.substring(0, 20) + '...',
-    keyIsJWT: key?.startsWith('eyJ'),
   });
   
   if (!isSupabaseConfigured()) {
@@ -50,32 +49,45 @@ export async function registerUserToSupabase(user: User, password: string): Prom
     is_trainer: user.isTrainer || false,
     is_verified_trainer: user.isVerifiedTrainer || false,
     mode: user.mode || 'user',
-    trainer_id: (user as any).trainerId || null, // Link client to their trainer
+    trainer_id: (user as any).trainerId || null,
   };
   
-  console.log('[Supabase Register] User data being sent:', JSON.stringify(userData, null, 2));
+  console.log('[Supabase Register] User data:', JSON.stringify(userData, null, 2));
   
   try {
-    console.log('[Supabase Register] Attempting insert to "users" table...');
-    const { data, error, status, statusText } = await supabase.from('users').insert(userData).select();
+    // First check if user already exists
+    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).single();
     
-    console.log('[Supabase Register] Response status:', status, statusText);
+    if (existing) {
+      console.log('[Supabase Register] User already exists, updating...');
+      const { error: updateError } = await supabase.from('users').update(userData).eq('id', user.id);
+      if (updateError) {
+        console.error('[Supabase Register] Update error:', updateError.message, updateError.code, updateError.hint);
+        return false;
+      }
+      console.log('[Supabase Register] ✅ User updated:', user.email);
+      return true;
+    }
+    
+    // Insert new user
+    console.log('[Supabase Register] Inserting new user...');
+    const { data, error, status } = await supabase.from('users').insert(userData).select();
+    
+    console.log('[Supabase Register] Insert response - status:', status);
     
     if (error) {
-      console.error('[Supabase Register] ❌ Error:', {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code,
-      });
+      console.error('[Supabase Register] ❌ Insert error:', error.message, '| Code:', error.code, '| Hint:', error.hint);
+      // Log RLS hint
+      if (error.code === '42501' || error.message.includes('policy')) {
+        console.error('[Supabase Register] 🔒 This looks like a Row Level Security (RLS) issue. Check Supabase table policies.');
+      }
       return false;
     }
     
-    console.log('[Supabase Register] ✅ Success! User registered:', user.email);
-    console.log('[Supabase Register] Returned data:', JSON.stringify(data, null, 2));
+    console.log('[Supabase Register] ✅ User registered:', user.email);
     return true;
-  } catch (e) {
-    console.error('[Supabase Register] ❌ Exception caught:', e);
+  } catch (e: any) {
+    console.error('[Supabase Register] ❌ Exception:', e?.message || e);
     return false;
   }
 }
@@ -709,23 +721,40 @@ export async function deleteUserFromSupabase(userId: string): Promise<boolean> {
   
   try {
     // Delete related data first (foreign key constraints)
-    await supabase.from('workouts').delete().eq('user_id', userId);
-    await supabase.from('personal_bests').delete().eq('user_id', userId);
-    await supabase.from('medals').delete().eq('user_id', userId);
-    await supabase.from('strength_ratings').delete().eq('user_id', userId);
+    console.log('[Supabase Delete] Deleting related workouts...');
+    const { error: workoutErr } = await supabase.from('workouts').delete().eq('user_id', userId);
+    if (workoutErr) console.log('[Supabase Delete] Workouts:', workoutErr.message);
+    
+    console.log('[Supabase Delete] Deleting related PBs...');
+    const { error: pbErr } = await supabase.from('personal_bests').delete().eq('user_id', userId);
+    if (pbErr) console.log('[Supabase Delete] PBs:', pbErr.message);
+    
+    console.log('[Supabase Delete] Deleting related medals...');
+    const { error: medalErr } = await supabase.from('medals').delete().eq('user_id', userId);
+    if (medalErr) console.log('[Supabase Delete] Medals:', medalErr.message);
+    
+    console.log('[Supabase Delete] Deleting strength ratings...');
+    const { error: ratingErr } = await supabase.from('strength_ratings').delete().eq('user_id', userId);
+    if (ratingErr) console.log('[Supabase Delete] Ratings:', ratingErr.message);
     
     // Delete the user
-    const { error } = await supabase.from('users').delete().eq('id', userId);
+    console.log('[Supabase Delete] Deleting user record...');
+    const { error, status } = await supabase.from('users').delete().eq('id', userId);
+    
+    console.log('[Supabase Delete] Delete response status:', status);
     
     if (error) {
-      console.error('[Supabase Delete] ❌ Error:', error.message);
+      console.error('[Supabase Delete] ❌ Error:', error.message, '| Code:', error.code);
+      if (error.code === '42501' || error.message.includes('policy')) {
+        console.error('[Supabase Delete] 🔒 RLS policy is blocking deletion. Check Supabase table policies.');
+      }
       return false;
     }
     
     console.log('[Supabase Delete] ✅ User deleted from Supabase:', userId);
     return true;
-  } catch (e) {
-    console.error('[Supabase Delete] ❌ Exception:', e);
+  } catch (e: any) {
+    console.error('[Supabase Delete] ❌ Exception:', e?.message || e);
     return false;
   }
 }
