@@ -42,7 +42,7 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { evolvingMedals } from '@/lib/medals';
-import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, fetchAllUsersFromSupabase, linkClientToTrainer } from '@/lib/supabaseSync';
 
 export default function ClientsPage() {
   const router = useRouter();
@@ -128,9 +128,16 @@ export default function ClientsPage() {
   };
 
   // Link existing Supabase account as client
-  const handleLinkExistingAccount = () => {
+  const handleLinkExistingAccount = async () => {
     if (!selectedLinkUser) {
       toast.error('Please select a user to link');
+      return;
+    }
+    
+    // Check if already a client (prevent duplicates)
+    const existingClient = clients.find(c => c.clientId === selectedLinkUser.id);
+    if (existingClient) {
+      toast.error('This user is already in your client list');
       return;
     }
     
@@ -141,11 +148,17 @@ export default function ClientsPage() {
       status: 'active',
     });
     
+    // Update the client's trainerId in Supabase so they can see the connection
+    if (user?.id) {
+      await linkClientToTrainer(selectedLinkUser.id, user.id);
+    }
+    
     // Save to localStorage for local login
     const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
     if (!existingLocalUsers.find((u: any) => u.id === selectedLinkUser.id)) {
-      localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers, selectedLinkUser]));
-      setAllUsers([...existingLocalUsers, selectedLinkUser]);
+      const updatedUser = { ...selectedLinkUser, trainerId: user?.id };
+      localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers, updatedUser]));
+      setAllUsers([...existingLocalUsers, updatedUser]);
     }
     
     toast.success(`Linked ${selectedLinkUser.displayName || selectedLinkUser.email} as your client`);
@@ -159,15 +172,15 @@ export default function ClientsPage() {
     return selectedLinkUser.id;
   };
 
-  const handleLinkAndOnboard = () => {
-    const clientId = handleLinkExistingAccount();
+  const handleLinkAndOnboard = async () => {
+    const clientId = await handleLinkExistingAccount();
     if (clientId) {
       router.push(`/clients/${clientId}/onboarding`);
     }
   };
 
-  const handleLinkSkipOnboarding = () => {
-    const clientId = handleLinkExistingAccount();
+  const handleLinkSkipOnboarding = async () => {
+    const clientId = await handleLinkExistingAccount();
     if (clientId) {
       updateClient(clientId, { onboardingComplete: true });
       router.push(`/clients/${clientId}`);
@@ -181,6 +194,14 @@ export default function ClientsPage() {
     }
     if (!newClientEmail.trim()) {
       toast.error('Please enter client email for login');
+      return;
+    }
+    
+    // Check for duplicate email in existing users
+    const currentUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const emailExists = currentUsers.some((u: any) => u.email?.toLowerCase() === newClientEmail.toLowerCase().trim());
+    if (emailExists) {
+      toast.error('A user with this email already exists. Use "Link Existing" instead.');
       return;
     }
 

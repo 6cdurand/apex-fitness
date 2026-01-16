@@ -1196,6 +1196,7 @@ export const useTrainerStore = create<TrainerState>()(
 
       removeClient: (clientId) => {
         // Remove from trainer's clients list and all associated data
+        // NOTE: This does NOT delete the user's account - they can still log in
         set(state => ({
           clients: state.clients.filter(c => c.clientId !== clientId),
           sessions: state.sessions.filter(s => s.clientId !== clientId),
@@ -1204,11 +1205,7 @@ export const useTrainerStore = create<TrainerState>()(
           calendarEvents: state.calendarEvents.filter(e => e.clientId !== clientId),
           clientPrograms: state.clientPrograms.filter(p => p.clientId !== clientId),
         }));
-        
-        // Also remove the user from localStorage
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        const updatedUsers = storedUsers.filter((u: any) => u.id !== clientId);
-        localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
+        // Do NOT remove from localStorage - the user's account should remain
       },
 
       updateClient: (clientId, updates) => {

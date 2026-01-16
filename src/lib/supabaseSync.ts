@@ -214,6 +214,7 @@ export async function updateUserInSupabase(userId: string, updates: Partial<User
     if (updates.isTrainer !== undefined) dbUpdates.is_trainer = updates.isTrainer;
     if (updates.mode) dbUpdates.mode = updates.mode;
     if (updates.preferredUnit) dbUpdates.preferred_unit = updates.preferredUnit;
+    if ((updates as any).trainerId !== undefined) dbUpdates.trainer_id = (updates as any).trainerId;
     
     const { error } = await supabase
       .from('users')
@@ -229,6 +230,72 @@ export async function updateUserInSupabase(userId: string, updates: Partial<User
   } catch (e) {
     console.error('Update user in Supabase failed:', e);
     return false;
+  }
+}
+
+// Link a client to a trainer in Supabase (update client's trainer_id)
+export async function linkClientToTrainer(clientId: string, trainerId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase] Not configured, skipping trainer link');
+    return false;
+  }
+  
+  try {
+    console.log(`[Supabase] Linking client ${clientId} to trainer ${trainerId}`);
+    const { error } = await supabase
+      .from('users')
+      .update({ trainer_id: trainerId })
+      .eq('id', clientId);
+    
+    if (error) {
+      console.error('[Supabase] Error linking client to trainer:', error.message);
+      return false;
+    }
+    
+    console.log('[Supabase] ✅ Client linked to trainer successfully');
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Exception linking client:', e);
+    return false;
+  }
+}
+
+// Fetch all trainer accounts from Supabase (for client to search trainers)
+export async function fetchAllTrainersFromSupabase(): Promise<any[]> {
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase] Not configured, returning empty array');
+    return [];
+  }
+
+  try {
+    console.log('[Supabase] Fetching all trainers...');
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('is_trainer', true);
+
+    if (error) {
+      console.error('[Supabase] Error fetching trainers:', error.message);
+      return [];
+    }
+
+    const trainers = (data || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      displayName: u.display_name,
+      gender: u.gender,
+      isTrainer: u.is_trainer,
+      isVerifiedTrainer: u.is_verified_trainer,
+      mode: u.mode,
+      bio: u.bio,
+    }));
+
+    console.log(`[Supabase] Found ${trainers.length} trainers`);
+    return trainers;
+  } catch (e) {
+    console.error('[Supabase] Exception fetching trainers:', e);
+    return [];
   }
 }
 

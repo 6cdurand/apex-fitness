@@ -174,27 +174,11 @@ export default function ClientDetailPage() {
   };
 
   const handleDeleteClient = async () => {
-    if (confirm(`Are you sure you want to delete ${clientUser?.displayName || 'this client'}? This will remove all their sessions, payments, and data.`)) {
-      // Delete from Supabase first
-      try {
-        const deleted = await deleteUserFromSupabase(clientId);
-        if (deleted) {
-          console.log('[Delete Client] ✅ Deleted from Supabase:', clientId);
-        } else {
-          console.log('[Delete Client] ⚠️ Supabase delete failed or not configured');
-        }
-      } catch (e) {
-        console.error('[Delete Client] Error deleting from Supabase:', e);
-      }
-      
-      // Remove from localStorage
-      const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-      const filteredUsers = existingUsers.filter((u: any) => u.id !== clientId);
-      localStorage.setItem('apex-users', JSON.stringify(filteredUsers));
-      
-      // Remove from trainer store
+    if (confirm(`Are you sure you want to remove ${clientUser?.displayName || 'this client'} from your client list? Their account will NOT be deleted - they can still log in.`)) {
+      // Only remove from trainer's client list - do NOT delete from Supabase
+      // Supabase account deletion should only happen from the user's own Settings page
       removeClient(clientId);
-      toast.success('Client deleted');
+      toast.success('Client removed from your list');
       router.push('/clients');
     }
   };

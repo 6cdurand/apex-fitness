@@ -23,12 +23,22 @@ import {
   Users
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import { fetchAllTrainersFromSupabase, linkClientToTrainer } from '@/lib/supabaseSync';
+import { Loader2 } from 'lucide-react';
 
 export default function MyTrainerPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { assignedWorkouts } = useTrainerStore();
   const [myTrainer, setMyTrainer] = useState<any>(null);
+  const [showFindTrainer, setShowFindTrainer] = useState(false);
+  const [availableTrainers, setAvailableTrainers] = useState<any[]>([]);
+  const [isLoadingTrainers, setIsLoadingTrainers] = useState(false);
+  const [trainerSearchQuery, setTrainerSearchQuery] = useState('');
+  const [selectedTrainer, setSelectedTrainer] = useState<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -40,9 +50,60 @@ export default function MyTrainerPage() {
     if (user?.trainerId) {
       const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
       const trainer = storedUsers.find((u: any) => u.id === user.trainerId);
-      setMyTrainer(trainer);
+      if (trainer) {
+        setMyTrainer(trainer);
+      } else {
+        // Trainer might be in Supabase but not local, fetch from Supabase
+        fetchAllTrainersFromSupabase().then(trainers => {
+          const t = trainers.find(tr => tr.id === user.trainerId);
+          if (t) setMyTrainer(t);
+        });
+      }
     }
   }, [user?.trainerId]);
+
+  // Fetch trainers when dialog opens
+  useEffect(() => {
+    if (showFindTrainer && availableTrainers.length === 0) {
+      setIsLoadingTrainers(true);
+      fetchAllTrainersFromSupabase()
+        .then(trainers => {
+          setAvailableTrainers(trainers);
+          console.log('[Trainer] Found', trainers.length, 'trainers');
+        })
+        .finally(() => setIsLoadingTrainers(false));
+    }
+  }, [showFindTrainer, availableTrainers.length]);
+
+  const filteredTrainers = trainerSearchQuery.trim()
+    ? availableTrainers.filter(t => 
+        t.displayName?.toLowerCase().includes(trainerSearchQuery.toLowerCase()) ||
+        t.username?.toLowerCase().includes(trainerSearchQuery.toLowerCase())
+      )
+    : availableTrainers;
+
+  const handleConnectToTrainer = async () => {
+    if (!selectedTrainer || !user?.id) return;
+    
+    // Update user's trainerId in Supabase
+    await linkClientToTrainer(user.id, selectedTrainer.id);
+    
+    // Update local user using updateUser from auth store
+    const { updateUser } = useAuthStore.getState();
+    updateUser({ trainerId: selectedTrainer.id } as any);
+    
+    // Also update localStorage
+    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const updatedUsers = storedUsers.map((u: any) => 
+      u.id === user.id ? { ...u, trainerId: selectedTrainer.id } : u
+    );
+    localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
+    
+    setMyTrainer(selectedTrainer);
+    setShowFindTrainer(false);
+    setSelectedTrainer(null);
+    toast.success(`Connected to ${selectedTrainer.displayName || selectedTrainer.username}!`);
+  };
 
   if (!isAuthenticated) return null;
 
@@ -119,7 +180,10 @@ export default function MyTrainerPage() {
                 <p className="text-sm text-gray-500 mb-4">
                   Find a personal trainer to guide your fitness journey
                 </p>
-                <Button className="bg-rose-500 hover:bg-rose-600">
+                <Button 
+                  className="bg-rose-500 hover:bg-rose-600"
+                  onClick={() => setShowFindTrainer(true)}
+                >
                   <Search className="w-4 h-4 mr-2" />
                   Find a Trainer
                 </Button>
@@ -226,10 +290,6 @@ export default function MyTrainerPage() {
                 <GraduationCap className="w-5 h-5 text-rose-400" />
                 Find Trainers
               </h2>
-              <Button variant="ghost" size="sm" className="text-gray-400">
-                See All
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
             </div>
             <Card className="bg-gray-900 border-gray-800">
               <CardContent className="py-8 text-center">
@@ -238,10 +298,79 @@ export default function MyTrainerPage() {
                 <p className="text-sm text-gray-500 mb-4">
                   Find the perfect trainer for your goals
                 </p>
-                <Button variant="outline" className="border-gray-700">
-                  <Search className="w-4 h-4 mr-2" />
-                  Search Trainers
-                </Button>
+                <Dialog open={showFindTrainer} onOpenChange={setShowFindTrainer}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="border-gray-700">
+                      <Search className="w-4 h-4 mr-2" />
+                      Search Trainers
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Find a Trainer</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <Input
+                        type="text"
+                        placeholder="Search by name..."
+                        value={trainerSearchQuery}
+                        onChange={(e) => {
+                          setTrainerSearchQuery(e.target.value);
+                          setSelectedTrainer(null);
+                        }}
+                        className="bg-gray-800 border-gray-700 text-white"
+                      />
+                      
+                      {isLoadingTrainers ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+                          <span className="ml-2 text-gray-400">Loading trainers...</span>
+                        </div>
+                      ) : filteredTrainers.length === 0 ? (
+                        <p className="text-center text-gray-500 py-4">
+                          {availableTrainers.length === 0 ? 'No trainers found' : 'No matching trainers'}
+                        </p>
+                      ) : (
+                        <ScrollArea className="h-48">
+                          <div className="space-y-2">
+                            {filteredTrainers.map((trainer: any) => (
+                              <div
+                                key={trainer.id}
+                                onClick={() => setSelectedTrainer(trainer)}
+                                className={`p-3 rounded-lg border cursor-pointer transition-colors flex items-center gap-3 ${
+                                  selectedTrainer?.id === trainer.id
+                                    ? 'border-rose-500 bg-rose-500/10'
+                                    : 'border-gray-700 hover:border-gray-600 bg-gray-800'
+                                }`}
+                              >
+                                <Avatar className="w-10 h-10">
+                                  <AvatarFallback className="bg-rose-600 text-white">
+                                    {trainer.displayName?.[0] || trainer.username?.[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium text-white">{trainer.displayName || trainer.username}</p>
+                                    {trainer.isVerifiedTrainer && <BadgeCheck className="w-4 h-4 text-blue-400" />}
+                                  </div>
+                                  <p className="text-sm text-gray-400">@{trainer.username}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </ScrollArea>
+                      )}
+                      
+                      <Button 
+                        onClick={handleConnectToTrainer}
+                        className="w-full bg-rose-500 hover:bg-rose-600"
+                        disabled={!selectedTrainer}
+                      >
+                        Connect with Trainer
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </CardContent>
             </Card>
           </section>
