@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useTrainerStore, useAuthStore } from '@/lib/store';
-import { registerUserToSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { toast } from 'sonner';
 import { 
   TrainingGoal, 
@@ -37,7 +37,9 @@ import {
   User,
   Mail,
   Lock,
-  CheckCircle2
+  CheckCircle2,
+  UserPlus,
+  Link2
 } from 'lucide-react';
 
 const GOALS: { value: TrainingGoal; label: string; description: string }[] = [
@@ -117,7 +119,7 @@ export default function ClientOnboardingPage() {
   const client = clients.find(c => c.clientId === clientId);
   
   // Account creation state
-  const [accountMode, setAccountMode] = useState<'create' | 'link'>('create');
+  const [accountMode, setAccountMode] = useState<'create' | 'link' | null>(null); // null = show choice first
   const [accountName, setAccountName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [accountUsername, setAccountUsername] = useState('');
@@ -128,6 +130,8 @@ export default function ClientOnboardingPage() {
   const [createdClientId, setCreatedClientId] = useState<string | null>(null); // Track the new UUID
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExistingUser, setSelectedExistingUser] = useState<any>(null);
+  const [supabaseUsers, setSupabaseUsers] = useState<any[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<OnboardingData>({
@@ -251,21 +255,29 @@ export default function ClientOnboardingPage() {
     setIsCreatingAccount(false);
   };
   
-  // Get existing users for search
-  const existingUsers = useMemo(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    return stored.filter((u: any) => !u.isTrainer && u.id !== clientId);
-  }, [clientId]);
+  // Fetch Supabase users when link mode is selected
+  useEffect(() => {
+    if (accountMode === 'link' && supabaseUsers.length === 0) {
+      setIsLoadingUsers(true);
+      fetchAllUsersFromSupabase()
+        .then(users => {
+          setSupabaseUsers(users);
+          console.log('[Onboarding] Loaded', users.length, 'users from Supabase for linking');
+        })
+        .finally(() => setIsLoadingUsers(false));
+    }
+  }, [accountMode, supabaseUsers.length]);
   
-  // Filter users by search query
+  // Filter users by search query - use Supabase users
   const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return [];
+    if (!searchQuery.trim()) return supabaseUsers; // Show all when no search
     const query = searchQuery.toLowerCase();
-    return existingUsers.filter((u: any) => 
+    return supabaseUsers.filter((u: any) => 
       u.displayName?.toLowerCase().includes(query) || 
-      u.username?.toLowerCase().includes(query)
-    ).slice(0, 5);
-  }, [searchQuery, existingUsers]);
+      u.username?.toLowerCase().includes(query) ||
+      u.email?.toLowerCase().includes(query)
+    );
+  }, [searchQuery, supabaseUsers]);
   
   // Link existing user to this client slot
   const handleLinkExisting = () => {
@@ -274,16 +286,26 @@ export default function ClientOnboardingPage() {
       return;
     }
     
-    // Update the client relationship to point to existing user
-    updateClient(clientId, { 
-      clientId: selectedExistingUser.id,
-      client: selectedExistingUser 
+    // Add the linked user to trainer's client list
+    const { addClient } = useTrainerStore.getState();
+    addClient(selectedExistingUser.id, {
+      goals: [],
+      onboardingComplete: false,
+      status: 'active',
     });
     
-    toast.success(`Linked to ${selectedExistingUser.displayName}`);
+    // Also save to localStorage for local login
+    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    if (!existingLocalUsers.find((u: any) => u.id === selectedExistingUser.id)) {
+      localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers, selectedExistingUser]));
+    }
+    
+    // Track the linked client ID for completion
+    setCreatedClientId(selectedExistingUser.id);
+    toast.success(`Linked to ${selectedExistingUser.displayName || selectedExistingUser.email}`);
     setAccountCreated(true);
-    setAccountName(selectedExistingUser.displayName);
-    setAccountUsername(selectedExistingUser.username);
+    setAccountName(selectedExistingUser.displayName || '');
+    setAccountUsername(selectedExistingUser.username || '');
   };
 
   const handleNext = () => {
@@ -401,25 +423,60 @@ export default function ClientOnboardingPage() {
           <CardContent className="space-y-6">
             {!accountCreated ? (
               <>
-                {/* Mode Toggle */}
-                <div className="flex gap-2">
-                  <Button
-                    variant={accountMode === 'create' ? 'default' : 'outline'}
-                    onClick={() => setAccountMode('create')}
-                    className="flex-1"
-                  >
-                    Create New Account
-                  </Button>
-                  <Button
-                    variant={accountMode === 'link' ? 'default' : 'outline'}
-                    onClick={() => setAccountMode('link')}
-                    className="flex-1"
-                  >
-                    Link Existing
-                  </Button>
-                </div>
-                
-                {accountMode === 'create' ? (
+                {/* Show choice first when accountMode is null */}
+                {accountMode === null ? (
+                  <div className="space-y-4">
+                    <p className="text-center text-muted-foreground">
+                      Does this client already have an account?
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Card 
+                        className="cursor-pointer hover:border-emerald-500 transition-colors p-4"
+                        onClick={() => setAccountMode('create')}
+                      >
+                        <div className="text-center space-y-2">
+                          <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
+                            <UserPlus className="h-6 w-6 text-emerald-400" />
+                          </div>
+                          <h3 className="font-semibold">Create New</h3>
+                          <p className="text-xs text-muted-foreground">
+                            New client, no existing account
+                          </p>
+                        </div>
+                      </Card>
+                      <Card 
+                        className="cursor-pointer hover:border-blue-500 transition-colors p-4"
+                        onClick={() => setAccountMode('link')}
+                      >
+                        <div className="text-center space-y-2">
+                          <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto">
+                            <Link2 className="h-6 w-6 text-blue-400" />
+                          </div>
+                          <h3 className="font-semibold">Link Existing</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Has account from another device
+                          </p>
+                        </div>
+                      </Card>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Back button to return to choice */}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setAccountMode(null);
+                        setSelectedExistingUser(null);
+                        setSearchQuery('');
+                      }}
+                      className="mb-2"
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-2" /> Back to choice
+                    </Button>
+                    
+                    {accountMode === 'create' ? (
                   <>
                     <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
                       <p className="text-sm text-emerald-400 font-medium mb-1">
@@ -579,6 +636,8 @@ export default function ClientOnboardingPage() {
                     >
                       Link Account
                     </Button>
+                  </>
+                )}
                   </>
                 )}
               </>

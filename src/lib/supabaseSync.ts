@@ -140,6 +140,50 @@ export async function loginFromSupabase(email: string, password: string): Promis
   }
 }
 
+// Fetch all non-trainer users from Supabase for linking
+export async function fetchAllUsersFromSupabase(): Promise<any[]> {
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase] Not configured, returning empty array');
+    return [];
+  }
+  
+  try {
+    console.log('[Supabase] Fetching all users for linking...');
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('is_trainer', false);
+    
+    if (error) {
+      console.error('[Supabase] Error fetching users:', error.message);
+      return [];
+    }
+    
+    // Convert to app format
+    const users = (data || []).map(u => ({
+      id: u.id,
+      email: u.email,
+      username: u.username,
+      displayName: u.display_name,
+      gender: u.gender,
+      dateOfBirth: u.date_of_birth,
+      height: u.height,
+      weight: u.weight,
+      preferredUnit: u.preferred_unit,
+      isTrainer: u.is_trainer,
+      isVerifiedTrainer: u.is_verified_trainer,
+      mode: u.mode,
+      trainerId: u.trainer_id,
+    }));
+    
+    console.log(`[Supabase] Found ${users.length} users for linking`);
+    return users;
+  } catch (e) {
+    console.error('[Supabase] Exception fetching users:', e);
+    return [];
+  }
+}
+
 // Check if email exists in Supabase
 export async function checkEmailExistsInSupabase(email: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
