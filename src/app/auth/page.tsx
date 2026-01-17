@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +18,8 @@ type Step = 'credentials' | 'profile' | 'goals';
 
 export default function AuthPage() {
   const router = useRouter();
-  const { login, register, isLoading } = useAuthStore();
+  const { login, register, isLoading, user } = useAuthStore();
+  const { loadFromSupabase } = useTrainerStore();
   
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [step, setStep] = useState<Step>('credentials');
@@ -44,6 +45,14 @@ export default function AuthPage() {
     const success = await login(loginEmail, loginPassword);
     if (success) {
       toast.success('Welcome back!');
+      
+      // Load data from Supabase for cross-device sync
+      const loggedInUser = useAuthStore.getState().user;
+      if (loggedInUser?.mode === 'trainer' || loggedInUser?.isTrainer) {
+        console.log('[Auth] Loading trainer data from Supabase...');
+        loadFromSupabase(loggedInUser.id);
+      }
+      
       router.push('/workout');
     } else {
       toast.error('Invalid email or password');

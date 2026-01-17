@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useAuthStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
 import { useMessageStore } from '@/lib/messageStore';
 import { 
   fetchAllUserDataFromSupabase, 
@@ -91,6 +91,12 @@ export function SupabaseSync() {
       setTimeout(() => {
         useMedalStore.getState().calculateStrengthRating();
       }, 100);
+
+      // Sync trainer data if user is a trainer
+      if (user.mode === 'trainer' || user.isTrainer) {
+        console.log('[SupabaseSync] User is a trainer, loading trainer data...');
+        await useTrainerStore.getState().loadFromSupabase(user.id);
+      }
 
       console.log(`[SupabaseSync] ✅ Synced from Supabase:
         - ${remoteData.workouts.length} workouts

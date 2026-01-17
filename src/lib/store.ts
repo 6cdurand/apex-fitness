@@ -2054,6 +2054,33 @@ export const useTrainerStore = create<TrainerState>()(
         });
         
         console.log(`[Trainer Store] Loaded ${supabaseSessions.length} sessions, ${supabasePackages.length} packages, ${supabaseClients.length} clients from Supabase`);
+        
+        // Also sync LOCAL clients to Supabase that aren't there yet (bidirectional sync)
+        const clientsToUpload = mergedClients.filter(
+          local => !supabaseClients.find((sb: any) => sb.clientId === local.clientId)
+        );
+        if (clientsToUpload.length > 0) {
+          console.log(`[Trainer Store] Uploading ${clientsToUpload.length} local clients to Supabase...`);
+          clientsToUpload.forEach(client => syncTrainerClientToSupabase(client));
+        }
+        
+        // Sync local sessions to Supabase that aren't there yet
+        const sessionsToUpload = mergedSessions.filter(
+          local => !supabaseSessions.find(sb => sb.id === local.id)
+        );
+        if (sessionsToUpload.length > 0) {
+          console.log(`[Trainer Store] Uploading ${sessionsToUpload.length} local sessions to Supabase...`);
+          sessionsToUpload.forEach(session => syncTrainerSessionToSupabase(session));
+        }
+        
+        // Sync local packages to Supabase that aren't there yet
+        const packagesToUpload = mergedPackages.filter(
+          local => !supabasePackages.find(sb => sb.id === local.id)
+        );
+        if (packagesToUpload.length > 0) {
+          console.log(`[Trainer Store] Uploading ${packagesToUpload.length} local packages to Supabase...`);
+          packagesToUpload.forEach(pkg => syncSessionPackageToSupabase(pkg));
+        }
       },
 
       // Update session package (for editing total, price, etc.)
