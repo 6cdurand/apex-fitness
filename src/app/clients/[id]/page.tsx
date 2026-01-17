@@ -103,10 +103,13 @@ export default function ClientDetailPage() {
   const [editSessionsLeft, setEditSessionsLeft] = useState('');
   const [editTotalPaid, setEditTotalPaid] = useState('');
   
-  // Edit package state
+  // Edit/Create package state
   const [showEditPackage, setShowEditPackage] = useState(false);
+  const [showCreatePackage, setShowCreatePackage] = useState(false);
   const [editPackageTotal, setEditPackageTotal] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
+  const [newPackageTotal, setNewPackageTotal] = useState('');
+  const [newPackagePrice, setNewPackagePrice] = useState('');
   
   // Calculate per-session cost
   const perSessionCost = paymentAmount && sessionsCovered && parseInt(sessionsCovered) > 0
@@ -351,8 +354,8 @@ export default function ClientDetailPage() {
         <ScrollArea className="flex-1 px-4 pb-24">
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-4 space-y-4">
-            {/* Session Package Summary - Editable */}
-            {activePackage && (
+            {/* Session Package Summary - Editable or Create New */}
+            {activePackage ? (
               <Card className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -404,7 +407,94 @@ export default function ClientDetailPage() {
                   </div>
                 </CardContent>
               </Card>
+            ) : (
+              /* No active package - show create button */
+              <Card className="bg-gray-900 border-gray-800 border-dashed">
+                <CardContent className="p-4">
+                  <div className="text-center py-4">
+                    <Package className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-400 mb-3">No active session package</p>
+                    <Button
+                      className="bg-emerald-500 hover:bg-emerald-600"
+                      onClick={() => {
+                        setNewPackageTotal('');
+                        setNewPackagePrice('');
+                        setShowCreatePackage(true);
+                      }}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Package
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             )}
+
+            {/* Create Package Dialog */}
+            <Dialog open={showCreatePackage} onOpenChange={setShowCreatePackage}>
+              <DialogContent className="bg-gray-900 border-gray-800">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Create Session Package</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-gray-300">Total Sessions</Label>
+                    <Input
+                      type="number"
+                      value={newPackageTotal}
+                      onChange={(e) => setNewPackageTotal(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      placeholder="e.g., 10"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Price Per Session ($)</Label>
+                    <Input
+                      type="number"
+                      value={newPackagePrice}
+                      onChange={(e) => setNewPackagePrice(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      placeholder="e.g., 50"
+                    />
+                  </div>
+                  {newPackageTotal && newPackagePrice && (
+                    <div className="p-3 bg-gray-800 rounded-lg">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Package Total:</span>
+                        <span className="text-emerald-400 font-bold">
+                          ${(parseInt(newPackageTotal) * parseFloat(newPackagePrice)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <Button
+                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => {
+                      if (newPackageTotal && newPackagePrice) {
+                        const total = parseInt(newPackageTotal);
+                        const price = parseFloat(newPackagePrice);
+                        
+                        addSessionPackage({
+                          clientId,
+                          trainerId: user?.id || '',
+                          name: `${total} Session Package`,
+                          totalSessions: total,
+                          priceTotal: total * price,
+                          pricePerSession: price,
+                          purchaseDate: new Date().toISOString(),
+                          paymentId: '',
+                          status: 'active',
+                        });
+                        setShowCreatePackage(false);
+                        toast.success(`Package created: ${total} sessions at $${price}/session`);
+                      }
+                    }}
+                  >
+                    Create Package
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Edit Package Dialog */}
             <Dialog open={showEditPackage} onOpenChange={setShowEditPackage}>

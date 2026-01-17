@@ -1072,6 +1072,82 @@ export async function fetchSessionPackagesFromSupabase(trainerId: string): Promi
   }
 }
 
+// Sync trainer client relationship to Supabase
+export async function syncTrainerClientToSupabase(client: {
+  id: string;
+  trainerId: string;
+  clientId: string;
+  status?: string;
+  startDate?: string;
+  onboardingComplete?: boolean;
+  notes?: string;
+  goals?: string[];
+}): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbClient = {
+      id: client.id,
+      trainer_id: client.trainerId,
+      client_id: client.clientId,
+      status: client.status || 'active',
+      start_date: client.startDate || new Date().toISOString(),
+      onboarding_complete: client.onboardingComplete || false,
+      notes: client.notes || null,
+      goals: client.goals || null,
+    };
+    
+    const { error } = await supabase
+      .from('trainer_clients')
+      .upsert(dbClient, { onConflict: 'id' });
+    
+    if (error) {
+      console.error('[Client Sync] Error:', error.message);
+      return false;
+    }
+    
+    console.log('[Client Sync] ✅ Client synced:', client.clientId);
+    return true;
+  } catch (e) {
+    console.error('[Client Sync] Exception:', e);
+    return false;
+  }
+}
+
+// Fetch trainer's clients from Supabase
+export async function fetchTrainerClientsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('trainer_clients')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Client Fetch] Error:', error.message);
+      return [];
+    }
+    
+    const clients = (data || []).map(c => ({
+      id: c.id,
+      trainerId: c.trainer_id,
+      clientId: c.client_id,
+      status: c.status,
+      startDate: c.start_date,
+      onboardingComplete: c.onboarding_complete,
+      notes: c.notes,
+      goals: c.goals,
+    }));
+    
+    console.log(`[Client Fetch] Found ${clients.length} clients for trainer`);
+    return clients;
+  } catch (e) {
+    console.error('[Client Fetch] Exception:', e);
+    return [];
+  }
+}
+
 // Clear all local storage data for Apex
 export function clearAllLocalData(): void {
   console.log('[Local Cleanup] Clearing localStorage...');

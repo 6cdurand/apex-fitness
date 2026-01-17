@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { syncWorkoutToSupabase, syncPBToSupabase, syncMedalToSupabase, registerUserToSupabase, loginFromSupabase, updateUserInSupabase, syncTrainerSessionToSupabase, syncSessionPackageToSupabase, fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase } from './supabaseSync';
+import { syncWorkoutToSupabase, syncPBToSupabase, syncMedalToSupabase, registerUserToSupabase, loginFromSupabase, updateUserInSupabase, syncTrainerSessionToSupabase, syncSessionPackageToSupabase, fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase, syncTrainerClientToSupabase, fetchTrainerClientsFromSupabase } from './supabaseSync';
 import {
   User,
   UserMode,
@@ -1198,6 +1198,9 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           clients: [...state.clients, newClient],
         }));
+        
+        // Sync to Supabase for cross-device backup
+        syncTrainerClientToSupabase(newClient);
       },
 
       removeClient: (clientId) => {
@@ -1999,13 +2002,15 @@ export const useTrainerStore = create<TrainerState>()(
       loadFromSupabase: async (trainerId: string) => {
         console.log('[Trainer Store] Loading data from Supabase for trainer:', trainerId);
         
-        // Fetch sessions from Supabase
+        // Fetch all data from Supabase
         const supabaseSessions = await fetchTrainerSessionsFromSupabase(trainerId);
         const supabasePackages = await fetchSessionPackagesFromSupabase(trainerId);
+        const supabaseClients = await fetchTrainerClientsFromSupabase(trainerId);
         
-        // Merge with local data (Supabase takes priority for conflicts)
+        // Merge with local data (keep both, Supabase takes priority for conflicts)
         const localSessions = get().sessions;
         const localPackages = get().sessionPackages;
+        const localClients = get().clients;
         
         // Merge sessions - use Supabase version if ID exists, otherwise keep local
         const mergedSessions = [...supabaseSessions];
@@ -2023,12 +2028,32 @@ export const useTrainerStore = create<TrainerState>()(
           }
         });
         
+        // Merge clients
+        const mergedClients = [...localClients]; // Start with local
+        supabaseClients.forEach((sbClient: any) => {
+          const existingIdx = mergedClients.findIndex(c => c.clientId === sbClient.clientId);
+          if (existingIdx === -1) {
+            // Add from Supabase if not in local
+            mergedClients.push({
+              id: sbClient.id,
+              trainerId: sbClient.trainerId,
+              clientId: sbClient.clientId,
+              status: sbClient.status || 'active',
+              startDate: sbClient.startDate,
+              onboardingComplete: sbClient.onboardingComplete,
+              notes: sbClient.notes,
+              goals: sbClient.goals,
+            });
+          }
+        });
+        
         set({
           sessions: mergedSessions,
           sessionPackages: mergedPackages,
+          clients: mergedClients,
         });
         
-        console.log(`[Trainer Store] Loaded ${supabaseSessions.length} sessions, ${supabasePackages.length} packages from Supabase`);
+        console.log(`[Trainer Store] Loaded ${supabaseSessions.length} sessions, ${supabasePackages.length} packages, ${supabaseClients.length} clients from Supabase`);
       },
 
       // Update session package (for editing total, price, etc.)
