@@ -1,5 +1,5 @@
 import { supabase, db } from './supabase';
-import type { Workout, PersonalBest, Medal, User } from '@/types';
+import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage } from '@/types';
 
 /**
  * Supabase Sync Service
@@ -906,6 +906,169 @@ export async function deleteAllUsersFromSupabase(): Promise<boolean> {
   } catch (e) {
     console.error('[Supabase Cleanup] ❌ Exception:', e);
     return false;
+  }
+}
+
+// ============ TRAINER SESSION SYNC ============
+
+// Sync a trainer session to Supabase
+export async function syncTrainerSessionToSupabase(session: ClientSession): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbSession = {
+      id: session.id,
+      trainer_id: session.trainerId,
+      client_id: session.clientId,
+      date: session.date,
+      start_time: session.startTime,
+      end_time: session.endTime,
+      duration: session.duration,
+      type: session.type,
+      status: session.status,
+      workout_id: session.workoutId || null,
+      notes: session.notes || null,
+      rating: session.rating || null,
+      feedback: session.feedback || null,
+      paid: session.paid,
+      payment_id: session.paymentId || null,
+      updated_at: new Date().toISOString(),
+    };
+    
+    const { error } = await supabase
+      .from('trainer_sessions')
+      .upsert(dbSession, { onConflict: 'id' });
+    
+    if (error) {
+      console.error('[Session Sync] Error:', error.message);
+      return false;
+    }
+    
+    console.log('[Session Sync] ✅ Session synced:', session.id);
+    return true;
+  } catch (e) {
+    console.error('[Session Sync] Exception:', e);
+    return false;
+  }
+}
+
+// Fetch all sessions for a trainer from Supabase
+export async function fetchTrainerSessionsFromSupabase(trainerId: string): Promise<ClientSession[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('trainer_sessions')
+      .select('*')
+      .eq('trainer_id', trainerId)
+      .order('date', { ascending: false });
+    
+    if (error) {
+      console.error('[Session Fetch] Error:', error.message);
+      return [];
+    }
+    
+    const sessions: ClientSession[] = (data || []).map(s => ({
+      id: s.id,
+      trainerId: s.trainer_id,
+      clientId: s.client_id,
+      date: s.date,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      duration: s.duration,
+      type: s.type,
+      status: s.status,
+      workoutId: s.workout_id,
+      notes: s.notes,
+      rating: s.rating,
+      feedback: s.feedback,
+      paid: s.paid,
+      paymentId: s.payment_id,
+    }));
+    
+    console.log(`[Session Fetch] Found ${sessions.length} sessions for trainer`);
+    return sessions;
+  } catch (e) {
+    console.error('[Session Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// Sync a session package to Supabase
+export async function syncSessionPackageToSupabase(pkg: SessionPackage): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbPackage = {
+      id: pkg.id,
+      trainer_id: pkg.trainerId,
+      client_id: pkg.clientId,
+      name: pkg.name,
+      total_sessions: pkg.totalSessions,
+      used_sessions: pkg.usedSessions,
+      remaining_sessions: pkg.remainingSessions,
+      price_total: pkg.priceTotal,
+      price_per_session: pkg.pricePerSession,
+      purchase_date: pkg.purchaseDate,
+      expiry_date: pkg.expiryDate || null,
+      payment_id: pkg.paymentId || null,
+      status: pkg.status,
+      updated_at: new Date().toISOString(),
+    };
+    
+    const { error } = await supabase
+      .from('session_packages')
+      .upsert(dbPackage, { onConflict: 'id' });
+    
+    if (error) {
+      console.error('[Package Sync] Error:', error.message);
+      return false;
+    }
+    
+    console.log('[Package Sync] ✅ Package synced:', pkg.id);
+    return true;
+  } catch (e) {
+    console.error('[Package Sync] Exception:', e);
+    return false;
+  }
+}
+
+// Fetch all session packages for a trainer from Supabase
+export async function fetchSessionPackagesFromSupabase(trainerId: string): Promise<SessionPackage[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('session_packages')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Package Fetch] Error:', error.message);
+      return [];
+    }
+    
+    const packages: SessionPackage[] = (data || []).map(p => ({
+      id: p.id,
+      trainerId: p.trainer_id,
+      clientId: p.client_id,
+      name: p.name,
+      totalSessions: p.total_sessions,
+      usedSessions: p.used_sessions,
+      remainingSessions: p.remaining_sessions,
+      priceTotal: p.price_total,
+      pricePerSession: p.price_per_session,
+      purchaseDate: p.purchase_date,
+      expiryDate: p.expiry_date,
+      paymentId: p.payment_id,
+      status: p.status,
+    }));
+    
+    console.log(`[Package Fetch] Found ${packages.length} packages for trainer`);
+    return packages;
+  } catch (e) {
+    console.error('[Package Fetch] Exception:', e);
+    return [];
   }
 }
 

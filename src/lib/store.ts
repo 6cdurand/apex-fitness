@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { syncWorkoutToSupabase, syncPBToSupabase, syncMedalToSupabase, registerUserToSupabase, loginFromSupabase, updateUserInSupabase } from './supabaseSync';
+import { syncWorkoutToSupabase, syncPBToSupabase, syncMedalToSupabase, registerUserToSupabase, loginFromSupabase, updateUserInSupabase, syncTrainerSessionToSupabase, syncSessionPackageToSupabase, fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase } from './supabaseSync';
 import {
   User,
   UserMode,
@@ -1160,6 +1160,12 @@ interface TrainerState {
   // Client-facing session functions
   getScheduledSessionsForUser: (userId: string) => CalendarEvent[];
   confirmSession: (eventId: string) => void;
+  
+  // Supabase sync
+  loadFromSupabase: (trainerId: string) => Promise<void>;
+  
+  // Update package (for editing)
+  updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => void;
 }
 
 export const useTrainerStore = create<TrainerState>()(
@@ -1585,6 +1591,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           sessions: [...state.sessions, newSession],
         }));
+        // Sync to Supabase for cross-device access
+        syncTrainerSessionToSupabase(newSession);
       },
 
       updateSession: (sessionId, updates) => {
@@ -1593,6 +1601,9 @@ export const useTrainerStore = create<TrainerState>()(
             s.id === sessionId ? { ...s, ...updates } : s
           ),
         }));
+        // Sync updated session to Supabase
+        const updated = get().sessions.find(s => s.id === sessionId);
+        if (updated) syncTrainerSessionToSupabase(updated);
       },
 
       getSessionsForClient: (clientId) => {
@@ -1607,14 +1618,18 @@ export const useTrainerStore = create<TrainerState>()(
               : s
           ),
         }));
-        // Decrement from active package if exists
+        // Sync to Supabase
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
-          const activePackage = get().sessionPackages.find(
-            p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
-          );
-          if (activePackage) {
-            get().useSessionFromPackage(activePackage.id);
+          syncTrainerSessionToSupabase(session);
+          // Decrement from active package if exists (only for PT sessions)
+          if (session.type === 'pt_session') {
+            const activePackage = get().sessionPackages.find(
+              p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
+            );
+            if (activePackage) {
+              get().useSessionFromPackage(activePackage.id);
+            }
           }
         }
       },
@@ -1625,6 +1640,9 @@ export const useTrainerStore = create<TrainerState>()(
             s.id === sessionId ? { ...s, paid: true, paymentId } : s
           ),
         }));
+        // Sync to Supabase
+        const session = get().sessions.find(s => s.id === sessionId);
+        if (session) syncTrainerSessionToSupabase(session);
       },
 
       markSessionNoShow: (sessionId) => {
@@ -1635,14 +1653,17 @@ export const useTrainerStore = create<TrainerState>()(
               : s
           ),
         }));
-        // Still decrement from active package (no-show still uses a session)
+        // Sync to Supabase and still decrement from active package (no-show still uses a session)
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
-          const activePackage = get().sessionPackages.find(
-            p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
-          );
-          if (activePackage) {
-            get().useSessionFromPackage(activePackage.id);
+          syncTrainerSessionToSupabase(session);
+          if (session.type === 'pt_session') {
+            const activePackage = get().sessionPackages.find(
+              p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
+            );
+            if (activePackage) {
+              get().useSessionFromPackage(activePackage.id);
+            }
           }
         }
       },
@@ -1653,6 +1674,9 @@ export const useTrainerStore = create<TrainerState>()(
             s.id === sessionId ? { ...s, paid: !s.paid } : s
           ),
         }));
+        // Sync to Supabase
+        const session = get().sessions.find(s => s.id === sessionId);
+        if (session) syncTrainerSessionToSupabase(session);
       },
 
       // Payments
@@ -1700,6 +1724,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           sessionPackages: [...state.sessionPackages, newPackage],
         }));
+        // Sync to Supabase
+        syncSessionPackageToSupabase(newPackage);
       },
 
       useSessionFromPackage: (packageId) => {
@@ -1715,6 +1741,9 @@ export const useTrainerStore = create<TrainerState>()(
               : p
           ),
         }));
+        // Sync updated package to Supabase
+        const updated = get().sessionPackages.find(p => p.id === packageId);
+        if (updated) syncSessionPackageToSupabase(updated);
       },
 
       getPackagesForClient: (clientId) => {
@@ -1964,6 +1993,54 @@ export const useTrainerStore = create<TrainerState>()(
               : e
           ),
         }));
+      },
+
+      // Load trainer data from Supabase for cross-device sync
+      loadFromSupabase: async (trainerId: string) => {
+        console.log('[Trainer Store] Loading data from Supabase for trainer:', trainerId);
+        
+        // Fetch sessions from Supabase
+        const supabaseSessions = await fetchTrainerSessionsFromSupabase(trainerId);
+        const supabasePackages = await fetchSessionPackagesFromSupabase(trainerId);
+        
+        // Merge with local data (Supabase takes priority for conflicts)
+        const localSessions = get().sessions;
+        const localPackages = get().sessionPackages;
+        
+        // Merge sessions - use Supabase version if ID exists, otherwise keep local
+        const mergedSessions = [...supabaseSessions];
+        localSessions.forEach(local => {
+          if (!mergedSessions.find(s => s.id === local.id)) {
+            mergedSessions.push(local);
+          }
+        });
+        
+        // Merge packages
+        const mergedPackages = [...supabasePackages];
+        localPackages.forEach(local => {
+          if (!mergedPackages.find(p => p.id === local.id)) {
+            mergedPackages.push(local);
+          }
+        });
+        
+        set({
+          sessions: mergedSessions,
+          sessionPackages: mergedPackages,
+        });
+        
+        console.log(`[Trainer Store] Loaded ${supabaseSessions.length} sessions, ${supabasePackages.length} packages from Supabase`);
+      },
+
+      // Update session package (for editing total, price, etc.)
+      updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => {
+        set(state => ({
+          sessionPackages: state.sessionPackages.map(p =>
+            p.id === packageId ? { ...p, ...updates } : p
+          ),
+        }));
+        // Sync to Supabase
+        const updated = get().sessionPackages.find(p => p.id === packageId);
+        if (updated) syncSessionPackageToSupabase(updated);
       },
     }),
     {

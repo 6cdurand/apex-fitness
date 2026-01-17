@@ -8,6 +8,7 @@ import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +36,7 @@ import {
   MoreVertical,
   Trash2,
   Edit,
+  Package,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { toast } from 'sonner';
@@ -65,6 +67,7 @@ export default function ClientDetailPage() {
     addSessionPackage,
     removeClient,
     setInitialClientStats,
+    updateSessionPackage,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -99,6 +102,11 @@ export default function ClientDetailPage() {
   const [editSessionsDone, setEditSessionsDone] = useState('');
   const [editSessionsLeft, setEditSessionsLeft] = useState('');
   const [editTotalPaid, setEditTotalPaid] = useState('');
+  
+  // Edit package state
+  const [showEditPackage, setShowEditPackage] = useState(false);
+  const [editPackageTotal, setEditPackageTotal] = useState('');
+  const [editPackagePrice, setEditPackagePrice] = useState('');
   
   // Calculate per-session cost
   const perSessionCost = paymentAmount && sessionsCovered && parseInt(sessionsCovered) > 0
@@ -137,11 +145,12 @@ export default function ClientDetailPage() {
     return getMessages(conversation.id);
   }, [conversation]);
 
-  // Stats
-  const completedSessions = sessions.filter(s => s.status === 'completed').length;
-  const upcomingSessions = sessions.filter(s => s.status === 'scheduled').length;
-  const unpaidSessions = sessions.filter(s => s.status === 'completed' && !s.paid).length;
-  const noShowSessions = sessions.filter(s => s.status === 'no_show').length;
+  // Stats - only count PT sessions for billable purposes (not solo/group sessions)
+  const ptSessions = sessions.filter(s => s.type === 'pt_session');
+  const completedSessions = ptSessions.filter(s => s.status === 'completed').length;
+  const upcomingSessions = ptSessions.filter(s => s.status === 'scheduled').length;
+  const unpaidSessions = ptSessions.filter(s => s.status === 'completed' && !s.paid).length;
+  const noShowSessions = ptSessions.filter(s => s.status === 'no_show').length;
   const activePackage = packages.find(p => p.status === 'active');
   const pendingPayments = payments.filter(p => p.status === 'pending');
   const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
@@ -342,6 +351,124 @@ export default function ClientDetailPage() {
         <ScrollArea className="flex-1 px-4 pb-24">
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-4 space-y-4">
+            {/* Session Package Summary - Editable */}
+            {activePackage && (
+              <Card className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold text-white flex items-center gap-2">
+                      <Package className="w-5 h-5 text-emerald-400" />
+                      Session Package
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-gray-400 hover:text-white"
+                      onClick={() => {
+                        setEditPackageTotal(activePackage.totalSessions.toString());
+                        setEditPackagePrice(activePackage.pricePerSession.toString());
+                        setShowEditPackage(true);
+                      }}
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="bg-gray-900/50 rounded-lg p-2">
+                      <p className="text-2xl font-bold text-emerald-400">{activePackage.totalSessions}</p>
+                      <p className="text-xs text-gray-400">Total Sessions</p>
+                    </div>
+                    <div className="bg-gray-900/50 rounded-lg p-2">
+                      <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                      <p className="text-xs text-gray-400">Per Session</p>
+                    </div>
+                    <div className="bg-gray-900/50 rounded-lg p-2">
+                      <p className="text-2xl font-bold text-blue-400">${(completedSessions * activePackage.pricePerSession).toFixed(0)}</p>
+                      <p className="text-xs text-gray-400">Total Value</p>
+                    </div>
+                  </div>
+                  
+                  {/* Progress bar */}
+                  <div className="mt-3">
+                    <div className="flex justify-between text-xs text-gray-400 mb-1">
+                      <span>{activePackage.usedSessions} used</span>
+                      <span>{activePackage.remainingSessions} remaining</span>
+                    </div>
+                    <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                        style={{ width: `${(activePackage.usedSessions / activePackage.totalSessions) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Edit Package Dialog */}
+            <Dialog open={showEditPackage} onOpenChange={setShowEditPackage}>
+              <DialogContent className="bg-gray-900 border-gray-800">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Edit Session Package</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-gray-300">Total Sessions in Package</Label>
+                    <Input
+                      type="number"
+                      value={editPackageTotal}
+                      onChange={(e) => setEditPackageTotal(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      placeholder="e.g., 10"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300">Price Per Session ($)</Label>
+                    <Input
+                      type="number"
+                      value={editPackagePrice}
+                      onChange={(e) => setEditPackagePrice(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      placeholder="e.g., 50"
+                    />
+                  </div>
+                  {editPackageTotal && editPackagePrice && (
+                    <div className="p-3 bg-gray-800 rounded-lg">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Package Total:</span>
+                        <span className="text-emerald-400 font-bold">
+                          ${(parseInt(editPackageTotal) * parseFloat(editPackagePrice)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <Button
+                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => {
+                      if (activePackage && editPackageTotal && editPackagePrice) {
+                        const newTotal = parseInt(editPackageTotal);
+                        const newPrice = parseFloat(editPackagePrice);
+                        const newRemaining = Math.max(0, newTotal - activePackage.usedSessions);
+                        
+                        updateSessionPackage(activePackage.id, {
+                          totalSessions: newTotal,
+                          pricePerSession: newPrice,
+                          priceTotal: newTotal * newPrice,
+                          remainingSessions: newRemaining,
+                          status: newRemaining > 0 ? 'active' : 'completed',
+                        });
+                        setShowEditPackage(false);
+                        toast.success('Package updated');
+                      }
+                    }}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            
             {/* Import History Button */}
             <Button
               variant="outline"
