@@ -1034,22 +1034,30 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
 
-      followUser: (userId) => {
+      followUser: async (userId) => {
         const { updateUser, user } = useAuthStore.getState();
         if (!user) return;
 
         updateUser({
           following: [...user.following, userId],
         });
+        
+        // Sync to Supabase
+        const { syncFollowToSupabase } = await import('./supabaseSync');
+        await syncFollowToSupabase(user.id, userId);
       },
 
-      unfollowUser: (userId) => {
+      unfollowUser: async (userId) => {
         const { updateUser, user } = useAuthStore.getState();
         if (!user) return;
 
         updateUser({
           following: user.following.filter(id => id !== userId),
         });
+        
+        // Sync to Supabase
+        const { removeFollowFromSupabase } = await import('./supabaseSync');
+        await removeFollowFromSupabase(user.id, userId);
       },
 
       addNotification: (notification) => {

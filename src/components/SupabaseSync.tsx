@@ -79,13 +79,12 @@ export function SupabaseSync() {
         conversations: mergedConversations,
       });
 
-      // Update user's followers/following from Supabase
-      if (remoteData.followers.length > 0 || remoteData.following.length > 0) {
-        updateUser({
-          followers: remoteData.followers,
-          following: remoteData.following,
-        });
-      }
+      // ALWAYS update user's followers/following from Supabase (source of truth)
+      // This ensures stale local data is replaced with accurate remote data
+      updateUser({
+        followers: remoteData.followers,
+        following: remoteData.following,
+      });
 
       // Recalculate strength rating from synced PBs (it's derived from personal bests)
       setTimeout(() => {

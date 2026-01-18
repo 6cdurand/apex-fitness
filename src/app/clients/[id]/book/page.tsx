@@ -57,7 +57,7 @@ export default function BookClientPage() {
   const clientId = params.id as string;
   
   const { user, isAuthenticated } = useAuthStore();
-  const { getClientById, createBookingRequest, confirmBooking, clients } = useTrainerStore();
+  const { getClientById, createBookingRequest, confirmBooking, clients, getActiveProgram } = useTrainerStore();
   
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -72,6 +72,22 @@ export default function BookClientPage() {
   // Workout type selection
   const [workoutType, setWorkoutType] = useState<'program' | 'empty' | 'template'>('program');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedProgramDay, setSelectedProgramDay] = useState<string>('');
+  
+  // Get client's active program
+  const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId]);
+  
+  // Generate day labels (A, B, C, etc.) based on program days
+  const programDays = useMemo(() => {
+    if (!activeProgram?.weeklyPlan) return [];
+    const dayLabels = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+    return activeProgram.weeklyPlan.map((day: any, i: number) => ({
+      id: day.id || `day-${i}`,
+      label: `Day ${dayLabels[i] || i + 1}`,
+      dayLabel: day.dayLabel,
+      exerciseCount: day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0,
+    }));
+  }, [activeProgram]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -312,6 +328,49 @@ export default function BookClientPage() {
               </Button>
             </div>
 
+            {/* Program Day Selection */}
+            {workoutType === 'program' && (
+              <div className="space-y-2 mt-3">
+                {activeProgram ? (
+                  <>
+                    <Label className="text-gray-400 text-sm">
+                      Select Workout Day ({activeProgram.templateName})
+                    </Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {programDays.map((day) => (
+                        <Button
+                          key={day.id}
+                          variant={selectedProgramDay === day.id ? 'default' : 'outline'}
+                          className={selectedProgramDay === day.id 
+                            ? 'bg-emerald-500 hover:bg-emerald-600 flex-col h-auto py-2' 
+                            : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-2'
+                          }
+                          onClick={() => setSelectedProgramDay(day.id)}
+                        >
+                          <span className="font-bold">{day.label}</span>
+                          <span className="text-xs opacity-70">{day.exerciseCount} exercises</span>
+                        </Button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-amber-400 text-sm">
+                      No program assigned. Select a template or assign a program first.
+                    </p>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="mt-2 text-amber-400 border-amber-500/50"
+                      onClick={() => router.push(`/clients/${clientId}/program/select`)}
+                    >
+                      Assign Program
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Template Selection */}
             {workoutType === 'template' && (
               <div className="space-y-2 mt-3">
@@ -348,6 +407,15 @@ export default function BookClientPage() {
                     {allTrainerTemplates.find(t => t.id === selectedTemplateId)?.description}
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* Empty Workout Info */}
+            {workoutType === 'empty' && (
+              <div className="p-3 bg-gray-800 rounded-lg mt-3">
+                <p className="text-gray-400 text-sm">
+                  Start with a blank workout and add exercises during the session.
+                </p>
               </div>
             )}
           </div>

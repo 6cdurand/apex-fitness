@@ -38,7 +38,7 @@ import {
   Edit,
   Package,
 } from 'lucide-react';
-import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, endOfWeek, isWithinInterval, addDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
@@ -1250,66 +1250,181 @@ export default function ClientDetailPage() {
 
           {/* Calendar Tab */}
           <TabsContent value="calendar" className="mt-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-white font-medium">This Week's Sessions</h3>
-              <Button size="sm" variant="outline" onClick={() => router.push('/calendar')}>
-                <Calendar className="w-4 h-4 mr-1" />
-                Full Calendar
-              </Button>
-            </div>
-            
             {(() => {
               const now = new Date();
-              const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
-              const weekEnd = endOfWeek(now, { weekStartsOn: 1 }); // Sunday
+              const monthStart = startOfMonth(now);
+              const monthEnd = endOfMonth(now);
+              const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+              const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+              const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
               
-              const thisWeekEvents = calendarEvents
-                .filter(e => {
-                  const eventDate = new Date(e.date);
-                  return isWithinInterval(eventDate, { start: weekStart, end: weekEnd }) && 
-                         (isFuture(eventDate) || isToday(eventDate));
-                })
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+              // Get sessions for this month
+              const monthSessions = sessions.filter(s => {
+                const sessionDate = new Date(s.date);
+                return isWithinInterval(sessionDate, { start: monthStart, end: monthEnd });
+              });
               
-              if (thisWeekEvents.length === 0) {
-                return (
-                  <Card className="bg-gray-900 border-gray-800">
-                    <CardContent className="p-8 text-center">
-                      <Calendar className="w-12 h-12 text-gray-600 mx-auto mb-2" />
-                      <p className="text-gray-400">No sessions this week</p>
-                    </CardContent>
-                  </Card>
-                );
-              }
+              // Get events/calendar items
+              const monthEvents = calendarEvents.filter(e => {
+                const eventDate = new Date(e.date);
+                return isWithinInterval(eventDate, { start: monthStart, end: monthEnd });
+              });
               
               return (
                 <>
-                  {thisWeekEvents.map((event) => (
-                    <Card key={event.id} className="bg-gray-900 border-gray-800">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${
-                              isToday(new Date(event.date)) ? 'bg-emerald-500/20' : 'bg-blue-500/20'
-                            }`}>
-                              <Calendar className={`w-5 h-5 ${
-                                isToday(new Date(event.date)) ? 'text-emerald-400' : 'text-blue-400'
-                              }`} />
-                            </div>
-                            <div>
-                              <p className="text-white font-medium">{event.title}</p>
-                              <p className="text-gray-400 text-sm">
-                                {format(new Date(event.date), 'EEE, MMM d')} • {event.startTime}
-                              </p>
-                            </div>
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-white font-medium">{format(now, 'MMMM yyyy')}</h3>
+                    <Button size="sm" onClick={() => router.push(`/clients/${clientId}/book`)}>
+                      <Plus className="w-4 h-4 mr-1" />
+                      Book Session
+                    </Button>
+                  </div>
+                  
+                  {/* Legend */}
+                  <div className="flex gap-4 text-xs">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                      <span className="text-gray-400">PT Session</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 rounded-full bg-blue-500" />
+                      <span className="text-gray-400">Solo Workout</span>
+                    </div>
+                  </div>
+
+                  {/* Calendar Grid */}
+                  <Card className="bg-gray-900 border-gray-800">
+                    <CardContent className="p-2">
+                      {/* Day Headers */}
+                      <div className="grid grid-cols-7 gap-1 mb-1">
+                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
+                          <div key={day} className="text-center text-xs text-gray-500 py-1">
+                            {day}
                           </div>
-                          {isToday(new Date(event.date)) && (
-                            <Badge className="bg-emerald-500">Today</Badge>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        ))}
+                      </div>
+                      
+                      {/* Calendar Days */}
+                      <div className="grid grid-cols-7 gap-1">
+                        {calendarDays.map((day, i) => {
+                          const isCurrentMonth = day.getMonth() === now.getMonth();
+                          
+                          // Find sessions/events on this day
+                          const daySessions = monthSessions.filter(s => 
+                            isSameDay(new Date(s.date), day)
+                          );
+                          const dayEvents = monthEvents.filter(e => 
+                            isSameDay(new Date(e.date), day)
+                          );
+                          
+                          const hasPTSession = daySessions.some(s => s.type === 'pt_session') || 
+                                               dayEvents.some(e => e.type === 'session');
+                          const hasSoloWorkout = clientWorkoutHistory.some(w => 
+                            isSameDay(new Date(w.startTime), day) && !w.assignedBy
+                          );
+                          
+                          return (
+                            <div
+                              key={i}
+                              className={`
+                                relative aspect-square p-1 rounded-lg text-center text-sm
+                                ${!isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}
+                                ${isToday(day) ? 'bg-emerald-500/20 ring-1 ring-emerald-500' : ''}
+                              `}
+                            >
+                              <span className={`${isToday(day) ? 'text-emerald-400 font-bold' : ''}`}>
+                                {format(day, 'd')}
+                              </span>
+                              
+                              {/* Session indicators */}
+                              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                                {hasPTSession && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                )}
+                                {hasSoloWorkout && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Upcoming Sessions List */}
+                  <h3 className="text-white font-medium mt-4">Upcoming Sessions</h3>
+                  {(() => {
+                    const scheduledSessions = sessions.filter(s => s.status === 'scheduled');
+                    const allUpcoming = [...scheduledSessions, ...calendarEvents]
+                      .filter(e => {
+                        const eventDate = new Date('date' in e ? e.date : '');
+                        return isFuture(eventDate) || isToday(eventDate);
+                      })
+                      .sort((a, b) => {
+                        const dateA = new Date('date' in a ? a.date : '');
+                        const dateB = new Date('date' in b ? b.date : '');
+                        return dateA.getTime() - dateB.getTime();
+                      })
+                      .slice(0, 5);
+                    
+                    if (allUpcoming.length === 0) {
+                      return (
+                        <Card className="bg-gray-900 border-gray-800">
+                          <CardContent className="p-6 text-center">
+                            <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                            <p className="text-gray-400 text-sm">No upcoming sessions</p>
+                            <Button 
+                              size="sm" 
+                              className="mt-3 bg-emerald-500 hover:bg-emerald-600"
+                              onClick={() => router.push(`/clients/${clientId}/book`)}
+                            >
+                              Book First Session
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      );
+                    }
+                    
+                    return (
+                      <div className="space-y-2">
+                        {allUpcoming.map((event: any, i) => {
+                          const isPT = event.type === 'pt_session' || event.type === 'session';
+                          const eventDate = new Date(event.date);
+                          const title = event.title || `PT Session`;
+                          const time = event.startTime || '';
+                          
+                          return (
+                            <Card key={i} className={`border ${isPT ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
+                              <CardContent className="p-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${isPT ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}>
+                                      {isPT ? (
+                                        <User className={`w-4 h-4 text-emerald-400`} />
+                                      ) : (
+                                        <Dumbbell className={`w-4 h-4 text-blue-400`} />
+                                      )}
+                                    </div>
+                                    <div>
+                                      <p className="text-white font-medium text-sm">{title}</p>
+                                      <p className="text-gray-400 text-xs">
+                                        {format(eventDate, 'EEE, MMM d')} {time && `• ${time}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  {isToday(eventDate) && (
+                                    <Badge className="bg-emerald-500 text-xs">Today</Badge>
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </>
               );
             })()}
