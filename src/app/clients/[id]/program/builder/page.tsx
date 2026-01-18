@@ -100,11 +100,24 @@ const COMMON_EXERCISES = [
   { id: 'bird-dog', name: 'Bird Dog', pattern: 'core' },
 ];
 
-const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode }[] = [
-  { value: 'warmup', label: 'Warm-up', icon: <Flame className="h-4 w-4 text-orange-500" /> },
-  { value: 'work', label: 'Work', icon: <Dumbbell className="h-4 w-4 text-primary" /> },
-  { value: 'cooldown', label: 'Cool-down', icon: <RotateCcw className="h-4 w-4 text-blue-500" /> },
+const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
+  { value: 'warmup', label: 'Warm-up', icon: <Flame className="h-4 w-4 text-yellow-500" />, color: 'yellow' },
+  { value: 'work', label: 'Strength', icon: <Dumbbell className="h-4 w-4 text-blue-400" />, color: 'blue' },
+  { value: 'circuit', label: 'Circuit', icon: <Target className="h-4 w-4 text-orange-400" />, color: 'orange' },
+  { value: 'cooldown', label: 'Cool-down', icon: <RotateCcw className="h-4 w-4 text-purple-500" />, color: 'purple' },
 ];
+
+// Block color styles
+const getBlockStyles = (type: BlockType) => {
+  const styles: Record<BlockType, { bg: string; border: string; badge: string }> = {
+    warmup: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' },
+    work: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
+    circuit: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400 border-orange-500/50' },
+    cardio: { bg: 'bg-green-500/10', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400 border-green-500/50' },
+    cooldown: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' },
+  };
+  return styles[type] || styles.work;
+};
 
 export default function WorkoutBuilderPage() {
   const params = useParams();
@@ -259,8 +272,10 @@ export default function WorkoutBuilderPage() {
 
       {/* Blocks */}
       <div className="space-y-4 mb-20">
-        {blocks.map((block, blockIndex) => (
-          <Card key={block.id}>
+        {blocks.map((block, blockIndex) => {
+          const blockStyles = getBlockStyles(block.type);
+          return (
+          <Card key={block.id} className={`${blockStyles.bg} ${blockStyles.border} border-2`}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -268,10 +283,10 @@ export default function WorkoutBuilderPage() {
                   <Input
                     value={block.name}
                     onChange={(e) => updateBlockName(block.id, e.target.value)}
-                    className="font-semibold border-none p-0 h-auto text-lg focus-visible:ring-0"
+                    className="font-semibold border-none p-0 h-auto text-lg focus-visible:ring-0 bg-transparent"
                   />
-                  <Badge variant="outline" className="text-xs capitalize">
-                    {block.type}
+                  <Badge className={`text-xs capitalize ${blockStyles.badge}`}>
+                    {block.type === 'work' ? 'strength' : block.type}
                   </Badge>
                 </div>
                 <Button 
@@ -367,7 +382,8 @@ export default function WorkoutBuilderPage() {
               </div>
             </CardContent>
           </Card>
-        ))}
+        );
+        })}
 
         {/* Add Block */}
         <Card className="border-dashed">
