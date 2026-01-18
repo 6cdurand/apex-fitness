@@ -1165,3 +1165,49 @@ export async function fullCleanup(): Promise<void> {
   clearAllLocalData();
   console.log('[Full Cleanup] ✅ Complete! Refresh the page to start fresh.');
 }
+
+// DEBUG: Check what's actually in Supabase - call from browser console
+export async function debugSupabase(trainerId?: string): Promise<void> {
+  console.log('=== SUPABASE DEBUG ===');
+  console.log('Configured:', isSupabaseConfigured());
+  console.log('URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+  
+  if (!isSupabaseConfigured()) {
+    console.error('❌ Supabase NOT configured - check env vars');
+    return;
+  }
+  
+  try {
+    // Test connection by fetching users count
+    const { data: users, error: usersError } = await supabase.from('users').select('id, email, display_name');
+    console.log('Users table:', usersError ? `ERROR: ${usersError.message}` : `${users?.length || 0} users`);
+    if (users) console.table(users);
+    
+    // Check trainer_clients table
+    const { data: clients, error: clientsError } = await supabase.from('trainer_clients').select('*');
+    console.log('Trainer_clients table:', clientsError ? `ERROR: ${clientsError.message}` : `${clients?.length || 0} records`);
+    if (clients) console.table(clients);
+    
+    // Check trainer_sessions table
+    const { data: sessions, error: sessionsError } = await supabase.from('trainer_sessions').select('*');
+    console.log('Trainer_sessions table:', sessionsError ? `ERROR: ${sessionsError.message}` : `${sessions?.length || 0} records`);
+    
+    // Check session_packages table
+    const { data: packages, error: packagesError } = await supabase.from('session_packages').select('*');
+    console.log('Session_packages table:', packagesError ? `ERROR: ${packagesError.message}` : `${packages?.length || 0} records`);
+    
+    // If trainerId provided, fetch specifically for that trainer
+    if (trainerId) {
+      console.log('\n--- Data for trainer:', trainerId, '---');
+      const trainerClients = await fetchTrainerClientsFromSupabase(trainerId);
+      console.log('Clients for this trainer:', trainerClients.length);
+      console.table(trainerClients);
+      
+      const trainerSessions = await fetchTrainerSessionsFromSupabase(trainerId);
+      console.log('Sessions for this trainer:', trainerSessions.length);
+    }
+    
+  } catch (e) {
+    console.error('Debug error:', e);
+  }
+}

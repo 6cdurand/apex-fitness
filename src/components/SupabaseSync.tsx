@@ -7,9 +7,15 @@ import {
   fetchAllUserDataFromSupabase, 
   isSupabaseConfigured, 
   mergeData,
+  debugSupabase,
   type MessageData,
   type ConversationData,
 } from '@/lib/supabaseSync';
+
+// Expose debug function globally for browser console
+if (typeof window !== 'undefined') {
+  (window as any).debugSupabase = debugSupabase;
+}
 
 /**
  * SupabaseSync Component
