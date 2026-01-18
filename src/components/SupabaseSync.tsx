@@ -14,13 +14,15 @@ import {
 /**
  * SupabaseSync Component
  * Syncs ALL user data from Supabase on login for cross-device access
+ * Now syncs on EVERY page load for trainers to ensure cross-device consistency
  */
 export function SupabaseSync() {
   const { user, isAuthenticated, updateUser } = useAuthStore();
-  const hasSynced = useRef(false);
+  const hasSyncedUser = useRef(false);
 
+  // Sync user data (workouts, PBs, medals, etc.) - once per session
   useEffect(() => {
-    if (!isAuthenticated || !user?.id || hasSynced.current) return;
+    if (!isAuthenticated || !user?.id || hasSyncedUser.current) return;
     if (!isSupabaseConfigured()) {
       console.log('[SupabaseSync] Supabase not configured, using localStorage only');
       return;
@@ -91,13 +93,7 @@ export function SupabaseSync() {
         useMedalStore.getState().calculateStrengthRating();
       }, 100);
 
-      // Sync trainer data if user is a trainer
-      if (user.mode === 'trainer' || user.isTrainer) {
-        console.log('[SupabaseSync] User is a trainer, loading trainer data...');
-        await useTrainerStore.getState().loadFromSupabase(user.id);
-      }
-
-      console.log(`[SupabaseSync] ✅ Synced from Supabase:
+      console.log(`[SupabaseSync] ✅ Synced user data from Supabase:
         - ${remoteData.workouts.length} workouts
         - ${remoteData.personalBests.length} personal bests
         - ${remoteData.medals.length} medals
@@ -106,11 +102,28 @@ export function SupabaseSync() {
         - ${remoteData.followers.length} followers
         - ${remoteData.following.length} following`);
       
-      hasSynced.current = true;
+      hasSyncedUser.current = true;
     };
 
     syncFromSupabase();
   }, [isAuthenticated, user?.id, updateUser]);
+
+  // SEPARATE effect for trainer data - syncs on EVERY mount to ensure cross-device consistency
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) return;
+    if (!isSupabaseConfigured()) return;
+    if (user.mode !== 'trainer' && !user.isTrainer) return;
+
+    const syncTrainerData = async () => {
+      console.log('[SupabaseSync] 🔄 Syncing trainer data from Supabase (every page load)...');
+      await useTrainerStore.getState().loadFromSupabase(user.id);
+      console.log('[SupabaseSync] ✅ Trainer data synced');
+    };
+
+    // Small delay to ensure auth is fully loaded
+    const timer = setTimeout(syncTrainerData, 500);
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user?.id, user?.mode, user?.isTrainer]);
 
   return null;
 }
