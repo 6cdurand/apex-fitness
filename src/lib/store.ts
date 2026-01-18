@@ -1220,6 +1220,13 @@ export const useTrainerStore = create<TrainerState>()(
         const trainerId = useAuthStore.getState().user?.id;
         if (!trainerId) return;
 
+        // CHECK FOR DUPLICATE - don't add if client already exists
+        const existingClient = get().clients.find(c => c.clientId === clientId);
+        if (existingClient) {
+          console.log('[Trainer Store] Client already exists, skipping duplicate add:', clientId);
+          return;
+        }
+
         const newClient: TrainerClient = {
           id: uuidv4(),
           trainerId,
@@ -2063,24 +2070,27 @@ export const useTrainerStore = create<TrainerState>()(
           }
         });
         
-        // Merge clients
-        const mergedClients = [...localClients]; // Start with local
-        supabaseClients.forEach((sbClient: any) => {
-          const existingIdx = mergedClients.findIndex(c => c.clientId === sbClient.clientId);
-          if (existingIdx === -1) {
-            // Add from Supabase if not in local
-            mergedClients.push({
-              id: sbClient.id,
-              trainerId: sbClient.trainerId,
-              clientId: sbClient.clientId,
-              status: sbClient.status || 'active',
-              startDate: sbClient.startDate,
-              onboardingComplete: sbClient.onboardingComplete,
-              notes: sbClient.notes,
-              goals: sbClient.goals,
-            });
+        // Merge clients - SUPABASE IS SOURCE OF TRUTH
+        // Start with Supabase clients, then add any local-only clients
+        const mergedClients: TrainerClient[] = supabaseClients.map((sbClient: any) => ({
+          id: sbClient.id,
+          trainerId: sbClient.trainerId,
+          clientId: sbClient.clientId,
+          status: sbClient.status || 'active',
+          startDate: sbClient.startDate,
+          onboardingComplete: sbClient.onboardingComplete,
+          notes: sbClient.notes,
+          goals: sbClient.goals,
+        }));
+        
+        // Add local clients that aren't in Supabase yet
+        localClients.forEach(localClient => {
+          if (!mergedClients.find(c => c.clientId === localClient.clientId)) {
+            mergedClients.push(localClient);
           }
         });
+        
+        console.log(`[Trainer Store] Merged clients: ${supabaseClients.length} from Supabase + ${localClients.filter(l => !supabaseClients.find((s: any) => s.clientId === l.clientId)).length} local-only`);
         
         set({
           sessions: mergedSessions,
