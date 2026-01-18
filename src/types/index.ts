@@ -393,6 +393,8 @@ export interface TimerState {
   seconds: number;
   type: 'workout' | 'rest';
   exerciseId?: string;
+  startTimestamp?: number; // Unix timestamp when timer started (for background persistence)
+  accumulatedSeconds?: number; // Seconds accumulated before last pause
 }
 
 // ============ CLIENT SESSION & PAYMENT TRACKING ============

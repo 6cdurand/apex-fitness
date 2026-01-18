@@ -21,7 +21,11 @@ import {
   Check,
   Send,
   User,
+  Dumbbell,
+  FileText,
+  Zap,
 } from 'lucide-react';
+import { allTrainerTemplates, TrainerTemplate } from '@/lib/trainerTemplates';
 import { format, addDays, setHours, setMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import { User as UserType } from '@/types';
@@ -64,6 +68,10 @@ export default function BookClientPage() {
   const [location, setLocation] = useState('');
   const [autoConfirm, setAutoConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Workout type selection
+  const [workoutType, setWorkoutType] = useState<'program' | 'empty' | 'template'>('program');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -260,6 +268,90 @@ export default function BookClientPage() {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Workout Type Selection */}
+        {sessionType === 'pt_session' && (
+          <div className="space-y-3">
+            <Label className="text-gray-300 flex items-center gap-2">
+              <Dumbbell className="w-4 h-4 text-emerald-400" />
+              Workout Plan
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                variant={workoutType === 'program' ? 'default' : 'outline'}
+                className={workoutType === 'program' 
+                  ? 'bg-emerald-500 hover:bg-emerald-600 flex-col h-auto py-3' 
+                  : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-3'
+                }
+                onClick={() => setWorkoutType('program')}
+              >
+                <FileText className="w-5 h-5 mb-1" />
+                <span className="text-xs">Follow Program</span>
+              </Button>
+              <Button
+                variant={workoutType === 'template' ? 'default' : 'outline'}
+                className={workoutType === 'template' 
+                  ? 'bg-blue-500 hover:bg-blue-600 flex-col h-auto py-3' 
+                  : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-3'
+                }
+                onClick={() => setWorkoutType('template')}
+              >
+                <Zap className="w-5 h-5 mb-1" />
+                <span className="text-xs">Template</span>
+              </Button>
+              <Button
+                variant={workoutType === 'empty' ? 'default' : 'outline'}
+                className={workoutType === 'empty' 
+                  ? 'bg-gray-600 hover:bg-gray-700 flex-col h-auto py-3' 
+                  : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-3'
+                }
+                onClick={() => setWorkoutType('empty')}
+              >
+                <Dumbbell className="w-5 h-5 mb-1" />
+                <span className="text-xs">Empty</span>
+              </Button>
+            </div>
+
+            {/* Template Selection */}
+            {workoutType === 'template' && (
+              <div className="space-y-2 mt-3">
+                <Label className="text-gray-400 text-sm">Select Template</Label>
+                <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Choose a workout template..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700 max-h-[300px]">
+                    {/* Strength Templates */}
+                    <div className="px-2 py-1 text-xs text-gray-500 font-semibold">STRENGTH</div>
+                    {allTrainerTemplates.filter(t => t.category !== 'circuit').map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-blue-400" />
+                          {t.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                    {/* Circuit Templates */}
+                    <div className="px-2 py-1 text-xs text-gray-500 font-semibold mt-2">CIRCUITS</div>
+                    {allTrainerTemplates.filter(t => t.category === 'circuit').map((t) => (
+                      <SelectItem key={t.id} value={t.id} className="text-gray-200">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-orange-400" />
+                          {t.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedTemplateId && (
+                  <p className="text-xs text-gray-500">
+                    {allTrainerTemplates.find(t => t.id === selectedTemplateId)?.description}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Location */}
         <div className="space-y-2">

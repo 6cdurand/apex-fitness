@@ -276,7 +276,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         };
         set({ 
           activeWorkout: workout,
-          workoutTimer: { isRunning: true, seconds: 0, type: 'workout' },
+          workoutTimer: { isRunning: true, seconds: 0, type: 'workout', startTimestamp: Date.now(), accumulatedSeconds: 0 },
           currentClientId: clientId || null,
         });
       },
@@ -325,7 +325,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         };
         set({ 
           activeWorkout: workout,
-          workoutTimer: { isRunning: true, seconds: 0, type: 'workout' },
+          workoutTimer: { isRunning: true, seconds: 0, type: 'workout', startTimestamp: Date.now(), accumulatedSeconds: 0 },
           currentClientId: clientId || null,
         });
       },
@@ -597,29 +597,56 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       startWorkoutTimer: () => {
         set(state => ({
-          workoutTimer: { ...state.workoutTimer, isRunning: true },
+          workoutTimer: { 
+            ...state.workoutTimer, 
+            isRunning: true,
+            startTimestamp: Date.now(),
+            accumulatedSeconds: state.workoutTimer.seconds,
+          },
         }));
       },
 
       pauseWorkoutTimer: () => {
-        set(state => ({
-          workoutTimer: { ...state.workoutTimer, isRunning: false },
-        }));
+        // When pausing, calculate current elapsed time and store it
+        const state = get();
+        const elapsed = state.workoutTimer.startTimestamp 
+          ? Math.floor((Date.now() - state.workoutTimer.startTimestamp) / 1000)
+          : 0;
+        const totalSeconds = (state.workoutTimer.accumulatedSeconds || 0) + elapsed;
+        
+        set({
+          workoutTimer: { 
+            ...state.workoutTimer, 
+            isRunning: false,
+            seconds: totalSeconds,
+            startTimestamp: undefined,
+            accumulatedSeconds: totalSeconds,
+          },
+        });
       },
 
       resetWorkoutTimer: () => {
         set({
-          workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
+          workoutTimer: { isRunning: false, seconds: 0, type: 'workout', startTimestamp: undefined, accumulatedSeconds: 0 },
         });
       },
 
       tickWorkoutTimer: () => {
-        set(state => ({
+        // Calculate elapsed time from timestamp (handles background/sleep correctly)
+        const state = get();
+        if (!state.workoutTimer.isRunning || !state.workoutTimer.startTimestamp) {
+          return;
+        }
+        
+        const elapsed = Math.floor((Date.now() - state.workoutTimer.startTimestamp) / 1000);
+        const totalSeconds = (state.workoutTimer.accumulatedSeconds || 0) + elapsed;
+        
+        set({
           workoutTimer: {
             ...state.workoutTimer,
-            seconds: state.workoutTimer.seconds + 1,
+            seconds: totalSeconds,
           },
-        }));
+        });
       },
 
       startRestTimer: (seconds, exerciseId) => {
