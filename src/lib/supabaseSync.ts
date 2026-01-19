@@ -1166,6 +1166,332 @@ export async function fullCleanup(): Promise<void> {
   console.log('[Full Cleanup] ✅ Complete! Refresh the page to start fresh.');
 }
 
+// ============ CALENDAR EVENTS SYNC ============
+
+export async function syncCalendarEventToSupabase(event: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbEvent = {
+      id: event.id,
+      title: event.title,
+      type: event.type,
+      date: event.date,
+      start_time: event.startTime || null,
+      end_time: event.endTime || null,
+      duration: event.duration || null,
+      client_id: event.clientId || null,
+      trainer_id: event.trainerId || null,
+      workout_id: event.workoutId || null,
+      notes: event.notes || null,
+      status: event.status || 'scheduled',
+      color: event.color || null,
+      client_confirmed: event.clientConfirmed || false,
+      client_confirmed_at: event.clientConfirmedAt || null,
+    };
+    
+    const { error } = await supabase.from('calendar_events').upsert(dbEvent, { onConflict: 'id' });
+    if (error) {
+      console.error('[Calendar Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Calendar Sync] ✅ Event synced:', event.id);
+    return true;
+  } catch (e) {
+    console.error('[Calendar Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchCalendarEventsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Calendar Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(e => ({
+      id: e.id,
+      title: e.title,
+      type: e.type,
+      date: e.date,
+      startTime: e.start_time,
+      endTime: e.end_time,
+      duration: e.duration,
+      clientId: e.client_id,
+      trainerId: e.trainer_id,
+      workoutId: e.workout_id,
+      notes: e.notes,
+      status: e.status,
+      color: e.color,
+      clientConfirmed: e.client_confirmed,
+      clientConfirmedAt: e.client_confirmed_at,
+    }));
+  } catch (e) {
+    console.error('[Calendar Fetch] Exception:', e);
+    return [];
+  }
+}
+
+export async function deleteCalendarEventFromSupabase(eventId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('calendar_events').delete().eq('id', eventId);
+    if (error) {
+      console.error('[Calendar Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ============ PAYMENTS SYNC ============
+
+export async function syncPaymentToSupabase(payment: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbPayment = {
+      id: payment.id,
+      trainer_id: payment.trainerId,
+      client_id: payment.clientId,
+      amount: payment.amount,
+      currency: payment.currency || 'NZD',
+      type: payment.type,
+      sessions_included: payment.sessionsIncluded || null,
+      description: payment.description,
+      status: payment.status,
+      due_date: payment.dueDate || null,
+      paid_at: payment.paidAt || null,
+      method: payment.method || null,
+      invoice_number: payment.invoiceNumber || null,
+      created_at: payment.createdAt,
+    };
+    
+    const { error } = await supabase.from('client_payments').upsert(dbPayment, { onConflict: 'id' });
+    if (error) {
+      console.error('[Payment Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Payment Sync] ✅ Payment synced:', payment.id);
+    return true;
+  } catch (e) {
+    console.error('[Payment Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('client_payments')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Payment Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(p => ({
+      id: p.id,
+      trainerId: p.trainer_id,
+      clientId: p.client_id,
+      amount: p.amount,
+      currency: p.currency,
+      type: p.type,
+      sessionsIncluded: p.sessions_included,
+      description: p.description,
+      status: p.status,
+      dueDate: p.due_date,
+      paidAt: p.paid_at,
+      method: p.method,
+      invoiceNumber: p.invoice_number,
+      createdAt: p.created_at,
+    }));
+  } catch (e) {
+    console.error('[Payment Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// ============ CLIENT PROGRAMS SYNC ============
+
+export async function syncClientProgramToSupabase(program: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbProgram = {
+      id: program.id,
+      client_id: program.clientId,
+      trainer_id: program.trainerId,
+      template_id: program.templateId || null,
+      template_name: program.templateName || null,
+      phase: program.phase || null,
+      goal: program.goal || null,
+      weekly_plan: program.weeklyPlan || null,
+      training_days: program.trainingDays || null,
+      start_date: program.startDate || null,
+      end_date: program.endDate || null,
+      status: program.status || 'active',
+      updated_at: new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+    if (error) {
+      console.error('[Program Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Program Sync] ✅ Program synced:', program.id);
+    return true;
+  } catch (e) {
+    console.error('[Program Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchClientProgramsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('client_programs')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Program Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(p => ({
+      id: p.id,
+      clientId: p.client_id,
+      trainerId: p.trainer_id,
+      templateId: p.template_id,
+      templateName: p.template_name,
+      phase: p.phase,
+      goal: p.goal,
+      weeklyPlan: p.weekly_plan,
+      trainingDays: p.training_days,
+      startDate: p.start_date,
+      endDate: p.end_date,
+      status: p.status,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    }));
+  } catch (e) {
+    console.error('[Program Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// ============ BOOKING REQUESTS SYNC ============
+
+export async function syncBookingRequestToSupabase(request: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbRequest = {
+      id: request.id,
+      trainer_id: request.trainerId,
+      client_id: request.clientId,
+      date: request.date,
+      start_time: request.startTime,
+      end_time: request.endTime,
+      type: request.type,
+      status: request.status,
+      requested_by: request.requestedBy,
+      confirmed_by: request.confirmedBy || null,
+      notes: request.notes || null,
+      location: request.location || null,
+      created_at: request.createdAt,
+      responded_at: request.respondedAt || null,
+      calendar_event_id: request.calendarEventId || null,
+    };
+    
+    const { error } = await supabase.from('booking_requests').upsert(dbRequest, { onConflict: 'id' });
+    if (error) {
+      console.error('[Booking Sync] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Booking Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchBookingRequestsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('booking_requests')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Booking Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(r => ({
+      id: r.id,
+      trainerId: r.trainer_id,
+      clientId: r.client_id,
+      date: r.date,
+      startTime: r.start_time,
+      endTime: r.end_time,
+      type: r.type,
+      status: r.status,
+      requestedBy: r.requested_by,
+      confirmedBy: r.confirmed_by,
+      notes: r.notes,
+      location: r.location,
+      createdAt: r.created_at,
+      respondedAt: r.responded_at,
+      calendarEventId: r.calendar_event_id,
+    }));
+  } catch (e) {
+    console.error('[Booking Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// ============ DELETE FUNCTIONS ============
+
+export async function deleteTrainerSessionFromSupabase(sessionId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('trainer_sessions').delete().eq('id', sessionId);
+    return !error;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function deleteTrainerClientFromSupabase(clientId: string, trainerId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('trainer_clients').delete().eq('client_id', clientId).eq('trainer_id', trainerId);
+    return !error;
+  } catch (e) {
+    return false;
+  }
+}
+
 // DEBUG: Check what's actually in Supabase - call from browser console
 export async function debugSupabase(trainerId?: string): Promise<void> {
   console.log('=== SUPABASE DEBUG ===');

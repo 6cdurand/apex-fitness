@@ -1,7 +1,31 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
-import { syncWorkoutToSupabase, syncPBToSupabase, syncMedalToSupabase, registerUserToSupabase, loginFromSupabase, updateUserInSupabase, syncTrainerSessionToSupabase, syncSessionPackageToSupabase, fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase, syncTrainerClientToSupabase, fetchTrainerClientsFromSupabase } from './supabaseSync';
+import { 
+  syncWorkoutToSupabase, 
+  syncPBToSupabase, 
+  syncMedalToSupabase, 
+  registerUserToSupabase, 
+  loginFromSupabase, 
+  updateUserInSupabase, 
+  syncTrainerSessionToSupabase, 
+  syncSessionPackageToSupabase, 
+  fetchTrainerSessionsFromSupabase, 
+  fetchSessionPackagesFromSupabase, 
+  syncTrainerClientToSupabase, 
+  fetchTrainerClientsFromSupabase,
+  // New sync functions for all data types
+  syncCalendarEventToSupabase,
+  fetchCalendarEventsFromSupabase,
+  deleteCalendarEventFromSupabase,
+  syncPaymentToSupabase,
+  fetchPaymentsFromSupabase,
+  syncClientProgramToSupabase,
+  fetchClientProgramsFromSupabase,
+  syncBookingRequestToSupabase,
+  fetchBookingRequestsFromSupabase,
+  deleteTrainerClientFromSupabase,
+} from './supabaseSync';
 import {
   User,
   UserMode,
@@ -1603,6 +1627,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           calendarEvents: [...state.calendarEvents, newEvent],
         }));
+        // Sync to Supabase immediately
+        syncCalendarEventToSupabase(newEvent);
       },
 
       updateCalendarEvent: (eventId, updates) => {
@@ -1611,12 +1637,17 @@ export const useTrainerStore = create<TrainerState>()(
             e.id === eventId ? { ...e, ...updates } : e
           ),
         }));
+        // Sync to Supabase
+        const updated = get().calendarEvents.find(e => e.id === eventId);
+        if (updated) syncCalendarEventToSupabase(updated);
       },
 
       deleteCalendarEvent: (eventId) => {
         set(state => ({
           calendarEvents: state.calendarEvents.filter(e => e.id !== eventId),
         }));
+        // Delete from Supabase
+        deleteCalendarEventFromSupabase(eventId);
       },
 
       getEventsForDate: (date) => {
@@ -1734,6 +1765,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           payments: [...state.payments, newPayment],
         }));
+        // Sync to Supabase immediately
+        syncPaymentToSupabase(newPayment);
       },
 
       updatePayment: (paymentId, updates) => {
@@ -1742,6 +1775,9 @@ export const useTrainerStore = create<TrainerState>()(
             p.id === paymentId ? { ...p, ...updates } : p
           ),
         }));
+        // Sync to Supabase
+        const updated = get().payments.find(p => p.id === paymentId);
+        if (updated) syncPaymentToSupabase(updated);
       },
 
       getPaymentsForClient: (clientId) => {
@@ -1756,6 +1792,9 @@ export const useTrainerStore = create<TrainerState>()(
               : p
           ),
         }));
+        // Sync to Supabase
+        const updated = get().payments.find(p => p.id === paymentId);
+        if (updated) syncPaymentToSupabase(updated);
       },
 
       // Session packages
@@ -1806,6 +1845,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           bookingRequests: [...state.bookingRequests, newRequest],
         }));
+        // Sync to Supabase immediately
+        syncBookingRequestToSupabase(newRequest);
         
         // Send notification to client
         useSocialStore.getState().addNotification({
@@ -1846,6 +1887,11 @@ export const useTrainerStore = create<TrainerState>()(
           ),
           calendarEvents: [...state.calendarEvents, newEvent],
         }));
+        
+        // Sync to Supabase
+        syncCalendarEventToSupabase(newEvent);
+        const updatedRequest = get().bookingRequests.find(r => r.id === requestId);
+        if (updatedRequest) syncBookingRequestToSupabase(updatedRequest);
 
         // Create session record
         get().addSession({
@@ -1882,6 +1928,9 @@ export const useTrainerStore = create<TrainerState>()(
               : r
           ),
         }));
+        // Sync to Supabase
+        const updated = get().bookingRequests.find(r => r.id === requestId);
+        if (updated) syncBookingRequestToSupabase(updated);
 
         // Notify trainer
         useSocialStore.getState().addNotification({
@@ -1900,6 +1949,9 @@ export const useTrainerStore = create<TrainerState>()(
               : r
           ),
         }));
+        // Sync to Supabase
+        const updated = get().bookingRequests.find(r => r.id === requestId);
+        if (updated) syncBookingRequestToSupabase(updated);
       },
 
       getBookingRequestsForClient: (clientId) => {
@@ -1923,6 +1975,12 @@ export const useTrainerStore = create<TrainerState>()(
             program,
           ],
         }));
+        // Sync to Supabase
+        syncClientProgramToSupabase(program);
+        // Also sync any deactivated programs
+        get().clientPrograms
+          .filter(p => p.clientId === program.clientId && p.status === 'completed')
+          .forEach(p => syncClientProgramToSupabase(p));
       },
 
       updateClientProgram: (programId, updates) => {
@@ -1931,6 +1989,9 @@ export const useTrainerStore = create<TrainerState>()(
             p.id === programId ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
           ),
         }));
+        // Sync to Supabase
+        const updated = get().clientPrograms.find(p => p.id === programId);
+        if (updated) syncClientProgramToSupabase(updated);
       },
 
       getClientPrograms: (clientId) => {
@@ -2041,91 +2102,133 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       // Load trainer data from Supabase for cross-device sync
+      // OPTION 2: SUPABASE IS THE PRIMARY SOURCE OF TRUTH
       loadFromSupabase: async (trainerId: string) => {
-        console.log('[Trainer Store] Loading data from Supabase for trainer:', trainerId);
+        console.log('[Trainer Store] 🔄 Loading ALL data from Supabase (primary source):', trainerId);
         
-        // Fetch all data from Supabase
-        const supabaseSessions = await fetchTrainerSessionsFromSupabase(trainerId);
-        const supabasePackages = await fetchSessionPackagesFromSupabase(trainerId);
-        const supabaseClients = await fetchTrainerClientsFromSupabase(trainerId);
+        // Fetch ALL data from Supabase in parallel
+        const [
+          supabaseClients,
+          supabaseSessions,
+          supabasePackages,
+          supabaseCalendarEvents,
+          supabasePayments,
+          supabasePrograms,
+          supabaseBookings,
+        ] = await Promise.all([
+          fetchTrainerClientsFromSupabase(trainerId),
+          fetchTrainerSessionsFromSupabase(trainerId),
+          fetchSessionPackagesFromSupabase(trainerId),
+          fetchCalendarEventsFromSupabase(trainerId),
+          fetchPaymentsFromSupabase(trainerId),
+          fetchClientProgramsFromSupabase(trainerId),
+          fetchBookingRequestsFromSupabase(trainerId),
+        ]);
         
-        // Merge with local data (keep both, Supabase takes priority for conflicts)
+        // Get local data for bidirectional sync
+        const localClients = get().clients;
         const localSessions = get().sessions;
         const localPackages = get().sessionPackages;
-        const localClients = get().clients;
+        const localCalendarEvents = get().calendarEvents;
+        const localPayments = get().payments;
+        const localPrograms = get().clientPrograms;
+        const localBookings = get().bookingRequests;
         
-        // Merge sessions - use Supabase version if ID exists, otherwise keep local
+        // SUPABASE IS SOURCE OF TRUTH - start with Supabase data
+        // Then add any local-only items that need to be uploaded
+        
+        // Clients
+        const mergedClients: TrainerClient[] = supabaseClients.map((sb: any) => ({
+          id: sb.id,
+          trainerId: sb.trainerId,
+          clientId: sb.clientId,
+          status: sb.status || 'active',
+          startDate: sb.startDate,
+          onboardingComplete: sb.onboardingComplete,
+          notes: sb.notes,
+          goals: sb.goals,
+        }));
+        localClients.forEach(local => {
+          if (!mergedClients.find(c => c.clientId === local.clientId)) {
+            mergedClients.push(local);
+            syncTrainerClientToSupabase(local); // Upload to Supabase
+          }
+        });
+        
+        // Sessions
         const mergedSessions = [...supabaseSessions];
         localSessions.forEach(local => {
           if (!mergedSessions.find(s => s.id === local.id)) {
             mergedSessions.push(local);
+            syncTrainerSessionToSupabase(local);
           }
         });
         
-        // Merge packages
+        // Packages
         const mergedPackages = [...supabasePackages];
         localPackages.forEach(local => {
           if (!mergedPackages.find(p => p.id === local.id)) {
             mergedPackages.push(local);
+            syncSessionPackageToSupabase(local);
           }
         });
         
-        // Merge clients - SUPABASE IS SOURCE OF TRUTH
-        // Start with Supabase clients, then add any local-only clients
-        const mergedClients: TrainerClient[] = supabaseClients.map((sbClient: any) => ({
-          id: sbClient.id,
-          trainerId: sbClient.trainerId,
-          clientId: sbClient.clientId,
-          status: sbClient.status || 'active',
-          startDate: sbClient.startDate,
-          onboardingComplete: sbClient.onboardingComplete,
-          notes: sbClient.notes,
-          goals: sbClient.goals,
-        }));
-        
-        // Add local clients that aren't in Supabase yet
-        localClients.forEach(localClient => {
-          if (!mergedClients.find(c => c.clientId === localClient.clientId)) {
-            mergedClients.push(localClient);
+        // Calendar Events
+        const mergedCalendarEvents = [...supabaseCalendarEvents];
+        localCalendarEvents.forEach(local => {
+          if (!mergedCalendarEvents.find(e => e.id === local.id)) {
+            mergedCalendarEvents.push(local);
+            syncCalendarEventToSupabase(local);
           }
         });
         
-        console.log(`[Trainer Store] Merged clients: ${supabaseClients.length} from Supabase + ${localClients.filter(l => !supabaseClients.find((s: any) => s.clientId === l.clientId)).length} local-only`);
+        // Payments
+        const mergedPayments = [...supabasePayments];
+        localPayments.forEach(local => {
+          if (!mergedPayments.find(p => p.id === local.id)) {
+            mergedPayments.push(local);
+            syncPaymentToSupabase(local);
+          }
+        });
         
+        // Programs
+        const mergedPrograms = [...supabasePrograms];
+        localPrograms.forEach(local => {
+          if (!mergedPrograms.find(p => p.id === local.id)) {
+            mergedPrograms.push(local);
+            syncClientProgramToSupabase(local);
+          }
+        });
+        
+        // Booking Requests
+        const mergedBookings = [...supabaseBookings];
+        localBookings.forEach(local => {
+          if (!mergedBookings.find(b => b.id === local.id)) {
+            mergedBookings.push(local);
+            syncBookingRequestToSupabase(local);
+          }
+        });
+        
+        // Update store with merged data
         set({
+          clients: mergedClients,
           sessions: mergedSessions,
           sessionPackages: mergedPackages,
-          clients: mergedClients,
+          calendarEvents: mergedCalendarEvents,
+          payments: mergedPayments,
+          clientPrograms: mergedPrograms,
+          bookingRequests: mergedBookings,
         });
         
-        console.log(`[Trainer Store] Loaded ${supabaseSessions.length} sessions, ${supabasePackages.length} packages, ${supabaseClients.length} clients from Supabase`);
-        
-        // Also sync LOCAL clients to Supabase that aren't there yet (bidirectional sync)
-        const clientsToUpload = mergedClients.filter(
-          local => !supabaseClients.find((sb: any) => sb.clientId === local.clientId)
-        );
-        if (clientsToUpload.length > 0) {
-          console.log(`[Trainer Store] Uploading ${clientsToUpload.length} local clients to Supabase...`);
-          clientsToUpload.forEach(client => syncTrainerClientToSupabase(client));
-        }
-        
-        // Sync local sessions to Supabase that aren't there yet
-        const sessionsToUpload = mergedSessions.filter(
-          local => !supabaseSessions.find(sb => sb.id === local.id)
-        );
-        if (sessionsToUpload.length > 0) {
-          console.log(`[Trainer Store] Uploading ${sessionsToUpload.length} local sessions to Supabase...`);
-          sessionsToUpload.forEach(session => syncTrainerSessionToSupabase(session));
-        }
-        
-        // Sync local packages to Supabase that aren't there yet
-        const packagesToUpload = mergedPackages.filter(
-          local => !supabasePackages.find(sb => sb.id === local.id)
-        );
-        if (packagesToUpload.length > 0) {
-          console.log(`[Trainer Store] Uploading ${packagesToUpload.length} local packages to Supabase...`);
-          packagesToUpload.forEach(pkg => syncSessionPackageToSupabase(pkg));
-        }
+        console.log(`[Trainer Store] ✅ Loaded from Supabase:`, {
+          clients: supabaseClients.length,
+          sessions: supabaseSessions.length,
+          packages: supabasePackages.length,
+          calendarEvents: supabaseCalendarEvents.length,
+          payments: supabasePayments.length,
+          programs: supabasePrograms.length,
+          bookings: supabaseBookings.length,
+        });
       },
 
       // Update session package (for editing total, price, etc.)
