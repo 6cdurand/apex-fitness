@@ -1242,7 +1242,13 @@ export const useTrainerStore = create<TrainerState>()(
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
-        if (!trainerId) return;
+        
+        console.log('[Trainer Store] addClient called:', { clientId, trainerId, hasTrainerId: !!trainerId });
+        
+        if (!trainerId) {
+          console.error('[Trainer Store] ❌ Cannot add client - no trainer ID! User not logged in?');
+          return;
+        }
 
         // CHECK FOR DUPLICATE - don't add if client already exists
         const existingClient = get().clients.find(c => c.clientId === clientId);
@@ -1261,12 +1267,22 @@ export const useTrainerStore = create<TrainerState>()(
           ...onboardingData,
         };
 
+        console.log('[Trainer Store] Creating new client relationship:', newClient);
+
         set(state => ({
           clients: [...state.clients, newClient],
         }));
         
-        // Sync to Supabase for cross-device backup
-        syncTrainerClientToSupabase(newClient);
+        // Sync to Supabase for cross-device backup (async but we log result)
+        syncTrainerClientToSupabase(newClient).then(success => {
+          if (success) {
+            console.log('[Trainer Store] ✅ Client synced to Supabase:', clientId);
+          } else {
+            console.error('[Trainer Store] ❌ Failed to sync client to Supabase:', clientId);
+          }
+        }).catch(err => {
+          console.error('[Trainer Store] ❌ Exception syncing client:', err);
+        });
       },
 
       removeClient: (clientId) => {
