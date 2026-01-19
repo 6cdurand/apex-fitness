@@ -17,6 +17,50 @@ function simpleHash(str: string): string {
   return 'hash_' + Math.abs(hash).toString(36) + '_' + str.length;
 }
 
+// Ensure user exists in Supabase users table (for foreign key relationships)
+export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    // Check if user already exists
+    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).single();
+    
+    if (existing) {
+      console.log('[Supabase] User already exists in DB:', user.id);
+      return true;
+    }
+    
+    // User doesn't exist - create them
+    console.log('[Supabase] Creating user in DB:', user.id, user.email);
+    const { error } = await supabase.from('users').insert({
+      id: user.id,
+      email: user.email,
+      username: user.username || user.displayName,
+      display_name: user.displayName || user.username,
+      gender: user.gender,
+      date_of_birth: user.dateOfBirth,
+      height: user.height,
+      weight: user.weight,
+      preferred_unit: user.preferredUnit || 'kg',
+      is_trainer: user.isTrainer || false,
+      is_verified_trainer: user.isVerifiedTrainer || false,
+      mode: user.mode || 'user',
+      password_hash: 'migrated_user', // Placeholder for migrated users
+    });
+    
+    if (error) {
+      console.error('[Supabase] Error creating user:', error.message);
+      return false;
+    }
+    
+    console.log('[Supabase] ✅ User created in DB:', user.email);
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Exception ensuring user exists:', e);
+    return false;
+  }
+}
+
 // Register user to Supabase for cross-device login
 export async function registerUserToSupabase(user: User, password: string): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

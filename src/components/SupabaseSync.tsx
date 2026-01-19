@@ -8,6 +8,7 @@ import {
   isSupabaseConfigured, 
   mergeData,
   debugSupabase,
+  ensureUserExistsInSupabase,
   type MessageData,
   type ConversationData,
 } from '@/lib/supabaseSync';
@@ -127,6 +128,10 @@ export function SupabaseSync() {
       console.log('[SupabaseSync] Is trainer:', user.isTrainer);
       
       try {
+        // IMPORTANT: Ensure this user exists in Supabase users table first
+        // This is required for foreign key relationships (trainer_clients, etc.)
+        await ensureUserExistsInSupabase(user);
+        
         await useTrainerStore.getState().loadFromSupabase(user.id);
         
         // Check what we got
