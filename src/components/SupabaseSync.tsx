@@ -114,22 +114,36 @@ export function SupabaseSync() {
     syncFromSupabase();
   }, [isAuthenticated, user?.id, updateUser]);
 
-  // SEPARATE effect for trainer data - syncs on EVERY mount to ensure cross-device consistency
+  // SEPARATE effect for trainer data - syncs on EVERY mount for ALL authenticated users
+  // This ensures cross-device consistency regardless of localStorage state
   useEffect(() => {
     if (!isAuthenticated || !user?.id) return;
     if (!isSupabaseConfigured()) return;
-    if (user.mode !== 'trainer' && !user.isTrainer) return;
 
     const syncTrainerData = async () => {
-      console.log('[SupabaseSync] 🔄 Syncing trainer data from Supabase (every page load)...');
-      await useTrainerStore.getState().loadFromSupabase(user.id);
-      console.log('[SupabaseSync] ✅ Trainer data synced');
+      console.log('[SupabaseSync] 🔄 Syncing trainer data from Supabase...');
+      console.log('[SupabaseSync] User ID:', user.id);
+      console.log('[SupabaseSync] User mode:', user.mode);
+      console.log('[SupabaseSync] Is trainer:', user.isTrainer);
+      
+      try {
+        await useTrainerStore.getState().loadFromSupabase(user.id);
+        
+        // Check what we got
+        const clients = useTrainerStore.getState().clients;
+        console.log('[SupabaseSync] ✅ Trainer data synced - Clients:', clients.length);
+        if (clients.length > 0) {
+          console.log('[SupabaseSync] Client names:', clients.map(c => c.clientId));
+        }
+      } catch (error) {
+        console.error('[SupabaseSync] ❌ Error syncing trainer data:', error);
+      }
     };
 
     // Small delay to ensure auth is fully loaded
-    const timer = setTimeout(syncTrainerData, 500);
+    const timer = setTimeout(syncTrainerData, 300);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, user?.id, user?.mode, user?.isTrainer]);
+  }, [isAuthenticated, user?.id]);
 
   return null;
 }
