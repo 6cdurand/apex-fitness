@@ -22,8 +22,8 @@ export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   
   try {
-    // Check if user already exists
-    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).single();
+    // Check if user already exists (use maybeSingle to avoid 406 error when not found)
+    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).maybeSingle();
     
     if (existing) {
       console.log('[Supabase] User already exists in DB:', user.id);
@@ -99,8 +99,8 @@ export async function registerUserToSupabase(user: User, password: string): Prom
   console.log('[Supabase Register] User data:', JSON.stringify(userData, null, 2));
   
   try {
-    // First check if user already exists
-    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).single();
+    // First check if user already exists (use maybeSingle to avoid 406 error)
+    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).maybeSingle();
     
     if (existing) {
       console.log('[Supabase Register] User already exists, updating...');
@@ -149,7 +149,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
       .select('*')
       .eq('email', email)
       .eq('password_hash', simpleHash(password))
-      .single();
+      .maybeSingle();
     
     if (error || !data) {
       console.log('Supabase login failed:', error?.message);
@@ -237,7 +237,7 @@ export async function checkEmailExistsInSupabase(email: string): Promise<boolean
       .from('users')
       .select('id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
     
     return !!data;
   } catch {
@@ -808,7 +808,7 @@ export async function fetchStrengthRatingFromSupabase(userId: string): Promise<S
       .from('strength_ratings')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     
     if (error || !data) return null;
     
