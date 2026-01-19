@@ -139,20 +139,47 @@ export async function registerUserToSupabase(user: User, password: string): Prom
 // Login user from Supabase (cross-device)
 export async function loginFromSupabase(email: string, password: string): Promise<User | null> {
   if (!isSupabaseConfigured()) {
-    console.log('Supabase not configured');
+    console.log('[Supabase Login] Not configured');
     return null;
   }
   
+  const emailLower = email.toLowerCase().trim();
+  const passwordHash = simpleHash(password);
+  
+  console.log('[Supabase Login] Attempting login for:', emailLower);
+  console.log('[Supabase Login] Password hash:', passwordHash);
+  
   try {
+    // First check if user exists by email only (to debug password issues)
+    const { data: userByEmail } = await supabase
+      .from('users')
+      .select('id, email, password_hash')
+      .eq('email', emailLower)
+      .maybeSingle();
+    
+    if (!userByEmail) {
+      console.log('[Supabase Login] ❌ No user found with email:', emailLower);
+      return null;
+    }
+    
+    console.log('[Supabase Login] Found user, stored hash:', userByEmail.password_hash);
+    console.log('[Supabase Login] Provided hash:', passwordHash);
+    console.log('[Supabase Login] Hashes match:', userByEmail.password_hash === passwordHash);
+    
+    if (userByEmail.password_hash !== passwordHash) {
+      console.log('[Supabase Login] ❌ Password mismatch');
+      return null;
+    }
+    
+    // Now get full user data
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('email', email)
-      .eq('password_hash', simpleHash(password))
+      .eq('id', userByEmail.id)
       .maybeSingle();
     
     if (error || !data) {
-      console.log('Supabase login failed:', error?.message);
+      console.log('[Supabase Login] ❌ Error fetching user data:', error?.message);
       return null;
     }
     

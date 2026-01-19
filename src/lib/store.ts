@@ -76,21 +76,29 @@ export const useAuthStore = create<AuthState>()(
       login: async (email: string, password: string) => {
         set({ isLoading: true });
         
+        console.log('[Auth] Login attempt for:', email);
+        
         // First try localStorage (for quick local login)
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        console.log('[Auth] Found', storedUsers.length, 'users in localStorage');
+        
         const localUser = storedUsers.find((u: User & { password: string }) => 
-          u.email === email && u.password === password
+          u.email?.toLowerCase() === email.toLowerCase() && u.password === password
         );
         
         if (localUser) {
+          console.log('[Auth] ✅ Found user in localStorage');
           const { password: _, ...userData } = localUser;
           set({ user: userData, isAuthenticated: true, isLoading: false });
           return true;
         }
         
+        console.log('[Auth] User not in localStorage, trying Supabase...');
+        
         // Try Supabase for cross-device login
         const supabaseUser = await loginFromSupabase(email, password);
         if (supabaseUser) {
+          console.log('[Auth] ✅ Found user in Supabase:', supabaseUser.email);
           // Save to localStorage for future local logins
           storedUsers.push({ ...supabaseUser, password });
           localStorage.setItem('apex-users', JSON.stringify(storedUsers));
@@ -98,6 +106,7 @@ export const useAuthStore = create<AuthState>()(
           return true;
         }
         
+        console.log('[Auth] ❌ Login failed - user not found in localStorage or Supabase');
         set({ isLoading: false });
         return false;
       },
