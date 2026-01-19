@@ -91,9 +91,35 @@ export default function ClientsPage() {
     }
   }, [isAuthenticated, user?.mode, router]);
 
+  // Load users from both localStorage AND Supabase for cross-device sync
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored);
+    const loadAllUsers = async () => {
+      // Start with localStorage for quick load
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored);
+      
+      // Then fetch from Supabase and merge (Supabase is source of truth)
+      try {
+        const supabaseUsersList = await fetchAllUsersFromSupabase();
+        if (supabaseUsersList && supabaseUsersList.length > 0) {
+          console.log('[Clients] Loaded', supabaseUsersList.length, 'users from Supabase');
+          
+          // Merge: Supabase users take precedence, add any local-only users
+          const supabaseIds = new Set(supabaseUsersList.map((u: any) => u.id));
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
+          const mergedUsers = [...supabaseUsersList, ...localOnlyUsers];
+          
+          setAllUsers(mergedUsers);
+          
+          // Update localStorage with merged data
+          localStorage.setItem('apex-users', JSON.stringify(mergedUsers));
+        }
+      } catch (e) {
+        console.error('[Clients] Error loading users from Supabase:', e);
+      }
+    };
+    
+    loadAllUsers();
   }, []);
 
   // Fetch Supabase users when link mode is selected

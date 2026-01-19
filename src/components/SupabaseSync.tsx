@@ -25,11 +25,10 @@ if (typeof window !== 'undefined') {
  */
 export function SupabaseSync() {
   const { user, isAuthenticated, updateUser } = useAuthStore();
-  const hasSyncedUser = useRef(false);
 
-  // Sync user data (workouts, PBs, medals, etc.) - once per session
+  // Sync user data (workouts, PBs, medals, etc.) - on EVERY page load for cross-device sync
   useEffect(() => {
-    if (!isAuthenticated || !user?.id || hasSyncedUser.current) return;
+    if (!isAuthenticated || !user?.id) return;
     if (!isSupabaseConfigured()) {
       console.log('[SupabaseSync] Supabase not configured, using localStorage only');
       return;
@@ -108,8 +107,6 @@ export function SupabaseSync() {
         - ${remoteData.conversations.length} conversations
         - ${remoteData.followers.length} followers
         - ${remoteData.following.length} following`);
-      
-      hasSyncedUser.current = true;
     };
 
     syncFromSupabase();
