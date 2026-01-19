@@ -1127,7 +1127,16 @@ export async function syncTrainerClientToSupabase(client: {
   notes?: string;
   goals?: string[];
 }): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isSupabaseConfigured()) {
+    console.log('[Client Sync] Supabase not configured');
+    return false;
+  }
+  
+  console.log('[Client Sync] 🔄 Syncing trainer-client relationship:', {
+    id: client.id,
+    trainerId: client.trainerId,
+    clientId: client.clientId,
+  });
   
   try {
     const dbClient = {
@@ -1141,19 +1150,28 @@ export async function syncTrainerClientToSupabase(client: {
       goals: client.goals || null,
     };
     
-    const { error } = await supabase
+    console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
+    
+    const { data, error, status } = await supabase
       .from('trainer_clients')
-      .upsert(dbClient, { onConflict: 'id' });
+      .upsert(dbClient, { onConflict: 'id' })
+      .select();
+    
+    console.log('[Client Sync] Response status:', status);
     
     if (error) {
-      console.error('[Client Sync] Error:', error.message);
+      console.error('[Client Sync] ❌ Error:', error.message);
+      console.error('[Client Sync] Error code:', error.code);
+      console.error('[Client Sync] Error details:', error.details);
+      console.error('[Client Sync] Error hint:', error.hint);
       return false;
     }
     
-    console.log('[Client Sync] ✅ Client synced:', client.clientId);
+    console.log('[Client Sync] ✅ Client synced successfully:', client.clientId);
+    console.log('[Client Sync] Returned data:', data);
     return true;
-  } catch (e) {
-    console.error('[Client Sync] Exception:', e);
+  } catch (e: any) {
+    console.error('[Client Sync] ❌ Exception:', e?.message || e);
     return false;
   }
 }
