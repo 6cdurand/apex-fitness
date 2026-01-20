@@ -40,8 +40,14 @@ import {
   User,
   ArrowUp,
   ArrowDown,
-  Info
+  Info,
+  Save,
+  X,
+  Trash2,
+  RefreshCw
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 // Exercise progressions/regressions mapping
 const EXERCISE_PROGRESSIONS: Record<string, { progressions: string[]; regressions: string[] }> = {
@@ -132,7 +138,13 @@ export default function WeeklyPlanPreviewPage() {
   const [activeDay, setActiveDay] = useState<string>('0');
   const [useCyclingMode, setUseCyclingMode] = useState<boolean>(false);
   const [sessionType, setSessionType] = useState<'pt' | 'solo' | 'mixed'>('pt');
-  const [selectedExercise, setSelectedExercise] = useState<{ id: string; name: string } | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<{ id: string; name: string; dayIndex: number; blockIndex: number; exerciseIndex: number } | null>(null);
+  
+  // Custom template state
+  const [customWorkoutDays, setCustomWorkoutDays] = useState<ClientWorkoutDay[]>([]);
+  const [hasCustomizations, setHasCustomizations] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [customTemplateName, setCustomTemplateName] = useState('');
 
   // Helper to sort blocks: warmup first, work in middle, cooldown last
   const sortBlocks = (blocksToSort: { type: string }[]) => {
@@ -141,7 +153,7 @@ export default function WeeklyPlanPreviewPage() {
   };
 
   // Create workout days based on template and frequency
-  const workoutDays = useMemo(() => {
+  const baseWorkoutDays = useMemo(() => {
     if (!template) return [];
     
     // Take the first N days based on frequency
@@ -168,11 +180,59 @@ export default function WeeklyPlanPreviewPage() {
       return {
         id: `day-${index}`,
         dayLabel: day.dayLabel,
-        scheduledDay: undefined, // Will be set based on selectedTrainingDays
+        scheduledDay: undefined,
         blocks: sortBlocks(mappedBlocks),
       };
     }) as ClientWorkoutDay[];
   }, [template, selectedFrequency]);
+  
+  // Use custom workout days if customized, otherwise use base
+  const workoutDays = hasCustomizations ? customWorkoutDays : baseWorkoutDays;
+  
+  // Initialize custom workout days when base changes
+  useMemo(() => {
+    if (baseWorkoutDays.length > 0 && customWorkoutDays.length === 0) {
+      setCustomWorkoutDays(JSON.parse(JSON.stringify(baseWorkoutDays)));
+    }
+  }, [baseWorkoutDays]);
+  
+  // Replace exercise function
+  const handleReplaceExercise = (dayIndex: number, blockIndex: number, exerciseIndex: number, newName: string, newId?: string) => {
+    setCustomWorkoutDays(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      if (updated[dayIndex]?.blocks[blockIndex]?.exercises[exerciseIndex]) {
+        updated[dayIndex].blocks[blockIndex].exercises[exerciseIndex].exerciseName = newName;
+        if (newId) {
+          updated[dayIndex].blocks[blockIndex].exercises[exerciseIndex].exerciseId = newId;
+        }
+      }
+      return updated;
+    });
+    setHasCustomizations(true);
+    setSelectedExercise(null);
+    toast.success(`Replaced with ${newName}`);
+  };
+  
+  // Remove exercise function
+  const handleRemoveExercise = (dayIndex: number, blockIndex: number, exerciseIndex: number) => {
+    setCustomWorkoutDays(prev => {
+      const updated = JSON.parse(JSON.stringify(prev));
+      if (updated[dayIndex]?.blocks[blockIndex]?.exercises) {
+        updated[dayIndex].blocks[blockIndex].exercises.splice(exerciseIndex, 1);
+      }
+      return updated;
+    });
+    setHasCustomizations(true);
+    setSelectedExercise(null);
+    toast.success('Exercise removed');
+  };
+  
+  // Reset to original template
+  const handleResetTemplate = () => {
+    setCustomWorkoutDays(JSON.parse(JSON.stringify(baseWorkoutDays)));
+    setHasCustomizations(false);
+    toast.success('Reset to original template');
+  };
 
   // Toggle a day as a training day
   const handleToggleTrainingDay = (day: typeof DAYS_OF_WEEK[number]) => {
@@ -539,7 +599,13 @@ export default function WeeklyPlanPreviewPage() {
                             <div 
                               key={exercise.id}
                               className="flex items-center justify-between p-2 bg-muted/50 rounded cursor-pointer hover:bg-muted/80 transition-colors"
-                              onClick={() => setSelectedExercise({ id: exercise.exerciseId, name: exercise.exerciseName })}
+                              onClick={() => setSelectedExercise({ 
+                                id: exercise.exerciseId, 
+                                name: exercise.exerciseName,
+                                dayIndex: index,
+                                blockIndex: day.blocks.indexOf(block),
+                                exerciseIndex: exIndex
+                              })}
                             >
                               <div className="flex items-center gap-3">
                                 <span className="text-xs text-muted-foreground w-5">
@@ -595,6 +661,7 @@ export default function WeeklyPlanPreviewPage() {
             <p className="text-sm text-muted-foreground">
               {selectedFrequency} workouts per week
               {useCyclingMode && ' • Cycling mode'}
+              {hasCustomizations && ' • Customized'}
             </p>
             <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
               {sessionType === 'pt' && <><Users className="h-3 w-3" /> PT Sessions</>}
@@ -602,9 +669,16 @@ export default function WeeklyPlanPreviewPage() {
               {sessionType === 'mixed' && <><Users className="h-3 w-3" /><User className="h-3 w-3" /> Mixed Sessions</>}
             </p>
           </div>
-          <Button onClick={handleCreateProgram} size="lg">
-            <Check className="h-4 w-4 mr-2" /> Assign Program
-          </Button>
+          <div className="flex gap-2">
+            {hasCustomizations && (
+              <Button variant="outline" onClick={handleResetTemplate} size="sm">
+                <RefreshCw className="h-4 w-4 mr-1" /> Reset
+              </Button>
+            )}
+            <Button onClick={handleCreateProgram} size="lg">
+              <Check className="h-4 w-4 mr-2" /> Assign Program
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -621,53 +695,80 @@ export default function WeeklyPlanPreviewPage() {
           {selectedExercise && (() => {
             const exerciseData = EXERCISE_PROGRESSIONS[selectedExercise.id];
             
-            if (!exerciseData) {
-              return (
-                <div className="text-center py-4 text-muted-foreground">
-                  <p>No progressions/regressions data available for this exercise.</p>
-                </div>
-              );
-            }
-            
             return (
               <div className="space-y-4">
-                {/* Progressions (harder) */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowUp className="h-4 w-4 text-green-500" />
-                    <span className="font-medium text-sm">Progressions</span>
-                    <span className="text-xs text-muted-foreground">(harder)</span>
-                  </div>
-                  <div className="space-y-1">
-                    {exerciseData.progressions.map((prog, idx) => (
-                      <div 
-                        key={idx} 
-                        className="p-2 bg-green-500/10 border border-green-500/20 rounded text-sm"
-                      >
-                        {prog}
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {/* Remove Exercise Button */}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => handleRemoveExercise(
+                    selectedExercise.dayIndex,
+                    selectedExercise.blockIndex,
+                    selectedExercise.exerciseIndex
+                  )}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" /> Remove Exercise
+                </Button>
                 
-                {/* Regressions (easier) */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowDown className="h-4 w-4 text-blue-500" />
-                    <span className="font-medium text-sm">Regressions</span>
-                    <span className="text-xs text-muted-foreground">(easier)</span>
+                {!exerciseData ? (
+                  <div className="text-center py-4 text-muted-foreground">
+                    <p className="text-sm">No progression/regression suggestions available.</p>
+                    <p className="text-xs mt-2">You can still remove this exercise or manually replace it in the builder.</p>
                   </div>
-                  <div className="space-y-1">
-                    {exerciseData.regressions.map((reg, idx) => (
-                      <div 
-                        key={idx} 
-                        className="p-2 bg-blue-500/10 border border-blue-500/20 rounded text-sm"
-                      >
-                        {reg}
+                ) : (
+                  <>
+                    {/* Progressions (harder) - clickable to replace */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <ArrowUp className="h-4 w-4 text-green-500" />
+                        <span className="font-medium text-sm">Progressions</span>
+                        <span className="text-xs text-muted-foreground">(harder - tap to replace)</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                      <div className="space-y-1">
+                        {exerciseData.progressions.map((prog, idx) => (
+                          <div 
+                            key={idx} 
+                            className="p-2 bg-green-500/10 border border-green-500/20 rounded text-sm cursor-pointer hover:bg-green-500/20 transition-colors"
+                            onClick={() => handleReplaceExercise(
+                              selectedExercise.dayIndex,
+                              selectedExercise.blockIndex,
+                              selectedExercise.exerciseIndex,
+                              prog
+                            )}
+                          >
+                            {prog}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    
+                    {/* Regressions (easier) - clickable to replace */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <ArrowDown className="h-4 w-4 text-blue-500" />
+                        <span className="font-medium text-sm">Regressions</span>
+                        <span className="text-xs text-muted-foreground">(easier - tap to replace)</span>
+                      </div>
+                      <div className="space-y-1">
+                        {exerciseData.regressions.map((reg, idx) => (
+                          <div 
+                            key={idx} 
+                            className="p-2 bg-blue-500/10 border border-blue-500/20 rounded text-sm cursor-pointer hover:bg-blue-500/20 transition-colors"
+                            onClick={() => handleReplaceExercise(
+                              selectedExercise.dayIndex,
+                              selectedExercise.blockIndex,
+                              selectedExercise.exerciseIndex,
+                              reg
+                            )}
+                          >
+                            {reg}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             );
           })()}
