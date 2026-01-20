@@ -1,3 +1,4 @@
+
 -- APEX FITNESS - Complete Database Schema
 -- Run this in Supabase SQL Editor to create all tables with proper relationships
 
@@ -56,16 +57,32 @@ CREATE TABLE IF NOT EXISTS strength_ratings (
   UNIQUE(user_id, category)
 );
 
--- Workout History
+-- Workout History (stores complete workout data including all exercises, sets, reps)
 CREATE TABLE IF NOT EXISTS workouts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT,
-  exercises JSONB,
-  duration INTEGER,
-  completed_at TIMESTAMPTZ DEFAULT NOW(),
+  exercises JSONB,  -- Full exercise data: [{id, exerciseId, exercise: {name, muscles}, sets: [{weight, reps, completed}]}]
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
+  duration INTEGER,  -- Duration in seconds
+  total_volume NUMERIC DEFAULT 0,  -- Total weight * reps
+  notes TEXT,
+  status TEXT DEFAULT 'completed',  -- 'active', 'completed', 'cancelled'
+  assigned_by UUID REFERENCES users(id),  -- Trainer ID if PT session
+  template_id TEXT,  -- Reference to workout template used
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add missing columns to existing workouts table
+-- Run these if the table already exists:
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS start_time TIMESTAMPTZ;
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ;
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS total_volume NUMERIC DEFAULT 0;
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS notes TEXT;
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'completed';
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS assigned_by UUID REFERENCES users(id);
+-- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS template_id TEXT;
 
 -- ==========================================
 -- SOCIAL TABLES

@@ -383,13 +383,15 @@ function toDbWorkout(workout: Workout): any {
     id: workout.id,
     user_id: workout.userId,
     name: workout.name,
-    exercises: workout.exercises,
+    exercises: workout.exercises,  // JSONB - stores full exercise/set data
     start_time: workout.startTime,
     end_time: workout.endTime,
     duration: workout.duration,
-    total_volume: workout.totalVolume,
+    total_volume: workout.totalVolume || 0,
     notes: workout.notes || '',
-    status: workout.status,
+    status: workout.status || 'completed',
+    assigned_by: workout.assignedBy || null,  // Trainer ID for PT sessions
+    template_id: workout.templateId || null,
   };
 }
 
@@ -405,7 +407,9 @@ function fromDbWorkout(dbWorkout: any): Workout {
     duration: dbWorkout.duration,
     totalVolume: dbWorkout.total_volume || 0,
     notes: dbWorkout.notes,
-    status: dbWorkout.status,
+    status: dbWorkout.status || 'completed',
+    assignedBy: dbWorkout.assigned_by,
+    templateId: dbWorkout.template_id,
   };
 }
 
@@ -477,21 +481,37 @@ function fromDbMedal(dbMedal: any): Medal {
 
 // Sync a completed workout to Supabase
 export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isSupabaseConfigured()) {
+    console.log('[WorkoutSync] Supabase not configured, skipping sync');
+    return false;
+  }
   
   try {
-    const { error } = await supabase
+    const dbWorkout = toDbWorkout(workout);
+    console.log('[WorkoutSync] Syncing workout to Supabase:', {
+      id: workout.id,
+      userId: workout.userId,
+      name: workout.name,
+      exerciseCount: workout.exercises?.length || 0,
+      duration: workout.duration,
+      totalVolume: workout.totalVolume,
+    });
+    
+    const { error, data } = await supabase
       .from('workouts')
-      .upsert(toDbWorkout(workout));
+      .upsert(dbWorkout)
+      .select();
     
     if (error) {
-      console.error('Error syncing workout:', error);
+      console.error('[WorkoutSync] ❌ Error syncing workout:', error.message, error.details, error.hint);
+      console.error('[WorkoutSync] Workout data that failed:', JSON.stringify(dbWorkout, null, 2));
       return false;
     }
-    console.log('Workout synced to Supabase:', workout.id);
+    
+    console.log('[WorkoutSync] ✅ Workout synced successfully:', workout.id);
     return true;
   } catch (e) {
-    console.error('Sync error:', e);
+    console.error('[WorkoutSync] ❌ Exception:', e);
     return false;
   }
 }
