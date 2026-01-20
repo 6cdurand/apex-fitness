@@ -42,7 +42,8 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
-import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured } from '@/lib/supabaseSync';
+import { Workout, PersonalBest } from '@/types';
 
 export default function ClientDetailPage() {
   const router = useRouter();
@@ -95,15 +96,67 @@ export default function ClientDetailPage() {
   const { getOrCreateConversation, sendMessage, getMessages } = useMessageStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
   
-  // Get client-specific workout data
-  const clientWorkoutHistory = useMemo(() => 
-    workoutHistory.filter(w => w.userId === clientId), 
-    [workoutHistory, clientId]
-  );
-  const clientPersonalBests = useMemo(() => 
-    personalBests.filter(pb => pb.userId === clientId), 
-    [personalBests, clientId]
-  );
+  // State for client workout data fetched from Supabase
+  const [clientWorkouts, setClientWorkouts] = useState<Workout[]>([]);
+  const [clientPBs, setClientPBs] = useState<PersonalBest[]>([]);
+  
+  // Fetch client's workout data from Supabase for cross-device sync
+  useEffect(() => {
+    const fetchClientWorkoutData = async () => {
+      if (!clientId || !isSupabaseConfigured()) return;
+      
+      try {
+        console.log('[ClientDetail] Fetching workout data for client:', clientId);
+        const remoteData = await fetchUserDataFromSupabase(clientId);
+        if (remoteData) {
+          console.log('[ClientDetail] Got client workouts:', remoteData.workouts.length);
+          setClientWorkouts(remoteData.workouts);
+          setClientPBs(remoteData.personalBests);
+          
+          // Also update the global workout store with this client's data
+          useWorkoutStore.setState(state => {
+            const existingIds = new Set(state.workoutHistory.map(w => w.id));
+            const newWorkouts = remoteData.workouts.filter(w => !existingIds.has(w.id));
+            const existingPBIds = new Set(state.personalBests.map(pb => pb.id));
+            const newPBs = remoteData.personalBests.filter(pb => !existingPBIds.has(pb.id));
+            
+            return {
+              workoutHistory: [...state.workoutHistory, ...newWorkouts],
+              personalBests: [...state.personalBests, ...newPBs],
+            };
+          });
+        }
+      } catch (e) {
+        console.error('[ClientDetail] Error fetching client workout data:', e);
+      }
+    };
+    
+    fetchClientWorkoutData();
+  }, [clientId]);
+  
+  // Get client-specific workout data - merge local and remote
+  const clientWorkoutHistory = useMemo(() => {
+    const localWorkouts = workoutHistory.filter(w => w.userId === clientId);
+    // Merge with fetched client workouts, deduplicating by ID
+    const allWorkouts = [...localWorkouts];
+    clientWorkouts.forEach(w => {
+      if (!allWorkouts.find(existing => existing.id === w.id)) {
+        allWorkouts.push(w);
+      }
+    });
+    return allWorkouts;
+  }, [workoutHistory, clientId, clientWorkouts]);
+  
+  const clientPersonalBests = useMemo(() => {
+    const localPBs = personalBests.filter(pb => pb.userId === clientId);
+    const allPBs = [...localPBs];
+    clientPBs.forEach(pb => {
+      if (!allPBs.find(existing => existing.id === pb.id)) {
+        allPBs.push(pb);
+      }
+    });
+    return allPBs;
+  }, [personalBests, clientId, clientPBs]);
   
   const [messageInput, setMessageInput] = useState('');
   const [activeTab, setActiveTab] = useState('overview');
@@ -172,15 +225,22 @@ export default function ClientDetailPage() {
     return getMessages(conversation.id);
   }, [conversation]);
 
-  // Stats - only count PT sessions for billable purposes (not solo/group sessions)
+  // Stats - count ACTUAL completed workouts (from workout store) for training stats
+  // AND count PT sessions (from trainer store) for billing purposes
   const ptSessions = sessions.filter(s => s.type === 'pt_session');
-  const completedSessions = ptSessions.filter(s => s.status === 'completed').length;
-  const upcomingSessions = ptSessions.filter(s => s.status === 'scheduled').length;
+  const scheduledPTSessions = ptSessions.filter(s => s.status === 'scheduled').length;
   const unpaidSessions = ptSessions.filter(s => s.status === 'completed' && !s.paid).length;
   const noShowSessions = ptSessions.filter(s => s.status === 'no_show').length;
   const activePackage = packages.find(p => p.status === 'active');
   const pendingPayments = payments.filter(p => p.status === 'pending');
   const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
+  
+  // Actual completed workouts (from workout store) - this is the real training data
+  const completedWorkouts = clientWorkoutHistory.length;
+  // Upcoming sessions from calendar events + scheduled PT sessions
+  const upcomingSessions = scheduledPTSessions + calendarEvents.filter(e => 
+    new Date(e.date) >= new Date() && e.type === 'session'
+  ).length;
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversation || !user) return;
@@ -411,7 +471,7 @@ export default function ClientDetailPage() {
                       <p className="text-xs text-gray-400">Per Session</p>
                     </div>
                     <div className="bg-gray-900/50 rounded-lg p-2">
-                      <p className="text-2xl font-bold text-blue-400">${(completedSessions * activePackage.pricePerSession).toFixed(0)}</p>
+                      <p className="text-2xl font-bold text-blue-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
                       <p className="text-xs text-gray-400">Total Value</p>
                     </div>
                   </div>
@@ -432,24 +492,29 @@ export default function ClientDetailPage() {
                 </CardContent>
               </Card>
             ) : (
-              /* No active package - show create button */
-              <Card className="bg-gray-900 border-gray-800 border-dashed">
+              /* No active package - show alert and create button */
+              <Card className="bg-amber-900/20 border-amber-500/50 border-2">
                 <CardContent className="p-4">
-                  <div className="text-center py-4">
-                    <Package className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-400 mb-3">No active session package</p>
-                    <Button
-                      className="bg-emerald-500 hover:bg-emerald-600"
-                      onClick={() => {
-                        setNewPackageTotal('');
-                        setNewPackagePrice('');
-                        setShowCreatePackage(true);
-                      }}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Create Package
-                    </Button>
+                  <div className="flex items-start gap-3 mb-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="text-amber-400 font-medium">No Session Package</p>
+                      <p className="text-amber-400/70 text-sm">
+                        Create a package to track sessions and payments. Completed workouts will be linked to the package once created.
+                      </p>
+                    </div>
                   </div>
+                  <Button
+                    className="w-full bg-amber-500 hover:bg-amber-600 text-black"
+                    onClick={() => {
+                      setNewPackageTotal('');
+                      setNewPackagePrice('');
+                      setShowCreatePackage(true);
+                    }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create Package
+                  </Button>
                 </CardContent>
               </Card>
             )}
@@ -602,8 +667,8 @@ export default function ClientDetailPage() {
                       <CheckCircle2 className="w-5 h-5 text-emerald-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">{completedSessions}</p>
-                      <p className="text-xs text-gray-400">Sessions Done</p>
+                      <p className="text-2xl font-bold text-white">{completedWorkouts}</p>
+                      <p className="text-xs text-gray-400">Workouts Done</p>
                     </div>
                   </div>
                 </CardContent>
