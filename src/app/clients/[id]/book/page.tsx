@@ -29,6 +29,7 @@ import { allTrainerTemplates, TrainerTemplate } from '@/lib/trainerTemplates';
 import { format, addDays, setHours, setMinutes } from 'date-fns';
 import { toast } from 'sonner';
 import { User as UserType } from '@/types';
+import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 
 const timeSlots = [
   '06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
@@ -97,9 +98,25 @@ export default function BookClientPage() {
     }
   }, [isAuthenticated, user?.mode, router]);
 
+  // Load users from both localStorage AND Supabase for cross-device sync
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored);
+    const loadAllUsers = async () => {
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored);
+      
+      try {
+        const supabaseUsersList = await fetchAllUsersFromSupabase();
+        if (supabaseUsersList && supabaseUsersList.length > 0) {
+          const supabaseIds = new Set(supabaseUsersList.map((u: any) => u.id));
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
+          const mergedUsers = [...supabaseUsersList, ...localOnlyUsers];
+          setAllUsers(mergedUsers);
+        }
+      } catch (e) {
+        console.error('[Book] Error loading users from Supabase:', e);
+      }
+    };
+    loadAllUsers();
   }, []);
 
   const clientRelation = useMemo(() => getClientById(clientId), [clientId, clients]);

@@ -42,7 +42,7 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
-import { registerUserToSupabase, deleteUserFromSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 
 export default function ClientDetailPage() {
   const router = useRouter();
@@ -68,12 +68,29 @@ export default function ClientDetailPage() {
     removeClient,
     setInitialClientStats,
     updateSessionPackage,
+    updateClient,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
+  // Load users from both localStorage AND Supabase for cross-device sync
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored);
+    const loadAllUsers = async () => {
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored);
+      
+      try {
+        const supabaseUsersList = await fetchAllUsersFromSupabase();
+        if (supabaseUsersList && supabaseUsersList.length > 0) {
+          const supabaseIds = new Set(supabaseUsersList.map((u: any) => u.id));
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
+          const mergedUsers = [...supabaseUsersList, ...localOnlyUsers];
+          setAllUsers(mergedUsers);
+        }
+      } catch (e) {
+        console.error('[ClientDetail] Error loading users from Supabase:', e);
+      }
+    };
+    loadAllUsers();
   }, []);
   const { getOrCreateConversation, sendMessage, getMessages } = useMessageStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
@@ -108,6 +125,13 @@ export default function ClientDetailPage() {
   const [showCreatePackage, setShowCreatePackage] = useState(false);
   const [editPackageTotal, setEditPackageTotal] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
+  
+  // Edit goals/notes state
+  const [showEditGoals, setShowEditGoals] = useState(false);
+  const [showEditNotes, setShowEditNotes] = useState(false);
+  const [editGoals, setEditGoals] = useState<string[]>([]);
+  const [editNotes, setEditNotes] = useState('');
+  const [newGoal, setNewGoal] = useState('');
   const [newPackageTotal, setNewPackageTotal] = useState('');
   const [newPackagePrice, setNewPackagePrice] = useState('');
   
@@ -834,16 +858,28 @@ export default function ClientDetailPage() {
               </CardContent>
             </Card>
 
-            {/* Goals */}
-            {clientRelation.goals && clientRelation.goals.length > 0 && (
-              <Card className="bg-gray-900 border-gray-800">
-                <CardHeader className="pb-2">
+            {/* Goals - Always show with edit option */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
                   <CardTitle className="text-white flex items-center gap-2">
                     <Target className="w-5 h-5 text-emerald-400" />
                     Goals
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditGoals(clientRelation.goals || []);
+                      setShowEditGoals(true);
+                    }}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {clientRelation.goals && clientRelation.goals.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {clientRelation.goals.map((goal, i) => (
                       <Badge key={i} variant="secondary" className="bg-gray-800">
@@ -851,24 +887,129 @@ export default function ClientDetailPage() {
                       </Badge>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
-            )}
+                ) : (
+                  <p className="text-gray-500 text-sm">No goals set yet. Click edit to add goals.</p>
+                )}
+              </CardContent>
+            </Card>
 
-            {/* Notes */}
-            {clientRelation.notes && (
-              <Card className="bg-gray-900 border-gray-800">
-                <CardHeader className="pb-2">
+            {/* Edit Goals Dialog */}
+            <Dialog open={showEditGoals} onOpenChange={setShowEditGoals}>
+              <DialogContent className="bg-gray-900 border-gray-800">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Edit Goals</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <Input
+                      value={newGoal}
+                      onChange={(e) => setNewGoal(e.target.value)}
+                      placeholder="Add a goal..."
+                      className="bg-gray-800 border-gray-700 text-white"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newGoal.trim()) {
+                          setEditGoals([...editGoals, newGoal.trim()]);
+                          setNewGoal('');
+                        }
+                      }}
+                    />
+                    <Button
+                      onClick={() => {
+                        if (newGoal.trim()) {
+                          setEditGoals([...editGoals, newGoal.trim()]);
+                          setNewGoal('');
+                        }
+                      }}
+                      className="bg-emerald-500 hover:bg-emerald-600"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 min-h-[60px]">
+                    {editGoals.map((goal, i) => (
+                      <Badge 
+                        key={i} 
+                        variant="secondary" 
+                        className="bg-gray-800 cursor-pointer hover:bg-red-900/50 group"
+                        onClick={() => setEditGoals(editGoals.filter((_, idx) => idx !== i))}
+                      >
+                        {goal}
+                        <X className="w-3 h-3 ml-1 opacity-50 group-hover:opacity-100" />
+                      </Badge>
+                    ))}
+                    {editGoals.length === 0 && (
+                      <p className="text-gray-500 text-sm">No goals yet</p>
+                    )}
+                  </div>
+                  <Button
+                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => {
+                      updateClient(clientId, { goals: editGoals });
+                      setShowEditGoals(false);
+                      toast.success('Goals updated');
+                    }}
+                  >
+                    Save Goals
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Notes - Always show with edit option */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
                   <CardTitle className="text-white flex items-center gap-2">
                     <ClipboardList className="w-5 h-5 text-emerald-400" />
                     Notes
                   </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-300 text-sm">{clientRelation.notes}</p>
-                </CardContent>
-              </Card>
-            )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEditNotes(clientRelation.notes || '');
+                      setShowEditNotes(true);
+                    }}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {clientRelation.notes ? (
+                  <p className="text-gray-300 text-sm whitespace-pre-wrap">{clientRelation.notes}</p>
+                ) : (
+                  <p className="text-gray-500 text-sm">No notes yet. Click edit to add notes.</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Edit Notes Dialog */}
+            <Dialog open={showEditNotes} onOpenChange={setShowEditNotes}>
+              <DialogContent className="bg-gray-900 border-gray-800">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Edit Notes</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Textarea
+                    value={editNotes}
+                    onChange={(e) => setEditNotes(e.target.value)}
+                    placeholder="Add notes about this client..."
+                    className="bg-gray-800 border-gray-700 text-white min-h-[150px]"
+                  />
+                  <Button
+                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    onClick={() => {
+                      updateClient(clientId, { notes: editNotes });
+                      setShowEditNotes(false);
+                      toast.success('Notes updated');
+                    }}
+                  >
+                    Save Notes
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Pending Payments Alert */}
             {pendingPayments.length > 0 && (
