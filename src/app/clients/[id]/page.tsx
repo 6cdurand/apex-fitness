@@ -1562,10 +1562,21 @@ export default function ClientDetailPage() {
                   {/* Upcoming Sessions List */}
                   <h3 className="text-white font-medium mt-4">Upcoming Sessions</h3>
                   {(() => {
+                    // Get today's completed workouts to filter them out
+                    const todayCompletedWorkouts = clientWorkoutHistory.filter(w => {
+                      const workoutDate = new Date(w.endTime || w.startTime);
+                      return isToday(workoutDate) && w.status === 'completed';
+                    });
+                    
                     const scheduledSessions = sessions.filter(s => s.status === 'scheduled');
                     const allUpcoming = [...scheduledSessions, ...calendarEvents]
                       .filter(e => {
                         const eventDate = new Date('date' in e ? e.date : '');
+                        // If it's today, check if there's already a completed workout
+                        if (isToday(eventDate) && todayCompletedWorkouts.length > 0) {
+                          // Filter out if we have a completed workout for today
+                          return false;
+                        }
                         return isFuture(eventDate) || isToday(eventDate);
                       })
                       .sort((a, b) => {
