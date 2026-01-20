@@ -105,6 +105,9 @@ interface OnboardingData {
   stressLevel: number;
   jobActivity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | '';
   currentPhase: TrainingPhase | '';
+  // First session booking
+  firstSessionDate: string;
+  firstSessionTime: string;
 }
 
 const TOTAL_STEPS = 7;
@@ -115,7 +118,7 @@ export default function ClientOnboardingPage() {
   const clientId = params.id as string;
   
   const { user } = useAuthStore();
-  const { clients, updateClient, saveClientProfile } = useTrainerStore();
+  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
   
   // Account creation state
@@ -155,6 +158,8 @@ export default function ClientOnboardingPage() {
     stressLevel: 3,
     jobActivity: '',
     currentPhase: '',
+    firstSessionDate: '',
+    firstSessionTime: '09:00',
   });
 
   const progress = (currentStep / TOTAL_STEPS) * 100;
@@ -368,7 +373,43 @@ export default function ClientOnboardingPage() {
       onboardingComplete: true,
     });
 
-    toast.success('Onboarding complete!');
+    // Book first session if date was selected
+    if (data.firstSessionDate) {
+      const sessionDate = new Date(data.firstSessionDate);
+      const [hours, minutes] = data.firstSessionTime.split(':').map(Number);
+      sessionDate.setHours(hours, minutes, 0, 0);
+      
+      // Add to calendar
+      addCalendarEvent({
+        title: 'PT Session',
+        type: 'session',
+        date: sessionDate.toISOString(),
+        startTime: data.firstSessionTime,
+        endTime: `${String(hours + Math.floor((minutes + data.sessionLength) / 60)).padStart(2, '0')}:${String((minutes + data.sessionLength) % 60).padStart(2, '0')}`,
+        clientId: actualClientId,
+        trainerId,
+        status: 'scheduled',
+      });
+      
+      // Add session record
+      const endHour = hours + Math.floor((minutes + data.sessionLength) / 60);
+      const endMin = (minutes + data.sessionLength) % 60;
+      addSession({
+        trainerId,
+        clientId: actualClientId,
+        date: sessionDate.toISOString(),
+        startTime: data.firstSessionTime,
+        endTime: `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`,
+        duration: data.sessionLength,
+        type: 'pt_session',
+        status: 'scheduled',
+        paid: false,
+      });
+      
+      toast.success(`Onboarding complete! First session booked for ${sessionDate.toLocaleDateString()}`);
+    } else {
+      toast.success('Onboarding complete!');
+    }
     
     // Navigate to template selection using actual UUID
     router.push(`/clients/${actualClientId}/program/select`);
@@ -1014,6 +1055,54 @@ export default function ClientOnboardingPage() {
                   </Button>
                 ))}
               </div>
+            </div>
+
+            {/* Book First Session */}
+            <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-4">
+              <div>
+                <Label className="text-base font-medium text-purple-400 flex items-center gap-2">
+                  <Calendar className="h-4 w-4" /> Book First PT Session
+                </Label>
+                <p className="text-sm text-muted-foreground mb-3">Schedule their first session now (optional)</p>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Date</Label>
+                  <Input
+                    type="date"
+                    value={data.firstSessionDate}
+                    onChange={(e) => setData({ ...data, firstSessionDate: e.target.value })}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm">Time</Label>
+                  <Select
+                    value={data.firstSessionTime}
+                    onValueChange={(v) => setData({ ...data, firstSessionTime: v })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', 
+                        '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+                        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+                        '18:00', '18:30', '19:00', '19:30', '20:00'].map(time => (
+                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              {data.firstSessionDate && (
+                <div className="p-2 bg-purple-500/20 rounded text-sm text-purple-300">
+                  ✓ First session: {new Date(data.firstSessionDate).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at {data.firstSessionTime}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
