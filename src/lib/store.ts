@@ -25,6 +25,7 @@ import {
   syncBookingRequestToSupabase,
   fetchBookingRequestsFromSupabase,
   deleteTrainerClientFromSupabase,
+  deleteClientFromSupabase,
 } from './supabaseSync';
 import {
   User,
@@ -1297,6 +1298,11 @@ export const useTrainerStore = create<TrainerState>()(
       removeClient: (clientId) => {
         // Remove from trainer's clients list and all associated data
         // NOTE: This does NOT delete the user's account - they can still log in
+        
+        // Get trainer ID before removing
+        const client = get().clients.find(c => c.clientId === clientId);
+        const trainerId = client?.trainerId;
+        
         set(state => ({
           clients: state.clients.filter(c => c.clientId !== clientId),
           sessions: state.sessions.filter(s => s.clientId !== clientId),
@@ -1305,7 +1311,11 @@ export const useTrainerStore = create<TrainerState>()(
           calendarEvents: state.calendarEvents.filter(e => e.clientId !== clientId),
           clientPrograms: state.clientPrograms.filter(p => p.clientId !== clientId),
         }));
-        // Do NOT remove from localStorage - the user's account should remain
+        
+        // Sync deletion to Supabase for cross-device consistency
+        if (trainerId) {
+          deleteClientFromSupabase(trainerId, clientId);
+        }
       },
 
       updateClient: (clientId, updates) => {

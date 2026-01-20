@@ -157,15 +157,31 @@ CREATE TABLE IF NOT EXISTS session_packages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trainer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   client_id TEXT NOT NULL,
-  total_sessions INTEGER NOT NULL,
+  name TEXT,
+  total_sessions INTEGER NOT NULL,  -- -1 for continuous/unlimited
   used_sessions INTEGER DEFAULT 0,
-  price NUMERIC,
-  start_date TIMESTAMPTZ DEFAULT NOW(),
+  remaining_sessions INTEGER DEFAULT 0,
+  price_total NUMERIC DEFAULT 0,
+  price_per_session NUMERIC,
+  purchase_date TIMESTAMPTZ DEFAULT NOW(),
   expiry_date TIMESTAMPTZ,
+  payment_id TEXT,
   status TEXT DEFAULT 'active',
+  is_continuous BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: Add missing columns to session_packages
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS name TEXT;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS remaining_sessions INTEGER DEFAULT 0;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS price_total NUMERIC DEFAULT 0;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS price_per_session NUMERIC;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS purchase_date TIMESTAMPTZ DEFAULT NOW();
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS payment_id TEXT;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS is_continuous BOOLEAN DEFAULT false;
+-- ALTER TABLE session_packages RENAME COLUMN price TO price_per_session;
+-- ALTER TABLE session_packages RENAME COLUMN start_date TO purchase_date;
 
 -- Calendar Events
 CREATE TABLE IF NOT EXISTS calendar_events (

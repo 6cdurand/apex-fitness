@@ -558,6 +558,35 @@ export async function syncMedalToSupabase(medal: Medal): Promise<boolean> {
   }
 }
 
+// ============ CLIENT DELETION SYNC ============
+
+// Delete a client relationship from Supabase (removes all associated data)
+export async function deleteClientFromSupabase(trainerId: string, clientId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    console.log('[ClientSync] Deleting client relationship:', clientId, 'for trainer:', trainerId);
+    
+    // Delete in order: packages, sessions, then client relationship
+    const [packagesResult, sessionsResult, clientResult] = await Promise.all([
+      supabase.from('session_packages').delete().eq('trainer_id', trainerId).eq('client_id', clientId),
+      supabase.from('trainer_sessions').delete().eq('trainer_id', trainerId).eq('client_id', clientId),
+      supabase.from('trainer_clients').delete().eq('trainer_id', trainerId).eq('client_id', clientId),
+    ]);
+    
+    if (clientResult.error) {
+      console.error('[ClientSync] ❌ Error deleting client:', clientResult.error.message);
+      return false;
+    }
+    
+    console.log('[ClientSync] ✅ Client and associated data deleted from Supabase');
+    return true;
+  } catch (e) {
+    console.error('[ClientSync] ❌ Exception:', e);
+    return false;
+  }
+}
+
 // Fetch all data for a user from Supabase
 export async function fetchUserDataFromSupabase(userId: string): Promise<{
   workouts: Workout[];
@@ -1130,6 +1159,7 @@ export async function syncSessionPackageToSupabase(pkg: SessionPackage): Promise
       expiry_date: pkg.expiryDate || null,
       payment_id: pkg.paymentId || null,
       status: pkg.status,
+      is_continuous: pkg.isContinuous || false,
       updated_at: new Date().toISOString(),
     };
     
@@ -1179,6 +1209,7 @@ export async function fetchSessionPackagesFromSupabase(trainerId: string): Promi
       expiryDate: p.expiry_date,
       paymentId: p.payment_id,
       status: p.status,
+      isContinuous: p.is_continuous || false,
     }));
     
     console.log(`[Package Fetch] Found ${packages.length} packages for trainer`);

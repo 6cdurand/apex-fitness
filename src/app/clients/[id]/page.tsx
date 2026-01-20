@@ -187,6 +187,7 @@ export default function ClientDetailPage() {
   const [newGoal, setNewGoal] = useState('');
   const [newPackageTotal, setNewPackageTotal] = useState('');
   const [newPackagePrice, setNewPackagePrice] = useState('');
+  const [isContinuousPackage, setIsContinuousPackage] = useState(false);
   const [isSyncingWorkouts, setIsSyncingWorkouts] = useState(false);
   
   // Calculate per-session cost
@@ -441,12 +442,12 @@ export default function ClientDetailPage() {
           <TabsContent value="overview" className="mt-4 space-y-4">
             {/* Session Package Summary - Editable or Create New */}
             {activePackage ? (
-              <Card className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30">
+              <Card className={`border ${activePackage.isContinuous ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-500/30' : 'bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30'}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-white flex items-center gap-2">
-                      <Package className="w-5 h-5 text-emerald-400" />
-                      Session Package
+                      <Package className={`w-5 h-5 ${activePackage.isContinuous ? 'text-blue-400' : 'text-emerald-400'}`} />
+                      {activePackage.isContinuous ? 'Continuous Training' : 'Session Package'}
                     </h3>
                     <Button
                       variant="ghost"
@@ -462,34 +463,55 @@ export default function ClientDetailPage() {
                     </Button>
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-3 text-center">
-                    <div className="bg-gray-900/50 rounded-lg p-2">
-                      <p className="text-2xl font-bold text-emerald-400">{activePackage.totalSessions}</p>
-                      <p className="text-xs text-gray-400">Total Sessions</p>
+                  {activePackage.isContinuous ? (
+                    /* Continuous package display */
+                    <div className="grid grid-cols-3 gap-3 text-center">
+                      <div className="bg-gray-900/50 rounded-lg p-2">
+                        <p className="text-2xl font-bold text-blue-400">{completedWorkouts}</p>
+                        <p className="text-xs text-gray-400">Sessions Done</p>
+                      </div>
+                      <div className="bg-gray-900/50 rounded-lg p-2">
+                        <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                        <p className="text-xs text-gray-400">Per Session</p>
+                      </div>
+                      <div className="bg-gray-900/50 rounded-lg p-2">
+                        <p className="text-2xl font-bold text-emerald-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
+                        <p className="text-xs text-gray-400">Total Value</p>
+                      </div>
                     </div>
-                    <div className="bg-gray-900/50 rounded-lg p-2">
-                      <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
-                      <p className="text-xs text-gray-400">Per Session</p>
-                    </div>
-                    <div className="bg-gray-900/50 rounded-lg p-2">
-                      <p className="text-2xl font-bold text-blue-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
-                      <p className="text-xs text-gray-400">Total Value</p>
-                    </div>
-                  </div>
-                  
-                  {/* Progress bar */}
-                  <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-400 mb-1">
-                      <span>{activePackage.usedSessions} used</span>
-                      <span>{activePackage.remainingSessions} remaining</span>
-                    </div>
-                    <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
-                        style={{ width: `${(activePackage.usedSessions / activePackage.totalSessions) * 100}%` }}
-                      />
-                    </div>
-                  </div>
+                  ) : (
+                    /* Fixed package display */
+                    <>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-emerald-400">{completedWorkouts}/{activePackage.totalSessions}</p>
+                          <p className="text-xs text-gray-400">Sessions Used</p>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                          <p className="text-xs text-gray-400">Per Session</p>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-blue-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
+                          <p className="text-xs text-gray-400">Total Value</p>
+                        </div>
+                      </div>
+                      
+                      {/* Progress bar - only for fixed packages */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs text-gray-400 mb-1">
+                          <span>{completedWorkouts} completed</span>
+                          <span>{Math.max(0, activePackage.totalSessions - completedWorkouts)} remaining</span>
+                        </div>
+                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                            style={{ width: `${Math.min(100, (completedWorkouts / activePackage.totalSessions) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -521,22 +543,52 @@ export default function ClientDetailPage() {
             )}
 
             {/* Create Package Dialog */}
-            <Dialog open={showCreatePackage} onOpenChange={setShowCreatePackage}>
+            <Dialog open={showCreatePackage} onOpenChange={(open) => {
+              setShowCreatePackage(open);
+              if (!open) {
+                setIsContinuousPackage(false);
+                setNewPackageTotal('');
+                setNewPackagePrice('');
+              }
+            }}>
               <DialogContent className="bg-gray-900 border-gray-800">
                 <DialogHeader>
                   <DialogTitle className="text-white">Create Session Package</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div>
-                    <Label className="text-gray-300">Total Sessions</Label>
-                    <Input
-                      type="number"
-                      value={newPackageTotal}
-                      onChange={(e) => setNewPackageTotal(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white mt-1"
-                      placeholder="e.g., 10"
-                    />
+                  {/* Package Type Toggle */}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={!isContinuousPackage ? "default" : "outline"}
+                      className={!isContinuousPackage ? "flex-1 bg-emerald-500 hover:bg-emerald-600" : "flex-1 border-gray-700 text-gray-400"}
+                      onClick={() => setIsContinuousPackage(false)}
+                    >
+                      Fixed Sessions
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={isContinuousPackage ? "default" : "outline"}
+                      className={isContinuousPackage ? "flex-1 bg-blue-500 hover:bg-blue-600" : "flex-1 border-gray-700 text-gray-400"}
+                      onClick={() => setIsContinuousPackage(true)}
+                    >
+                      Continuous
+                    </Button>
                   </div>
+                  
+                  {!isContinuousPackage && (
+                    <div>
+                      <Label className="text-gray-300">Total Sessions</Label>
+                      <Input
+                        type="number"
+                        value={newPackageTotal}
+                        onChange={(e) => setNewPackageTotal(e.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        placeholder="e.g., 10"
+                      />
+                    </div>
+                  )}
+                  
                   <div>
                     <Label className="text-gray-300">Price Per Session ($)</Label>
                     <Input
@@ -547,7 +599,15 @@ export default function ClientDetailPage() {
                       placeholder="e.g., 50"
                     />
                   </div>
-                  {newPackageTotal && newPackagePrice && (
+                  
+                  {isContinuousPackage ? (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                      <p className="text-blue-400 text-sm">
+                        <strong>Continuous Package:</strong> Sessions are tracked without a limit. 
+                        Ideal for ongoing clients who pay per session or monthly.
+                      </p>
+                    </div>
+                  ) : newPackageTotal && newPackagePrice && (
                     <div className="p-3 bg-gray-800 rounded-lg">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Package Total:</span>
@@ -557,10 +617,28 @@ export default function ClientDetailPage() {
                       </div>
                     </div>
                   )}
+                  
                   <Button
-                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    className={`w-full ${isContinuousPackage ? 'bg-blue-500 hover:bg-blue-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
                     onClick={() => {
-                      if (newPackageTotal && newPackagePrice) {
+                      if (isContinuousPackage && newPackagePrice) {
+                        const price = parseFloat(newPackagePrice);
+                        addSessionPackage({
+                          clientId,
+                          trainerId: user?.id || '',
+                          name: 'Continuous Training',
+                          totalSessions: -1,
+                          priceTotal: 0,
+                          pricePerSession: price,
+                          purchaseDate: new Date().toISOString(),
+                          paymentId: '',
+                          status: 'active',
+                          isContinuous: true,
+                        });
+                        setShowCreatePackage(false);
+                        setIsContinuousPackage(false);
+                        toast.success(`Continuous package created at $${price}/session`);
+                      } else if (newPackageTotal && newPackagePrice) {
                         const total = parseInt(newPackageTotal);
                         const price = parseFloat(newPackagePrice);
                         
@@ -574,11 +652,13 @@ export default function ClientDetailPage() {
                           purchaseDate: new Date().toISOString(),
                           paymentId: '',
                           status: 'active',
+                          isContinuous: false,
                         });
                         setShowCreatePackage(false);
                         toast.success(`Package created: ${total} sessions at $${price}/session`);
                       }
                     }}
+                    disabled={isContinuousPackage ? !newPackagePrice : (!newPackageTotal || !newPackagePrice)}
                   >
                     Create Package
                   </Button>
@@ -1591,21 +1671,28 @@ export default function ClientDetailPage() {
                   {/* Upcoming Sessions List */}
                   <h3 className="text-white font-medium mt-4">Upcoming Sessions</h3>
                   {(() => {
-                    // Get today's completed workouts to filter them out
-                    const todayCompletedWorkouts = clientWorkoutHistory.filter(w => {
-                      const workoutDate = new Date(w.endTime || w.startTime);
-                      return isToday(workoutDate) && w.status === 'completed';
-                    });
+                    // Get all completed workouts for this client
+                    const completedWorkoutDates = clientWorkoutHistory
+                      .filter(w => w.status === 'completed')
+                      .map(w => {
+                        const date = new Date(w.endTime || w.startTime);
+                        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                      });
                     
+                    // Filter sessions: only show scheduled ones, not completed
                     const scheduledSessions = sessions.filter(s => s.status === 'scheduled');
+                    
                     const allUpcoming = [...scheduledSessions, ...calendarEvents]
                       .filter(e => {
                         const eventDate = new Date('date' in e ? e.date : '');
-                        // If it's today, check if there's already a completed workout
-                        if (isToday(eventDate) && todayCompletedWorkouts.length > 0) {
-                          // Filter out if we have a completed workout for today
+                        const dateKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+                        
+                        // Filter out sessions on dates where a workout was completed
+                        if (completedWorkoutDates.includes(dateKey)) {
                           return false;
                         }
+                        
+                        // Only show future or today's sessions
                         return isFuture(eventDate) || isToday(eventDate);
                       })
                       .sort((a, b) => {

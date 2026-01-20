@@ -436,21 +436,22 @@ export interface ClientPayment {
   createdAt: string;
 }
 
-// Session package (e.g., "10 sessions for $500")
+// Session package (e.g., "10 sessions for $500" or continuous/unlimited)
 export interface SessionPackage {
   id: string;
   trainerId: string;
   clientId: string;
   name: string;
-  totalSessions: number;
+  totalSessions: number;  // -1 for unlimited/continuous
   usedSessions: number;
-  remainingSessions: number;
+  remainingSessions: number;  // -1 for unlimited
   priceTotal: number;
   pricePerSession: number;
   purchaseDate: string;
   expiryDate?: string;
   paymentId: string;
   status: 'active' | 'expired' | 'completed';
+  isContinuous?: boolean;  // true for ongoing/unlimited packages
 }
 
 // ============ TRAINER PROGRAMMING SYSTEM ============
