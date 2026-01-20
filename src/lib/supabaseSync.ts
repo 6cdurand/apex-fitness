@@ -629,6 +629,32 @@ export async function pushAllDataToSupabase(
   }
 }
 
+// Sync all workouts for a specific client to Supabase
+export async function syncClientWorkoutsToSupabase(clientId: string, workouts: Workout[]): Promise<{ success: number; failed: number }> {
+  if (!isSupabaseConfigured()) {
+    console.log('[SyncClientWorkouts] Supabase not configured');
+    return { success: 0, failed: 0 };
+  }
+  
+  const clientWorkouts = workouts.filter(w => w.userId === clientId);
+  console.log(`[SyncClientWorkouts] Syncing ${clientWorkouts.length} workouts for client ${clientId}`);
+  
+  let success = 0;
+  let failed = 0;
+  
+  for (const workout of clientWorkouts) {
+    const result = await syncWorkoutToSupabase(workout);
+    if (result) {
+      success++;
+    } else {
+      failed++;
+    }
+  }
+  
+  console.log(`[SyncClientWorkouts] Complete: ${success} synced, ${failed} failed`);
+  return { success, failed };
+}
+
 // ============ MESSAGES & CONVERSATIONS SYNC ============
 
 export interface MessageData {

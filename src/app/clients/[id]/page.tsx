@@ -42,7 +42,7 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
-import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured } from '@/lib/supabaseSync';
+import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase } from '@/lib/supabaseSync';
 import { Workout, PersonalBest } from '@/types';
 
 export default function ClientDetailPage() {
@@ -187,6 +187,7 @@ export default function ClientDetailPage() {
   const [newGoal, setNewGoal] = useState('');
   const [newPackageTotal, setNewPackageTotal] = useState('');
   const [newPackagePrice, setNewPackagePrice] = useState('');
+  const [isSyncingWorkouts, setIsSyncingWorkouts] = useState(false);
   
   // Calculate per-session cost
   const perSessionCost = paymentAmount && sessionsCovered && parseInt(sessionsCovered) > 0
@@ -1103,16 +1104,44 @@ export default function ClientDetailPage() {
                     <Dumbbell className="w-5 h-5 text-emerald-400" />
                     Recent Workouts
                   </CardTitle>
-                  {clientWorkoutHistory.length > 3 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setActiveTab('progress')}
-                      className="text-emerald-400 text-xs"
-                    >
-                      View All
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {clientWorkoutHistory.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isSyncingWorkouts}
+                        onClick={async () => {
+                          setIsSyncingWorkouts(true);
+                          try {
+                            const result = await syncClientWorkoutsToSupabase(clientId, workoutHistory);
+                            if (result.success > 0) {
+                              toast.success(`Synced ${result.success} workout${result.success > 1 ? 's' : ''} to cloud`);
+                            } else if (result.failed > 0) {
+                              toast.error(`Failed to sync ${result.failed} workout(s)`);
+                            } else {
+                              toast.info('No workouts to sync');
+                            }
+                          } catch (e) {
+                            toast.error('Sync failed');
+                          }
+                          setIsSyncingWorkouts(false);
+                        }}
+                        className="text-blue-400 text-xs"
+                      >
+                        {isSyncingWorkouts ? 'Syncing...' : 'Sync to Cloud'}
+                      </Button>
+                    )}
+                    {clientWorkoutHistory.length > 3 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setActiveTab('progress')}
+                        className="text-emerald-400 text-xs"
+                      >
+                        View All
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
