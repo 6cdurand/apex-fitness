@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,6 +54,7 @@ export default function ActiveWorkoutPage() {
     removeSet,
     updateSet,
     completeSet,
+    uncompleteSet,
     endWorkout,
     cancelWorkout,
     tickWorkoutTimer,
@@ -84,6 +85,7 @@ export default function ActiveWorkoutPage() {
     clientId?: string;
   } | null>(null);
   const [defaultRestTime, setDefaultRestTime] = useState(90);
+  const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
 
@@ -117,8 +119,15 @@ export default function ActiveWorkoutPage() {
     toast.success(`Added ${exercise.name}`);
   };
 
+  const { startRestTimer } = useWorkoutStore();
+  
   const handleCompleteSet = (exerciseId: string, setId: string, weight: number, reps: number, exerciseName: string) => {
     completeSet(exerciseId, setId);
+    
+    // Auto-start rest timer if enabled
+    if (autoRestEnabled && defaultRestTime > 0) {
+      startRestTimer(defaultRestTime, exerciseId);
+    }
     
     // Check for new PB
     const exercise = activeWorkout?.exercises.find(e => e.id === exerciseId);
@@ -137,6 +146,7 @@ export default function ActiveWorkoutPage() {
     const workoutName = activeWorkout?.name || 'Workout';
     const isPT = !!activeWorkout?.assignedBy;
     const clientId = activeWorkout?.userId;
+    const trainerId = activeWorkout?.assignedBy;
     const duration = workoutTimer.seconds;
     const exerciseCount = activeWorkout?.exercises.length || 0;
     const completedSetsCount = activeWorkout?.exercises.reduce(
@@ -153,6 +163,34 @@ export default function ActiveWorkoutPage() {
         undefined,
         completed.id
       );
+
+      // Create session record for PT sessions to track session count
+      if (isPT && clientId && trainerId) {
+        const { addSession, useSessionFromPackage, getPackagesForClient } = useTrainerStore.getState();
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Add completed session
+        addSession({
+          trainerId,
+          clientId,
+          date: today,
+          startTime: new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          endTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+          duration: Math.round(duration / 60),
+          type: 'pt_session',
+          status: 'completed',
+          paid: false,
+          notes: workoutName,
+          workoutId: completed.id,
+        });
+        
+        // Use session from active package if exists
+        const packages = getPackagesForClient(clientId);
+        const activePackage = packages.find(p => p.status === 'active' && p.remainingSessions > 0);
+        if (activePackage) {
+          useSessionFromPackage(activePackage.id);
+        }
+      }
 
       // Show summary popup instead of redirecting
       setCompletedWorkoutData({
@@ -448,6 +486,7 @@ export default function ActiveWorkoutPage() {
                         exerciseName={workoutExercise.exercise.name}
                         onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
                         onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise.name)}
+                        onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
                         onRemove={() => removeSet(workoutExercise.id, set.id)}
                       />
                     ))}
@@ -692,7 +731,29 @@ export default function ActiveWorkoutPage() {
           </DialogHeader>
           
           <div className="py-4 space-y-6">
-            <div>
+            {/* Auto Rest Toggle */}
+            <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+              <div>
+                <p className="font-medium text-white">Auto Rest Timer</p>
+                <p className="text-xs text-gray-400">Start timer automatically after completing a set</p>
+              </div>
+              <button
+                onClick={() => setAutoRestEnabled(!autoRestEnabled)}
+                className={cn(
+                  "relative w-12 h-6 rounded-full transition-colors",
+                  autoRestEnabled ? "bg-emerald-500" : "bg-gray-600"
+                )}
+              >
+                <div
+                  className={cn(
+                    "absolute top-1 w-4 h-4 bg-white rounded-full transition-transform",
+                    autoRestEnabled ? "translate-x-7" : "translate-x-1"
+                  )}
+                />
+              </button>
+            </div>
+
+            <div className={cn(!autoRestEnabled && "opacity-50 pointer-events-none")}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm text-gray-400">Default Rest Time</span>
                 <span className="text-lg font-semibold text-white">{defaultRestTime}s</span>
@@ -711,7 +772,7 @@ export default function ActiveWorkoutPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className={cn("grid grid-cols-4 gap-2", !autoRestEnabled && "opacity-50 pointer-events-none")}>
               {[30, 60, 90, 120].map((time) => (
                 <Button
                   key={time}
@@ -745,6 +806,7 @@ function SetRow({
   exerciseName,
   onUpdate,
   onComplete,
+  onUncomplete,
   onRemove,
 }: {
   set: WorkoutSet;
@@ -752,6 +814,7 @@ function SetRow({
   exerciseName: string;
   onUpdate: (updates: Partial<WorkoutSet>) => void;
   onComplete: (weight: number, reps: number) => void;
+  onUncomplete: () => void;
   onRemove: () => void;
 }) {
   const [weight, setWeight] = useState(set.weight?.toString() || '');
@@ -843,6 +906,14 @@ function SetRow({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                <DropdownMenuItem 
+                  className="text-orange-400 focus:text-orange-300"
+                  onClick={onUncomplete}
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Undo / Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-gray-700" />
                 <DropdownMenuItem 
                   className="text-red-400 focus:text-red-300"
                   onClick={onRemove}

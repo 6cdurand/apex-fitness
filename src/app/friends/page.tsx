@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useSocialStore } from '@/lib/store';
+import { useAuthStore, useSocialStore, useTrainerStore } from '@/lib/store';
+import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Search, UserPlus, UserMinus, Users, BadgeCheck, MessageCircle } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Users, BadgeCheck, MessageCircle, Calendar, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ProfileCard } from '@/components/ProfileCard';
@@ -20,9 +21,18 @@ export default function FriendsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { followUser, unfollowUser } = useSocialStore();
+  const { createBookingRequest } = useTrainerStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  
+  // Consultation booking state
+  const [showBookConsultation, setShowBookConsultation] = useState(false);
+  const [selectedTrainer, setSelectedTrainer] = useState<any>(null);
+  const [consultationDate, setConsultationDate] = useState('');
+  const [consultationTime, setConsultationTime] = useState('09:00');
+  const [consultationNotes, setConsultationNotes] = useState('');
+  const [isBooking, setIsBooking] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -31,8 +41,25 @@ export default function FriendsPage() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored.filter((u: any) => u.id !== user?.id));
+    const loadAllUsers = async () => {
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored.filter((u: any) => u.id !== user?.id));
+      
+      // Also fetch from Supabase for cross-device sync
+      try {
+        const supabaseUsers = await fetchAllUsersFromSupabase();
+        if (supabaseUsers && supabaseUsers.length > 0) {
+          // Merge: Supabase is source of truth, add local-only users
+          const supabaseIds = new Set(supabaseUsers.map((u: any) => u.id));
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
+          const mergedUsers = [...supabaseUsers, ...localOnlyUsers].filter((u: any) => u.id !== user?.id);
+          setAllUsers(mergedUsers);
+        }
+      } catch (e) {
+        console.error('[Friends] Error loading users from Supabase:', e);
+      }
+    };
+    loadAllUsers();
   }, [user?.id]);
 
   const handleFollow = (userId: string, username: string) => {
@@ -43,6 +70,47 @@ export default function FriendsPage() {
   const handleUnfollow = (userId: string, username: string) => {
     unfollowUser(userId);
     toast.success(`Unfollowed ${username}`);
+  };
+
+  const handleBookConsultation = (trainer: any) => {
+    setSelectedTrainer(trainer);
+    setConsultationDate('');
+    setConsultationTime('09:00');
+    setConsultationNotes('');
+    setShowBookConsultation(true);
+  };
+
+  const handleSubmitConsultation = async () => {
+    if (!selectedTrainer || !consultationDate || !user?.id) return;
+    
+    setIsBooking(true);
+    try {
+      // Calculate end time (30 min consultation)
+      const [hours, mins] = consultationTime.split(':').map(Number);
+      const endMins = hours * 60 + mins + 30;
+      const endHours = Math.floor(endMins / 60);
+      const endMinutes = endMins % 60;
+      const endTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+      
+      createBookingRequest({
+        trainerId: selectedTrainer.id,
+        clientId: user.id,
+        date: consultationDate,
+        startTime: consultationTime,
+        endTime,
+        type: 'consultation',
+        requestedBy: 'client',
+        notes: consultationNotes || undefined,
+      });
+      
+      toast.success(`Consultation request sent to ${selectedTrainer.displayName || selectedTrainer.username}!`);
+      setShowBookConsultation(false);
+      setSelectedTrainer(null);
+    } catch (error) {
+      toast.error('Failed to book consultation');
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   if (!isAuthenticated || !user) return null;
@@ -175,19 +243,21 @@ export default function FriendsPage() {
                       <CardContent className="py-12 text-center">
                         <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                         <p className="text-gray-400">No trainers found</p>
+                        <p className="text-sm text-gray-500 mt-1">Personal trainers will appear here</p>
                       </CardContent>
                     </Card>
                   ) : (
                     <div className="space-y-3">
-                      <p className="text-sm text-gray-500 mb-2">{trainers.length} trainers in your area</p>
+                      <p className="text-sm text-gray-500 mb-2">{trainers.length} trainer{trainers.length !== 1 ? 's' : ''} available</p>
                       {trainers.map((u) => (
-                        <UserCard
+                        <TrainerCard
                           key={u.id}
                           userData={u}
                           isFollowing={user.following.includes(u.id)}
                           onFollow={() => handleFollow(u.id, u.username)}
                           onUnfollow={() => handleUnfollow(u.id, u.username)}
                           onAvatarClick={() => setSelectedUser(u)}
+                          onBookConsultation={() => handleBookConsultation(u)}
                         />
                       ))}
                     </div>
@@ -257,7 +327,146 @@ export default function FriendsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Book Consultation Dialog */}
+      <Dialog open={showBookConsultation} onOpenChange={setShowBookConsultation}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <div className="space-y-4">
+            <div className="text-center">
+              <Avatar className="w-16 h-16 mx-auto mb-3">
+                <AvatarImage src={selectedTrainer?.profilePhoto} />
+                <AvatarFallback className="bg-rose-500 text-white text-xl">
+                  {selectedTrainer?.displayName?.[0] || '?'}
+                </AvatarFallback>
+              </Avatar>
+              <h2 className="text-xl font-bold text-white">Book Consultation</h2>
+              <p className="text-gray-400">with {selectedTrainer?.displayName || selectedTrainer?.username}</p>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Preferred Date</label>
+              <Input
+                type="date"
+                value={consultationDate}
+                onChange={(e) => setConsultationDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Preferred Time</label>
+              <select
+                value={consultationTime}
+                onChange={(e) => setConsultationTime(e.target.value)}
+                className="w-full p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+              >
+                {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'].map(time => (
+                  <option key={time} value={time}>{time}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Notes (optional)</label>
+              <textarea
+                value={consultationNotes}
+                onChange={(e) => setConsultationNotes(e.target.value)}
+                placeholder="Tell the trainer about your goals..."
+                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-gray-700"
+                onClick={() => setShowBookConsultation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-rose-500 hover:bg-rose-600"
+                onClick={handleSubmitConsultation}
+                disabled={!consultationDate || isBooking}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isBooking ? 'Sending...' : 'Request Consultation'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
+  );
+}
+
+function TrainerCard({
+  userData,
+  isFollowing,
+  onFollow,
+  onUnfollow,
+  onAvatarClick,
+  onBookConsultation,
+}: {
+  userData: any;
+  isFollowing: boolean;
+  onFollow: () => void;
+  onUnfollow: () => void;
+  onAvatarClick?: () => void;
+  onBookConsultation: () => void;
+}) {
+  return (
+    <Card className="bg-gray-900 border-gray-800">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3">
+          <button onClick={onAvatarClick} className="group relative">
+            <Avatar className="w-12 h-12 ring-2 ring-transparent group-hover:ring-rose-500 transition-all">
+              <AvatarImage src={userData.profilePhoto} />
+              <AvatarFallback className="bg-rose-500 text-white">
+                {userData.displayName?.[0] || userData.username?.[0] || '?'}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-semibold text-white truncate">
+                {userData.displayName || userData.username}
+              </p>
+              {userData.isVerifiedTrainer && (
+                <BadgeCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+              )}
+              <Badge variant="outline" className="text-xs border-rose-500/50 text-rose-400">
+                Trainer
+              </Badge>
+            </div>
+            <p className="text-sm text-gray-500">@{userData.username}</p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onBookConsultation}
+              className="border-rose-500/50 text-rose-400 hover:bg-rose-500/10"
+            >
+              <Calendar className="w-4 h-4 mr-1" />
+              Book
+            </Button>
+            <Button
+              size="sm"
+              variant={isFollowing ? "outline" : "default"}
+              onClick={isFollowing ? onUnfollow : onFollow}
+              className={isFollowing 
+                ? "border-gray-700 text-gray-300" 
+                : "bg-emerald-500 hover:bg-emerald-600"
+              }
+            >
+              {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

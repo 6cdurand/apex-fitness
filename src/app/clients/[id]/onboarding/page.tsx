@@ -285,25 +285,49 @@ export default function ClientOnboardingPage() {
   }, [searchQuery, supabaseUsers]);
   
   // Link existing user to this client slot
-  const handleLinkExisting = () => {
+  const handleLinkExisting = async () => {
     if (!selectedExistingUser) {
       toast.error('Please select a user to link');
       return;
     }
     
+    const { addClient, getClientById } = useTrainerStore.getState();
+    
+    // Check if this user is already linked to this trainer
+    const existingClientRelation = getClientById(selectedExistingUser.id);
+    if (existingClientRelation) {
+      // User already exists as a client - continue with existing account
+      toast.info(`${selectedExistingUser.displayName || selectedExistingUser.email} is already your client. Continuing with existing account.`);
+      setCreatedClientId(selectedExistingUser.id);
+      setAccountCreated(true);
+      setAccountName(selectedExistingUser.displayName || '');
+      setAccountUsername(selectedExistingUser.username || '');
+      return;
+    }
+    
+    // Check if user already has a different trainer linked
+    if (selectedExistingUser.trainerId && selectedExistingUser.trainerId !== user?.id) {
+      toast.warning(`This user is already linked to another trainer. They will now be linked to you.`);
+    }
+    
     // Add the linked user to trainer's client list
-    const { addClient } = useTrainerStore.getState();
     addClient(selectedExistingUser.id, {
       goals: [],
       onboardingComplete: false,
       status: 'active',
     });
     
-    // Also save to localStorage for local login
-    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    if (!existingLocalUsers.find((u: any) => u.id === selectedExistingUser.id)) {
-      localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers, selectedExistingUser]));
+    // Update the user's trainerId in Supabase
+    const { linkClientToTrainer } = await import('@/lib/supabaseSync');
+    if (user?.id) {
+      await linkClientToTrainer(selectedExistingUser.id, user.id);
     }
+    
+    // Also save to localStorage for local login with updated trainerId
+    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const updatedUser = { ...selectedExistingUser, trainerId: user?.id };
+    const filteredUsers = existingLocalUsers.filter((u: any) => u.id !== selectedExistingUser.id);
+    localStorage.setItem('apex-users', JSON.stringify([...filteredUsers, updatedUser]));
     
     // Track the linked client ID for completion
     setCreatedClientId(selectedExistingUser.id);

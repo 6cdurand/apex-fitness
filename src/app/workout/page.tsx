@@ -42,6 +42,8 @@ export default function WorkoutPage() {
   const clientScheduledSessions = user?.id ? getScheduledSessionsForUser(user.id) : [];
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<WorkoutTemplate | null>(null);
+  const [showEmptyWorkoutOptions, setShowEmptyWorkoutOptions] = useState(false);
+  const [selectedBlockType, setSelectedBlockType] = useState<string | null>(null);
   
   // Reschedule session state
   const [rescheduleSession, setRescheduleSession] = useState<string | null>(null);
@@ -403,15 +405,113 @@ export default function WorkoutPage() {
         {/* Quick Actions - Only show in user mode, trainers use client sessions */}
         {user?.mode !== 'trainer' && (
           <div className="grid grid-cols-2 gap-4">
-            <Button
-              onClick={handleStartEmpty}
-              className="h-auto py-6 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 flex flex-col items-center gap-2 rounded-2xl shadow-lg shadow-emerald-500/20"
-            >
-              <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                <Plus className="w-6 h-6" />
-              </div>
-              <span className="font-semibold">Start Empty Workout</span>
-            </Button>
+            <Dialog open={showEmptyWorkoutOptions} onOpenChange={setShowEmptyWorkoutOptions}>
+              <DialogTrigger asChild>
+                <Button
+                  className="h-auto py-6 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 flex flex-col items-center gap-2 rounded-2xl shadow-lg shadow-emerald-500/20"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <span className="font-semibold">Start Workout</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-white">Start New Workout</DialogTitle>
+                  <DialogDescription>Choose how to start your workout</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  {/* Quick Start */}
+                  <Button
+                    variant="outline"
+                    className="w-full h-auto py-4 border-gray-700 hover:bg-gray-800 justify-start"
+                    onClick={() => {
+                      handleStartEmpty();
+                      setShowEmptyWorkoutOptions(false);
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-emerald-400" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium text-white">Quick Start</p>
+                        <p className="text-xs text-gray-500">Empty workout, add exercises as you go</p>
+                      </div>
+                    </div>
+                  </Button>
+
+                  <div className="border-t border-gray-800 pt-4">
+                    <p className="text-sm text-gray-400 mb-3">Or start with a structured block:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-auto py-3 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 flex flex-col items-center gap-1"
+                        onClick={() => {
+                          startWorkout('Warm-up Session');
+                          setShowEmptyWorkoutOptions(false);
+                          router.push('/workout/active');
+                        }}
+                      >
+                        <Flame className="w-5 h-5 text-orange-400" />
+                        <span className="text-sm text-orange-400">Warm-up</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto py-3 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 flex flex-col items-center gap-1"
+                        onClick={() => {
+                          startWorkout('Strength Training');
+                          setShowEmptyWorkoutOptions(false);
+                          router.push('/workout/active');
+                        }}
+                      >
+                        <Dumbbell className="w-5 h-5 text-blue-400" />
+                        <span className="text-sm text-blue-400">Strength</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto py-3 border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 flex flex-col items-center gap-1"
+                        onClick={() => {
+                          startWorkout('Circuit Training');
+                          setShowEmptyWorkoutOptions(false);
+                          router.push('/workout/active');
+                        }}
+                      >
+                        <Target className="w-5 h-5 text-purple-400" />
+                        <span className="text-sm text-purple-400">Circuit</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="h-auto py-3 border-red-500/30 bg-red-500/10 hover:bg-red-500/20 flex flex-col items-center gap-1"
+                        onClick={() => {
+                          startWorkout('Cardio Session');
+                          setShowEmptyWorkoutOptions(false);
+                          router.push('/workout/active');
+                        }}
+                      >
+                        <Flame className="w-5 h-5 text-red-400" />
+                        <span className="text-sm text-red-400">Cardio</span>
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-gray-800 pt-4">
+                    <Button
+                      variant="outline"
+                      className="w-full border-gray-700 hover:bg-gray-800"
+                      onClick={() => {
+                        setShowEmptyWorkoutOptions(false);
+                        setShowTemplates(true);
+                      }}
+                    >
+                      <Dumbbell className="w-4 h-4 mr-2 text-emerald-400" />
+                      Choose from Templates
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
               <DialogTrigger asChild>

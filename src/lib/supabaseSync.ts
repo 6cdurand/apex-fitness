@@ -255,6 +255,59 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
   }
 }
 
+// Get all valid user IDs from Supabase (to detect deleted accounts)
+export async function getValidUserIdsFromSupabase(): Promise<Set<string>> {
+  if (!isSupabaseConfigured()) {
+    return new Set();
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id');
+    
+    if (error) {
+      console.error('[Supabase] Error fetching user IDs:', error.message);
+      return new Set();
+    }
+    
+    const ids = new Set((data || []).map(u => u.id));
+    console.log(`[Supabase] Found ${ids.size} valid user IDs`);
+    return ids;
+  } catch (e) {
+    console.error('[Supabase] Exception fetching user IDs:', e);
+    return new Set();
+  }
+}
+
+// Clean up clients that no longer exist in Supabase
+export async function cleanupDeletedClients(
+  currentClients: Array<{ clientId: string }>,
+  removeClient: (clientId: string) => void
+): Promise<number> {
+  const validIds = await getValidUserIdsFromSupabase();
+  
+  if (validIds.size === 0) {
+    console.log('[Supabase] No valid IDs found, skipping cleanup');
+    return 0;
+  }
+  
+  let removedCount = 0;
+  for (const client of currentClients) {
+    if (!validIds.has(client.clientId)) {
+      console.log(`[Supabase] Removing deleted client: ${client.clientId}`);
+      removeClient(client.clientId);
+      removedCount++;
+    }
+  }
+  
+  if (removedCount > 0) {
+    console.log(`[Supabase] Removed ${removedCount} deleted clients`);
+  }
+  
+  return removedCount;
+}
+
 // Check if email exists in Supabase
 export async function checkEmailExistsInSupabase(email: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;

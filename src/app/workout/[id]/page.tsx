@@ -44,11 +44,13 @@ export default function WorkoutDetailPage() {
   const router = useRouter();
   const params = useParams();
   const { isAuthenticated } = useAuthStore();
-  const { workoutHistory, deleteWorkout, startFromTemplate, personalBests, updateWorkoutNotes } = useWorkoutStore();
+  const { workoutHistory, deleteWorkout, startFromTemplate, personalBests, updateWorkoutNotes, updateCompletedWorkout } = useWorkoutStore();
   const { medals } = useMedalStore();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [notes, setNotes] = useState('');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingWorkout, setIsEditingWorkout] = useState(false);
+  const [editedExercises, setEditedExercises] = useState<Workout['exercises'] | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -95,6 +97,60 @@ export default function WorkoutDetailPage() {
       startFromTemplate(template);
       router.push('/workout/active');
     }
+  };
+
+  const handleStartEdit = () => {
+    if (workout) {
+      setEditedExercises(JSON.parse(JSON.stringify(workout.exercises)));
+      setIsEditingWorkout(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditedExercises(null);
+    setIsEditingWorkout(false);
+  };
+
+  const handleSaveEdit = () => {
+    if (workout && editedExercises) {
+      // Recalculate total volume
+      const newTotalVolume = editedExercises.reduce((sum, ex) => 
+        sum + ex.sets.filter(s => s.completed).reduce((setSum, set) => 
+          setSum + ((set.weight || 0) * (set.reps || 0)), 0
+        ), 0
+      );
+      
+      updateCompletedWorkout(workout.id, {
+        exercises: editedExercises,
+        totalVolume: newTotalVolume,
+      });
+      
+      // Update local state
+      setWorkout({
+        ...workout,
+        exercises: editedExercises,
+        totalVolume: newTotalVolume,
+      });
+      
+      setEditedExercises(null);
+      setIsEditingWorkout(false);
+      toast.success('Workout updated and synced');
+    }
+  };
+
+  const handleUpdateSet = (exerciseId: string, setId: string, field: 'weight' | 'reps', value: number) => {
+    if (!editedExercises) return;
+    
+    setEditedExercises(editedExercises.map(ex => 
+      ex.id === exerciseId
+        ? {
+            ...ex,
+            sets: ex.sets.map(s => 
+              s.id === setId ? { ...s, [field]: value } : s
+            ),
+          }
+        : ex
+    ));
   };
 
   if (!isAuthenticated || !workout) return null;
@@ -278,13 +334,45 @@ export default function WorkoutDetailPage() {
 
           {/* Exercises */}
           <section>
-            <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Dumbbell className="w-5 h-5 text-emerald-400" />
-              Exercises ({workout.exercises.length})
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Dumbbell className="w-5 h-5 text-emerald-400" />
+                Exercises ({workout.exercises.length})
+              </h2>
+              {!isEditingWorkout ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleStartEdit}
+                  className="text-gray-400 hover:text-white"
+                >
+                  <Edit2 className="w-4 h-4 mr-1" />
+                  Edit Workout
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancelEdit}
+                    className="text-gray-400 hover:text-white"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveEdit}
+                    className="bg-emerald-500 hover:bg-emerald-600"
+                  >
+                    <Save className="w-4 h-4 mr-1" />
+                    Save Changes
+                  </Button>
+                </div>
+              )}
+            </div>
             
             <div className="space-y-4">
-              {workout.exercises.filter(ex => ex.exercise).map((ex) => {
+              {(isEditingWorkout && editedExercises ? editedExercises : workout.exercises).filter(ex => ex.exercise).map((ex) => {
                 const completedSets = ex.sets.filter(s => s.completed);
                 const bestSet = completedSets.reduce((best, set) => {
                   if (!set.weight || !set.reps) return best;
@@ -327,10 +415,29 @@ export default function WorkoutDetailPage() {
                           <div className="text-right">VOLUME</div>
                         </div>
                         {completedSets.map((set) => (
-                          <div key={set.id} className="grid grid-cols-4 gap-2 px-3 py-2 border-t border-gray-800">
+                          <div key={set.id} className="grid grid-cols-4 gap-2 px-3 py-2 border-t border-gray-800 items-center">
                             <div className="text-gray-400">{set.setNumber}</div>
-                            <div className="text-center text-white">{set.weight || 0} kg</div>
-                            <div className="text-center text-white">{set.reps || 0}</div>
+                            {isEditingWorkout ? (
+                              <>
+                                <input
+                                  type="number"
+                                  value={set.weight || 0}
+                                  onChange={(e) => handleUpdateSet(ex.id, set.id, 'weight', parseFloat(e.target.value) || 0)}
+                                  className="w-full text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                                />
+                                <input
+                                  type="number"
+                                  value={set.reps || 0}
+                                  onChange={(e) => handleUpdateSet(ex.id, set.id, 'reps', parseInt(e.target.value) || 0)}
+                                  className="w-full text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                                />
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-center text-white">{set.weight || 0} kg</div>
+                                <div className="text-center text-white">{set.reps || 0}</div>
+                              </>
+                            )}
                             <div className="text-right text-gray-400">
                               {((set.weight || 0) * (set.reps || 0)).toLocaleString()} kg
                             </div>

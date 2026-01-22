@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
 import { sortMedalsByPriority, getMedalDefinition } from '@/lib/medals';
+import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,8 +60,24 @@ export default function ProfilePage() {
   }, [personalBests]);
 
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored);
+    const loadAllUsers = async () => {
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored);
+      
+      // Also fetch from Supabase for cross-device sync
+      try {
+        const supabaseUsers = await fetchAllUsersFromSupabase();
+        if (supabaseUsers && supabaseUsers.length > 0) {
+          // Merge: Supabase is source of truth, add local-only users
+          const supabaseIds = new Set(supabaseUsers.map((u: any) => u.id));
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
+          setAllUsers([...supabaseUsers, ...localOnlyUsers]);
+        }
+      } catch (e) {
+        console.error('[Profile] Error loading users from Supabase:', e);
+      }
+    };
+    loadAllUsers();
   }, []);
 
   const handleLogout = () => {

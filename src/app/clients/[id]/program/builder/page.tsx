@@ -240,8 +240,40 @@ export default function WorkoutBuilderPage() {
   };
 
   const handleSave = () => {
-    // In a full implementation, this would save to the store
-    // For now, navigate back with the changes
+    const { updateClientProgram, getActiveProgram } = useTrainerStore.getState();
+    const activeProgram = getActiveProgram(clientId);
+    
+    if (activeProgram && activeProgram.weeklyPlan) {
+      // Update the specific day in the weekly plan with the edited blocks
+      const updatedWeeklyPlan = [...activeProgram.weeklyPlan];
+      if (updatedWeeklyPlan[dayIndex]) {
+        updatedWeeklyPlan[dayIndex] = {
+          ...updatedWeeklyPlan[dayIndex],
+          blocks: blocks.map(block => ({
+            id: block.id,
+            type: block.type,
+            name: block.name,
+            exercises: block.exercises.map(ex => ({
+              id: ex.id,
+              exerciseId: ex.exerciseId,
+              exerciseName: ex.exerciseName,
+              movementPattern: ex.movementPattern,
+              sets: ex.sets,
+              reps: ex.reps,
+              rest: ex.rest,
+              tempo: ex.tempo,
+              notes: ex.notes,
+              trainerNotes: ex.trainerNotes,
+            })),
+          })),
+        };
+        
+        updateClientProgram(activeProgram.id, {
+          weeklyPlan: updatedWeeklyPlan,
+        });
+      }
+    }
+    
     router.back();
   };
 

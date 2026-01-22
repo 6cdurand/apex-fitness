@@ -37,7 +37,8 @@ import {
   X,
   Link2,
   ArrowLeft,
-  Loader2
+  Loader2,
+  DollarSign
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -48,6 +49,7 @@ export default function ClientsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { clients, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent } = useTrainerStore();
+  const { workoutHistory } = useWorkoutStore();
   const { getOrCreateConversation } = useMessageStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddClient, setShowAddClient] = useState(false);
@@ -82,6 +84,9 @@ export default function ClientsPage() {
   const [bookingTime, setBookingTime] = useState('09:00');
   const [bookingDuration, setBookingDuration] = useState('60');
   const [bookingNotes, setBookingNotes] = useState('');
+  
+  // Sync state
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -353,13 +358,35 @@ export default function ClientsPage() {
         title="Clients" 
         subtitle={`${activeClients.length} active clients`}
         action={
-          <Dialog open={showAddClient} onOpenChange={setShowAddClient}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="bg-rose-500 hover:bg-rose-600">
-                <UserPlus className="w-4 h-4 mr-2" />
-                Add Client
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="border-gray-700"
+              disabled={isSyncing}
+              onClick={async () => {
+                if (!user?.id) return;
+                setIsSyncing(true);
+                try {
+                  await useTrainerStore.getState().loadFromSupabase(user.id);
+                  toast.success('Data synced from cloud');
+                } catch (e) {
+                  toast.error('Sync failed');
+                } finally {
+                  setIsSyncing(false);
+                }
+              }}
+            >
+              <Loader2 className={`w-4 h-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync'}
+            </Button>
+            <Dialog open={showAddClient} onOpenChange={setShowAddClient}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="bg-rose-500 hover:bg-rose-600">
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Client
+                </Button>
+              </DialogTrigger>
             <DialogContent className="bg-gray-900 border-gray-800">
               <DialogHeader>
                 <DialogTitle className="text-white">Add Client</DialogTitle>
@@ -566,7 +593,8 @@ export default function ClientsPage() {
                 </div>
               )}
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         }
       />
 
@@ -633,7 +661,15 @@ export default function ClientsPage() {
                 const sessions = getSessionsForClient(client.clientId);
                 const packages = getPackagesForClient(client.clientId);
                 const activePackage = packages.find(p => p.status === 'active');
-                const completedSessions = sessions.filter(s => s.status === 'completed').length;
+                // Use workoutHistory for actual workout count (matches client detail page)
+                const clientWorkouts = workoutHistory.filter(w => w.userId === client.clientId);
+                const workoutsDone = clientWorkouts.length;
+                const paidSessions = sessions.filter(s => s.paid).length;
+                const unpaidSessions = workoutsDone - paidSessions;
+                const lastWorkout = clientWorkouts
+                  .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())[0];
+                // Calculate total paid from packages
+                const totalPaid = packages.reduce((sum, p) => sum + (p.priceTotal || 0), 0);
                 
                 return (
                   <Card 
@@ -682,10 +718,10 @@ export default function ClientsPage() {
                             )}
                           </div>
                           
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            <span className="flex items-center gap-1">
+                          <div className="flex items-center gap-3 text-sm">
+                            <span className="flex items-center gap-1 text-gray-500">
                               <CheckCircle2 className="w-3 h-3" />
-                              {completedSessions} sessions
+                              {workoutsDone} sessions
                             </span>
                             {activePackage && (
                               <span className="flex items-center gap-1 text-emerald-400">
@@ -693,7 +729,18 @@ export default function ClientsPage() {
                                 {activePackage.remainingSessions} left
                               </span>
                             )}
+                            {totalPaid > 0 && (
+                              <span className="flex items-center gap-1 text-blue-400">
+                                <DollarSign className="w-3 h-3" />
+                                ${totalPaid}
+                              </span>
+                            )}
                           </div>
+                          {lastWorkout && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Last: {format(new Date(lastWorkout.startTime), 'MMM d')}
+                            </p>
+                          )}
 
                           {client.goals && client.goals.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">

@@ -9,6 +9,7 @@ import {
   mergeData,
   debugSupabase,
   ensureUserExistsInSupabase,
+  cleanupDeletedClients,
   type MessageData,
   type ConversationData,
 } from '@/lib/supabaseSync';
@@ -136,6 +137,15 @@ export function SupabaseSync() {
         console.log('[SupabaseSync] ✅ Trainer data synced - Clients:', clients.length);
         if (clients.length > 0) {
           console.log('[SupabaseSync] Client names:', clients.map(c => c.clientId));
+        }
+        
+        // Clean up clients whose Supabase accounts have been deleted
+        const removedCount = await cleanupDeletedClients(
+          clients,
+          useTrainerStore.getState().removeClient
+        );
+        if (removedCount > 0) {
+          console.log(`[SupabaseSync] 🧹 Cleaned up ${removedCount} deleted clients`);
         }
       } catch (error) {
         console.error('[SupabaseSync] ❌ Error syncing trainer data:', error);

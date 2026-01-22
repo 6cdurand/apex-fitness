@@ -190,6 +190,10 @@ export default function ClientDetailPage() {
   const [isContinuousPackage, setIsContinuousPackage] = useState(false);
   const [isSyncingWorkouts, setIsSyncingWorkouts] = useState(false);
   
+  // Workout editing state
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
+  const [editedWorkoutExercises, setEditedWorkoutExercises] = useState<Workout['exercises'] | null>(null);
+  
   // Calculate per-session cost
   const perSessionCost = paymentAmount && sessionsCovered && parseInt(sessionsCovered) > 0
     ? (parseFloat(paymentAmount) / parseInt(sessionsCovered)).toFixed(2)
@@ -380,6 +384,44 @@ export default function ClientDetailPage() {
     setEditSessionsDone('');
     setEditSessionsLeft('');
     setEditTotalPaid('');
+  };
+
+  // Workout editing handlers
+  const handleUpdateWorkoutSet = (exerciseId: string, setId: string, field: 'weight' | 'reps', value: number) => {
+    if (!editedWorkoutExercises) return;
+    
+    setEditedWorkoutExercises(editedWorkoutExercises.map(ex => 
+      ex.id === exerciseId
+        ? {
+            ...ex,
+            sets: ex.sets.map(s => 
+              s.id === setId ? { ...s, [field]: value } : s
+            ),
+          }
+        : ex
+    ));
+  };
+
+  const handleSaveWorkoutEdit = () => {
+    if (!editingWorkout || !editedWorkoutExercises) return;
+    
+    // Recalculate total volume
+    const newTotalVolume = editedWorkoutExercises.reduce((sum, ex) => 
+      sum + ex.sets.filter(s => s.completed).reduce((setSum, set) => 
+        setSum + ((set.weight || 0) * (set.reps || 0)), 0
+      ), 0
+    );
+    
+    // Update workout in store (this will also recalculate PBs and sync to Supabase)
+    const { updateCompletedWorkout } = useWorkoutStore.getState();
+    updateCompletedWorkout(editingWorkout.id, {
+      exercises: editedWorkoutExercises,
+      totalVolume: newTotalVolume,
+    });
+    
+    toast.success('Workout updated - PBs and stats recalculated');
+    setEditingWorkout(null);
+    setEditedWorkoutExercises(null);
   };
 
   if (!clientUser || !clientRelation) {
@@ -1235,23 +1277,39 @@ export default function ClientDetailPage() {
                       .map(workout => (
                         <div
                           key={workout.id}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
-                          onClick={() => router.push(`/workout/${workout.id}`)}
+                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
                         >
-                          <div className="flex-1 min-w-0">
+                          <div 
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => router.push(`/workout/${workout.id}`)}
+                          >
                             <p className="font-medium text-white text-sm truncate">{workout.name}</p>
                             <p className="text-xs text-gray-500">
                               {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
                               {workout.notes && ' • Has notes'}
                             </p>
                           </div>
-                          <div className="text-right ml-3">
-                            <p className="text-emerald-400 font-medium text-sm">
-                              {Math.round(workout.totalVolume).toLocaleString()} kg
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className="text-emerald-400 font-medium text-sm">
+                                {Math.round(workout.totalVolume).toLocaleString()} kg
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-400 hover:text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingWorkout(workout);
+                                setEditedWorkoutExercises(JSON.parse(JSON.stringify(workout.exercises)));
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -1316,10 +1374,12 @@ export default function ClientDetailPage() {
                       .map(workout => (
                         <div
                           key={workout.id}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
-                          onClick={() => router.push(`/workout/${workout.id}`)}
+                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
                         >
-                          <div className="flex-1 min-w-0">
+                          <div 
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => router.push(`/workout/${workout.id}`)}
+                          >
                             <p className="font-medium text-white text-sm truncate">{workout.name}</p>
                             <p className="text-xs text-gray-500">
                               {format(new Date(workout.startTime), 'MMM d, yyyy')} • {workout.exercises.length} exercises
@@ -1327,13 +1387,27 @@ export default function ClientDetailPage() {
                               {workout.notes && ' • Has notes'}
                             </p>
                           </div>
-                          <div className="text-right ml-3">
-                            <p className="text-emerald-400 font-medium text-sm">
-                              {Math.round(workout.totalVolume).toLocaleString()} kg
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className="text-emerald-400 font-medium text-sm">
+                                {Math.round(workout.totalVolume).toLocaleString()} kg
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                              </p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-400 hover:text-white"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingWorkout(workout);
+                                setEditedWorkoutExercises(JSON.parse(JSON.stringify(workout.exercises)));
+                              }}
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       ))}
@@ -2063,6 +2137,80 @@ export default function ClientDetailPage() {
               Import History
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Workout Dialog */}
+      <Dialog open={!!editingWorkout} onOpenChange={(open) => !open && setEditingWorkout(null)}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Workout</DialogTitle>
+          </DialogHeader>
+          {editingWorkout && editedWorkoutExercises && (
+            <div className="space-y-4 pt-4">
+              <div className="text-sm text-gray-400">
+                <p><strong>{editingWorkout.name}</strong></p>
+                <p>{format(new Date(editingWorkout.startTime), 'MMM d, yyyy')}</p>
+              </div>
+              
+              {editedWorkoutExercises.map(ex => (
+                <div key={ex.id} className="bg-gray-800 rounded-lg p-3">
+                  <h4 className="font-medium text-white mb-2">{ex.exercise?.name || 'Exercise'}</h4>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-4 gap-2 text-xs text-gray-500 px-1">
+                      <div>SET</div>
+                      <div className="text-center">WEIGHT</div>
+                      <div className="text-center">REPS</div>
+                      <div className="text-right">VOL</div>
+                    </div>
+                    {ex.sets.filter(s => s.completed).map(set => (
+                      <div key={set.id} className="grid grid-cols-4 gap-2 items-center">
+                        <div className="text-gray-400 text-sm">{set.setNumber}</div>
+                        <input
+                          type="number"
+                          value={set.weight || 0}
+                          onChange={(e) => handleUpdateWorkoutSet(ex.id, set.id, 'weight', parseFloat(e.target.value) || 0)}
+                          className="w-full text-center bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                        />
+                        <input
+                          type="number"
+                          value={set.reps || 0}
+                          onChange={(e) => handleUpdateWorkoutSet(ex.id, set.id, 'reps', parseInt(e.target.value) || 0)}
+                          className="w-full text-center bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                        />
+                        <div className="text-right text-gray-400 text-sm">
+                          {((set.weight || 0) * (set.reps || 0)).toLocaleString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-700"
+                  onClick={() => {
+                    setEditingWorkout(null);
+                    setEditedWorkoutExercises(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                  onClick={handleSaveWorkoutEdit}
+                >
+                  Save Changes
+                </Button>
+              </div>
+              
+              <p className="text-xs text-gray-500 text-center">
+                Saving will recalculate PBs and strength rating, then sync to cloud
+              </p>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </MainLayout>

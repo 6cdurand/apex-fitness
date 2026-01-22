@@ -242,6 +242,7 @@ interface WorkoutState {
   removeSet: (exerciseId: string, setId: string) => void;
   updateSet: (exerciseId: string, setId: string, updates: Partial<WorkoutSet>) => void;
   completeSet: (exerciseId: string, setId: string) => void;
+  uncompleteSet: (exerciseId: string, setId: string) => void;
   
   // Timer actions
   startWorkoutTimer: () => void;
@@ -271,6 +272,12 @@ interface WorkoutState {
   // Notes
   updateWorkoutNotes: (workoutId: string, notes: string) => void;
   getWorkoutById: (workoutId: string) => Workout | undefined;
+  
+  // Edit completed workouts
+  updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => void;
+  
+  // Recalculate PBs from workout history
+  recalculatePBsForUser: (userId: string) => void;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -629,6 +636,27 @@ export const useWorkoutStore = create<WorkoutState>()(
         }
       },
 
+      uncompleteSet: (exerciseId, setId) => {
+        const { activeWorkout } = get();
+        if (!activeWorkout) return;
+
+        set({
+          activeWorkout: {
+            ...activeWorkout,
+            exercises: activeWorkout.exercises.map(e =>
+              e.id === exerciseId
+                ? {
+                    ...e,
+                    sets: e.sets.map(s =>
+                      s.id === setId ? { ...s, completed: false } : s
+                    ),
+                  }
+                : e
+            ),
+          },
+        });
+      },
+
       startWorkoutTimer: () => {
         set(state => ({
           workoutTimer: { 
@@ -952,6 +980,66 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       getWorkoutById: (workoutId: string) => {
         return get().workoutHistory.find(w => w.id === workoutId);
+      },
+
+      updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => {
+        set(state => ({
+          workoutHistory: state.workoutHistory.map(w =>
+            w.id === workoutId ? { ...w, ...updates } : w
+          ),
+        }));
+        
+        // Sync to Supabase
+        const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
+        if (updatedWorkout) {
+          syncWorkoutToSupabase(updatedWorkout);
+          
+          // Recalculate PBs for the user after workout edit
+          get().recalculatePBsForUser(updatedWorkout.userId);
+        }
+      },
+
+      recalculatePBsForUser: (userId: string) => {
+        const workouts = get().workoutHistory.filter(w => w.userId === userId);
+        const newPBs: Record<string, PersonalBest> = {};
+        
+        // Go through all workouts and find best lifts for each exercise
+        workouts.forEach(workout => {
+          workout.exercises.forEach(ex => {
+            if (!ex.exerciseId) return;
+            
+            ex.sets.filter(s => s.completed && s.weight && s.reps).forEach(set => {
+              const oneRepMax = calculate1RM(set.weight!, set.reps!);
+              if (oneRepMax === null) return; // Skip if reps > 20
+              
+              const existing = newPBs[ex.exerciseId];
+              if (!existing || oneRepMax > existing.oneRepMax) {
+                newPBs[ex.exerciseId] = {
+                  id: existing?.id || uuidv4(),
+                  exerciseId: ex.exerciseId,
+                  userId,
+                  bestWeight: set.weight!,
+                  bestReps: set.reps!,
+                  oneRepMax,
+                  bestVolume: existing?.bestVolume || 0,
+                  achievedAt: workout.endTime || workout.startTime,
+                  workoutId: workout.id,
+                };
+              }
+            });
+          });
+        });
+        
+        // Update state: remove old PBs for this user, add recalculated ones
+        set(state => ({
+          personalBests: [
+            ...state.personalBests.filter(pb => pb.userId !== userId),
+            ...Object.values(newPBs),
+          ],
+        }));
+        
+        // Recalculate strength rating
+        useMedalStore.getState().calculateStrengthRatingForUser(userId);
       },
     }),
     {
@@ -1899,12 +1987,17 @@ export const useTrainerStore = create<TrainerState>()(
         const request = get().bookingRequests.find(r => r.id === requestId);
         if (!request) return;
 
-        // Create calendar event
+        // Create calendar event with proper type mapping
         const eventId = uuidv4();
+        const eventType = request.type === 'pt_session' ? 'session' : request.type;
+        const eventTitle = request.type === 'pt_session' ? 'PT Session' 
+          : request.type === 'consultation' ? 'Consultation'
+          : 'Assessment';
+        
         const newEvent: CalendarEvent = {
           id: eventId,
-          title: `PT Session`,
-          type: 'workout',
+          title: eventTitle,
+          type: eventType as any,
           date: request.date,
           startTime: request.startTime,
           endTime: request.endTime,
