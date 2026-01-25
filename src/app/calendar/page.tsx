@@ -19,8 +19,11 @@ import {
   Edit,
   Trash2,
   LayoutGrid,
-  List
+  List,
+  FileText,
+  Sparkles
 } from 'lucide-react';
+import { defaultTemplates } from '@/lib/templates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -66,6 +69,10 @@ export default function CalendarPage() {
   const [newEventEndTime, setNewEventEndTime] = useState('10:00');
   const [newEventRecurrence, setNewEventRecurrence] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none');
   const [newEventType, setNewEventType] = useState<'session' | 'consultation' | 'assessment'>('session');
+  
+  // Workout customization state
+  const [showWorkoutPicker, setShowWorkoutPicker] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -619,6 +626,56 @@ export default function CalendarPage() {
               </div>
             </div>
 
+            {/* Workout Customization - only for session type events */}
+            {editingEvent?.type === 'session' && (
+              <div className="border-t border-gray-700 pt-4">
+                <Label className="text-gray-400 mb-2 block">Session Workout</Label>
+                {editingEvent?.workoutId ? (
+                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <Dumbbell className="w-4 h-4" />
+                      <span className="text-sm font-medium">Workout assigned</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full border-gray-600"
+                      onClick={() => setShowWorkoutPicker(true)}
+                    >
+                      <Edit className="w-3 h-3 mr-2" />
+                      Change Workout
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="bg-gray-800 rounded-lg p-3">
+                    <p className="text-sm text-gray-400 mb-3">No workout assigned yet</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-gray-600"
+                        onClick={() => setShowWorkoutPicker(true)}
+                      >
+                        <FileText className="w-3 h-3 mr-2" />
+                        From Template
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-500 text-blue-400"
+                        onClick={() => {
+                          router.push(`/workout/builder?eventId=${editingEvent.id}&clientId=${editingEvent.clientId}`);
+                        }}
+                      >
+                        <Sparkles className="w-3 h-3 mr-2" />
+                        Create New
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-2 pt-4">
               <Button
                 className="flex-1 bg-emerald-500 hover:bg-emerald-600"
@@ -634,6 +691,59 @@ export default function CalendarPage() {
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Workout Picker Dialog */}
+      <Dialog open={showWorkoutPicker} onOpenChange={setShowWorkoutPicker}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Select Workout Template</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-[400px]">
+            <div className="space-y-2">
+              {defaultTemplates.map((template) => (
+                <div
+                  key={template.id}
+                  className={cn(
+                    "p-3 rounded-lg border cursor-pointer transition-colors",
+                    selectedTemplateId === template.id
+                      ? "border-emerald-500 bg-emerald-500/10"
+                      : "border-gray-700 hover:border-gray-600"
+                  )}
+                  onClick={() => setSelectedTemplateId(template.id)}
+                >
+                  <h4 className="font-medium text-white">{template.name}</h4>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {template.exercises.length} exercises
+                  </p>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <div className="flex gap-2 pt-4">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setShowWorkoutPicker(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              disabled={!selectedTemplateId}
+              onClick={() => {
+                if (editingEvent && selectedTemplateId) {
+                  updateCalendarEvent(editingEvent.id, { workoutId: selectedTemplateId });
+                  setEditingEvent({ ...editingEvent, workoutId: selectedTemplateId });
+                  setShowWorkoutPicker(false);
+                  setSelectedTemplateId('');
+                }
+              }}
+            >
+              Assign Workout
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

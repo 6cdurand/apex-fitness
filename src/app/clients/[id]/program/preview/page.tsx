@@ -137,6 +137,7 @@ export default function WeeklyPlanPreviewPage() {
   const [workoutAssignments, setWorkoutAssignments] = useState<Partial<Record<typeof DAYS_OF_WEEK[number], number>>>({});
   const [activeDay, setActiveDay] = useState<string>('0');
   const [useCyclingMode, setUseCyclingMode] = useState<boolean>(false);
+  const [cycleAcrossWeeks, setCycleAcrossWeeks] = useState<boolean>(true); // When days > workouts, cycle across weeks
   const [sessionType, setSessionType] = useState<'pt' | 'solo' | 'mixed'>('pt');
   const [selectedExercise, setSelectedExercise] = useState<{ id: string; name: string; dayIndex: number; blockIndex: number; exerciseIndex: number } | null>(null);
   
@@ -276,6 +277,10 @@ export default function WeeklyPlanPreviewPage() {
       phase: template.phases[0] as TrainingPhase,
       goal: (client.goals?.[0] || template.goals[0]) as TrainingGoal,
       weeklyPlan: workoutDays,
+      trainingDaysPerWeek: selectedFrequency,
+      selectedDays: selectedTrainingDays,
+      cycleAcrossWeeks,
+      sessionType,
       startDate: new Date().toISOString(),
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -293,10 +298,15 @@ export default function WeeklyPlanPreviewPage() {
       
       const today = new Date();
       const currentDayOfWeek = today.getDay();
+      const numWorkouts = workoutDays.length;
+      const numDaysPerWeek = selectedTrainingDays.length;
+      
+      // Track global session index for cycling across weeks
+      let globalSessionIndex = 0;
       
       // Schedule sessions for next 4 weeks
       for (let week = 0; week < 4; week++) {
-        selectedTrainingDays.forEach((dayName, idx) => {
+        selectedTrainingDays.forEach((dayName, dayIdx) => {
           const targetDayNum = dayToNumber[dayName];
           let daysUntil = targetDayNum - currentDayOfWeek;
           if (daysUntil <= 0 && week === 0) daysUntil += 7;
@@ -304,12 +314,24 @@ export default function WeeklyPlanPreviewPage() {
           const sessionDate = new Date(today);
           sessionDate.setDate(today.getDate() + daysUntil + (week * 7));
           
-          const workoutIndex = workoutAssignments[dayName] ?? idx % workoutDays.length;
+          let workoutIndex: number;
+          
+          if (cycleAcrossWeeks && numDaysPerWeek > numWorkouts) {
+            // Cycling mode: workouts cycle across weeks
+            // E.g., 3 days/week with 2 workouts (A, B):
+            // Week 1: A, B, A | Week 2: B, A, B | Week 3: A, B, A...
+            workoutIndex = globalSessionIndex % numWorkouts;
+          } else {
+            // Fixed mode: use manual assignments or simple modulo within week
+            workoutIndex = workoutAssignments[dayName] ?? dayIdx % numWorkouts;
+          }
+          
           const workout = workoutDays[workoutIndex];
+          const isPTSession = sessionType === 'pt' || (sessionType === 'mixed' && dayIdx === 0);
           
           addCalendarEvent({
-            title: workout?.dayLabel || `Training Day ${idx + 1}`,
-            type: 'session',
+            title: workout?.dayLabel || `Training Day ${dayIdx + 1}`,
+            type: isPTSession ? 'session' : 'workout',
             date: sessionDate.toISOString().split('T')[0],
             startTime: '09:00',
             endTime: '10:00',
@@ -318,7 +340,10 @@ export default function WeeklyPlanPreviewPage() {
             trainerId: client.trainerId,
             status: 'scheduled',
             notes: `Week ${week + 1} - ${template.name}`,
+            workoutId: isPTSession ? undefined : program.id, // PT sessions start empty
           });
+          
+          globalSessionIndex++;
         });
       }
     }
@@ -534,16 +559,46 @@ export default function WeeklyPlanPreviewPage() {
               {/* Step 2: Show workout assignments for selected days */}
               {selectedTrainingDays.length > 0 && (
                 <div className="border-t pt-4">
-                  <p className="text-sm font-medium mb-2">Workout Schedule (tap to change)</p>
+                  {/* Cycle across weeks toggle - show when days > workouts */}
+                  {selectedTrainingDays.length > workoutDays.length && (
+                    <div className="flex items-center justify-between mb-4 p-3 bg-blue-500/10 rounded-lg border border-blue-500/20">
+                      <div className="space-y-1">
+                        <Label htmlFor="cycle-weeks" className="text-sm font-medium">
+                          Cycle workouts across weeks
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {cycleAcrossWeeks 
+                            ? `Week 1: ${workoutDays.slice(0, selectedTrainingDays.length).map((_, i) => workoutDays[i % workoutDays.length]?.dayLabel?.charAt(0) || String.fromCharCode(65 + (i % workoutDays.length))).join(', ')} → Week 2 continues sequence`
+                            : 'Same pattern repeats each week'
+                          }
+                        </p>
+                      </div>
+                      <Switch
+                        id="cycle-weeks"
+                        checked={cycleAcrossWeeks}
+                        onCheckedChange={setCycleAcrossWeeks}
+                      />
+                    </div>
+                  )}
+                  
+                  <p className="text-sm font-medium mb-2">
+                    {cycleAcrossWeeks && selectedTrainingDays.length > workoutDays.length 
+                      ? 'Week 1 Preview (workouts cycle across weeks)'
+                      : 'Workout Schedule (tap to change)'
+                    }
+                  </p>
                   <div className="space-y-2">
-                    {DAYS_OF_WEEK.filter(d => selectedTrainingDays.includes(d)).map(weekday => {
-                      const workoutIndex = workoutAssignments[weekday] ?? 0;
+                    {DAYS_OF_WEEK.filter(d => selectedTrainingDays.includes(d)).map((weekday, idx) => {
+                      const workoutIndex = cycleAcrossWeeks && selectedTrainingDays.length > workoutDays.length
+                        ? idx % workoutDays.length
+                        : (workoutAssignments[weekday] ?? 0);
                       const workout = workoutDays[workoutIndex];
+                      const canChange = !cycleAcrossWeeks || selectedTrainingDays.length <= workoutDays.length;
                       return (
                         <div 
                           key={weekday} 
-                          className="flex items-center justify-between bg-muted/50 rounded-lg p-3 cursor-pointer hover:bg-muted/70 transition-colors"
-                          onClick={() => handleChangeWorkoutForDay(weekday)}
+                          className={`flex items-center justify-between bg-muted/50 rounded-lg p-3 ${canChange ? 'cursor-pointer hover:bg-muted/70' : ''} transition-colors`}
+                          onClick={() => canChange && handleChangeWorkoutForDay(weekday)}
                         >
                           <span className="font-medium">{DAY_LABELS[weekday]}</span>
                           <Badge variant="secondary" className="text-sm">
@@ -553,9 +608,11 @@ export default function WeeklyPlanPreviewPage() {
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Tap a day to cycle through different workouts
-                  </p>
+                  {(!cycleAcrossWeeks || selectedTrainingDays.length <= workoutDays.length) && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Tap a day to cycle through different workouts
+                    </p>
+                  )}
                 </div>
               )}
             </div>

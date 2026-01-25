@@ -55,6 +55,7 @@ export default function WorkoutPage() {
     clientId: string;
     clientName: string;
     sessionTitle?: string;
+    workoutId?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -212,6 +213,8 @@ export default function WorkoutPage() {
             <div className="space-y-3">
               {todaysSessions.map((session) => {
                 const clientUser = allUsers.find(u => u.id === session.clientId);
+                const linkedTemplate = session.workoutId ? defaultTemplates.find(t => t.id === session.workoutId) : null;
+                const clientProgram = session.clientId ? getActiveProgram(session.clientId) : null;
                 return (
                   <Card
                     key={session.id}
@@ -245,6 +248,7 @@ export default function WorkoutPage() {
                               clientId: session.clientId!,
                               clientName: clientUser?.displayName || 'Client',
                               sessionTitle: session.title || session.notes,
+                              workoutId: session.workoutId,
                             });
                           }}
                         >
@@ -252,8 +256,29 @@ export default function WorkoutPage() {
                           Start
                         </Button>
                       </div>
+                      
+                      {/* Show linked workout details */}
+                      {linkedTemplate ? (
+                        <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                          <div className="flex items-center gap-2 text-emerald-400">
+                            <Dumbbell className="w-4 h-4" />
+                            <span className="text-sm font-medium">{linkedTemplate.name}</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {linkedTemplate.exercises.length} exercises
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="mt-3 p-2 bg-gray-800 rounded-lg border border-gray-700">
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <Dumbbell className="w-3 h-3" />
+                            No workout assigned - select during session
+                          </p>
+                        </div>
+                      )}
+                      
                       {session.notes && (
-                        <p className="text-xs text-gray-500 mt-2 pl-13">
+                        <p className="text-xs text-gray-500 mt-2">
                           Note: {session.notes}
                         </p>
                       )}

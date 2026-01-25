@@ -1279,16 +1279,38 @@ export default function ClientOnboardingPage() {
         >
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
-        <Button
-          onClick={handleNext}
-          disabled={!canProceed()}
-        >
-          {currentStep === TOTAL_STEPS ? (
-            <>Complete <Check className="h-4 w-4 ml-2" /></>
-          ) : (
-            <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
+        <div className="flex gap-2">
+          {/* Exit Onboarding Button - visible after account creation */}
+          {accountCreated && (
+            <Button
+              variant="ghost"
+              className="text-gray-400 hover:text-white"
+              onClick={() => {
+                // Save current progress
+                const actualClientId = createdClientId || clientId;
+                updateClient(actualClientId, { 
+                  onboardingComplete: true,
+                  goals: data.primaryGoal ? [data.primaryGoal, data.secondaryGoal].filter(Boolean) as string[] : [],
+                  notes: data.customGoalText,
+                });
+                toast.success('Onboarding saved! You can continue later.');
+                router.push(`/clients/${actualClientId}`);
+              }}
+            >
+              Exit & Save
+            </Button>
           )}
-        </Button>
+          <Button
+            onClick={handleNext}
+            disabled={!canProceed()}
+          >
+            {currentStep === TOTAL_STEPS ? (
+              <>Complete <Check className="h-4 w-4 ml-2" /></>
+            ) : (
+              <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

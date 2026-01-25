@@ -734,6 +734,12 @@ export interface ClientProgram {
   // Customized weekly plan
   weeklyPlan: ClientWorkoutDay[];
   
+  // Scheduling configuration
+  trainingDaysPerWeek?: number;
+  selectedDays?: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
+  cycleAcrossWeeks?: boolean; // When days > workouts, cycle workouts across weeks
+  sessionType?: 'pt' | 'solo' | 'mixed';
+  
   startDate: string;
   endDate?: string;
   status: 'active' | 'completed' | 'paused';
