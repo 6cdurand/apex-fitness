@@ -18,6 +18,9 @@ import {
   syncCalendarEventToSupabase,
   fetchCalendarEventsFromSupabase,
   deleteCalendarEventFromSupabase,
+  syncSessionWorkoutToSupabase,
+  fetchSessionWorkoutsFromSupabase,
+  deleteSessionWorkoutFromSupabase,
   syncPaymentToSupabase,
   fetchPaymentsFromSupabase,
   syncClientProgramToSupabase,
@@ -1223,6 +1226,17 @@ export const useSocialStore = create<SocialState>()(
 );
 
 // ============ TRAINER STORE ============
+// Session workout created in builder
+interface SessionWorkout {
+  id: string;
+  name: string;
+  clientId: string;
+  eventId?: string;
+  trainerId?: string;
+  blocks: any[]; // WorkoutBlock[]
+  createdAt: string;
+}
+
 interface TrainerState {
   clients: TrainerClient[];
   assignedWorkouts: Workout[];
@@ -1233,6 +1247,7 @@ interface TrainerState {
   bookingRequests: BookingRequest[];
   clientPrograms: ClientProgram[];
   clientProfiles: ClientProgrammingProfile[];
+  sessionWorkouts: SessionWorkout[]; // Workouts created in builder
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -1315,6 +1330,12 @@ interface TrainerState {
   getScheduledSessionsForUser: (userId: string) => CalendarEvent[];
   confirmSession: (eventId: string) => void;
   
+  // Session workouts (created in builder)
+  addSessionWorkout: (workout: SessionWorkout) => void;
+  getSessionWorkout: (workoutId: string) => SessionWorkout | undefined;
+  getSessionWorkoutsForClient: (clientId: string) => SessionWorkout[];
+  deleteSessionWorkout: (workoutId: string) => void;
+  
   // Supabase sync
   loadFromSupabase: (trainerId: string) => Promise<void>;
   
@@ -1334,6 +1355,7 @@ export const useTrainerStore = create<TrainerState>()(
       sessionPackages: [],
       clientPrograms: [],
       clientProfiles: [],
+      sessionWorkouts: [],
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -2226,6 +2248,36 @@ export const useTrainerStore = create<TrainerState>()(
         }));
       },
 
+      // Session workouts (created in builder)
+      addSessionWorkout: (workout) => {
+        // Add trainerId if not present
+        const trainerId = useAuthStore.getState().user?.id;
+        const workoutWithTrainer = { ...workout, trainerId: workout.trainerId || trainerId };
+        
+        set(state => ({
+          sessionWorkouts: [...state.sessionWorkouts, workoutWithTrainer],
+        }));
+        
+        // Sync to Supabase immediately
+        syncSessionWorkoutToSupabase(workoutWithTrainer);
+      },
+
+      getSessionWorkout: (workoutId) => {
+        return get().sessionWorkouts.find(w => w.id === workoutId);
+      },
+
+      getSessionWorkoutsForClient: (clientId) => {
+        return get().sessionWorkouts.filter(w => w.clientId === clientId);
+      },
+
+      deleteSessionWorkout: (workoutId) => {
+        set(state => ({
+          sessionWorkouts: state.sessionWorkouts.filter(w => w.id !== workoutId),
+        }));
+        // Delete from Supabase
+        deleteSessionWorkoutFromSupabase(workoutId);
+      },
+
       // Load trainer data from Supabase for cross-device sync
       // OPTION 2: SUPABASE IS THE PRIMARY SOURCE OF TRUTH
       // This REPLACES localStorage data with Supabase data (no merge of old localStorage)
@@ -2241,6 +2293,7 @@ export const useTrainerStore = create<TrainerState>()(
           supabasePayments,
           supabasePrograms,
           supabaseBookings,
+          supabaseSessionWorkouts,
         ] = await Promise.all([
           fetchTrainerClientsFromSupabase(trainerId),
           fetchTrainerSessionsFromSupabase(trainerId),
@@ -2249,6 +2302,7 @@ export const useTrainerStore = create<TrainerState>()(
           fetchPaymentsFromSupabase(trainerId),
           fetchClientProgramsFromSupabase(trainerId),
           fetchBookingRequestsFromSupabase(trainerId),
+          fetchSessionWorkoutsFromSupabase(trainerId),
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
@@ -2273,6 +2327,7 @@ export const useTrainerStore = create<TrainerState>()(
           payments: supabasePayments,
           clientPrograms: supabasePrograms,
           bookingRequests: supabaseBookings,
+          sessionWorkouts: supabaseSessionWorkouts,
         });
         
         console.log(`[Trainer Store] ✅ REPLACED localStorage with Supabase data:`, {
@@ -2283,6 +2338,7 @@ export const useTrainerStore = create<TrainerState>()(
           payments: supabasePayments.length,
           programs: supabasePrograms.length,
           bookings: supabaseBookings.length,
+          sessionWorkouts: supabaseSessionWorkouts.length,
         });
       },
 

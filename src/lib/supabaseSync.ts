@@ -1756,3 +1756,76 @@ export async function debugSupabase(trainerId?: string): Promise<void> {
     console.error('Debug error:', e);
   }
 }
+
+// ============ SESSION WORKOUTS SYNC ============
+
+export async function syncSessionWorkoutToSupabase(workout: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbWorkout = {
+      id: workout.id,
+      name: workout.name,
+      client_id: workout.clientId || null,
+      event_id: workout.eventId || null,
+      trainer_id: workout.trainerId || null,
+      blocks: JSON.stringify(workout.blocks || []),
+      created_at: workout.createdAt || new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('session_workouts').upsert(dbWorkout, { onConflict: 'id' });
+    if (error) {
+      console.error('[Session Workout Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Session Workout Sync] ✅ Workout synced:', workout.id);
+    return true;
+  } catch (e) {
+    console.error('[Session Workout Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchSessionWorkoutsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('session_workouts')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Session Workout Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(w => ({
+      id: w.id,
+      name: w.name,
+      clientId: w.client_id,
+      eventId: w.event_id,
+      trainerId: w.trainer_id,
+      blocks: typeof w.blocks === 'string' ? JSON.parse(w.blocks) : (w.blocks || []),
+      createdAt: w.created_at,
+    }));
+  } catch (e) {
+    console.error('[Session Workout Fetch] Exception:', e);
+    return [];
+  }
+}
+
+export async function deleteSessionWorkoutFromSupabase(workoutId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('session_workouts').delete().eq('id', workoutId);
+    if (error) {
+      console.error('[Session Workout Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Session Workout Delete] Exception:', e);
+    return false;
+  }
+}

@@ -32,7 +32,7 @@ export default function WorkoutPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates } = useWorkoutStore();
-  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram } = useTrainerStore();
+  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram, sessionWorkouts, getSessionWorkout } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
   // Get today's sessions for trainer mode
@@ -65,16 +65,10 @@ export default function WorkoutPage() {
     }
   }, [isAuthenticated, router]);
 
-  // Load users and session workouts from localStorage
-  const [sessionWorkouts, setSessionWorkouts] = useState<any[]>([]);
-  
+  // Load users from localStorage (sessionWorkouts now from trainer store)
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
-    
-    // Load session workouts created in builder
-    const workouts = JSON.parse(localStorage.getItem('apex-session-workouts') || '[]');
-    setSessionWorkouts(workouts);
   }, []);
 
   useEffect(() => {
@@ -123,7 +117,13 @@ export default function WorkoutPage() {
             restTimerSeconds: parseInt(ex.rest) || 90,
             notes: ex.notes || '',
             blockName: block.name, // Track which block this exercise belongs to
+            blockType: block.type, // Track block type (circuit, warmup, etc.)
             setStyle: ex.setStyle || 'fixed',
+            repType: ex.repType || 'reps', // Time-based or rep-based
+            // Circuit block timing info
+            circuitRounds: block.type === 'circuit' ? block.rounds : undefined,
+            roundDuration: block.type === 'circuit' ? block.roundDuration : undefined,
+            restBetweenRounds: block.type === 'circuit' ? block.restBetweenRounds : undefined,
           })) || []
         ) || [];
 

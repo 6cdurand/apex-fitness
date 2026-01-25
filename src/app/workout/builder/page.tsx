@@ -49,6 +49,7 @@ interface WorkoutExercise {
   movementPattern: MovementPattern;
   sets: number;
   reps: string;
+  repType: 'reps' | 'time'; // 'time' for cardio, iso holds, etc.
   rest: string;
   tempo?: string;
   notes?: string;
@@ -88,6 +89,10 @@ interface WorkoutBlock {
   type: BlockType;
   name: string;
   exercises: WorkoutExercise[];
+  // Circuit-specific settings
+  rounds?: number; // Number of circuit rounds
+  roundDuration?: string; // Duration per round (e.g., "5min")
+  restBetweenRounds?: string; // Rest between rounds (e.g., "60s")
 }
 
 const COMMON_EXERCISES = [
@@ -260,7 +265,7 @@ function WorkoutBuilderContent() {
   const templateId = searchParams.get('templateId');
   
   const { user } = useAuthStore();
-  const { clients, calendarEvents, updateCalendarEvent } = useTrainerStore();
+  const { clients, calendarEvents, updateCalendarEvent, addSessionWorkout } = useTrainerStore();
   
   const client = clients.find(c => c.clientId === clientId);
   const event = calendarEvents.find(e => e.id === eventId);
@@ -291,6 +296,7 @@ function WorkoutBuilderContent() {
           movementPattern: 'push' as MovementPattern,
           sets: ex.sets?.length || 3,
           reps: ex.sets?.[0]?.reps?.toString() || '8-12',
+          repType: 'reps' as const,
           rest: `${ex.restTimerSeconds || 60}s`,
           setStyle: 'fixed' as const,
         })),
@@ -371,20 +377,42 @@ function WorkoutBuilderContent() {
     let totalSeconds = 0;
     
     blocks.forEach(block => {
-      block.exercises.forEach(exercise => {
-        // Time per set (approx 30-45 seconds for the actual lift)
-        const timePerSet = block.type === 'warmup' ? 20 : block.type === 'cardio' || block.type === 'circuit' ? 45 : 35;
-        totalSeconds += exercise.sets * timePerSet;
-        
-        // Rest time between sets (parse the rest string like "60s" or "90s")
-        const restMatch = exercise.rest.match(/(\d+)/);
+      if (block.type === 'circuit' && block.rounds && block.roundDuration) {
+        // Circuit blocks: use round duration × rounds + rest between rounds
+        const durationMatch = block.roundDuration.match(/(\d+)/);
+        const roundMinutes = durationMatch ? parseInt(durationMatch[1]) : 5;
+        const restMatch = block.restBetweenRounds?.match(/(\d+)/);
         const restSeconds = restMatch ? parseInt(restMatch[1]) : 60;
-        // Rest is taken between sets, so (sets - 1) rest periods per exercise
-        totalSeconds += (exercise.sets - 1) * restSeconds;
         
-        // Transition time between exercises
-        totalSeconds += 30;
-      });
+        totalSeconds += block.rounds * roundMinutes * 60;
+        totalSeconds += (block.rounds - 1) * restSeconds;
+      } else {
+        block.exercises.forEach(exercise => {
+          // Time per set based on repType
+          let timePerSet = 35;
+          if (exercise.repType === 'time') {
+            // Parse time from reps (e.g., "30s", "60s", "2min")
+            const timeMatch = exercise.reps.match(/(\d+)(s|m|min)?/);
+            if (timeMatch) {
+              const value = parseInt(timeMatch[1]);
+              const unit = timeMatch[2];
+              timePerSet = unit === 'm' || unit === 'min' ? value * 60 : value;
+            }
+          } else {
+            timePerSet = block.type === 'warmup' ? 20 : 35;
+          }
+          
+          totalSeconds += exercise.sets * timePerSet;
+          
+          // Rest time between sets
+          const restMatch = exercise.rest.match(/(\d+)/);
+          const restSeconds = restMatch ? parseInt(restMatch[1]) : 60;
+          totalSeconds += (exercise.sets - 1) * restSeconds;
+          
+          // Transition time between exercises
+          totalSeconds += 30;
+        });
+      }
     });
     
     const minutes = Math.round(totalSeconds / 60);
@@ -407,8 +435,14 @@ function WorkoutBuilderContent() {
     const newBlock: WorkoutBlock = {
       id: `block-${Date.now()}`,
       type,
-      name: type === 'warmup' ? 'Warm-up' : type === 'cooldown' ? 'Cool-down' : 'Main Work',
+      name: type === 'warmup' ? 'Warm-up' : type === 'cooldown' ? 'Cool-down' : type === 'circuit' ? 'Circuit' : 'Main Work',
       exercises: [],
+      // Default circuit settings
+      ...(type === 'circuit' && {
+        rounds: 3,
+        roundDuration: '5min',
+        restBetweenRounds: '60s',
+      }),
     };
     setBlocks(sortBlocks([...blocks, newBlock]));
   };
@@ -418,14 +452,20 @@ function WorkoutBuilderContent() {
   };
 
   const addExercise = (blockId: string, exercise: typeof COMMON_EXERCISES[0]) => {
+    // Determine if this is a time-based exercise (warmup, cardio patterns)
+    const isTimeBased = exercise.pattern === 'warmup' || exercise.pattern === 'cardio';
+    const block = blocks.find(b => b.id === blockId);
+    const isCircuitBlock = block?.type === 'circuit';
+    
     const newExercise: WorkoutExercise = {
       id: `ex-${Date.now()}`,
       exerciseId: exercise.id,
       exerciseName: exercise.name,
       movementPattern: exercise.pattern as MovementPattern,
-      sets: selectedPhase?.sets || 3,
-      reps: selectedPhase?.reps || '8-12',
-      rest: selectedPhase?.rest || '60s',
+      sets: isCircuitBlock ? 1 : (selectedPhase?.sets || 3),
+      reps: isTimeBased ? '30s' : (selectedPhase?.reps || '8-12'),
+      repType: isTimeBased ? 'time' : 'reps',
+      rest: isCircuitBlock ? '0s' : (selectedPhase?.rest || '60s'),
       setStyle: 'fixed',
     };
     setBlocks(blocks.map(b => 
@@ -467,17 +507,20 @@ function WorkoutBuilderContent() {
       });
     }
     
-    // Store the workout blocks (in a real app, this would go to database)
+    // Store the workout blocks using trainer store (persisted via Zustand)
     const workoutData = {
       id: workoutId,
       name: workoutName,
-      clientId,
-      eventId,
+      clientId: clientId || selectedClientId || '',
+      eventId: eventId || undefined,
       blocks,
       createdAt: new Date().toISOString(),
     };
     
-    // Save to localStorage for now
+    // Save to trainer store (automatically persisted)
+    addSessionWorkout(workoutData);
+    
+    // Also save to localStorage for backward compatibility
     const existingWorkouts = JSON.parse(localStorage.getItem('apex-session-workouts') || '[]');
     localStorage.setItem('apex-session-workouts', JSON.stringify([...existingWorkouts, workoutData]));
     
@@ -657,6 +700,7 @@ function WorkoutBuilderContent() {
                           movementPattern: 'push' as MovementPattern,
                           sets: ex.sets?.length || 3,
                           reps: ex.sets?.[0]?.reps?.toString() || '8-12',
+                          repType: 'reps' as const,
                           rest: `${ex.restTimerSeconds || 60}s`,
                           setStyle: 'fixed' as const,
                         })),
@@ -728,6 +772,56 @@ function WorkoutBuilderContent() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {/* Circuit Block Settings */}
+                  {block.type === 'circuit' && (
+                    <div className="mb-4 p-3 bg-background/30 rounded-lg border border-orange-500/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Clock className="h-4 w-4 text-orange-400" />
+                        <span className="text-sm font-medium text-orange-400">Circuit Timer Settings</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Rounds</Label>
+                          <Input
+                            type="number"
+                            value={block.rounds || 3}
+                            onChange={(e) => setBlocks(blocks.map(b => 
+                              b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                            ))}
+                            className="h-8 mt-1"
+                            min={1}
+                            max={10}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Round Duration</Label>
+                          <Input
+                            value={block.roundDuration || '5min'}
+                            onChange={(e) => setBlocks(blocks.map(b => 
+                              b.id === block.id ? { ...b, roundDuration: e.target.value } : b
+                            ))}
+                            className="h-8 mt-1"
+                            placeholder="5min"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Rest Between</Label>
+                          <Input
+                            value={block.restBetweenRounds || '60s'}
+                            onChange={(e) => setBlocks(blocks.map(b => 
+                              b.id === block.id ? { ...b, restBetweenRounds: e.target.value } : b
+                            ))}
+                            className="h-8 mt-1"
+                            placeholder="60s"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Total: {block.rounds || 3} rounds × {block.roundDuration || '5min'} = ~{((block.rounds || 3) * 5)} min workout time
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     {block.exercises.map((exercise, idx) => (
                       <div
@@ -739,7 +833,11 @@ function WorkoutBuilderContent() {
                         <div className="flex-1">
                           <p className="font-medium text-sm">{exercise.exerciseName}</p>
                           <p className="text-xs text-muted-foreground">
-                            {exercise.sets} × {exercise.reps} • {exercise.rest} rest
+                            {block.type === 'circuit' 
+                              ? `${exercise.reps}${exercise.repType === 'time' ? '' : ' reps'}`
+                              : `${exercise.sets} × ${exercise.reps}${exercise.repType === 'time' ? '' : ' reps'} • ${exercise.rest} rest`
+                            }
+                            {exercise.repType === 'time' && <span className="ml-1 text-blue-400">(timed)</span>}
                           </p>
                         </div>
                         <Button
@@ -1060,6 +1158,52 @@ function WorkoutBuilderContent() {
                 </p>
               </div>
               
+              {/* Reps vs Time Toggle */}
+              <div>
+                <Label className="mb-2 block">Measurement Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={editingExercise.exercise.repType === 'reps' ? 'default' : 'outline'}
+                    size="sm"
+                    className={editingExercise.exercise.repType === 'reps' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { 
+                        ...editingExercise.exercise, 
+                        repType: 'reps',
+                        reps: editingExercise.exercise.repType === 'time' ? '10' : editingExercise.exercise.reps 
+                      }
+                    })}
+                  >
+                    Reps
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={editingExercise.exercise.repType === 'time' ? 'default' : 'outline'}
+                    size="sm"
+                    className={editingExercise.exercise.repType === 'time' ? 'bg-blue-500 hover:bg-blue-600' : ''}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { 
+                        ...editingExercise.exercise, 
+                        repType: 'time',
+                        reps: editingExercise.exercise.repType === 'reps' ? '30s' : editingExercise.exercise.reps
+                      }
+                    })}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    Time
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editingExercise.exercise.repType === 'time' 
+                    ? 'Use for cardio, holds, stretches (e.g., 30s, 1min, 5min)'
+                    : 'Standard repetition counting'
+                  }
+                </p>
+              </div>
+              
               <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label>Sets</Label>
@@ -1073,14 +1217,14 @@ function WorkoutBuilderContent() {
                   />
                 </div>
                 <div>
-                  <Label>Reps {editingExercise.exercise.setStyle !== 'fixed' && '(per set)'}</Label>
+                  <Label>{editingExercise.exercise.repType === 'time' ? 'Duration' : 'Reps'} {editingExercise.exercise.setStyle !== 'fixed' && '(per set)'}</Label>
                   <Input
                     value={editingExercise.exercise.reps}
+                    placeholder={editingExercise.exercise.repType === 'time' ? '30s' : (editingExercise.exercise.setStyle === 'pyramid' ? '12→10→8→6' : '8-12')}
                     onChange={(e) => setEditingExercise({
                       ...editingExercise,
                       exercise: { ...editingExercise.exercise, reps: e.target.value }
                     })}
-                    placeholder={editingExercise.exercise.setStyle === 'pyramid' ? '12→10→8→6' : '8-12'}
                   />
                   {editingExercise.exercise.setStyle === 'pyramid' && (
                     <p className="text-xs text-muted-foreground mt-1">Use → to separate reps per set</p>

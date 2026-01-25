@@ -442,10 +442,22 @@ export default function ActiveWorkoutPage() {
               <React.Fragment key={workoutExercise.id}>
                 {/* Block Header */}
                 {showBlockHeader && (
-                  <div className="flex items-center gap-2 pt-2">
-                    <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-transparent" />
-                    <span className="text-sm font-semibold text-emerald-400 px-2">{currentBlockName}</span>
-                    <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/50 to-transparent" />
+                  <div className="space-y-1 pt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-transparent" />
+                      <span className="text-sm font-semibold text-emerald-400 px-2">{currentBlockName}</span>
+                      <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/50 to-transparent" />
+                    </div>
+                    {/* Circuit block timing info */}
+                    {(workoutExercise as any).blockType === 'circuit' && (workoutExercise as any).circuitRounds && (
+                      <div className="flex items-center justify-center gap-2 text-xs text-orange-400">
+                        <Clock className="w-3 h-3" />
+                        <span>
+                          {(workoutExercise as any).circuitRounds} rounds × {(workoutExercise as any).roundDuration || '5min'}
+                          {(workoutExercise as any).restBetweenRounds && ` • ${(workoutExercise as any).restBetweenRounds} rest`}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
                 <Card 
@@ -584,9 +596,21 @@ export default function ActiveWorkoutPage() {
                     <div className="col-span-2">SET</div>
                     <div className="col-span-3">PREVIOUS</div>
                     <div className="col-span-3 text-center">KG</div>
-                    <div className="col-span-3 text-center">REPS</div>
+                    <div className="col-span-3 text-center">
+                      {(workoutExercise as any).repType === 'time' ? (
+                        <span className="text-blue-400">DURATION</span>
+                      ) : 'REPS'}
+                    </div>
                     <div className="col-span-1"></div>
                   </div>
+                  
+                  {/* Time-based exercise hint */}
+                  {(workoutExercise as any).repType === 'time' && (
+                    <div className="px-4 py-1 bg-blue-500/10 text-xs text-blue-400 flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Timed exercise - enter duration in seconds
+                    </div>
+                  )}
 
                   {/* Sets */}
                   <div className="divide-y divide-gray-800/50">
