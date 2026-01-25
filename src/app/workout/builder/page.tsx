@@ -160,6 +160,56 @@ const COMMON_EXERCISES = [
   { id: 'skull-crusher', name: 'Skull Crusher', pattern: 'push', aliases: ['lying tricep extension', 'french press', 'nose breaker'] },
   { id: 'lateral-raise', name: 'Lateral Raise', pattern: 'push', aliases: ['side raise', 'dumbbell lateral raise', 'side lateral'] },
   { id: 'rear-delt-fly', name: 'Rear Delt Fly', pattern: 'pull', aliases: ['reverse fly', 'rear delt raise', 'bent over fly'] },
+  // Warmup & Mobility
+  { id: 'foam-roll-quads', name: 'Foam Roll Quads', pattern: 'warmup', aliases: ['massage quads', 'roll quads'] },
+  { id: 'foam-roll-hamstrings', name: 'Foam Roll Hamstrings', pattern: 'warmup', aliases: ['massage hamstrings', 'roll hamstrings'] },
+  { id: 'foam-roll-glutes', name: 'Foam Roll Glutes', pattern: 'warmup', aliases: ['massage glutes', 'roll glutes'] },
+  { id: 'foam-roll-adductors', name: 'Foam Roll Adductors', pattern: 'warmup', aliases: ['massage adductors', 'roll groin', 'foam roll groin'] },
+  { id: 'foam-roll-it-band', name: 'Foam Roll IT Band', pattern: 'warmup', aliases: ['roll it band', 'massage it band'] },
+  { id: 'foam-roll-lats', name: 'Foam Roll Lats', pattern: 'warmup', aliases: ['massage lats', 'roll lats'] },
+  { id: 'lacrosse-ball-glutes', name: 'Lacrosse Ball Glutes', pattern: 'warmup', aliases: ['massage ball glutes', 'trigger point glutes'] },
+  { id: 'lacrosse-ball-hip-flexor', name: 'Lacrosse Ball Hip Flexor', pattern: 'warmup', aliases: ['massage hip flexor', 'psoas release'] },
+  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', pattern: 'warmup', aliases: ['kneeling hip flexor', 'lunge stretch'] },
+  { id: 'pigeon-stretch', name: 'Pigeon Stretch', pattern: 'warmup', aliases: ['pigeon pose', 'hip opener'] },
+  { id: 'adductor-stretch', name: 'Adductor Stretch', pattern: 'warmup', aliases: ['groin stretch', 'butterfly stretch', 'frog stretch'] },
+  { id: 'figure-four-stretch', name: 'Figure Four Stretch', pattern: 'warmup', aliases: ['glute stretch', 'piriformis stretch'] },
+  { id: 'world-greatest-stretch', name: 'World\'s Greatest Stretch', pattern: 'warmup', aliases: ['wgs', 'lunge with rotation'] },
+  { id: '90-90-stretch', name: '90/90 Hip Stretch', pattern: 'warmup', aliases: ['90 90 stretch', 'hip mobility'] },
+  { id: 'couch-stretch', name: 'Couch Stretch', pattern: 'warmup', aliases: ['quad hip flexor stretch'] },
+  { id: 'banded-hip-distraction', name: 'Banded Hip Distraction', pattern: 'warmup', aliases: ['hip mobilization', 'band hip stretch'] },
+  { id: 'glute-activation', name: 'Glute Activation', pattern: 'warmup', aliases: ['glute bridge hold', 'activate glutes'] },
+  { id: 'clamshell', name: 'Clamshell', pattern: 'warmup', aliases: ['banded clamshell', 'hip abduction'] },
+  { id: 'fire-hydrant', name: 'Fire Hydrant', pattern: 'warmup', aliases: ['hip abduction', 'glute med activation'] },
+  { id: 'banded-monster-walk', name: 'Banded Monster Walk', pattern: 'warmup', aliases: ['lateral band walk', 'side walk'] },
+  { id: 'banded-glute-bridge', name: 'Banded Glute Bridge', pattern: 'warmup', aliases: ['activate glutes', 'bridge with band'] },
+  { id: 'adductor-activation', name: 'Adductor Squeeze', pattern: 'warmup', aliases: ['groin activation', 'ball squeeze'] },
+  { id: 'copenhagen-plank', name: 'Copenhagen Plank', pattern: 'warmup', aliases: ['adductor plank', 'groin strengthening'] },
+  // Cardio & Circuit
+  { id: 'treadmill-walk', name: 'Treadmill Walk', pattern: 'cardio', aliases: ['walking', 'incline walk'] },
+  { id: 'treadmill-run', name: 'Treadmill Run', pattern: 'cardio', aliases: ['running', 'jogging'] },
+  { id: 'stairmaster', name: 'Stairmaster', pattern: 'cardio', aliases: ['stair climber', 'step mill'] },
+  { id: 'rowing-machine', name: 'Rowing Machine', pattern: 'cardio', aliases: ['rower', 'erg', 'row machine'] },
+  { id: 'assault-bike', name: 'Assault Bike', pattern: 'cardio', aliases: ['air bike', 'fan bike', 'airdyne'] },
+  { id: 'ski-erg', name: 'Ski Erg', pattern: 'cardio', aliases: ['ski machine', 'skier'] },
+  { id: 'bike-erg', name: 'Bike Erg', pattern: 'cardio', aliases: ['stationary bike', 'cycle'] },
+  { id: 'elliptical', name: 'Elliptical', pattern: 'cardio', aliases: ['cross trainer'] },
+  { id: 'jump-rope', name: 'Jump Rope', pattern: 'cardio', aliases: ['skipping', 'skip rope'] },
+  { id: 'box-jump', name: 'Box Jump', pattern: 'cardio', aliases: ['plyo box', 'plyometric jump'] },
+  { id: 'kb-swing', name: 'Kettlebell Swing', pattern: 'cardio', aliases: ['kb swing', 'russian swing', 'american swing'] },
+  { id: 'kb-goblet-squat', name: 'KB Goblet Squat', pattern: 'cardio', aliases: ['kettlebell squat', 'goblet squat'] },
+  { id: 'kb-clean', name: 'Kettlebell Clean', pattern: 'cardio', aliases: ['kb clean', 'kettlebell clean'] },
+  { id: 'kb-snatch', name: 'Kettlebell Snatch', pattern: 'cardio', aliases: ['kb snatch'] },
+  { id: 'kb-thruster', name: 'Kettlebell Thruster', pattern: 'cardio', aliases: ['kb thruster', 'squat to press'] },
+  { id: 'kb-lunge', name: 'Kettlebell Lunge', pattern: 'cardio', aliases: ['kb walking lunge', 'kettlebell lunge'] },
+  { id: 'kb-reverse-lunge', name: 'KB Reverse Lunge', pattern: 'cardio', aliases: ['kettlebell reverse lunge', 'kb step back lunge'] },
+  { id: 'kb-deadlift', name: 'Kettlebell Deadlift', pattern: 'cardio', aliases: ['kb dl', 'kb rdl'] },
+  { id: 'kb-row', name: 'Kettlebell Row', pattern: 'cardio', aliases: ['kb bent over row', 'single arm kb row'] },
+  { id: 'burpee', name: 'Burpee', pattern: 'cardio', aliases: ['burpees'] },
+  { id: 'mountain-climber', name: 'Mountain Climber', pattern: 'cardio', aliases: ['mountain climbers'] },
+  { id: 'battle-ropes', name: 'Battle Ropes', pattern: 'cardio', aliases: ['rope waves', 'battling ropes'] },
+  { id: 'sled-push', name: 'Sled Push', pattern: 'cardio', aliases: ['prowler push', 'sled work'] },
+  { id: 'sled-pull', name: 'Sled Pull', pattern: 'cardio', aliases: ['prowler pull', 'rope sled pull'] },
+  { id: 'farmers-carry', name: 'Farmers Carry', pattern: 'cardio', aliases: ['farmers walk', 'loaded carry'] },
 ];
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -316,6 +366,31 @@ function WorkoutBuilderContent() {
     setSelectedPhaseId(newPhaseId);
   };
 
+  // Estimate workout duration
+  const estimatedDuration = useMemo(() => {
+    let totalSeconds = 0;
+    
+    blocks.forEach(block => {
+      block.exercises.forEach(exercise => {
+        // Time per set (approx 30-45 seconds for the actual lift)
+        const timePerSet = block.type === 'warmup' ? 20 : block.type === 'cardio' || block.type === 'circuit' ? 45 : 35;
+        totalSeconds += exercise.sets * timePerSet;
+        
+        // Rest time between sets (parse the rest string like "60s" or "90s")
+        const restMatch = exercise.rest.match(/(\d+)/);
+        const restSeconds = restMatch ? parseInt(restMatch[1]) : 60;
+        // Rest is taken between sets, so (sets - 1) rest periods per exercise
+        totalSeconds += (exercise.sets - 1) * restSeconds;
+        
+        // Transition time between exercises
+        totalSeconds += 30;
+      });
+    });
+    
+    const minutes = Math.round(totalSeconds / 60);
+    return minutes;
+  }, [blocks]);
+
   const filteredExercises = COMMON_EXERCISES.filter(ex => {
     const search = exerciseSearch.toLowerCase();
     // Search by name or any alias
@@ -449,14 +524,26 @@ function WorkoutBuilderContent() {
       {/* Workout Name & Phase Selection */}
       <Card className="mb-4">
         <CardContent className="p-4 space-y-4">
-          <div>
-            <Label>Workout Name</Label>
-            <Input 
-              value={workoutName}
-              onChange={(e) => setWorkoutName(e.target.value)}
-              placeholder="Enter workout name..."
-              className="mt-2"
-            />
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1">
+              <Label>Workout Name</Label>
+              <Input 
+                value={workoutName}
+                onChange={(e) => setWorkoutName(e.target.value)}
+                placeholder="Enter workout name..."
+                className="mt-2"
+              />
+            </div>
+            {blocks.length > 0 && (
+              <div className="text-right">
+                <Label className="text-muted-foreground">Est. Duration</Label>
+                <div className="mt-2 flex items-center justify-end gap-1.5 text-emerald-400">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-lg font-semibold">{estimatedDuration}</span>
+                  <span className="text-sm text-muted-foreground">min</span>
+                </div>
+              </div>
+            )}
           </div>
           
           {/* Training Phase Selection */}
