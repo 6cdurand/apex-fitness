@@ -94,6 +94,23 @@ export interface WorkoutExercise {
   miniRestSeconds?: number; // Optional rest between exercises in superset
 }
 
+// Workout Block (for organizing exercises in the builder)
+export interface WorkoutBlock {
+  id: string;
+  name: string;
+  exercises: {
+    id: string;
+    exerciseId: string;
+    exerciseName: string;
+    sets: number;
+    reps: string;
+    rest: string;
+    tempo?: string;
+    notes?: string;
+    setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+  }[];
+}
+
 // Workout Template
 export interface WorkoutTemplate {
   id: string;
@@ -106,6 +123,7 @@ export interface WorkoutTemplate {
   estimatedDuration?: number; // minutes
   createdAt: string;
   updatedAt: string;
+  blocks?: WorkoutBlock[]; // Optional blocks for structured workouts
 }
 
 // Active/Completed Workout

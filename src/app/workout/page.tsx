@@ -65,9 +65,16 @@ export default function WorkoutPage() {
     }
   }, [isAuthenticated, router]);
 
+  // Load users and session workouts from localStorage
+  const [sessionWorkouts, setSessionWorkouts] = useState<any[]>([]);
+  
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
+    
+    // Load session workouts created in builder
+    const workouts = JSON.parse(localStorage.getItem('apex-session-workouts') || '[]');
+    setSessionWorkouts(workouts);
   }, []);
 
   useEffect(() => {
@@ -88,8 +95,60 @@ export default function WorkoutPage() {
     router.push('/workout/active');
   };
 
-  // Start workout from client's assigned program
-  const handleStartClientSession = (clientId: string, clientName: string, sessionTitle?: string) => {
+  // Start workout from session workout (created in builder) or client's program
+  const handleStartClientSession = (clientId: string, clientName: string, sessionTitle?: string, workoutId?: string) => {
+    // First check if there's a session workout created in builder
+    if (workoutId) {
+      const sessionWorkout = sessionWorkouts.find(w => w.id === workoutId);
+      if (sessionWorkout && sessionWorkout.blocks) {
+        // Convert session workout blocks to template format
+        const exercises = sessionWorkout.blocks.flatMap((block: any) => 
+          block.exercises?.map((ex: any) => ({
+            id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            exerciseId: ex.exerciseId || ex.id,
+            exercise: {
+              id: ex.exerciseId || ex.id,
+              name: ex.exerciseName || 'Exercise',
+              category: 'strength',
+              muscleGroups: [],
+            },
+            sets: Array.from({ length: ex.sets || 3 }, (_, i) => ({
+              id: `set-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
+              setNumber: i + 1,
+              targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+              reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+              weight: 0,
+              completed: false,
+            })),
+            restTimerSeconds: parseInt(ex.rest) || 90,
+            notes: ex.notes || '',
+            blockName: block.name, // Track which block this exercise belongs to
+            setStyle: ex.setStyle || 'fixed',
+          })) || []
+        ) || [];
+
+        if (exercises.length > 0) {
+          const template: WorkoutTemplate = {
+            id: `session-${Date.now()}`,
+            name: sessionWorkout.name || `Session - ${clientName}`,
+            description: `${sessionWorkout.blocks.length} blocks`,
+            exercises: exercises,
+            category: 'strength',
+            estimatedDuration: 60,
+            createdAt: new Date().toISOString(),
+            createdBy: user?.id || '',
+            isPublic: false,
+            updatedAt: new Date().toISOString(),
+            blocks: sessionWorkout.blocks, // Pass blocks for active workout display
+          };
+          
+          startFromTemplate(template, clientId);
+          router.push('/workout/active');
+          return;
+        }
+      }
+    }
+    
     const program = getActiveProgram(clientId);
     
     if (program?.weeklyPlan && program.weeklyPlan.length > 0) {
@@ -238,6 +297,7 @@ export default function WorkoutPage() {
               {todaysSessions.map((session) => {
                 const clientUser = allUsers.find(u => u.id === session.clientId);
                 const linkedTemplate = session.workoutId ? defaultTemplates.find(t => t.id === session.workoutId) : null;
+                const linkedSessionWorkout = session.workoutId ? sessionWorkouts.find(w => w.id === session.workoutId) : null;
                 const clientProgram = session.clientId ? getActiveProgram(session.clientId) : null;
                 return (
                   <Card
@@ -282,7 +342,28 @@ export default function WorkoutPage() {
                       </div>
                       
                       {/* Show linked workout details */}
-                      {linkedTemplate ? (
+                      {linkedSessionWorkout ? (
+                        <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-emerald-400">
+                              <Dumbbell className="w-4 h-4" />
+                              <span className="text-sm font-medium">{linkedSessionWorkout.name}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-gray-400 hover:text-white"
+                              onClick={() => router.push(`/workout/builder?eventId=${session.id}&clientId=${session.clientId}&templateId=${session.workoutId}`)}
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              Edit
+                            </Button>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {linkedSessionWorkout.blocks?.reduce((acc: number, b: any) => acc + (b.exercises?.length || 0), 0) || 0} exercises • {linkedSessionWorkout.blocks?.length || 0} blocks
+                          </p>
+                        </div>
+                      ) : linkedTemplate ? (
                         <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-emerald-400">
@@ -695,11 +776,46 @@ export default function WorkoutPage() {
             {startSessionDialog && (() => {
               const program = getActiveProgram(startSessionDialog.clientId);
               const weeklyPlan = program?.weeklyPlan || [];
+              const linkedWorkout = startSessionDialog.workoutId 
+                ? sessionWorkouts.find(w => w.id === startSessionDialog.workoutId)
+                : null;
               
               return (
                 <div className="space-y-3">
+                  {/* Linked Session Workout (from builder) */}
+                  {linkedWorkout && (
+                    <div>
+                      <p className="text-sm text-gray-400 mb-2">Assigned Workout:</p>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start h-auto py-3 border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20"
+                        onClick={() => {
+                          handleStartClientSession(
+                            startSessionDialog.clientId,
+                            startSessionDialog.clientName,
+                            startSessionDialog.sessionTitle,
+                            startSessionDialog.workoutId
+                          );
+                          setStartSessionDialog(null);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-emerald-500/30 flex items-center justify-center">
+                            <Dumbbell className="w-4 h-4 text-emerald-400" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium text-emerald-400">{linkedWorkout.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {linkedWorkout.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises • {linkedWorkout.blocks?.length || 0} blocks
+                            </p>
+                          </div>
+                        </div>
+                      </Button>
+                    </div>
+                  )}
+
                   {/* Program Days */}
-                  {weeklyPlan.length > 0 && (
+                  {weeklyPlan.length > 0 && !linkedWorkout && (
                     <div>
                       <p className="text-sm text-gray-400 mb-2">From {program?.templateName || 'Program'}:</p>
                       <div className="space-y-2">
@@ -734,7 +850,7 @@ export default function WorkoutPage() {
                     </div>
                   )}
                   
-                  {weeklyPlan.length === 0 && (
+                  {weeklyPlan.length === 0 && !linkedWorkout && (
                     <p className="text-sm text-gray-500 text-center py-2">No program assigned to this client</p>
                   )}
                   

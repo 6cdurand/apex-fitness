@@ -422,7 +422,7 @@ export default function ActiveWorkoutPage() {
       {/* Exercise List */}
       <ScrollArea className="flex-1 pb-32">
         <div className="px-4 py-4 space-y-4">
-          {activeWorkout.exercises.map((workoutExercise) => {
+          {activeWorkout.exercises.map((workoutExercise, index) => {
             const pb = getPBForExercise(workoutExercise.exerciseId);
             
             // Check if this exercise is in a superset
@@ -432,29 +432,43 @@ export default function ActiveWorkoutPage() {
               : [];
             const isPairingTarget = supersetPairingId && supersetPairingId !== workoutExercise.id;
             
+            // Check if we need to show a block header
+            const currentBlockName = (workoutExercise as any).blockName;
+            const prevExercise = index > 0 ? activeWorkout.exercises[index - 1] : null;
+            const prevBlockName = prevExercise ? (prevExercise as any).blockName : null;
+            const showBlockHeader = currentBlockName && currentBlockName !== prevBlockName;
+            
             return (
-              <Card 
-                key={workoutExercise.id} 
-                className={cn(
-                  "bg-gray-900 border-gray-800 overflow-hidden transition-all",
-                  supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
-                  isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-emerald-500",
-                  isInSuperset && "border-l-4 border-l-purple-500"
+              <React.Fragment key={workoutExercise.id}>
+                {/* Block Header */}
+                {showBlockHeader && (
+                  <div className="flex items-center gap-2 pt-2">
+                    <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-transparent" />
+                    <span className="text-sm font-semibold text-emerald-400 px-2">{currentBlockName}</span>
+                    <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/50 to-transparent" />
+                  </div>
                 )}
-                onClick={() => {
-                  if (isPairingTarget) {
-                    // Complete the superset pairing
-                    const groupId = `superset-${Date.now()}`;
-                    updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
-                    updateExercise(workoutExercise.id, { groupId, groupOrder: 'A2' });
-                    setSupersetPairingId(null);
-                    toast.success('Superset created!', {
-                      description: 'Exercises are now linked together',
-                    });
-                  }
-                }}
-              >
-                <CardContent className="p-0">
+                <Card 
+                  className={cn(
+                    "bg-gray-900 border-gray-800 overflow-hidden transition-all",
+                    supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
+                    isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-emerald-500",
+                    isInSuperset && "border-l-4 border-l-purple-500"
+                  )}
+                  onClick={() => {
+                    if (isPairingTarget) {
+                      // Complete the superset pairing
+                      const groupId = `superset-${Date.now()}`;
+                      updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
+                      updateExercise(workoutExercise.id, { groupId, groupOrder: 'A2' });
+                      setSupersetPairingId(null);
+                      toast.success('Superset created!', {
+                        description: 'Exercises are now linked together',
+                      });
+                    }
+                  }}
+                >
+                  <CardContent className="p-0">
                   {/* Superset indicator */}
                   {isInSuperset && (
                     <div className="bg-purple-500/20 px-4 py-1 flex items-center gap-2">
@@ -600,7 +614,8 @@ export default function ActiveWorkoutPage() {
                     Add Set
                   </Button>
                 </CardContent>
-              </Card>
+                </Card>
+              </React.Fragment>
             );
           })}
 
