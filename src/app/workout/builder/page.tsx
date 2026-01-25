@@ -52,7 +52,36 @@ interface WorkoutExercise {
   rest: string;
   tempo?: string;
   notes?: string;
+  setStyle: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+  setDetails?: string[]; // For pyramid/custom rep schemes per set
 }
+
+// Training phases with suggested rep/set configurations
+const TRAINING_PHASES = [
+  { id: 'none', name: 'No Phase', sets: 3, reps: '8-12', rest: '60s', description: 'Custom configuration' },
+  { id: 'strength', name: 'Strength', sets: 5, reps: '3-5', rest: '180s', description: 'Heavy weight, low reps, long rest' },
+  { id: 'hypertrophy', name: 'Hypertrophy', sets: 4, reps: '8-12', rest: '90s', description: 'Moderate weight, muscle growth focus' },
+  { id: 'power', name: 'Power', sets: 5, reps: '1-3', rest: '180s', description: 'Explosive movements, very heavy' },
+  { id: 'endurance', name: 'Endurance', sets: 3, reps: '15-20', rest: '45s', description: 'Light weight, high reps, short rest' },
+  { id: 'deload', name: 'Deload', sets: 2, reps: '10-12', rest: '60s', description: 'Recovery week, reduced volume' },
+];
+
+// Set style options
+const SET_STYLES = [
+  { id: 'fixed', name: 'Fixed', description: 'Same reps each set (e.g., 4×10)', icon: '⬜' },
+  { id: 'pyramid', name: 'Pyramid', description: 'Increasing weight, decreasing reps (e.g., 12→10→8→6)', icon: '🔺' },
+  { id: 'reverse-pyramid', name: 'Reverse Pyramid', description: 'Heaviest first, then lighter (e.g., 6→8→10→12)', icon: '🔻' },
+  { id: '5x5', name: '5×5', description: 'Classic strength: 5 sets of 5 reps', icon: '5️⃣' },
+  { id: 'drop-set', name: 'Drop Set', description: 'Reduce weight each set, no rest between', icon: '⬇️' },
+  { id: 'amrap', name: 'AMRAP', description: 'As Many Reps As Possible', icon: '♾️' },
+];
+
+// Assignment frequency options
+const ASSIGNMENT_OPTIONS = [
+  { id: 'once', name: 'One-time', description: 'Assign to a single session' },
+  { id: 'weekly', name: 'Weekly', description: 'Repeat every week for selected duration' },
+  { id: 'program', name: 'Add to Program', description: 'Add as part of client\'s training program' },
+];
 
 interface WorkoutBlock {
   id: string;
@@ -175,6 +204,7 @@ function WorkoutBuilderContent() {
           sets: ex.sets?.length || 3,
           reps: ex.sets?.[0]?.reps?.toString() || '8-12',
           rest: `${ex.restTimerSeconds || 60}s`,
+          setStyle: 'fixed' as const,
         })),
       };
       return [workBlock];
@@ -187,6 +217,66 @@ function WorkoutBuilderContent() {
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showSwapPanel, setShowSwapPanel] = useState(false);
+  
+  // New state for enhanced builder
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId);
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>('none');
+  const [previousPhaseConfig, setPreviousPhaseConfig] = useState<{ sets: number; reps: string; rest: string } | null>(null);
+  const [assignmentType, setAssignmentType] = useState<'once' | 'weekly' | 'program'>('once');
+  const [assignmentWeeks, setAssignmentWeeks] = useState<number>(4);
+  const [assignmentDate, setAssignmentDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  
+  const selectedPhase = TRAINING_PHASES.find(p => p.id === selectedPhaseId);
+  const selectedClient = clients.find(c => c.clientId === selectedClientId);
+  const selectedClientUser = allUsers.find(u => u.id === selectedClientId);
+  
+  // Apply phase configuration to all exercises
+  const applyPhaseToExercises = (phaseId: string) => {
+    const phase = TRAINING_PHASES.find(p => p.id === phaseId);
+    if (!phase || phaseId === 'none') return;
+    
+    // Save current config before changing
+    if (blocks.length > 0 && blocks[0].exercises.length > 0) {
+      const firstEx = blocks[0].exercises[0];
+      setPreviousPhaseConfig({ sets: firstEx.sets, reps: firstEx.reps, rest: firstEx.rest });
+    }
+    
+    // Apply phase config to all exercises
+    setBlocks(blocks.map(block => ({
+      ...block,
+      exercises: block.exercises.map(ex => ({
+        ...ex,
+        sets: phase.sets,
+        reps: phase.reps,
+        rest: phase.rest,
+      })),
+    })));
+  };
+  
+  // Restore previous config when going back to no phase
+  const restorePreviousConfig = () => {
+    if (!previousPhaseConfig) return;
+    setBlocks(blocks.map(block => ({
+      ...block,
+      exercises: block.exercises.map(ex => ({
+        ...ex,
+        sets: previousPhaseConfig.sets,
+        reps: previousPhaseConfig.reps,
+        rest: previousPhaseConfig.rest,
+      })),
+    })));
+    setPreviousPhaseConfig(null);
+  };
+  
+  // Handle phase change
+  const handlePhaseChange = (newPhaseId: string) => {
+    if (newPhaseId === 'none' && selectedPhaseId !== 'none') {
+      restorePreviousConfig();
+    } else if (newPhaseId !== 'none') {
+      applyPhaseToExercises(newPhaseId);
+    }
+    setSelectedPhaseId(newPhaseId);
+  };
 
   const filteredExercises = COMMON_EXERCISES.filter(ex => 
     ex.name.toLowerCase().includes(exerciseSearch.toLowerCase())
@@ -217,9 +307,10 @@ function WorkoutBuilderContent() {
       exerciseId: exercise.id,
       exerciseName: exercise.name,
       movementPattern: exercise.pattern as MovementPattern,
-      sets: 3,
-      reps: '8-12',
-      rest: '60s',
+      sets: selectedPhase?.sets || 3,
+      reps: selectedPhase?.reps || '8-12',
+      rest: selectedPhase?.rest || '60s',
+      setStyle: 'fixed',
     };
     setBlocks(blocks.map(b => 
       b.id === blockId 
@@ -284,31 +375,130 @@ function WorkoutBuilderContent() {
         <Button variant="ghost" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
-        <h1 className="text-2xl font-bold">Session Workout Builder</h1>
-        {clientUser && (
-          <div className="flex items-center gap-2 mt-2 text-muted-foreground">
-            <Users className="h-4 w-4" />
-            <span>For: {clientUser?.displayName || 'Client'}</span>
-          </div>
-        )}
-        {event && (
-          <p className="text-sm text-muted-foreground mt-1">
-            <Clock className="h-3 w-3 inline mr-1" />
-            {event.date} at {event.startTime}
-          </p>
-        )}
+        <h1 className="text-2xl font-bold">Workout Builder</h1>
+        <p className="text-muted-foreground">Create and assign workouts to clients</p>
       </div>
 
-      {/* Workout Name */}
+      {/* Client Selection */}
       <Card className="mb-4">
         <CardContent className="p-4">
-          <Label>Workout Name</Label>
-          <Input 
-            value={workoutName}
-            onChange={(e) => setWorkoutName(e.target.value)}
-            placeholder="Enter workout name..."
-            className="mt-2"
-          />
+          <Label className="mb-2 block">Assign to Client</Label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {clients.map((c) => {
+              const cUser = allUsers.find(u => u.id === c.clientId);
+              return (
+                <Button
+                  key={c.clientId}
+                  variant={selectedClientId === c.clientId ? "default" : "outline"}
+                  className={`h-auto py-2 px-3 justify-start ${selectedClientId === c.clientId ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                  onClick={() => setSelectedClientId(c.clientId)}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  <span className="truncate">{cUser?.displayName || c.clientId}</span>
+                </Button>
+              );
+            })}
+            {clients.length === 0 && (
+              <p className="text-sm text-muted-foreground col-span-full">No clients found</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Workout Name & Phase Selection */}
+      <Card className="mb-4">
+        <CardContent className="p-4 space-y-4">
+          <div>
+            <Label>Workout Name</Label>
+            <Input 
+              value={workoutName}
+              onChange={(e) => setWorkoutName(e.target.value)}
+              placeholder="Enter workout name..."
+              className="mt-2"
+            />
+          </div>
+          
+          {/* Training Phase Selection */}
+          <div>
+            <Label className="mb-2 block">Training Phase</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Selecting a phase will auto-configure sets, reps, and rest for all exercises
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {TRAINING_PHASES.map((phase) => (
+                <Button
+                  key={phase.id}
+                  variant={selectedPhaseId === phase.id ? "default" : "outline"}
+                  className={`h-auto py-2 px-3 flex-col items-start ${
+                    selectedPhaseId === phase.id 
+                      ? phase.id === 'strength' ? 'bg-red-500 hover:bg-red-600'
+                      : phase.id === 'hypertrophy' ? 'bg-blue-500 hover:bg-blue-600'
+                      : phase.id === 'power' ? 'bg-purple-500 hover:bg-purple-600'
+                      : phase.id === 'endurance' ? 'bg-orange-500 hover:bg-orange-600'
+                      : phase.id === 'deload' ? 'bg-green-500 hover:bg-green-600'
+                      : 'bg-gray-500 hover:bg-gray-600'
+                      : ''
+                  }`}
+                  onClick={() => handlePhaseChange(phase.id)}
+                >
+                  <span className="font-medium">{phase.name}</span>
+                  {phase.id !== 'none' && (
+                    <span className="text-xs opacity-80">{phase.sets}×{phase.reps} • {phase.rest}</span>
+                  )}
+                </Button>
+              ))}
+            </div>
+            {selectedPhaseId !== 'none' && (
+              <p className="text-xs text-emerald-400 mt-2">
+                ✓ {selectedPhase?.description}
+              </p>
+            )}
+          </div>
+
+          {/* Assignment Options */}
+          <div>
+            <Label className="mb-2 block">Assignment Type</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {ASSIGNMENT_OPTIONS.map((option) => (
+                <Button
+                  key={option.id}
+                  variant={assignmentType === option.id ? "default" : "outline"}
+                  className={`h-auto py-2 px-3 flex-col items-start ${assignmentType === option.id ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                  onClick={() => setAssignmentType(option.id as any)}
+                >
+                  <span className="font-medium text-sm">{option.name}</span>
+                  <span className="text-xs opacity-70">{option.description}</span>
+                </Button>
+              ))}
+            </div>
+            
+            {assignmentType === 'once' && (
+              <div className="mt-3">
+                <Label className="text-sm">Session Date</Label>
+                <Input
+                  type="date"
+                  value={assignmentDate}
+                  onChange={(e) => setAssignmentDate(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+            )}
+            
+            {assignmentType === 'weekly' && (
+              <div className="mt-3 flex items-center gap-2">
+                <Label className="text-sm">Repeat for</Label>
+                <Input
+                  type="number"
+                  value={assignmentWeeks}
+                  onChange={(e) => setAssignmentWeeks(parseInt(e.target.value) || 1)}
+                  className="w-20"
+                  min={1}
+                  max={52}
+                />
+                <span className="text-sm text-muted-foreground">weeks</span>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -340,6 +530,7 @@ function WorkoutBuilderContent() {
                           sets: ex.sets?.length || 3,
                           reps: ex.sets?.[0]?.reps?.toString() || '8-12',
                           rest: `${ex.restTimerSeconds || 60}s`,
+                          setStyle: 'fixed' as const,
                         })),
                       };
                       setBlocks([workBlock]);
@@ -682,6 +873,59 @@ function WorkoutBuilderContent() {
                   </Tabs>
                 </div>
               )}
+
+              {/* Set Style Selection */}
+              <div>
+                <Label className="mb-2 block">Set Style</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {SET_STYLES.map((style) => (
+                    <Button
+                      key={style.id}
+                      variant={editingExercise.exercise.setStyle === style.id ? "default" : "outline"}
+                      className={`h-auto py-2 px-3 flex-col items-start text-left ${
+                        editingExercise.exercise.setStyle === style.id ? 'bg-emerald-500 hover:bg-emerald-600' : ''
+                      }`}
+                      onClick={() => {
+                        let newSets = editingExercise.exercise.sets;
+                        let newReps = editingExercise.exercise.reps;
+                        
+                        // Auto-configure based on set style
+                        if (style.id === '5x5') {
+                          newSets = 5;
+                          newReps = '5';
+                        } else if (style.id === 'pyramid') {
+                          newSets = 4;
+                          newReps = '12→10→8→6';
+                        } else if (style.id === 'reverse-pyramid') {
+                          newSets = 4;
+                          newReps = '6→8→10→12';
+                        } else if (style.id === 'drop-set') {
+                          newSets = 3;
+                          newReps = '10→10→10';
+                        } else if (style.id === 'amrap') {
+                          newReps = 'AMRAP';
+                        }
+                        
+                        setEditingExercise({
+                          ...editingExercise,
+                          exercise: { 
+                            ...editingExercise.exercise, 
+                            setStyle: style.id as any,
+                            sets: newSets,
+                            reps: newReps,
+                          }
+                        });
+                      }}
+                    >
+                      <span className="font-medium text-sm">
+                        <span className="mr-1">{style.icon}</span>
+                        {style.name}
+                      </span>
+                      <span className="text-xs opacity-70">{style.description}</span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
               
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -696,15 +940,18 @@ function WorkoutBuilderContent() {
                   />
                 </div>
                 <div>
-                  <Label>Reps</Label>
+                  <Label>Reps {editingExercise.exercise.setStyle !== 'fixed' && '(per set)'}</Label>
                   <Input
                     value={editingExercise.exercise.reps}
                     onChange={(e) => setEditingExercise({
                       ...editingExercise,
                       exercise: { ...editingExercise.exercise, reps: e.target.value }
                     })}
-                    placeholder="8-12"
+                    placeholder={editingExercise.exercise.setStyle === 'pyramid' ? '12→10→8→6' : '8-12'}
                   />
+                  {editingExercise.exercise.setStyle === 'pyramid' && (
+                    <p className="text-xs text-muted-foreground mt-1">Use → to separate reps per set</p>
+                  )}
                 </div>
                 <div>
                   <Label>Rest</Label>
@@ -714,7 +961,7 @@ function WorkoutBuilderContent() {
                       ...editingExercise,
                       exercise: { ...editingExercise.exercise, rest: e.target.value }
                     })}
-                    placeholder="60s"
+                    placeholder={editingExercise.exercise.setStyle === 'drop-set' ? 'No rest' : '60s'}
                   />
                 </div>
               </div>

@@ -199,6 +199,29 @@ export default function WorkoutPage() {
       />
 
       <div className="px-4 py-6 space-y-6">
+        {/* Build Workout Button - Trainer Mode */}
+        {user?.mode === 'trainer' && (
+          <section className="mb-6">
+            <Card 
+              className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30 cursor-pointer hover:border-emerald-500/50 transition-all"
+              onClick={() => router.push('/workout/builder?mode=create')}
+            >
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/30 flex items-center justify-center">
+                    <Plus className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-white">Build Workout</h3>
+                    <p className="text-sm text-gray-400">Create & assign workouts to clients</p>
+                  </div>
+                </div>
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </CardContent>
+            </Card>
+          </section>
+        )}
+
         {/* Today's Client Sessions - Trainer Mode */}
         {user?.mode === 'trainer' && todaysSessions.length > 0 && (
           <section className="mb-6">
