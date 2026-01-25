@@ -27,13 +27,37 @@ import {
 import { toast } from 'sonner';
 import { Gender, WeightUnit } from '@/types';
 import { resetSeedData, resetWorkoutDataOnly } from '@/lib/seedData';
+import { 
+  syncTrainerClientToSupabase,
+  syncTrainerSessionToSupabase,
+  syncSessionPackageToSupabase,
+  syncCalendarEventToSupabase,
+  syncPaymentToSupabase,
+  syncClientProgramToSupabase,
+  syncSessionWorkoutToSupabase,
+  isSupabaseConfigured,
+} from '@/lib/supabaseSync';
+import { Cloud, CloudUpload, RefreshCw, Database, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
   const { user, isAuthenticated, updateUser, deleteAccount } = useAuthStore();
-  const { clearAllData, bulkImportClients } = useTrainerStore();
+  const { 
+    clearAllData, 
+    bulkImportClients,
+    clients,
+    sessions,
+    sessionPackages,
+    calendarEvents,
+    payments,
+    clientPrograms,
+    sessionWorkouts,
+    loadFromSupabase,
+  } = useTrainerStore();
   
   const [displayName, setDisplayName] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<Record<string, 'idle' | 'syncing' | 'done' | 'error'>>({});
 
   // Amanda's workout history - EXACT from spreadsheet (weight × reps)
   const amandaWorkouts = [
@@ -224,6 +248,105 @@ export default function SettingsPage() {
     localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
     toast.success(`Fixed credentials for ${fixedCount} items! Reloading...`);
     setTimeout(() => window.location.reload(), 500);
+  };
+
+  // Sync all data to Supabase
+  const handleSyncAllToSupabase = async () => {
+    if (!isSupabaseConfigured()) {
+      toast.error('Supabase not configured');
+      return;
+    }
+    
+    setIsSyncing(true);
+    const trainerId = user?.id;
+    if (!trainerId) {
+      toast.error('No user ID found');
+      setIsSyncing(false);
+      return;
+    }
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    // Sync clients
+    setSyncStatus(s => ({ ...s, clients: 'syncing' }));
+    for (const client of clients) {
+      const success = await syncTrainerClientToSupabase({ ...client, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, clients: errorCount > 0 ? 'error' : 'done' }));
+
+    // Sync sessions
+    setSyncStatus(s => ({ ...s, sessions: 'syncing' }));
+    for (const session of sessions) {
+      const success = await syncTrainerSessionToSupabase({ ...session, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, sessions: 'done' }));
+
+    // Sync session packages
+    setSyncStatus(s => ({ ...s, packages: 'syncing' }));
+    for (const pkg of sessionPackages) {
+      const success = await syncSessionPackageToSupabase({ ...pkg, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, packages: 'done' }));
+
+    // Sync calendar events
+    setSyncStatus(s => ({ ...s, calendar: 'syncing' }));
+    for (const event of calendarEvents) {
+      const success = await syncCalendarEventToSupabase({ ...event, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, calendar: 'done' }));
+
+    // Sync payments
+    setSyncStatus(s => ({ ...s, payments: 'syncing' }));
+    for (const payment of payments) {
+      const success = await syncPaymentToSupabase({ ...payment, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, payments: 'done' }));
+
+    // Sync client programs
+    setSyncStatus(s => ({ ...s, programs: 'syncing' }));
+    for (const program of clientPrograms) {
+      const success = await syncClientProgramToSupabase({ ...program, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, programs: 'done' }));
+
+    // Sync session workouts (from builder)
+    setSyncStatus(s => ({ ...s, workouts: 'syncing' }));
+    for (const workout of sessionWorkouts) {
+      const success = await syncSessionWorkoutToSupabase({ ...workout, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, workouts: 'done' }));
+
+    setIsSyncing(false);
+    toast.success(`Synced ${successCount} items to Supabase!`, {
+      description: errorCount > 0 ? `${errorCount} items failed` : 'All data backed up to cloud',
+    });
+  };
+
+  // Load all data from Supabase
+  const handleLoadFromSupabase = async () => {
+    if (!isSupabaseConfigured()) {
+      toast.error('Supabase not configured');
+      return;
+    }
+    
+    setIsSyncing(true);
+    try {
+      await loadFromSupabase(user?.id || '');
+      toast.success('Data loaded from Supabase!', {
+        description: 'Your data has been restored from the cloud',
+      });
+    } catch (e) {
+      toast.error('Failed to load from Supabase');
+    }
+    setIsSyncing(false);
   };
 
   const [bio, setBio] = useState('');
@@ -456,6 +579,84 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Cloud Sync - Supabase */}
+        <Card className="bg-gray-900 border-blue-900">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Cloud className="w-5 h-5 text-blue-400" />
+              Cloud Sync (Supabase)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Sync your data to the cloud for cross-device access. Your data is stored locally first, then backed up to Supabase.
+            </p>
+            
+            {/* Data summary */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Clients</span>
+                <span className="text-white font-medium">{clients.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Sessions</span>
+                <span className="text-white font-medium">{sessions.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Calendar</span>
+                <span className="text-white font-medium">{calendarEvents.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Payments</span>
+                <span className="text-white font-medium">{payments.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Programs</span>
+                <span className="text-white font-medium">{clientPrograms.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Workouts</span>
+                <span className="text-white font-medium">{sessionWorkouts.length}</span>
+              </div>
+            </div>
+
+            <Separator className="bg-gray-700" />
+
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={handleSyncAllToSupabase}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <CloudUpload className="w-4 h-4 mr-2" />
+              )}
+              {isSyncing ? 'Syncing...' : 'Upload All Data to Supabase'}
+            </Button>
+            <p className="text-xs text-gray-500 text-center">
+              Push all your local data to Supabase for backup & cross-device sync
+            </p>
+
+            <Button
+              variant="outline"
+              className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+              onClick={handleLoadFromSupabase}
+              disabled={isSyncing}
+            >
+              {isSyncing ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Database className="w-4 h-4 mr-2" />
+              )}
+              {isSyncing ? 'Loading...' : 'Load Data from Supabase'}
+            </Button>
+            <p className="text-xs text-gray-500 text-center">
+              Pull your data from Supabase (replaces local data)
+            </p>
+          </CardContent>
+        </Card>
 
         {/* Delete Account */}
         <Card className="bg-gray-900 border-red-900">
