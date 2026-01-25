@@ -30,7 +30,8 @@ import {
   RotateCcw,
   User,
   Users,
-  Settings
+  Settings,
+  StickyNote
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -74,6 +75,7 @@ export default function ActiveWorkoutPage() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showRestSettings, setShowRestSettings] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
+  const [showNotesDialog, setShowNotesDialog] = useState(false);
   const [completedWorkoutData, setCompletedWorkoutData] = useState<{
     id: string;
     name: string;
@@ -311,6 +313,14 @@ export default function ActiveWorkoutPage() {
               className="text-white hover:bg-white/20"
             >
               {workoutTimer.isRunning ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setShowNotesDialog(true)}
+              className={cn("text-white hover:bg-white/20", workoutNotes && "bg-white/20")}
+            >
+              <StickyNote className="w-5 h-5" />
             </Button>
             <Button
               size="icon"
@@ -862,6 +872,35 @@ export default function ActiveWorkoutPage() {
             className="w-full bg-emerald-500 hover:bg-emerald-600"
           >
             Done
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Workout Notes Dialog */}
+      <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <StickyNote className="w-5 h-5 text-emerald-400" />
+              Workout Notes
+            </DialogTitle>
+            <DialogDescription>
+              Add notes during your workout - they'll be saved with this session
+            </DialogDescription>
+          </DialogHeader>
+          
+          <textarea
+            value={workoutNotes}
+            onChange={(e) => setWorkoutNotes(e.target.value)}
+            placeholder="How's the workout going? Track energy levels, form notes, things to remember..."
+            className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          
+          <Button
+            onClick={() => setShowNotesDialog(false)}
+            className="w-full bg-emerald-500 hover:bg-emerald-600"
+          >
+            Save Notes
           </Button>
         </DialogContent>
       </Dialog>

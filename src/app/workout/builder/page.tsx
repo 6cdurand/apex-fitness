@@ -92,74 +92,74 @@ interface WorkoutBlock {
 
 const COMMON_EXERCISES = [
   // Squat patterns
-  { id: 'barbell-back-squat', name: 'Barbell Back Squat', pattern: 'squat' },
-  { id: 'goblet-squat', name: 'Goblet Squat', pattern: 'squat' },
-  { id: 'front-squat', name: 'Front Squat', pattern: 'squat' },
-  { id: 'leg-press', name: 'Leg Press', pattern: 'squat' },
-  { id: 'smith-squat', name: 'Smith Machine Squat', pattern: 'squat' },
-  { id: 'hack-squat', name: 'Hack Squat', pattern: 'squat' },
+  { id: 'barbell-back-squat', name: 'Barbell Back Squat', pattern: 'squat', aliases: ['back squat', 'bb squat'] },
+  { id: 'goblet-squat', name: 'Goblet Squat', pattern: 'squat', aliases: ['kb squat', 'kettlebell squat'] },
+  { id: 'front-squat', name: 'Front Squat', pattern: 'squat', aliases: [] },
+  { id: 'leg-press', name: 'Leg Press', pattern: 'squat', aliases: ['seated leg press', 'machine leg press'] },
+  { id: 'smith-squat', name: 'Smith Machine Squat', pattern: 'squat', aliases: ['smith squat'] },
+  { id: 'hack-squat', name: 'Hack Squat', pattern: 'squat', aliases: ['hack squat machine'] },
   // Hinge patterns
-  { id: 'deadlift', name: 'Deadlift', pattern: 'hinge' },
-  { id: 'romanian-deadlift', name: 'Romanian Deadlift', pattern: 'hinge' },
-  { id: 'hip-thrust', name: 'Hip Thrust', pattern: 'hinge' },
-  { id: 'kettlebell-swing', name: 'Kettlebell Swing', pattern: 'hinge' },
-  { id: 'smith-rdl', name: 'Smith Machine RDL', pattern: 'hinge' },
-  { id: 'good-morning', name: 'Good Morning', pattern: 'hinge' },
+  { id: 'deadlift', name: 'Deadlift', pattern: 'hinge', aliases: ['conventional deadlift', 'dl'] },
+  { id: 'romanian-deadlift', name: 'Romanian Deadlift', pattern: 'hinge', aliases: ['rdl', 'stiff leg deadlift'] },
+  { id: 'hip-thrust', name: 'Hip Thrust', pattern: 'hinge', aliases: ['barbell hip thrust', 'glute thrust'] },
+  { id: 'kettlebell-swing', name: 'Kettlebell Swing', pattern: 'hinge', aliases: ['kb swing', 'russian swing'] },
+  { id: 'smith-rdl', name: 'Smith Machine RDL', pattern: 'hinge', aliases: ['smith romanian deadlift'] },
+  { id: 'good-morning', name: 'Good Morning', pattern: 'hinge', aliases: ['barbell good morning'] },
   // Push patterns
-  { id: 'bench-press', name: 'Bench Press', pattern: 'push' },
-  { id: 'db-bench-press', name: 'DB Bench Press', pattern: 'push' },
-  { id: 'incline-bench-press', name: 'Incline Bench Press', pattern: 'push' },
-  { id: 'smith-bench-press', name: 'Smith Machine Bench Press', pattern: 'push' },
-  { id: 'smith-incline-press', name: 'Smith Machine Incline Press', pattern: 'push' },
-  { id: 'overhead-press', name: 'Overhead Press', pattern: 'push' },
-  { id: 'db-shoulder-press', name: 'DB Shoulder Press', pattern: 'push' },
-  { id: 'smith-shoulder-press', name: 'Smith Machine Shoulder Press', pattern: 'push' },
-  { id: 'push-up', name: 'Push-up', pattern: 'push' },
-  { id: 'dips', name: 'Dips', pattern: 'push' },
-  { id: 'cable-fly', name: 'Cable Fly', pattern: 'push' },
-  { id: 'pec-deck', name: 'Pec Deck', pattern: 'push' },
+  { id: 'bench-press', name: 'Bench Press', pattern: 'push', aliases: ['flat bench', 'barbell bench', 'bb bench'] },
+  { id: 'db-bench-press', name: 'DB Bench Press', pattern: 'push', aliases: ['dumbbell bench press', 'dumbbell bench'] },
+  { id: 'incline-bench-press', name: 'Incline Bench Press', pattern: 'push', aliases: ['incline press', 'incline barbell'] },
+  { id: 'smith-bench-press', name: 'Smith Machine Bench Press', pattern: 'push', aliases: ['smith bench', 'smith flat bench'] },
+  { id: 'smith-incline-press', name: 'Smith Machine Incline Press', pattern: 'push', aliases: ['smith incline', 'smith incline bench'] },
+  { id: 'overhead-press', name: 'Overhead Press', pattern: 'push', aliases: ['ohp', 'military press', 'shoulder press', 'standing press'] },
+  { id: 'db-shoulder-press', name: 'DB Shoulder Press', pattern: 'push', aliases: ['dumbbell shoulder press', 'seated shoulder press', 'dumbbell ohp'] },
+  { id: 'smith-shoulder-press', name: 'Smith Machine Shoulder Press', pattern: 'push', aliases: ['smith ohp', 'smith military press', 'smith press'] },
+  { id: 'push-up', name: 'Push-up', pattern: 'push', aliases: ['pushup', 'press up'] },
+  { id: 'dips', name: 'Dips', pattern: 'push', aliases: ['tricep dips', 'chest dips', 'parallel bar dips'] },
+  { id: 'cable-fly', name: 'Cable Fly', pattern: 'push', aliases: ['cable crossover', 'cable chest fly', 'cable flyes'] },
+  { id: 'pec-deck', name: 'Pec Deck', pattern: 'push', aliases: ['chest fly', 'machine fly', 'pec fly', 'butterfly', 'chest fly machine'] },
   // Pull patterns
-  { id: 'barbell-row', name: 'Barbell Row', pattern: 'pull' },
-  { id: 'cable-row', name: 'Cable Row', pattern: 'pull' },
-  { id: 'lat-pulldown', name: 'Lat Pulldown', pattern: 'pull' },
-  { id: 'weighted-pull-up', name: 'Weighted Pull-up', pattern: 'pull' },
-  { id: 'face-pull', name: 'Face Pull', pattern: 'pull' },
-  { id: 'smith-row', name: 'Smith Machine Row', pattern: 'pull' },
-  { id: 't-bar-row', name: 'T-Bar Row', pattern: 'pull' },
-  { id: 'db-row', name: 'Dumbbell Row', pattern: 'pull' },
-  { id: 'seated-row', name: 'Seated Cable Row', pattern: 'pull' },
-  { id: 'shrug', name: 'Barbell Shrug', pattern: 'pull' },
-  { id: 'smith-shrug', name: 'Smith Machine Shrug', pattern: 'pull' },
+  { id: 'barbell-row', name: 'Barbell Row', pattern: 'pull', aliases: ['bent over row', 'bb row', 'pendlay row'] },
+  { id: 'cable-row', name: 'Cable Row', pattern: 'pull', aliases: ['low row', 'seated row'] },
+  { id: 'lat-pulldown', name: 'Lat Pulldown', pattern: 'pull', aliases: ['pulldown', 'wide grip pulldown', 'cable pulldown'] },
+  { id: 'weighted-pull-up', name: 'Weighted Pull-up', pattern: 'pull', aliases: ['pull up', 'pullup', 'chin up'] },
+  { id: 'face-pull', name: 'Face Pull', pattern: 'pull', aliases: ['cable face pull', 'rear delt pull'] },
+  { id: 'smith-row', name: 'Smith Machine Row', pattern: 'pull', aliases: ['smith bent over row'] },
+  { id: 't-bar-row', name: 'T-Bar Row', pattern: 'pull', aliases: ['t bar row', 'landmine row'] },
+  { id: 'db-row', name: 'Dumbbell Row', pattern: 'pull', aliases: ['single arm row', 'one arm row', 'db row'] },
+  { id: 'seated-row', name: 'Seated Cable Row', pattern: 'pull', aliases: ['seated row', 'cable seated row', 'machine row'] },
+  { id: 'shrug', name: 'Barbell Shrug', pattern: 'pull', aliases: ['bb shrug', 'trap shrug'] },
+  { id: 'smith-shrug', name: 'Smith Machine Shrug', pattern: 'pull', aliases: ['smith trap shrug'] },
   // Core patterns
-  { id: 'plank', name: 'Plank', pattern: 'core' },
-  { id: 'dead-bug', name: 'Dead Bug', pattern: 'core' },
-  { id: 'pallof-press', name: 'Pallof Press', pattern: 'core' },
-  { id: 'hanging-leg-raise', name: 'Hanging Leg Raise', pattern: 'core' },
-  { id: 'cable-crunch', name: 'Cable Crunch', pattern: 'core' },
-  { id: 'ab-wheel', name: 'Ab Wheel Rollout', pattern: 'core' },
+  { id: 'plank', name: 'Plank', pattern: 'core', aliases: ['front plank', 'forearm plank'] },
+  { id: 'dead-bug', name: 'Dead Bug', pattern: 'core', aliases: [] },
+  { id: 'pallof-press', name: 'Pallof Press', pattern: 'core', aliases: ['anti rotation press', 'cable pallof'] },
+  { id: 'hanging-leg-raise', name: 'Hanging Leg Raise', pattern: 'core', aliases: ['leg raise', 'hanging knee raise'] },
+  { id: 'cable-crunch', name: 'Cable Crunch', pattern: 'core', aliases: ['kneeling cable crunch', 'rope crunch'] },
+  { id: 'ab-wheel', name: 'Ab Wheel Rollout', pattern: 'core', aliases: ['ab roller', 'wheel rollout'] },
   // Lunge patterns
-  { id: 'split-squat', name: 'Split Squat', pattern: 'lunge' },
-  { id: 'bulgarian-split-squat', name: 'Bulgarian Split Squat', pattern: 'lunge' },
-  { id: 'walking-lunge', name: 'Walking Lunge', pattern: 'lunge' },
-  { id: 'smith-lunge', name: 'Smith Machine Lunge', pattern: 'lunge' },
-  { id: 'reverse-lunge', name: 'Reverse Lunge', pattern: 'lunge' },
+  { id: 'split-squat', name: 'Split Squat', pattern: 'lunge', aliases: ['static lunge'] },
+  { id: 'bulgarian-split-squat', name: 'Bulgarian Split Squat', pattern: 'lunge', aliases: ['bss', 'rear foot elevated split squat'] },
+  { id: 'walking-lunge', name: 'Walking Lunge', pattern: 'lunge', aliases: ['forward lunge', 'lunges'] },
+  { id: 'smith-lunge', name: 'Smith Machine Lunge', pattern: 'lunge', aliases: ['smith split squat'] },
+  { id: 'reverse-lunge', name: 'Reverse Lunge', pattern: 'lunge', aliases: ['backward lunge', 'step back lunge'] },
   // Accessory
-  { id: 'glute-bridge', name: 'Glute Bridge', pattern: 'hinge' },
-  { id: 'band-pull-apart', name: 'Band Pull Apart', pattern: 'pull' },
-  { id: 'hip-circles', name: 'Hip Circles', pattern: 'squat' },
-  { id: 'cat-cow', name: 'Cat-Cow', pattern: 'hinge' },
-  { id: 'bird-dog', name: 'Bird Dog', pattern: 'core' },
-  { id: 'leg-curl', name: 'Leg Curl', pattern: 'hinge' },
-  { id: 'leg-extension', name: 'Leg Extension', pattern: 'squat' },
-  { id: 'calf-raise', name: 'Calf Raise', pattern: 'squat' },
-  { id: 'smith-calf-raise', name: 'Smith Machine Calf Raise', pattern: 'squat' },
+  { id: 'glute-bridge', name: 'Glute Bridge', pattern: 'hinge', aliases: ['bridge', 'hip bridge'] },
+  { id: 'band-pull-apart', name: 'Band Pull Apart', pattern: 'pull', aliases: ['banded pull apart'] },
+  { id: 'hip-circles', name: 'Hip Circles', pattern: 'squat', aliases: ['leg circles'] },
+  { id: 'cat-cow', name: 'Cat-Cow', pattern: 'hinge', aliases: ['cat camel', 'cat cow stretch'] },
+  { id: 'bird-dog', name: 'Bird Dog', pattern: 'core', aliases: ['quadruped'] },
+  { id: 'leg-curl', name: 'Leg Curl', pattern: 'hinge', aliases: ['hamstring curl', 'lying leg curl', 'seated leg curl'] },
+  { id: 'leg-extension', name: 'Leg Extension', pattern: 'squat', aliases: ['quad extension', 'knee extension'] },
+  { id: 'calf-raise', name: 'Calf Raise', pattern: 'squat', aliases: ['standing calf raise', 'calf press'] },
+  { id: 'smith-calf-raise', name: 'Smith Machine Calf Raise', pattern: 'squat', aliases: ['smith calf'] },
   // Arms
-  { id: 'bicep-curl', name: 'Bicep Curl', pattern: 'pull' },
-  { id: 'hammer-curl', name: 'Hammer Curl', pattern: 'pull' },
-  { id: 'tricep-pushdown', name: 'Tricep Pushdown', pattern: 'push' },
-  { id: 'skull-crusher', name: 'Skull Crusher', pattern: 'push' },
-  { id: 'lateral-raise', name: 'Lateral Raise', pattern: 'push' },
-  { id: 'rear-delt-fly', name: 'Rear Delt Fly', pattern: 'pull' },
+  { id: 'bicep-curl', name: 'Bicep Curl', pattern: 'pull', aliases: ['barbell curl', 'dumbbell curl', 'arm curl', 'curl'] },
+  { id: 'hammer-curl', name: 'Hammer Curl', pattern: 'pull', aliases: ['neutral grip curl'] },
+  { id: 'tricep-pushdown', name: 'Tricep Pushdown', pattern: 'push', aliases: ['cable pushdown', 'rope pushdown', 'tricep extension'] },
+  { id: 'skull-crusher', name: 'Skull Crusher', pattern: 'push', aliases: ['lying tricep extension', 'french press', 'nose breaker'] },
+  { id: 'lateral-raise', name: 'Lateral Raise', pattern: 'push', aliases: ['side raise', 'dumbbell lateral raise', 'side lateral'] },
+  { id: 'rear-delt-fly', name: 'Rear Delt Fly', pattern: 'pull', aliases: ['reverse fly', 'rear delt raise', 'bent over fly'] },
 ];
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -316,9 +316,12 @@ function WorkoutBuilderContent() {
     setSelectedPhaseId(newPhaseId);
   };
 
-  const filteredExercises = COMMON_EXERCISES.filter(ex => 
-    ex.name.toLowerCase().includes(exerciseSearch.toLowerCase())
-  );
+  const filteredExercises = COMMON_EXERCISES.filter(ex => {
+    const search = exerciseSearch.toLowerCase();
+    // Search by name or any alias
+    return ex.name.toLowerCase().includes(search) ||
+      ex.aliases?.some(alias => alias.toLowerCase().includes(search));
+  });
 
   const sortBlocks = (blocksToSort: WorkoutBlock[]): WorkoutBlock[] => {
     const order: Record<BlockType, number> = { warmup: 0, work: 1, cardio: 2, circuit: 3, cooldown: 4 };

@@ -817,6 +817,14 @@ export default function WorkoutPage() {
                         )}
                       </div>
                     </div>
+                    {/* Show workout notes if present */}
+                    {workout.notes && (
+                      <div className="mt-2 pt-2 border-t border-gray-800">
+                        <p className="text-sm text-gray-400 line-clamp-2">
+                          📝 {workout.notes}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
