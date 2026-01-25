@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,18 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/ui/dialog';
 import { useTrainerStore, useAuthStore } from '@/lib/store';
 import { defaultTemplates } from '@/lib/templates';
@@ -39,8 +34,13 @@ import {
   X,
   Target,
   Users,
+  ArrowLeftRight,
+  Zap,
+  Heart,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
 
 interface WorkoutExercise {
   id: string;
@@ -113,7 +113,29 @@ const getBlockStyles = (type: BlockType) => {
   return styles[type] || styles.work;
 };
 
+// Loading fallback component
+function BuilderLoading() {
+  return (
+    <div className="container mx-auto p-4 max-w-4xl flex items-center justify-center min-h-[50vh]">
+      <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-emerald-500" />
+        <p className="text-muted-foreground">Loading workout builder...</p>
+      </div>
+    </div>
+  );
+}
+
+// Main page wrapper with Suspense
 export default function SessionWorkoutBuilderPage() {
+  return (
+    <Suspense fallback={<BuilderLoading />}>
+      <WorkoutBuilderContent />
+    </Suspense>
+  );
+}
+
+// Actual content component that uses useSearchParams
+function WorkoutBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const eventId = searchParams.get('eventId');
@@ -164,6 +186,7 @@ export default function SessionWorkoutBuilderPage() {
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: WorkoutExercise } | null>(null);
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const [showSwapPanel, setShowSwapPanel] = useState(false);
 
   const filteredExercises = COMMON_EXERCISES.filter(ex => 
     ex.name.toLowerCase().includes(exerciseSearch.toLowerCase())
@@ -495,17 +518,170 @@ export default function SessionWorkoutBuilderPage() {
       )}
 
       {/* Edit Exercise Dialog */}
-      <Dialog open={!!editingExercise} onOpenChange={(open) => !open && setEditingExercise(null)}>
-        <DialogContent>
+      <Dialog open={!!editingExercise} onOpenChange={(open) => {
+        if (!open) {
+          setEditingExercise(null);
+          setShowSwapPanel(false);
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Exercise</DialogTitle>
           </DialogHeader>
           {editingExercise && (
             <div className="space-y-4">
-              <div>
-                <Label>Exercise</Label>
-                <p className="font-medium">{editingExercise.exercise.exerciseName}</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Exercise</Label>
+                  <p className="font-medium">{editingExercise.exercise.exerciseName}</p>
+                  <Badge variant="outline" className="text-xs capitalize mt-1">
+                    {editingExercise.exercise.movementPattern}
+                  </Badge>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowSwapPanel(!showSwapPanel)}
+                >
+                  <ArrowLeftRight className="h-4 w-4 mr-2" />
+                  {showSwapPanel ? 'Hide Swaps' : 'Swap Exercise'}
+                </Button>
               </div>
+
+              {/* Swap Suggestions Panel */}
+              {showSwapPanel && (
+                <div className="border rounded-lg p-4 bg-muted/50">
+                  <Tabs defaultValue="similar" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 mb-3">
+                      <TabsTrigger value="similar" className="text-xs">
+                        <Dumbbell className="h-3 w-3 mr-1" />
+                        Similar
+                      </TabsTrigger>
+                      <TabsTrigger value="muscle" className="text-xs">
+                        <Target className="h-3 w-3 mr-1" />
+                        Same Pattern
+                      </TabsTrigger>
+                      <TabsTrigger value="all" className="text-xs">
+                        <Search className="h-3 w-3 mr-1" />
+                        All Exercises
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="similar" className="mt-2">
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {getDirectSwaps(editingExercise.exercise.exerciseId).length > 0 ? (
+                            getDirectSwaps(editingExercise.exercise.exerciseId).map(ex => (
+                              <Button
+                                key={ex.id}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-left h-auto py-2"
+                                onClick={() => {
+                                  setEditingExercise({
+                                    ...editingExercise,
+                                    exercise: {
+                                      ...editingExercise.exercise,
+                                      exerciseId: ex.id,
+                                      exerciseName: ex.name,
+                                    }
+                                  });
+                                  setShowSwapPanel(false);
+                                }}
+                              >
+                                <div>
+                                  <p className="font-medium text-sm">{ex.name}</p>
+                                  <p className="text-xs text-muted-foreground">{ex.equipment}</p>
+                                </div>
+                              </Button>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground text-center py-4">
+                              No direct swaps available
+                            </p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="muscle" className="mt-2">
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {COMMON_EXERCISES.filter(ex => 
+                            ex.pattern === editingExercise.exercise.movementPattern &&
+                            ex.id !== editingExercise.exercise.exerciseId
+                          ).map(ex => (
+                            <Button
+                              key={ex.id}
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-left h-auto py-2"
+                              onClick={() => {
+                                setEditingExercise({
+                                  ...editingExercise,
+                                  exercise: {
+                                    ...editingExercise.exercise,
+                                    exerciseId: ex.id,
+                                    exerciseName: ex.name,
+                                  }
+                                });
+                                setShowSwapPanel(false);
+                              }}
+                            >
+                              <div>
+                                <p className="font-medium text-sm">{ex.name}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="all" className="mt-2">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          value={exerciseSearch}
+                          onChange={(e) => setExerciseSearch(e.target.value)}
+                          placeholder="Search all exercises..."
+                          className="pl-9"
+                        />
+                      </div>
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {filteredExercises.filter(ex => ex.id !== editingExercise.exercise.exerciseId).map(ex => (
+                            <Button
+                              key={ex.id}
+                              variant="ghost"
+                              size="sm"
+                              className="w-full justify-start text-left h-auto py-2"
+                              onClick={() => {
+                                setEditingExercise({
+                                  ...editingExercise,
+                                  exercise: {
+                                    ...editingExercise.exercise,
+                                    exerciseId: ex.id,
+                                    exerciseName: ex.name,
+                                    movementPattern: ex.pattern as MovementPattern,
+                                  }
+                                });
+                                setShowSwapPanel(false);
+                                setExerciseSearch('');
+                              }}
+                            >
+                              <div>
+                                <p className="font-medium text-sm">{ex.name}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
+                              </div>
+                            </Button>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              )}
               
               <div className="grid grid-cols-3 gap-3">
                 <div>
@@ -544,18 +720,33 @@ export default function SessionWorkoutBuilderPage() {
               </div>
 
               <div>
-                <Label>Notes (optional)</Label>
+                <Label>Tempo (optional)</Label>
+                <Input
+                  value={editingExercise.exercise.tempo || ''}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    exercise: { ...editingExercise.exercise, tempo: e.target.value }
+                  })}
+                  placeholder="3010 (eccentric-pause-concentric-pause)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Format: eccentric-bottom pause-concentric-top pause (e.g., 3010)
+                </p>
+              </div>
+
+              <div>
+                <Label>Coaching Notes (optional)</Label>
                 <Input
                   value={editingExercise.exercise.notes || ''}
                   onChange={(e) => setEditingExercise({
                     ...editingExercise,
                     exercise: { ...editingExercise.exercise, notes: e.target.value }
                   })}
-                  placeholder="Any coaching cues..."
+                  placeholder="Any coaching cues for this exercise..."
                 />
               </div>
 
-              <Button onClick={saveExerciseEdit} className="w-full">
+              <Button onClick={saveExerciseEdit} className="w-full bg-emerald-500 hover:bg-emerald-600">
                 <Save className="h-4 w-4 mr-2" /> Save Changes
               </Button>
             </div>
