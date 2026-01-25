@@ -22,7 +22,8 @@ import {
   Flame,
   History,
   Users,
-  Calendar
+  Calendar,
+  Edit
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
@@ -260,9 +261,20 @@ export default function WorkoutPage() {
                       {/* Show linked workout details */}
                       {linkedTemplate ? (
                         <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                          <div className="flex items-center gap-2 text-emerald-400">
-                            <Dumbbell className="w-4 h-4" />
-                            <span className="text-sm font-medium">{linkedTemplate.name}</span>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 text-emerald-400">
+                              <Dumbbell className="w-4 h-4" />
+                              <span className="text-sm font-medium">{linkedTemplate.name}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-gray-400 hover:text-white"
+                              onClick={() => router.push(`/workout/builder?eventId=${session.id}&clientId=${session.clientId}&templateId=${session.workoutId}`)}
+                            >
+                              <Edit className="w-3 h-3 mr-1" />
+                              Edit
+                            </Button>
                           </div>
                           <p className="text-xs text-gray-400 mt-1">
                             {linkedTemplate.exercises.length} exercises
@@ -270,10 +282,21 @@ export default function WorkoutPage() {
                         </div>
                       ) : (
                         <div className="mt-3 p-2 bg-gray-800 rounded-lg border border-gray-700">
-                          <p className="text-xs text-gray-500 flex items-center gap-1">
-                            <Dumbbell className="w-3 h-3" />
-                            No workout assigned - select during session
-                          </p>
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <Dumbbell className="w-3 h-3" />
+                              No workout assigned
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs border-blue-500 text-blue-400 hover:bg-blue-500/10"
+                              onClick={() => router.push(`/workout/builder?eventId=${session.id}&clientId=${session.clientId}`)}
+                            >
+                              <Plus className="w-3 h-3 mr-1" />
+                              Create Workout
+                            </Button>
+                          </div>
                         </div>
                       )}
                       
