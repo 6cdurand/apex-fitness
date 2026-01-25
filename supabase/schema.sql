@@ -309,6 +309,25 @@ CREATE POLICY "Own client programs" ON client_programs FOR ALL USING (auth.uid()
 CREATE POLICY "Own booking requests" ON booking_requests FOR ALL USING (auth.uid() = trainer_id);
 
 -- ==========================================
+-- SESSION WORKOUTS (workouts created in builder)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS session_workouts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  client_id TEXT,
+  event_id TEXT,
+  trainer_id TEXT NOT NULL,
+  blocks JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_session_workouts_trainer ON session_workouts(trainer_id);
+CREATE INDEX IF NOT EXISTS idx_session_workouts_client ON session_workouts(client_id);
+
+ALTER TABLE session_workouts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own session workouts" ON session_workouts FOR ALL USING (true);
+
+-- ==========================================
 -- DONE! All tables created with:
 -- - Proper foreign key relationships
 -- - CASCADE DELETE (when user deleted, all their data is deleted)
