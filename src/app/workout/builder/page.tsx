@@ -68,12 +68,12 @@ const TRAINING_PHASES = [
 
 // Set style options
 const SET_STYLES = [
-  { id: 'fixed', name: 'Fixed', description: 'Same reps each set (e.g., 4×10)', icon: '⬜' },
-  { id: 'pyramid', name: 'Pyramid', description: 'Increasing weight, decreasing reps (e.g., 12→10→8→6)', icon: '🔺' },
-  { id: 'reverse-pyramid', name: 'Reverse Pyramid', description: 'Heaviest first, then lighter (e.g., 6→8→10→12)', icon: '🔻' },
-  { id: '5x5', name: '5×5', description: 'Classic strength: 5 sets of 5 reps', icon: '5️⃣' },
-  { id: 'drop-set', name: 'Drop Set', description: 'Reduce weight each set, no rest between', icon: '⬇️' },
-  { id: 'amrap', name: 'AMRAP', description: 'As Many Reps As Possible', icon: '♾️' },
+  { id: 'fixed', name: 'Fixed', description: 'Same reps each set', icon: '⬜' },
+  { id: 'pyramid', name: 'Pyramid', description: '12→10→8→6', icon: '🔺' },
+  { id: 'reverse-pyramid', name: 'Rev Pyramid', description: '6→8→10→12', icon: '🔻' },
+  { id: '5x5', name: '5×5', description: '5 sets of 5', icon: '5️⃣' },
+  { id: 'drop-set', name: 'Drop Set', description: 'No rest between', icon: '⬇️' },
+  { id: 'amrap', name: 'AMRAP', description: 'Max reps', icon: '♾️' },
 ];
 
 // Assignment frequency options
@@ -918,19 +918,21 @@ function WorkoutBuilderContent() {
               {/* Set Style Selection */}
               <div>
                 <Label className="mb-2 block">Set Style</Label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {SET_STYLES.map((style) => (
-                    <Button
+                    <button
                       key={style.id}
-                      variant={editingExercise.exercise.setStyle === style.id ? "default" : "outline"}
-                      className={`h-auto py-2 px-3 flex-col items-start text-left ${
-                        editingExercise.exercise.setStyle === style.id ? 'bg-emerald-500 hover:bg-emerald-600' : ''
+                      type="button"
+                      className={`h-auto py-2 px-2 flex flex-col items-center justify-center text-center rounded-md border overflow-hidden transition-colors ${
+                        editingExercise.exercise.setStyle === style.id 
+                          ? 'bg-emerald-500 border-emerald-500 text-white' 
+                          : 'bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800'
                       }`}
                       onClick={() => {
                         let newSets = editingExercise.exercise.sets;
                         let newReps = editingExercise.exercise.reps;
                         
-                        // Auto-configure based on set style
+                        // Auto-configure based on set style (suggestions only - user can edit)
                         if (style.id === '5x5') {
                           newSets = 5;
                           newReps = '5';
@@ -946,6 +948,7 @@ function WorkoutBuilderContent() {
                         } else if (style.id === 'amrap') {
                           newReps = 'AMRAP';
                         }
+                        // Fixed keeps current values
                         
                         setEditingExercise({
                           ...editingExercise,
@@ -958,14 +961,16 @@ function WorkoutBuilderContent() {
                         });
                       }}
                     >
-                      <span className="font-medium text-sm">
-                        <span className="mr-1">{style.icon}</span>
-                        {style.name}
+                      <span className="font-medium text-sm whitespace-nowrap">
+                        {style.icon} {style.name}
                       </span>
-                      <span className="text-xs opacity-70">{style.description}</span>
-                    </Button>
+                      <span className="text-xs opacity-70 truncate w-full">{style.description}</span>
+                    </button>
                   ))}
                 </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  💡 These are suggestions - edit sets/reps below to record actual performance
+                </p>
               </div>
               
               <div className="grid grid-cols-3 gap-3">

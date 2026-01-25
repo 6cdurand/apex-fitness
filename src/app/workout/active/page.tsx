@@ -120,7 +120,25 @@ export default function ActiveWorkoutPage() {
     addExercise(exercise);
     setShowExerciseSearch(false);
     setExerciseSearch('');
-    toast.success(`Added ${exercise.name}`);
+    
+    // If in superset pairing mode, automatically pair the new exercise
+    if (supersetPairingId) {
+      // Small delay to ensure exercise is added first
+      setTimeout(() => {
+        const newExercise = useWorkoutStore.getState().activeWorkout?.exercises.slice(-1)[0];
+        if (newExercise) {
+          const groupId = `superset-${Date.now()}`;
+          updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
+          updateExercise(newExercise.id, { groupId, groupOrder: 'A2' });
+          setSupersetPairingId(null);
+          toast.success('Superset created!', {
+            description: `${exercise.name} paired as superset`,
+          });
+        }
+      }, 100);
+    } else {
+      toast.success(`Added ${exercise.name}`);
+    }
   };
 
   const { startRestTimer } = useWorkoutStore();
@@ -385,7 +403,7 @@ export default function ActiveWorkoutPage() {
               <Users className="w-6 h-6 text-white" />
               <div>
                 <p className="text-white font-semibold">Superset Mode</p>
-                <p className="text-sm text-white/80">Tap another exercise to link</p>
+                <p className="text-sm text-white/80">Tap exercise or add new one below</p>
               </div>
             </div>
             <Button
