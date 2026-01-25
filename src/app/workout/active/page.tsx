@@ -50,6 +50,7 @@ export default function ActiveWorkoutPage() {
     restTimer,
     addExercise,
     removeExercise,
+    updateExercise,
     addSet,
     removeSet,
     updateSet,
@@ -88,6 +89,7 @@ export default function ActiveWorkoutPage() {
   const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
+  const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null); // Exercise ID being paired
 
   // Redirect if not authenticated or no active workout
   useEffect(() => {
@@ -365,15 +367,76 @@ export default function ActiveWorkoutPage() {
         </div>
       )}
 
+      {/* Superset Pairing Mode Banner */}
+      {supersetPairingId && (
+        <div className="fixed inset-x-0 top-32 z-40 px-4">
+          <div className="bg-purple-500 rounded-xl p-4 shadow-lg flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Users className="w-6 h-6 text-white" />
+              <div>
+                <p className="text-white font-semibold">Superset Mode</p>
+                <p className="text-sm text-white/80">Tap another exercise to link</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setSupersetPairingId(null)}
+              className="bg-white/20 hover:bg-white/30 text-white"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Exercise List */}
       <ScrollArea className="flex-1 pb-32">
         <div className="px-4 py-4 space-y-4">
           {activeWorkout.exercises.map((workoutExercise) => {
             const pb = getPBForExercise(workoutExercise.exerciseId);
             
+            // Check if this exercise is in a superset
+            const isInSuperset = !!workoutExercise.groupId;
+            const supersetPartners = isInSuperset 
+              ? activeWorkout.exercises.filter(e => e.groupId === workoutExercise.groupId && e.id !== workoutExercise.id)
+              : [];
+            const isPairingTarget = supersetPairingId && supersetPairingId !== workoutExercise.id;
+            
             return (
-              <Card key={workoutExercise.id} className="bg-gray-900 border-gray-800 overflow-hidden">
+              <Card 
+                key={workoutExercise.id} 
+                className={cn(
+                  "bg-gray-900 border-gray-800 overflow-hidden transition-all",
+                  supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
+                  isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-emerald-500",
+                  isInSuperset && "border-l-4 border-l-purple-500"
+                )}
+                onClick={() => {
+                  if (isPairingTarget) {
+                    // Complete the superset pairing
+                    const groupId = `superset-${Date.now()}`;
+                    updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
+                    updateExercise(workoutExercise.id, { groupId, groupOrder: 'A2' });
+                    setSupersetPairingId(null);
+                    toast.success('Superset created!', {
+                      description: 'Exercises are now linked together',
+                    });
+                  }
+                }}
+              >
                 <CardContent className="p-0">
+                  {/* Superset indicator */}
+                  {isInSuperset && (
+                    <div className="bg-purple-500/20 px-4 py-1 flex items-center gap-2">
+                      <Users className="w-3 h-3 text-purple-400" />
+                      <span className="text-xs text-purple-400 font-medium">
+                        Superset with {supersetPartners.map(p => p.exercise.name).join(', ')}
+                      </span>
+                    </div>
+                  )}
+                  
                   {/* Exercise Header */}
                   <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <div className="flex-1">
@@ -446,14 +509,21 @@ export default function ActiveWorkoutPage() {
                         <DropdownMenuItem 
                           className="text-gray-300 focus:text-white focus:bg-gray-700"
                           onClick={() => {
-                            // Toggle superset mode for this exercise
-                            toast.info('Select another exercise to superset with', {
-                              description: 'Tap another exercise to link them',
-                            });
+                            if (workoutExercise.groupId) {
+                              // Remove from superset
+                              updateExercise(workoutExercise.id, { groupId: undefined, groupOrder: undefined });
+                              toast.success('Removed from superset');
+                            } else {
+                              // Start superset pairing mode
+                              setSupersetPairingId(workoutExercise.id);
+                              toast.info('Tap another exercise to superset with', {
+                                description: 'Or tap Cancel below to exit',
+                              });
+                            }
                           }}
                         >
                           <Users className="w-4 h-4 mr-2" />
-                          Create Superset
+                          {workoutExercise.groupId ? 'Remove from Superset' : 'Create Superset'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-gray-700" />
                         <DropdownMenuItem 

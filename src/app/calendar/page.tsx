@@ -17,7 +17,9 @@ import {
   Clock,
   Calendar as CalendarIcon,
   Edit,
-  Trash2
+  Trash2,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -31,9 +33,15 @@ import {
   isSameMonth,
   addMonths,
   subMonths,
+  addWeeks,
+  subWeeks,
   startOfWeek,
   endOfWeek,
-  isToday
+  isToday,
+  addDays,
+  setHours,
+  setMinutes,
+  getHours
 } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +51,7 @@ export default function CalendarPage() {
   const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, addCalendarEvent } = useTrainerStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [editTime, setEditTime] = useState('09:00');
   const [editEndTime, setEditEndTime] = useState('10:00');
@@ -203,86 +212,256 @@ export default function CalendarPage() {
       />
 
       <div className="px-4 py-4 space-y-4">
-        {/* Month Navigation */}
+        {/* View Toggle & Navigation */}
         <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
-            className="text-gray-400 hover:text-white"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <h2 className="text-lg font-semibold text-white">
-            {format(currentMonth, 'MMMM yyyy')}
-          </h2>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-            className="text-gray-400 hover:text-white"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+            <Button
+              size="sm"
+              variant={viewMode === 'month' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('month')}
+              className={cn("h-8 px-3", viewMode === 'month' ? 'bg-rose-500' : 'text-gray-400')}
+            >
+              Month
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === 'week' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('week')}
+              className={cn("h-8 px-3", viewMode === 'week' ? 'bg-rose-500' : 'text-gray-400')}
+            >
+              Week
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === 'day' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('day')}
+              className={cn("h-8 px-3", viewMode === 'day' ? 'bg-rose-500' : 'text-gray-400')}
+            >
+              Day
+            </Button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (viewMode === 'month') setCurrentMonth(subMonths(currentMonth, 1));
+                else if (viewMode === 'week') setSelectedDate(subWeeks(selectedDate, 1));
+                else setSelectedDate(addDays(selectedDate, -1));
+              }}
+              className="text-gray-400 hover:text-white"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <h2 className="text-lg font-semibold text-white min-w-[140px] text-center">
+              {viewMode === 'month' && format(currentMonth, 'MMMM yyyy')}
+              {viewMode === 'week' && `${format(startOfWeek(selectedDate), 'MMM d')} - ${format(endOfWeek(selectedDate), 'MMM d')}`}
+              {viewMode === 'day' && format(selectedDate, 'EEE, MMM d')}
+            </h2>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (viewMode === 'month') setCurrentMonth(addMonths(currentMonth, 1));
+                else if (viewMode === 'week') setSelectedDate(addWeeks(selectedDate, 1));
+                else setSelectedDate(addDays(selectedDate, 1));
+              }}
+              className="text-gray-400 hover:text-white"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
-        {/* Calendar Grid */}
-        <Card className="bg-gray-900 border-gray-800 overflow-hidden">
-          <CardContent className="p-0">
-            {/* Day Headers */}
-            <div className="grid grid-cols-7 border-b border-gray-800">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                <div key={day} className="py-3 text-center text-xs font-medium text-gray-500">
-                  {day}
-                </div>
-              ))}
-            </div>
+        {/* Month View */}
+        {viewMode === 'month' && (
+          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+            <CardContent className="p-0">
+              {/* Day Headers */}
+              <div className="grid grid-cols-7 border-b border-gray-800">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                  <div key={day} className="py-3 text-center text-xs font-medium text-gray-500">
+                    {day}
+                  </div>
+                ))}
+              </div>
 
-            {/* Calendar Days */}
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, idx) => {
-                const dayEvents = getEventsForDay(day);
-                const isSelected = isSameDay(day, selectedDate);
-                const isCurrentMonth = isSameMonth(day, currentMonth);
-                const isDayToday = isToday(day);
+              {/* Calendar Days */}
+              <div className="grid grid-cols-7">
+                {calendarDays.map((day, idx) => {
+                  const dayEvents = getEventsForDay(day);
+                  const isSelected = isSameDay(day, selectedDate);
+                  const isCurrentMonth = isSameMonth(day, currentMonth);
+                  const isDayToday = isToday(day);
 
-                return (
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setSelectedDate(day)}
+                      className={cn(
+                        "relative h-14 p-1 border-b border-r border-gray-800 transition-colors",
+                        "hover:bg-gray-800",
+                        isSelected && "bg-rose-500/20",
+                        !isCurrentMonth && "opacity-40"
+                      )}
+                    >
+                      <span className={cn(
+                        "absolute top-1 left-1/2 -translate-x-1/2 w-7 h-7 flex items-center justify-center rounded-full text-sm",
+                        isDayToday && "bg-rose-500 text-white font-semibold",
+                        isSelected && !isDayToday && "bg-gray-700 text-white",
+                        !isDayToday && !isSelected && "text-gray-300"
+                      )}>
+                        {format(day, 'd')}
+                      </span>
+                      
+                      {/* Event Indicators */}
+                      {dayEvents.length > 0 && (
+                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                          {dayEvents.slice(0, 3).map((event, i) => (
+                            <div
+                              key={i}
+                              className={cn("w-1.5 h-1.5 rounded-full", getEventColor(event.type))}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Week View */}
+        {viewMode === 'week' && (
+          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+            <CardContent className="p-0">
+              {/* Week Day Headers */}
+              <div className="grid grid-cols-7 border-b border-gray-800">
+                {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) }).map((day) => (
                   <button
-                    key={idx}
+                    key={day.toISOString()}
                     onClick={() => setSelectedDate(day)}
                     className={cn(
-                      "relative h-14 p-1 border-b border-r border-gray-800 transition-colors",
-                      "hover:bg-gray-800",
-                      isSelected && "bg-rose-500/20",
-                      !isCurrentMonth && "opacity-40"
+                      "py-3 text-center transition-colors hover:bg-gray-800",
+                      isSameDay(day, selectedDate) && "bg-rose-500/20"
                     )}
                   >
-                    <span className={cn(
-                      "absolute top-1 left-1/2 -translate-x-1/2 w-7 h-7 flex items-center justify-center rounded-full text-sm",
-                      isDayToday && "bg-rose-500 text-white font-semibold",
-                      isSelected && !isDayToday && "bg-gray-700 text-white",
-                      !isDayToday && !isSelected && "text-gray-300"
+                    <p className="text-xs text-gray-500">{format(day, 'EEE')}</p>
+                    <p className={cn(
+                      "text-lg font-semibold",
+                      isToday(day) ? "text-rose-500" : "text-white"
                     )}>
                       {format(day, 'd')}
-                    </span>
-                    
-                    {/* Event Indicators */}
-                    {dayEvents.length > 0 && (
-                      <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                        {dayEvents.slice(0, 3).map((event, i) => (
-                          <div
-                            key={i}
-                            className={cn("w-1.5 h-1.5 rounded-full", getEventColor(event.type))}
-                          />
-                        ))}
-                      </div>
-                    )}
+                    </p>
                   </button>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </div>
+
+              {/* Time slots */}
+              <ScrollArea className="h-[400px]">
+                <div className="relative">
+                  {/* Hour lines */}
+                  {Array.from({ length: 14 }, (_, i) => i + 6).map((hour) => (
+                    <div key={hour} className="flex border-b border-gray-800/50 h-12">
+                      <div className="w-12 text-xs text-gray-500 py-1 px-2 border-r border-gray-800">
+                        {hour}:00
+                      </div>
+                      <div className="flex-1 grid grid-cols-7">
+                        {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) }).map((day) => {
+                          const dayEvents = getEventsForDay(day).filter(e => {
+                            const eventHour = parseInt(e.startTime?.split(':')[0] || '0');
+                            return eventHour === hour;
+                          });
+                          return (
+                            <button
+                              key={`${day.toISOString()}-${hour}`}
+                              onClick={() => {
+                                setSelectedDate(day);
+                                setNewEventDate(format(day, 'yyyy-MM-dd'));
+                                setNewEventStartTime(`${hour.toString().padStart(2, '0')}:00`);
+                                setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+                                setShowAddEvent(true);
+                              }}
+                              className="border-r border-gray-800/30 hover:bg-gray-800/50 relative"
+                            >
+                              {dayEvents.map((event, i) => (
+                                <div
+                                  key={event.id}
+                                  className={cn(
+                                    "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded text-xs p-1 truncate",
+                                    getEventColor(event.type), "text-white"
+                                  )}
+                                  onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                                >
+                                  {getClientName(event.clientId)}
+                                </div>
+                              ))}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Day View */}
+        {viewMode === 'day' && (
+          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+            <CardContent className="p-0">
+              <ScrollArea className="h-[450px]">
+                <div className="relative">
+                  {/* Hour slots */}
+                  {Array.from({ length: 14 }, (_, i) => i + 6).map((hour) => {
+                    const hourEvents = selectedDateEvents.filter(e => {
+                      const eventHour = parseInt(e.startTime?.split(':')[0] || '0');
+                      return eventHour === hour;
+                    });
+                    return (
+                      <button
+                        key={hour}
+                        onClick={() => {
+                          setNewEventDate(format(selectedDate, 'yyyy-MM-dd'));
+                          setNewEventStartTime(`${hour.toString().padStart(2, '0')}:00`);
+                          setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+                          setShowAddEvent(true);
+                        }}
+                        className="flex w-full border-b border-gray-800/50 min-h-[60px] hover:bg-gray-800/30 transition-colors"
+                      >
+                        <div className="w-16 text-sm text-gray-500 py-2 px-3 border-r border-gray-800 flex-shrink-0">
+                          {hour.toString().padStart(2, '0')}:00
+                        </div>
+                        <div className="flex-1 p-1 space-y-1">
+                          {hourEvents.map((event) => (
+                            <div
+                              key={event.id}
+                              onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
+                              className={cn(
+                                "rounded-lg p-2 cursor-pointer",
+                                getEventColor(event.type)
+                              )}
+                            >
+                              <p className="font-medium text-white text-sm">{event.title}</p>
+                              <p className="text-xs text-white/80">
+                                {event.startTime} - {event.endTime} • {getClientName(event.clientId)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Selected Day Events */}
         <div>

@@ -630,10 +630,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           },
         });
 
-        // Start rest timer
-        if (exercise) {
-          get().startRestTimer(exercise.restTimerSeconds, exerciseId);
-        }
+        // Rest timer is started by the UI component based on user settings
       },
 
       uncompleteSet: (exerciseId, setId) => {
