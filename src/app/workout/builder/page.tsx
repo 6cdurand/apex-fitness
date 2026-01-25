@@ -91,37 +91,75 @@ interface WorkoutBlock {
 }
 
 const COMMON_EXERCISES = [
+  // Squat patterns
   { id: 'barbell-back-squat', name: 'Barbell Back Squat', pattern: 'squat' },
   { id: 'goblet-squat', name: 'Goblet Squat', pattern: 'squat' },
   { id: 'front-squat', name: 'Front Squat', pattern: 'squat' },
   { id: 'leg-press', name: 'Leg Press', pattern: 'squat' },
+  { id: 'smith-squat', name: 'Smith Machine Squat', pattern: 'squat' },
+  { id: 'hack-squat', name: 'Hack Squat', pattern: 'squat' },
+  // Hinge patterns
   { id: 'deadlift', name: 'Deadlift', pattern: 'hinge' },
   { id: 'romanian-deadlift', name: 'Romanian Deadlift', pattern: 'hinge' },
   { id: 'hip-thrust', name: 'Hip Thrust', pattern: 'hinge' },
   { id: 'kettlebell-swing', name: 'Kettlebell Swing', pattern: 'hinge' },
+  { id: 'smith-rdl', name: 'Smith Machine RDL', pattern: 'hinge' },
+  { id: 'good-morning', name: 'Good Morning', pattern: 'hinge' },
+  // Push patterns
   { id: 'bench-press', name: 'Bench Press', pattern: 'push' },
   { id: 'db-bench-press', name: 'DB Bench Press', pattern: 'push' },
   { id: 'incline-bench-press', name: 'Incline Bench Press', pattern: 'push' },
+  { id: 'smith-bench-press', name: 'Smith Machine Bench Press', pattern: 'push' },
+  { id: 'smith-incline-press', name: 'Smith Machine Incline Press', pattern: 'push' },
   { id: 'overhead-press', name: 'Overhead Press', pattern: 'push' },
   { id: 'db-shoulder-press', name: 'DB Shoulder Press', pattern: 'push' },
+  { id: 'smith-shoulder-press', name: 'Smith Machine Shoulder Press', pattern: 'push' },
   { id: 'push-up', name: 'Push-up', pattern: 'push' },
+  { id: 'dips', name: 'Dips', pattern: 'push' },
+  { id: 'cable-fly', name: 'Cable Fly', pattern: 'push' },
+  { id: 'pec-deck', name: 'Pec Deck', pattern: 'push' },
+  // Pull patterns
   { id: 'barbell-row', name: 'Barbell Row', pattern: 'pull' },
   { id: 'cable-row', name: 'Cable Row', pattern: 'pull' },
   { id: 'lat-pulldown', name: 'Lat Pulldown', pattern: 'pull' },
   { id: 'weighted-pull-up', name: 'Weighted Pull-up', pattern: 'pull' },
   { id: 'face-pull', name: 'Face Pull', pattern: 'pull' },
+  { id: 'smith-row', name: 'Smith Machine Row', pattern: 'pull' },
+  { id: 't-bar-row', name: 'T-Bar Row', pattern: 'pull' },
+  { id: 'db-row', name: 'Dumbbell Row', pattern: 'pull' },
+  { id: 'seated-row', name: 'Seated Cable Row', pattern: 'pull' },
+  { id: 'shrug', name: 'Barbell Shrug', pattern: 'pull' },
+  { id: 'smith-shrug', name: 'Smith Machine Shrug', pattern: 'pull' },
+  // Core patterns
   { id: 'plank', name: 'Plank', pattern: 'core' },
   { id: 'dead-bug', name: 'Dead Bug', pattern: 'core' },
   { id: 'pallof-press', name: 'Pallof Press', pattern: 'core' },
   { id: 'hanging-leg-raise', name: 'Hanging Leg Raise', pattern: 'core' },
+  { id: 'cable-crunch', name: 'Cable Crunch', pattern: 'core' },
+  { id: 'ab-wheel', name: 'Ab Wheel Rollout', pattern: 'core' },
+  // Lunge patterns
   { id: 'split-squat', name: 'Split Squat', pattern: 'lunge' },
   { id: 'bulgarian-split-squat', name: 'Bulgarian Split Squat', pattern: 'lunge' },
   { id: 'walking-lunge', name: 'Walking Lunge', pattern: 'lunge' },
+  { id: 'smith-lunge', name: 'Smith Machine Lunge', pattern: 'lunge' },
+  { id: 'reverse-lunge', name: 'Reverse Lunge', pattern: 'lunge' },
+  // Accessory
   { id: 'glute-bridge', name: 'Glute Bridge', pattern: 'hinge' },
   { id: 'band-pull-apart', name: 'Band Pull Apart', pattern: 'pull' },
   { id: 'hip-circles', name: 'Hip Circles', pattern: 'squat' },
   { id: 'cat-cow', name: 'Cat-Cow', pattern: 'hinge' },
   { id: 'bird-dog', name: 'Bird Dog', pattern: 'core' },
+  { id: 'leg-curl', name: 'Leg Curl', pattern: 'hinge' },
+  { id: 'leg-extension', name: 'Leg Extension', pattern: 'squat' },
+  { id: 'calf-raise', name: 'Calf Raise', pattern: 'squat' },
+  { id: 'smith-calf-raise', name: 'Smith Machine Calf Raise', pattern: 'squat' },
+  // Arms
+  { id: 'bicep-curl', name: 'Bicep Curl', pattern: 'pull' },
+  { id: 'hammer-curl', name: 'Hammer Curl', pattern: 'pull' },
+  { id: 'tricep-pushdown', name: 'Tricep Pushdown', pattern: 'push' },
+  { id: 'skull-crusher', name: 'Skull Crusher', pattern: 'push' },
+  { id: 'lateral-raise', name: 'Lateral Raise', pattern: 'push' },
+  { id: 'rear-delt-fly', name: 'Rear Delt Fly', pattern: 'pull' },
 ];
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
