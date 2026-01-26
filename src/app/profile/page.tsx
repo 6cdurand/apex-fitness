@@ -42,7 +42,7 @@ export default function ProfilePage() {
   const { workoutHistory, personalBests } = useWorkoutStore();
   const { medals, strengthRating, calculateStrengthRating } = useMedalStore();
   const { posts } = useSocialStore();
-  const { clients, removeClient, clearAllData } = useTrainerStore();
+  const { clients, removeClient, clearAllData, sessions, sessionPackages, payments } = useTrainerStore();
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [showFollowingModal, setShowFollowingModal] = useState(false);
@@ -154,6 +154,50 @@ export default function ProfilePage() {
   
   // Filter medals for current user only - must be earned AND belong to user
   const userMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
+  
+  // Trainer stats calculation
+  const trainerStats = useMemo(() => {
+    if (!user?.id || user.mode !== 'trainer') return null;
+    
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    // Filter sessions for this trainer
+    const trainerSessions = sessions.filter(s => s.trainerId === user.id);
+    const completedSessions = trainerSessions.filter(s => s.status === 'completed');
+    const weekSessions = completedSessions.filter(s => new Date(s.date) >= oneWeekAgo);
+    const monthSessions = completedSessions.filter(s => new Date(s.date) >= oneMonthAgo);
+    
+    // Calculate earnings from packages
+    const trainerPackages = sessionPackages.filter(p => p.trainerId === user.id);
+    const totalEarnings = trainerPackages.reduce((sum, p) => sum + (p.priceTotal || 0), 0);
+    const weekEarnings = trainerPackages
+      .filter(p => p.purchaseDate && new Date(p.purchaseDate) >= oneWeekAgo)
+      .reduce((sum, p) => sum + (p.priceTotal || 0), 0);
+    const monthEarnings = trainerPackages
+      .filter(p => p.purchaseDate && new Date(p.purchaseDate) >= oneMonthAgo)
+      .reduce((sum, p) => sum + (p.priceTotal || 0), 0);
+    
+    // Calculate averages
+    const activeClients = clients.filter(c => c.trainerId === user.id && c.status === 'active').length;
+    const avgSessionsPerWeek = monthSessions.length / 4; // Average over 4 weeks
+    const avgPerSession = completedSessions.length > 0 
+      ? totalEarnings / completedSessions.length 
+      : 0;
+    
+    return {
+      totalSessions: completedSessions.length,
+      weekSessions: weekSessions.length,
+      monthSessions: monthSessions.length,
+      totalEarnings,
+      weekEarnings,
+      monthEarnings,
+      activeClients,
+      avgSessionsPerWeek: avgSessionsPerWeek.toFixed(1),
+      avgPerSession: avgPerSession.toFixed(0),
+    };
+  }, [user, sessions, sessionPackages, clients]);
   
 
   const getTierColor = (tier?: string) => {
@@ -302,6 +346,46 @@ export default function ProfilePage() {
               </>
             )}
           </Button>
+        )}
+
+        {/* Trainer Stats - shown in trainer mode */}
+        {isTrainerMode && trainerStats && (
+          <Card className="bg-white/10 border-white/20">
+            <CardContent className="p-4">
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-white">${trainerStats.weekEarnings}</p>
+                  <p className="text-xs text-white/60">This Week</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-white">${trainerStats.monthEarnings}</p>
+                  <p className="text-xs text-white/60">This Month</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-emerald-400">${trainerStats.totalEarnings}</p>
+                  <p className="text-xs text-white/60">Total</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/10">
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-white">{trainerStats.weekSessions}</p>
+                  <p className="text-[10px] text-white/50">Sessions/wk</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-white">{trainerStats.activeClients}</p>
+                  <p className="text-[10px] text-white/50">Clients</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-white">{trainerStats.avgSessionsPerWeek}</p>
+                  <p className="text-[10px] text-white/50">Avg/wk</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-lg font-semibold text-white">${trainerStats.avgPerSession}</p>
+                  <p className="text-[10px] text-white/50">Avg/session</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
 
