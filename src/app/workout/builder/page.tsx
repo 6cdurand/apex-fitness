@@ -84,15 +84,21 @@ const ASSIGNMENT_OPTIONS = [
   { id: 'program', name: 'Add to Program', description: 'Add as part of client\'s training program' },
 ];
 
+type CircuitStyle = 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';
+
 interface WorkoutBlock {
   id: string;
   type: BlockType;
   name: string;
   exercises: WorkoutExercise[];
   // Circuit-specific settings
+  circuitStyle?: CircuitStyle; // Type of circuit
   rounds?: number; // Number of circuit rounds
   roundDuration?: string; // Duration per round (e.g., "5min")
   restBetweenRounds?: string; // Rest between rounds (e.g., "60s")
+  targetTime?: string; // For "for time" circuits
+  workInterval?: string; // For tabata/EMOM
+  restInterval?: string; // For tabata
 }
 
 const COMMON_EXERCISES = [
@@ -215,6 +221,47 @@ const COMMON_EXERCISES = [
   { id: 'sled-push', name: 'Sled Push', pattern: 'cardio', aliases: ['prowler push', 'sled work'] },
   { id: 'sled-pull', name: 'Sled Pull', pattern: 'cardio', aliases: ['prowler pull', 'rope sled pull'] },
   { id: 'farmers-carry', name: 'Farmers Carry', pattern: 'cardio', aliases: ['farmers walk', 'loaded carry'] },
+  // Compound/Circuit Exercises
+  { id: 'curl-to-press', name: 'Curl to Press', pattern: 'push', aliases: ['bicep curl to press', 'curl and press', 'db curl to press'] },
+  { id: 'clean-and-press', name: 'Clean and Press', pattern: 'push', aliases: ['db clean and press', 'clean press'] },
+  { id: 'squat-to-press', name: 'Squat to Press', pattern: 'squat', aliases: ['thruster', 'squat press'] },
+  { id: 'lunge-to-curl', name: 'Lunge to Curl', pattern: 'lunge', aliases: ['walking lunge curl'] },
+  { id: 'deadlift-to-row', name: 'Deadlift to Row', pattern: 'hinge', aliases: ['dl to row', 'rdl to row'] },
+  { id: 'renegade-row', name: 'Renegade Row', pattern: 'pull', aliases: ['plank row', 'push up row'] },
+  { id: 'man-maker', name: 'Man Maker', pattern: 'cardio', aliases: ['man makers', 'db man maker'] },
+  { id: 'turkish-getup', name: 'Turkish Get-up', pattern: 'core', aliases: ['tgu', 'turkish getup'] },
+  { id: 'devils-press', name: 'Devil\'s Press', pattern: 'cardio', aliases: ['devils press', 'db burpee snatch'] },
+  { id: 'wall-ball', name: 'Wall Ball', pattern: 'squat', aliases: ['wall balls', 'med ball squat throw'] },
+  { id: 'med-ball-slam', name: 'Med Ball Slam', pattern: 'hinge', aliases: ['ball slam', 'medicine ball slam'] },
+  { id: 'sumo-deadlift-high-pull', name: 'Sumo Deadlift High Pull', pattern: 'hinge', aliases: ['sdhp', 'sumo high pull'] },
+  { id: 'hang-clean', name: 'Hang Clean', pattern: 'hinge', aliases: ['db hang clean', 'barbell hang clean'] },
+  { id: 'push-press', name: 'Push Press', pattern: 'push', aliases: ['bb push press', 'db push press'] },
+  { id: 'thrusters', name: 'Thrusters', pattern: 'squat', aliases: ['barbell thruster', 'db thruster'] },
+  { id: 'step-ups', name: 'Step Ups', pattern: 'lunge', aliases: ['box step up', 'weighted step up'] },
+  { id: 'squat-jump', name: 'Squat Jump', pattern: 'squat', aliases: ['jump squat', 'jumping squat'] },
+  { id: 'lunge-jump', name: 'Lunge Jump', pattern: 'lunge', aliases: ['jumping lunge', 'split jump'] },
+  { id: 'high-knees', name: 'High Knees', pattern: 'cardio', aliases: ['running in place', 'knee drives'] },
+  { id: 'butt-kicks', name: 'Butt Kicks', pattern: 'cardio', aliases: ['heel flicks', 'hamstring kicks'] },
+  { id: 'bear-crawl', name: 'Bear Crawl', pattern: 'core', aliases: ['bear crawls'] },
+  { id: 'lateral-shuffle', name: 'Lateral Shuffle', pattern: 'cardio', aliases: ['side shuffle', 'lateral slides'] },
+  { id: 'skater-jumps', name: 'Skater Jumps', pattern: 'cardio', aliases: ['ice skaters', 'lateral bounds'] },
+  { id: 'tuck-jump', name: 'Tuck Jump', pattern: 'cardio', aliases: ['tuck jumps', 'knee tuck jump'] },
+  { id: 'broad-jump', name: 'Broad Jump', pattern: 'cardio', aliases: ['standing long jump', 'horizontal jump'] },
+  // Additional isolation exercises
+  { id: 'preacher-curl', name: 'Preacher Curl', pattern: 'pull', aliases: ['ez bar preacher', 'machine preacher curl'] },
+  { id: 'concentration-curl', name: 'Concentration Curl', pattern: 'pull', aliases: ['seated concentration curl'] },
+  { id: 'cable-curl', name: 'Cable Curl', pattern: 'pull', aliases: ['straight bar cable curl'] },
+  { id: 'overhead-tricep-extension', name: 'Overhead Tricep Extension', pattern: 'push', aliases: ['db overhead extension', 'french press'] },
+  { id: 'kickback', name: 'Tricep Kickback', pattern: 'push', aliases: ['db kickback', 'cable kickback'] },
+  { id: 'close-grip-bench', name: 'Close Grip Bench Press', pattern: 'push', aliases: ['cgbp', 'close grip press'] },
+  { id: 'front-raise', name: 'Front Raise', pattern: 'push', aliases: ['db front raise', 'plate front raise'] },
+  { id: 'upright-row', name: 'Upright Row', pattern: 'pull', aliases: ['bb upright row', 'cable upright row'] },
+  { id: 'arnold-press', name: 'Arnold Press', pattern: 'push', aliases: ['arnold shoulder press'] },
+  { id: 'hip-abduction', name: 'Hip Abduction Machine', pattern: 'squat', aliases: ['abductor machine', 'outer thigh'] },
+  { id: 'hip-adduction', name: 'Hip Adduction Machine', pattern: 'squat', aliases: ['adductor machine', 'inner thigh'] },
+  { id: 'glute-kickback', name: 'Glute Kickback', pattern: 'hinge', aliases: ['cable kickback', 'donkey kick'] },
+  { id: 'hyperextension', name: 'Hyperextension', pattern: 'hinge', aliases: ['back extension', '45 degree extension'] },
+  { id: 'reverse-hyper', name: 'Reverse Hyperextension', pattern: 'hinge', aliases: ['reverse hyper', 'reverse back extension'] },
 ];
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -775,49 +822,194 @@ function WorkoutBuilderContent() {
                   {/* Circuit Block Settings */}
                   {block.type === 'circuit' && (
                     <div className="mb-4 p-3 bg-background/30 rounded-lg border border-orange-500/20">
-                      <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 mb-3">
                         <Clock className="h-4 w-4 text-orange-400" />
-                        <span className="text-sm font-medium text-orange-400">Circuit Timer Settings</span>
+                        <span className="text-sm font-medium text-orange-400">Circuit Style</span>
                       </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Rounds</Label>
-                          <Input
-                            type="number"
-                            value={block.rounds || 3}
-                            onChange={(e) => setBlocks(blocks.map(b => 
-                              b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                      
+                      {/* Circuit Style Toggle */}
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {[
+                          { id: 'rounds', label: 'Rounds', icon: '🔄', desc: 'X rounds of exercises' },
+                          { id: 'amrap', label: 'AMRAP', icon: '♾️', desc: 'As many rounds as possible' },
+                          { id: 'emom', label: 'EMOM', icon: '⏱️', desc: 'Every minute on the minute' },
+                          { id: 'forTime', label: 'For Time', icon: '🏁', desc: 'Complete as fast as possible' },
+                          { id: 'tabata', label: 'Tabata', icon: '⚡', desc: '20s work / 10s rest' },
+                        ].map((style) => (
+                          <Button
+                            key={style.id}
+                            type="button"
+                            variant={block.circuitStyle === style.id || (!block.circuitStyle && style.id === 'rounds') ? 'default' : 'outline'}
+                            size="sm"
+                            className={block.circuitStyle === style.id || (!block.circuitStyle && style.id === 'rounds') 
+                              ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                              : 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10'}
+                            onClick={() => setBlocks(blocks.map(b => 
+                              b.id === block.id ? { ...b, circuitStyle: style.id as CircuitStyle } : b
                             ))}
-                            className="h-8 mt-1"
-                            min={1}
-                            max={10}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Round Duration</Label>
-                          <Input
-                            value={block.roundDuration || '5min'}
-                            onChange={(e) => setBlocks(blocks.map(b => 
-                              b.id === block.id ? { ...b, roundDuration: e.target.value } : b
-                            ))}
-                            className="h-8 mt-1"
-                            placeholder="5min"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs text-muted-foreground">Rest Between</Label>
-                          <Input
-                            value={block.restBetweenRounds || '60s'}
-                            onChange={(e) => setBlocks(blocks.map(b => 
-                              b.id === block.id ? { ...b, restBetweenRounds: e.target.value } : b
-                            ))}
-                            className="h-8 mt-1"
-                            placeholder="60s"
-                          />
-                        </div>
+                          >
+                            <span className="mr-1">{style.icon}</span>
+                            {style.label}
+                          </Button>
+                        ))}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Total: {block.rounds || 3} rounds × {block.roundDuration || '5min'} = ~{((block.rounds || 3) * 5)} min workout time
+                      
+                      {/* Settings based on circuit style */}
+                      {(block.circuitStyle === 'rounds' || !block.circuitStyle) && (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Rounds</Label>
+                            <Input
+                              type="number"
+                              value={block.rounds || 3}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                              ))}
+                              className="h-8 mt-1"
+                              min={1}
+                              max={20}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Round Duration</Label>
+                            <Input
+                              value={block.roundDuration || '5min'}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, roundDuration: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="5min"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Rest Between</Label>
+                            <Input
+                              value={block.restBetweenRounds || '60s'}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, restBetweenRounds: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="60s"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {block.circuitStyle === 'amrap' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Time Cap</Label>
+                            <Input
+                              value={block.targetTime || '10min'}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, targetTime: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="10min"
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <p className="text-xs text-orange-400/70">Complete as many rounds as possible in the time cap</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {block.circuitStyle === 'emom' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Total Minutes</Label>
+                            <Input
+                              type="number"
+                              value={block.rounds || 10}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                              ))}
+                              className="h-8 mt-1"
+                              min={1}
+                              max={30}
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            <p className="text-xs text-orange-400/70">Complete exercises at the start of each minute</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {block.circuitStyle === 'forTime' && (
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Rounds</Label>
+                            <Input
+                              type="number"
+                              value={block.rounds || 3}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                              ))}
+                              className="h-8 mt-1"
+                              min={1}
+                              max={10}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Time Cap (optional)</Label>
+                            <Input
+                              value={block.targetTime || ''}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, targetTime: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="15min"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {block.circuitStyle === 'tabata' && (
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Rounds</Label>
+                            <Input
+                              type="number"
+                              value={block.rounds || 8}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, rounds: parseInt(e.target.value) || 1 } : b
+                              ))}
+                              className="h-8 mt-1"
+                              min={1}
+                              max={20}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Work</Label>
+                            <Input
+                              value={block.workInterval || '20s'}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, workInterval: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="20s"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Rest</Label>
+                            <Input
+                              value={block.restInterval || '10s'}
+                              onChange={(e) => setBlocks(blocks.map(b => 
+                                b.id === block.id ? { ...b, restInterval: e.target.value } : b
+                              ))}
+                              className="h-8 mt-1"
+                              placeholder="10s"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-muted-foreground mt-3 pt-2 border-t border-orange-500/10">
+                        {block.circuitStyle === 'amrap' && `⏱️ ${block.targetTime || '10min'} AMRAP`}
+                        {block.circuitStyle === 'emom' && `⏱️ ${block.rounds || 10} minute EMOM`}
+                        {block.circuitStyle === 'forTime' && `🏁 ${block.rounds || 3} rounds for time${block.targetTime ? ` (${block.targetTime} cap)` : ''}`}
+                        {block.circuitStyle === 'tabata' && `⚡ ${block.rounds || 8} rounds: ${block.workInterval || '20s'} work / ${block.restInterval || '10s'} rest`}
+                        {(!block.circuitStyle || block.circuitStyle === 'rounds') && `🔄 ${block.rounds || 3} rounds × ${block.roundDuration || '5min'} = ~${((block.rounds || 3) * 5)} min`}
                       </p>
                     </div>
                   )}

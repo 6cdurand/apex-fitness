@@ -1277,40 +1277,48 @@ export default function ClientDetailPage() {
                       .map(workout => (
                         <div
                           key={workout.id}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
+                          className="p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
                         >
-                          <div 
-                            className="flex-1 min-w-0 cursor-pointer"
-                            onClick={() => router.push(`/workout/${workout.id}`)}
-                          >
-                            <p className="font-medium text-white text-sm truncate">{workout.name}</p>
-                            <p className="text-xs text-gray-500">
-                              {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
-                              {workout.notes && ' • Has notes'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              <p className="text-emerald-400 font-medium text-sm">
-                                {Math.round(workout.totalVolume).toLocaleString()} kg
-                              </p>
+                          <div className="flex items-center justify-between">
+                            <div 
+                              className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => router.push(`/workout/${workout.id}`)}
+                            >
+                              <p className="font-medium text-white text-sm truncate">{workout.name}</p>
                               <p className="text-xs text-gray-500">
-                                {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                                {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
                               </p>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-gray-400 hover:text-white"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingWorkout(workout);
-                                setEditedWorkoutExercises(JSON.parse(JSON.stringify(workout.exercises)));
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <div className="text-right">
+                                <p className="text-emerald-400 font-medium text-sm">
+                                  {Math.round(workout.totalVolume).toLocaleString()} kg
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                                </p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-400 hover:text-white"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingWorkout(workout);
+                                  setEditedWorkoutExercises(JSON.parse(JSON.stringify(workout.exercises)));
+                                }}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
+                          {workout.notes && (
+                            <div className="mt-2 pt-2 border-t border-gray-700">
+                              <p className="text-xs text-gray-400 line-clamp-2">
+                                📝 {workout.notes}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ))}
                   </div>

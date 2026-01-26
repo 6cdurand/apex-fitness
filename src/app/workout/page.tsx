@@ -23,7 +23,8 @@ import {
   History,
   Users,
   Calendar,
-  Edit
+  Edit,
+  Check
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
@@ -299,12 +300,29 @@ export default function WorkoutPage() {
                 const linkedTemplate = session.workoutId ? defaultTemplates.find(t => t.id === session.workoutId) : null;
                 const linkedSessionWorkout = session.workoutId ? sessionWorkouts.find(w => w.id === session.workoutId) : null;
                 const clientProgram = session.clientId ? getActiveProgram(session.clientId) : null;
+                
+                // Check if this session's workout has been completed today
+                const sessionCompleted = workoutHistory.some(w => 
+                  w.userId === session.clientId && 
+                  format(new Date(w.startTime), 'yyyy-MM-dd') === today
+                );
+                
                 return (
                   <Card
                     key={session.id}
-                    className="bg-gray-900 border-gray-800 hover:border-emerald-500/50 transition-colors"
+                    className={`bg-gray-900 border-gray-800 transition-colors ${sessionCompleted ? 'border-emerald-500/50 bg-emerald-500/5' : 'hover:border-emerald-500/50'}`}
                   >
                     <CardContent className="p-4">
+                      {/* Workout Complete Banner */}
+                      {sessionCompleted && (
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-emerald-500/20">
+                          <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                            <Check className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
+                        </div>
+                      )}
+                      
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-10 h-10">
@@ -324,21 +342,28 @@ export default function WorkoutPage() {
                             </p>
                           </div>
                         </div>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-500 hover:bg-emerald-600"
-                          onClick={() => {
-                            setStartSessionDialog({
-                              clientId: session.clientId!,
-                              clientName: clientUser?.displayName || 'Client',
-                              sessionTitle: session.title || session.notes,
-                              workoutId: session.workoutId,
-                            });
-                          }}
-                        >
-                          <Play className="w-4 h-4 mr-1" />
-                          Start
-                        </Button>
+                        {sessionCompleted ? (
+                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                            <Check className="w-3 h-3 mr-1" />
+                            Done
+                          </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="bg-emerald-500 hover:bg-emerald-600"
+                            onClick={() => {
+                              setStartSessionDialog({
+                                clientId: session.clientId!,
+                                clientName: clientUser?.displayName || 'Client',
+                                sessionTitle: session.title || session.notes,
+                                workoutId: session.workoutId,
+                              });
+                            }}
+                          >
+                            <Play className="w-4 h-4 mr-1" />
+                            Start
+                          </Button>
+                        )}
                       </div>
                       
                       {/* Show linked workout details */}
