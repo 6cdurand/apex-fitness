@@ -84,6 +84,25 @@ CREATE TABLE IF NOT EXISTS workouts (
 -- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS assigned_by UUID REFERENCES users(id);
 -- ALTER TABLE workouts ADD COLUMN IF NOT EXISTS template_id TEXT;
 
+-- Client Exercise History (tracks exercises used per client for suggestions)
+CREATE TABLE IF NOT EXISTS client_exercise_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  exercise_id TEXT NOT NULL,
+  exercise_name TEXT NOT NULL,
+  block_type TEXT,  -- 'warmup', 'strength', 'circuit'
+  times_used INTEGER DEFAULT 1,
+  last_used TIMESTAMPTZ DEFAULT NOW(),
+  last_weight NUMERIC,
+  last_reps INTEGER,
+  best_weight NUMERIC,
+  best_reps INTEGER,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, exercise_id, block_type)
+);
+
 -- ==========================================
 -- SOCIAL TABLES
 -- ==========================================

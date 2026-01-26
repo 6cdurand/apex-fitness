@@ -532,6 +532,119 @@ function fromDbMedal(dbMedal: any): Medal {
   };
 }
 
+// Sync client exercise history to Supabase
+export async function syncExerciseHistoryToSupabase(
+  userId: string,
+  exerciseId: string,
+  exerciseName: string,
+  blockType: string | null,
+  weight?: number,
+  reps?: number
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    // First check if record exists
+    const { data: existing } = await supabase
+      .from('client_exercise_history')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('exercise_id', exerciseId)
+      .eq('block_type', blockType || 'general')
+      .single();
+    
+    if (existing) {
+      // Update existing record
+      const updates: any = {
+        times_used: (existing.times_used || 0) + 1,
+        last_used: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      
+      if (weight) {
+        updates.last_weight = weight;
+        if (!existing.best_weight || weight > existing.best_weight) {
+          updates.best_weight = weight;
+        }
+      }
+      if (reps) {
+        updates.last_reps = reps;
+        if (!existing.best_reps || reps > existing.best_reps) {
+          updates.best_reps = reps;
+        }
+      }
+      
+      const { error } = await supabase
+        .from('client_exercise_history')
+        .update(updates)
+        .eq('id', existing.id);
+      
+      if (error) {
+        console.error('[ExerciseHistory] Update error:', error);
+        return false;
+      }
+    } else {
+      // Insert new record
+      const { error } = await supabase
+        .from('client_exercise_history')
+        .insert({
+          user_id: userId,
+          exercise_id: exerciseId,
+          exercise_name: exerciseName,
+          block_type: blockType || 'general',
+          times_used: 1,
+          last_used: new Date().toISOString(),
+          last_weight: weight,
+          last_reps: reps,
+          best_weight: weight,
+          best_reps: reps,
+        });
+      
+      if (error) {
+        console.error('[ExerciseHistory] Insert error:', error);
+        return false;
+      }
+    }
+    
+    return true;
+  } catch (e) {
+    console.error('[ExerciseHistory] Exception:', e);
+    return false;
+  }
+}
+
+// Get client exercise history from Supabase
+export async function getClientExerciseHistory(
+  userId: string,
+  blockType?: string
+): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    let query = supabase
+      .from('client_exercise_history')
+      .select('*')
+      .eq('user_id', userId)
+      .order('times_used', { ascending: false });
+    
+    if (blockType) {
+      query = query.eq('block_type', blockType);
+    }
+    
+    const { data, error } = await query.limit(50);
+    
+    if (error) {
+      console.error('[ExerciseHistory] Fetch error:', error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (e) {
+    console.error('[ExerciseHistory] Exception:', e);
+    return [];
+  }
+}
+
 // Sync a completed workout to Supabase
 export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> {
   if (!isSupabaseConfigured()) {

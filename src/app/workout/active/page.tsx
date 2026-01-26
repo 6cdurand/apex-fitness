@@ -148,36 +148,12 @@ export default function ActiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [restTimer.isRunning, tickRestTimer]);
 
-  // Warmup exercises (mobility, activation, light cardio)
-  const warmupExercises = exerciseLibrary.filter(e => 
-    e.name.toLowerCase().includes('band') ||
-    e.name.toLowerCase().includes('stretch') ||
-    e.name.toLowerCase().includes('glute bridge') ||
-    e.name.toLowerCase().includes('bird dog') ||
-    e.name.toLowerCase().includes('dead bug') ||
-    e.name.toLowerCase().includes('plank') ||
-    e.name.toLowerCase().includes('foam') ||
-    e.name.toLowerCase().includes('arm circle') ||
-    e.name.toLowerCase().includes('leg swing') ||
-    e.name.toLowerCase().includes('hip') ||
-    e.name.toLowerCase().includes('mobility') ||
-    e.name.toLowerCase().includes('activation') ||
-    e.primaryMuscles.some(m => m.toLowerCase().includes('core') || m.toLowerCase().includes('abs')) ||
-    e.equipment === 'bodyweight'
-  );
+  // Warmup exercises - use category filter
+  const warmupExercises = exerciseLibrary.filter(e => e.category === 'warmup');
   
-  // Strength exercises (compound movements, machines, weighted)
+  // Strength exercises - compound and isolation movements
   const strengthExercises = exerciseLibrary.filter(e => 
-    e.equipment === 'barbell' ||
-    e.equipment === 'dumbbell' ||
-    e.equipment === 'cable' ||
-    e.equipment === 'machine' ||
-    e.name.toLowerCase().includes('press') ||
-    e.name.toLowerCase().includes('squat') ||
-    e.name.toLowerCase().includes('deadlift') ||
-    e.name.toLowerCase().includes('row') ||
-    e.name.toLowerCase().includes('curl') ||
-    e.name.toLowerCase().includes('extension')
+    e.category === 'compound' || e.category === 'isolation'
   );
 
   // Get exercises based on active block type

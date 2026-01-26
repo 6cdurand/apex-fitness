@@ -31,7 +31,7 @@ export type MuscleGroup =
   | 'forearms' | 'abs' | 'obliques' | 'quads' | 'hamstrings' 
   | 'glutes' | 'calves' | 'traps' | 'lats' | 'lower_back';
 
-export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching';
+export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching' | 'warmup';
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bands' | 'other';
 
 export interface Exercise {
