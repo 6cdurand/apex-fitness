@@ -103,9 +103,12 @@ export default function WorkoutPage() {
             exerciseId: ex.exerciseId || ex.id,
             exercise: {
               id: ex.exerciseId || ex.id,
-              name: ex.exerciseName || 'Exercise',
+              name: ex.exerciseName || ex.name || 'Exercise',
               category: 'strength',
               muscleGroups: [],
+              primaryMuscles: ex.primaryMuscles || [],
+              secondaryMuscles: ex.secondaryMuscles || [],
+              equipment: ex.equipment || 'other',
             },
             sets: Array.from({ length: ex.sets || 3 }, (_, i) => ({
               id: `set-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
@@ -117,36 +120,35 @@ export default function WorkoutPage() {
             })),
             restTimerSeconds: parseInt(ex.rest) || 90,
             notes: ex.notes || '',
-            blockName: block.name, // Track which block this exercise belongs to
-            blockType: block.type, // Track block type (circuit, warmup, etc.)
+            blockId: block.id, // Track which block this exercise belongs to
+            blockName: block.name,
+            blockType: block.type,
             setStyle: ex.setStyle || 'fixed',
-            repType: ex.repType || 'reps', // Time-based or rep-based
-            // Circuit block timing info
+            repType: ex.repType || 'reps',
             circuitRounds: block.type === 'circuit' ? block.rounds : undefined,
             roundDuration: block.type === 'circuit' ? block.roundDuration : undefined,
             restBetweenRounds: block.type === 'circuit' ? block.restBetweenRounds : undefined,
           })) || []
         ) || [];
 
-        if (exercises.length > 0) {
-          const template: WorkoutTemplate = {
-            id: `session-${Date.now()}`,
-            name: sessionWorkout.name || `Session - ${clientName}`,
-            description: `${sessionWorkout.blocks.length} blocks`,
-            exercises: exercises,
-            category: 'strength',
-            estimatedDuration: 60,
-            createdAt: new Date().toISOString(),
-            createdBy: user?.id || '',
-            isPublic: false,
-            updatedAt: new Date().toISOString(),
-            blocks: sessionWorkout.blocks, // Pass blocks for active workout display
-          };
-          
-          startFromTemplate(template, clientId);
-          router.push('/workout/active');
-          return;
-        }
+        // Create template even if exercises is empty - we'll handle blocks in active page
+        const template: WorkoutTemplate = {
+          id: `session-${Date.now()}`,
+          name: sessionWorkout.name || `Session - ${clientName}`,
+          description: `${sessionWorkout.blocks.length} blocks`,
+          exercises: exercises,
+          category: 'strength',
+          estimatedDuration: 60,
+          createdAt: new Date().toISOString(),
+          createdBy: user?.id || '',
+          isPublic: false,
+          updatedAt: new Date().toISOString(),
+          blocks: sessionWorkout.blocks, // Pass blocks for active workout display
+        };
+        
+        startFromTemplate(template, clientId);
+        router.push('/workout/active');
+        return;
       }
     }
     

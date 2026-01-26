@@ -342,12 +342,12 @@ export const useWorkoutStore = create<WorkoutState>()(
         const pbs = get().personalBests.filter(p => p.userId === targetUserId);
         
         // Clone template exercises with previous data
-        const exercises: WorkoutExercise[] = template.exercises.map(ex => {
+        const exercises: WorkoutExercise[] = (template.exercises || []).map(ex => {
           const pb = pbs.find(p => p.exerciseId === ex.exerciseId);
           return {
             ...ex,
             id: uuidv4(),
-            sets: ex.sets.map((s, idx) => ({
+            sets: (ex.sets || []).map((s, idx) => ({
               ...s,
               id: uuidv4(),
               completed: false,
@@ -368,6 +368,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           status: 'active',
           // Mark as PT session if training a client
           assignedBy: clientId ? loggedInUserId : undefined,
+          // Store blocks data for session workouts
+          blocks: (template as any).blocks || undefined,
         };
         set({ 
           activeWorkout: workout,

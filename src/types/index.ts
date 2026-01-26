@@ -141,6 +141,7 @@ export interface Workout {
   status: 'active' | 'completed' | 'cancelled';
   assignedBy?: string; // Trainer ID if assigned
   scheduledDate?: string;
+  blocks?: WorkoutBlock[]; // Session workout blocks
 }
 
 // Personal Best / Records

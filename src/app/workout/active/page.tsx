@@ -138,6 +138,26 @@ export default function ActiveWorkoutPage() {
     }
   }, [isAuthenticated, activeWorkout, router]);
 
+  // Initialize blocks from activeWorkout.blocks (for session workouts)
+  useEffect(() => {
+    if (activeWorkout?.blocks && activeWorkout.blocks.length > 0 && workoutBlocks.length === 0) {
+      const initialBlocks = activeWorkout.blocks.map((block: any) => ({
+        id: block.id || `block-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        type: block.type || 'strength',
+        name: block.name || 'Block',
+        circuitStyle: block.circuitStyle,
+        circuitDuration: block.circuitDuration,
+        circuitRounds: block.rounds || block.circuitRounds,
+        timerRunning: false,
+        timerSeconds: 0,
+        completed: false,
+        circuitComplete: false,
+        roundsCompleted: [],
+      }));
+      setWorkoutBlocks(initialBlocks);
+    }
+  }, [activeWorkout?.blocks]);
+
   // Workout timer
   useEffect(() => {
     if (!workoutTimer.isRunning) return;

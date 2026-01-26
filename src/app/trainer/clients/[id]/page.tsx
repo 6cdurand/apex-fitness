@@ -153,6 +153,11 @@ export default function TrainerClientDetailPage() {
     .filter(e => e.clientId === clientId && e.trainerId === user?.id)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  // Get completed sessions for this client (includes imported sessions)
+  const clientCompletedSessions = getSessionsForClient(clientId).filter(s => 
+    s.status === 'completed' || s.status === 'no_show'
+  );
+  
   const stats = useMemo(() => {
     const totalVolume = clientWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
 
@@ -162,13 +167,16 @@ export default function TrainerClientDetailPage() {
     const now = new Date();
     const upcomingSessions = clientSessions.filter(s => new Date(s.date) > now).length;
 
+    // Total sessions = max of workout history or completed sessions (to include imports)
+    const totalSessions = Math.max(clientWorkouts.length, clientCompletedSessions.length);
+
     return {
-      totalWorkouts: clientWorkouts.length,
+      totalWorkouts: totalSessions,
       totalVolume,
       weeksWithTrainer,
       upcomingSessions,
     };
-  }, [clientRecord?.startDate, clientSessions, clientWorkouts]);
+  }, [clientRecord?.startDate, clientSessions, clientWorkouts, clientCompletedSessions]);
 
   if (!isAuthenticated || user?.mode !== 'trainer') return null;
   if (!clientUser) return null;

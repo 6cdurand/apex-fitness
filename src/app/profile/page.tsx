@@ -143,8 +143,8 @@ export default function ProfilePage() {
 
   const isTrainerMode = user.mode === 'trainer';
   
-  // Filter workouts for current user only
-  const userWorkouts = workoutHistory.filter(w => w.userId === user.id);
+  // Filter workouts for current user only (exclude client training sessions)
+  const userWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy);
   const totalWorkouts = userWorkouts.length;
   const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
   const userPosts = posts.filter(p => p.userId === user.id);
