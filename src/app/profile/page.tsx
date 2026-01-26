@@ -161,7 +161,7 @@ export default function ProfilePage() {
   // Filter medals for current user only - must be earned AND belong to user
   const userMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
   
-  // Trainer stats calculation
+  // Trainer stats calculation - uses actual payment data from packages
   const trainerStats = useMemo(() => {
     if (!user?.id || user.mode !== 'trainer') return null;
     
@@ -175,28 +175,41 @@ export default function ProfilePage() {
     const weekSessions = completedSessions.filter(s => new Date(s.date) >= oneWeekAgo);
     const monthSessions = completedSessions.filter(s => new Date(s.date) >= oneMonthAgo);
     
-    // Calculate earnings from completed sessions (using price per session from packages)
+    // Get all trainer packages
     const trainerPackages = sessionPackages.filter(p => p.trainerId === user.id);
+    
+    // Calculate ACTUAL earnings from paidSessions in packages
+    const totalPaidSessions = trainerPackages.reduce((sum, p) => sum + (p.paidSessions || 0), 0);
+    const totalEarnings = trainerPackages.reduce((sum, p) => 
+      sum + ((p.paidSessions || 0) * (p.pricePerSession || 0)), 0);
+    
+    // Calculate total used sessions (completed)
+    const totalUsedSessions = trainerPackages.reduce((sum, p) => sum + (p.usedSessions || 0), 0);
+    
+    // Outstanding amount (sessions done but not paid)
+    const outstandingAmount = trainerPackages.reduce((sum, p) => {
+      const unpaid = Math.max(0, (p.usedSessions || 0) - (p.paidSessions || 0));
+      return sum + (unpaid * (p.pricePerSession || 0));
+    }, 0);
     
     // Get average price per session from packages
     const avgPricePerSession = trainerPackages.length > 0
       ? trainerPackages.reduce((sum, p) => sum + (p.pricePerSession || 0), 0) / trainerPackages.length
       : 0;
     
-    // Earnings = completed sessions × price per session
-    const totalEarnings = completedSessions.length * avgPricePerSession;
+    // Week/month earnings estimate based on sessions
     const weekEarnings = weekSessions.length * avgPricePerSession;
     const monthEarnings = monthSessions.length * avgPricePerSession;
     
     // Calculate averages
     const activeClients = clients.filter(c => c.trainerId === user.id && c.status === 'active').length;
     const avgSessionsPerWeek = monthSessions.length / 4; // Average over 4 weeks
-    const avgPerSession = completedSessions.length > 0 
-      ? totalEarnings / completedSessions.length 
-      : 0;
+    const avgPerSession = totalPaidSessions > 0 
+      ? totalEarnings / totalPaidSessions 
+      : avgPricePerSession;
     
     return {
-      totalSessions: completedSessions.length,
+      totalSessions: totalUsedSessions || completedSessions.length,
       weekSessions: weekSessions.length,
       monthSessions: monthSessions.length,
       totalEarnings,
@@ -205,6 +218,9 @@ export default function ProfilePage() {
       activeClients,
       avgSessionsPerWeek: avgSessionsPerWeek.toFixed(1),
       avgPerSession: avgPerSession.toFixed(0),
+      outstandingAmount,
+      totalPaidSessions,
+      totalUnpaidSessions: Math.max(0, totalUsedSessions - totalPaidSessions),
     };
   }, [user, sessions, sessionPackages, clients]);
   
@@ -361,24 +377,39 @@ export default function ProfilePage() {
         {isTrainerMode && trainerStats && (
           <Card className="bg-white/10 border-white/20">
             <CardContent className="p-4">
+              {/* Earnings Row */}
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-white">${trainerStats.weekEarnings}</p>
+                  <p className="text-2xl font-bold text-white">${Math.round(trainerStats.weekEarnings)}</p>
                   <p className="text-xs text-white/60">This Week</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-white">${trainerStats.monthEarnings}</p>
+                  <p className="text-2xl font-bold text-white">${Math.round(trainerStats.monthEarnings)}</p>
                   <p className="text-xs text-white/60">This Month</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-emerald-400">${trainerStats.totalEarnings}</p>
-                  <p className="text-xs text-white/60">Total</p>
+                  <p className="text-2xl font-bold text-emerald-400">${Math.round(trainerStats.totalEarnings)}</p>
+                  <p className="text-xs text-white/60">Total Paid</p>
                 </div>
               </div>
+              
+              {/* Outstanding Warning */}
+              {trainerStats.outstandingAmount > 0 && (
+                <div className="mb-3 p-2 bg-amber-500/20 rounded-lg flex justify-between items-center">
+                  <span className="text-xs text-amber-300">
+                    {trainerStats.totalUnpaidSessions} unpaid session{trainerStats.totalUnpaidSessions !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-sm font-bold text-amber-400">
+                    ${Math.round(trainerStats.outstandingAmount)} outstanding
+                  </span>
+                </div>
+              )}
+              
+              {/* Stats Grid */}
               <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/10">
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-white">{trainerStats.weekSessions}</p>
-                  <p className="text-[10px] text-white/50">Sessions/wk</p>
+                  <p className="text-lg font-semibold text-white">{trainerStats.totalSessions}</p>
+                  <p className="text-[10px] text-white/50">Sessions</p>
                 </div>
                 <div className="text-center">
                   <p className="text-lg font-semibold text-white">{trainerStats.activeClients}</p>
