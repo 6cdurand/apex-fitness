@@ -91,17 +91,32 @@ export default function ActiveWorkoutPage() {
   const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
-  const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null); // Exercise ID being paired
-  const [showAddBlockDialog, setShowAddBlockDialog] = useState(false);
-  const [selectedBlockType, setSelectedBlockType] = useState<'warmup' | 'work' | 'circuit' | 'cooldown' | null>(null);
-  const [currentBlockName, setCurrentBlockName] = useState('');
-  const [circuitSettings, setCircuitSettings] = useState({
-    style: 'rounds' as 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata',
+  const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
+  
+  // Block system state
+  const [workoutBlocks, setWorkoutBlocks] = useState<{
+    id: string;
+    type: 'warmup' | 'strength' | 'circuit';
+    name: string;
+    circuitStyle?: 'amrap' | 'forTime' | 'rounds' | 'emom';
+    circuitDuration?: number; // in seconds
+    circuitRounds?: number;
+    timerRunning?: boolean;
+    timerSeconds?: number;
+    completed?: boolean;
+  }[]>([]);
+  const [showCircuitDialog, setShowCircuitDialog] = useState(false);
+  const [circuitConfig, setCircuitConfig] = useState({
+    style: 'amrap' as 'amrap' | 'forTime' | 'rounds' | 'emom',
+    duration: 600, // 10 min default
     rounds: 3,
-    targetTime: '10min',
-    workInterval: '20s',
-    restInterval: '10s',
   });
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [showExerciseModal, setShowExerciseModal] = useState(false);
+  
+  // Check if blocks exist
+  const hasWarmup = workoutBlocks.some(b => b.type === 'warmup');
+  const hasStrength = workoutBlocks.some(b => b.type === 'strength');
 
   // Redirect if not authenticated or no active workout
   useEffect(() => {
@@ -126,59 +141,142 @@ export default function ActiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [restTimer.isRunning, tickRestTimer]);
 
+  // Warmup exercises (mobility, activation, light cardio)
+  const warmupExercises = exerciseLibrary.filter(e => 
+    e.name.toLowerCase().includes('band') ||
+    e.name.toLowerCase().includes('stretch') ||
+    e.name.toLowerCase().includes('glute bridge') ||
+    e.name.toLowerCase().includes('bird dog') ||
+    e.name.toLowerCase().includes('dead bug') ||
+    e.name.toLowerCase().includes('plank') ||
+    e.name.toLowerCase().includes('foam') ||
+    e.name.toLowerCase().includes('arm circle') ||
+    e.name.toLowerCase().includes('leg swing') ||
+    e.name.toLowerCase().includes('hip') ||
+    e.name.toLowerCase().includes('mobility') ||
+    e.name.toLowerCase().includes('activation') ||
+    e.primaryMuscles.some(m => m.toLowerCase().includes('core') || m.toLowerCase().includes('abs')) ||
+    e.equipment === 'bodyweight'
+  );
+  
+  // Strength exercises (compound movements, machines, weighted)
+  const strengthExercises = exerciseLibrary.filter(e => 
+    e.equipment === 'barbell' ||
+    e.equipment === 'dumbbell' ||
+    e.equipment === 'cable' ||
+    e.equipment === 'machine' ||
+    e.name.toLowerCase().includes('press') ||
+    e.name.toLowerCase().includes('squat') ||
+    e.name.toLowerCase().includes('deadlift') ||
+    e.name.toLowerCase().includes('row') ||
+    e.name.toLowerCase().includes('curl') ||
+    e.name.toLowerCase().includes('extension')
+  );
+
+  // Get exercises based on active block type
+  const getFilteredExercises = () => {
+    const block = workoutBlocks.find(b => b.id === activeBlockId);
+    if (!block) return exerciseLibrary;
+    
+    let filtered = block.type === 'warmup' ? warmupExercises : 
+                   block.type === 'strength' ? strengthExercises : 
+                   exerciseLibrary;
+    
+    if (exerciseSearch) {
+      filtered = filtered.filter(e => 
+        e.name.toLowerCase().includes(exerciseSearch.toLowerCase())
+      );
+    }
+    return filtered;
+  };
+
   const handleAddExercise = (exercise: Exercise) => {
-    // Add exercise with block metadata if a block is selected
-    const blockMetadata = selectedBlockType ? {
-      blockName: currentBlockName || getDefaultBlockName(selectedBlockType),
-      blockType: selectedBlockType,
-      ...(selectedBlockType === 'circuit' && {
-        circuitStyle: circuitSettings.style,
-        circuitRounds: circuitSettings.rounds,
-        targetTime: circuitSettings.targetTime,
-        workInterval: circuitSettings.workInterval,
-        restInterval: circuitSettings.restInterval,
-      }),
+    const block = workoutBlocks.find(b => b.id === activeBlockId);
+    const blockMetadata = block ? {
+      blockName: block.name,
+      blockType: block.type,
+      blockId: block.id,
     } : {};
     
     addExercise({ ...exercise, ...blockMetadata } as any);
-    setShowExerciseSearch(false);
+    setShowExerciseModal(false);
     setExerciseSearch('');
+    toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
+  };
+  
+  const addBlock = (type: 'warmup' | 'strength' | 'circuit') => {
+    if (type === 'warmup' && hasWarmup) return;
+    if (type === 'strength' && hasStrength) return;
     
-    // If in superset pairing mode, automatically pair the new exercise
-    if (supersetPairingId) {
-      setTimeout(() => {
-        const newExercise = useWorkoutStore.getState().activeWorkout?.exercises.slice(-1)[0];
-        if (newExercise) {
-          const groupId = `superset-${Date.now()}`;
-          updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
-          updateExercise(newExercise.id, { groupId, groupOrder: 'A2' });
-          setSupersetPairingId(null);
-          toast.success('Superset created!', {
-            description: `${exercise.name} paired as superset`,
-          });
-        }
-      }, 100);
-    } else {
-      const blockLabel = selectedBlockType ? ` to ${currentBlockName || getDefaultBlockName(selectedBlockType)}` : '';
-      toast.success(`Added ${exercise.name}${blockLabel}`);
-    }
-  };
-  
-  const getDefaultBlockName = (type: string) => {
-    const names: Record<string, string> = {
-      warmup: 'Warm-Up',
-      work: 'Main Work',
-      circuit: 'Circuit',
-      cooldown: 'Cool Down',
+    const circuitCount = workoutBlocks.filter(b => b.type === 'circuit').length;
+    const newBlock = {
+      id: `block-${Date.now()}`,
+      type,
+      name: type === 'warmup' ? 'Warm-Up' : 
+            type === 'strength' ? 'Strength' : 
+            `Circuit ${circuitCount + 1}`,
+      ...(type === 'circuit' && {
+        circuitStyle: circuitConfig.style,
+        circuitDuration: circuitConfig.duration,
+        circuitRounds: circuitConfig.rounds,
+        timerSeconds: circuitConfig.style === 'forTime' ? 0 : circuitConfig.duration,
+        timerRunning: false,
+      }),
     };
-    return names[type] || 'Block';
+    
+    setWorkoutBlocks([...workoutBlocks, newBlock]);
+    setActiveBlockId(newBlock.id);
+    
+    if (type === 'circuit') {
+      setShowCircuitDialog(false);
+    }
+    
+    setShowExerciseModal(true);
+    toast.success(`${newBlock.name} block added`);
   };
   
-  const handleSelectBlockType = (type: 'warmup' | 'work' | 'circuit' | 'cooldown') => {
-    setSelectedBlockType(type);
-    setCurrentBlockName(getDefaultBlockName(type));
-    setShowAddBlockDialog(false);
-    setShowExerciseSearch(true);
+  // Circuit timer effect
+  useEffect(() => {
+    const runningCircuit = workoutBlocks.find(b => b.timerRunning);
+    if (!runningCircuit) return;
+    
+    const interval = setInterval(() => {
+      setWorkoutBlocks(blocks => blocks.map(b => {
+        if (b.id !== runningCircuit.id || !b.timerRunning) return b;
+        
+        const isCountdown = b.circuitStyle === 'amrap' || b.circuitStyle === 'emom';
+        const newSeconds = isCountdown ? (b.timerSeconds || 0) - 1 : (b.timerSeconds || 0) + 1;
+        
+        // Stop if countdown reaches 0
+        if (isCountdown && newSeconds <= 0) {
+          toast.success(`${b.name} complete!`);
+          return { ...b, timerSeconds: 0, timerRunning: false, completed: true };
+        }
+        
+        return { ...b, timerSeconds: newSeconds };
+      }));
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [workoutBlocks]);
+  
+  const toggleCircuitTimer = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => 
+      b.id === blockId ? { ...b, timerRunning: !b.timerRunning } : b
+    ));
+  };
+  
+  const resetCircuitTimer = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => {
+      if (b.id !== blockId) return b;
+      const isCountdown = b.circuitStyle === 'amrap' || b.circuitStyle === 'emom';
+      return { 
+        ...b, 
+        timerSeconds: isCountdown ? b.circuitDuration : 0, 
+        timerRunning: false,
+        completed: false,
+      };
+    }));
   };
 
   const { startRestTimer } = useWorkoutStore();
@@ -407,6 +505,90 @@ export default function ActiveWorkoutPage() {
         </div>
       </header>
 
+      {/* Block Panel - Add blocks from here */}
+      <div className="sticky top-[168px] z-40 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500 mr-2">Add:</span>
+          
+          {/* Warmup Button */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (!hasWarmup) {
+                addBlock('warmup');
+              } else {
+                const warmupBlock = workoutBlocks.find(b => b.type === 'warmup');
+                if (warmupBlock) {
+                  setActiveBlockId(warmupBlock.id);
+                  setShowExerciseModal(true);
+                }
+              }
+            }}
+            className={cn(
+              "h-8 px-3 gap-1.5",
+              hasWarmup 
+                ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" 
+                : "hover:bg-yellow-500/10 text-yellow-400/70 hover:text-yellow-400"
+            )}
+          >
+            🔥 <span className="hidden sm:inline">Warm-Up</span>
+            {hasWarmup && <Check className="w-3 h-3" />}
+          </Button>
+          
+          {/* Strength Button */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              if (!hasStrength) {
+                addBlock('strength');
+              } else {
+                const strengthBlock = workoutBlocks.find(b => b.type === 'strength');
+                if (strengthBlock) {
+                  setActiveBlockId(strengthBlock.id);
+                  setShowExerciseModal(true);
+                }
+              }
+            }}
+            className={cn(
+              "h-8 px-3 gap-1.5",
+              hasStrength 
+                ? "bg-blue-500/20 text-blue-400 border border-blue-500/30" 
+                : "hover:bg-blue-500/10 text-blue-400/70 hover:text-blue-400"
+            )}
+          >
+            💪 <span className="hidden sm:inline">Strength</span>
+            {hasStrength && <Check className="w-3 h-3" />}
+          </Button>
+          
+          {/* Circuit Button */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowCircuitDialog(true)}
+            className="h-8 px-3 gap-1.5 hover:bg-orange-500/10 text-orange-400/70 hover:text-orange-400"
+          >
+            ⚡ <span className="hidden sm:inline">Circuit</span>
+            <Plus className="w-3 h-3" />
+          </Button>
+          
+          {/* Quick Add */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setActiveBlockId(null);
+              setShowExerciseModal(true);
+            }}
+            className="h-8 px-3 gap-1.5 hover:bg-gray-700 text-gray-400 ml-auto"
+          >
+            <Plus className="w-3 h-3" />
+            <span className="hidden sm:inline">Exercise</span>
+          </Button>
+        </div>
+      </div>
+
       {/* Rest Timer Overlay */}
       {restTimer.isRunning && restTimer.seconds > 0 && (
         <div className="fixed inset-x-0 top-32 z-40 px-4">
@@ -459,10 +641,167 @@ export default function ActiveWorkoutPage() {
         </div>
       )}
 
-      {/* Exercise List */}
+      {/* Exercise List with Block Sections */}
       <ScrollArea className="flex-1 pb-32">
         <div className="px-4 py-4 space-y-4">
-          {activeWorkout.exercises.map((workoutExercise, index) => {
+          
+          {/* Render workout blocks */}
+          {workoutBlocks.map((block) => {
+            const blockExercises = activeWorkout.exercises.filter(
+              (e: any) => e.blockId === block.id
+            );
+            const colors = {
+              warmup: { bg: 'bg-yellow-500/5', border: 'border-yellow-500/30', text: 'text-yellow-400', accent: 'yellow' },
+              strength: { bg: 'bg-blue-500/5', border: 'border-blue-500/30', text: 'text-blue-400', accent: 'blue' },
+              circuit: { bg: 'bg-orange-500/5', border: 'border-orange-500/30', text: 'text-orange-400', accent: 'orange' },
+            };
+            const style = colors[block.type];
+            
+            return (
+              <div key={block.id} className={cn("rounded-xl border-2", style.border, style.bg)}>
+                {/* Block Header */}
+                <div className={cn("flex items-center justify-between p-3 border-b", style.border)}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">
+                      {block.type === 'warmup' && '🔥'}
+                      {block.type === 'strength' && '💪'}
+                      {block.type === 'circuit' && '⚡'}
+                    </span>
+                    <div>
+                      <h3 className={cn("font-semibold", style.text)}>{block.name}</h3>
+                      <p className="text-xs text-gray-500">
+                        {blockExercises.length} exercise{blockExercises.length !== 1 ? 's' : ''}
+                        {block.type === 'circuit' && ` • ${block.circuitStyle?.toUpperCase()}`}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Circuit Timer */}
+                  {block.type === 'circuit' && (
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        "text-2xl font-mono font-bold",
+                        block.completed ? "text-green-400" : style.text
+                      )}>
+                        {formatTime(block.timerSeconds || 0)}
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => toggleCircuitTimer(block.id)}
+                        className={cn("h-8 w-8", style.text)}
+                      >
+                        {block.timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => resetCircuitTimer(block.id)}
+                        className="h-8 w-8 text-gray-400"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Block Exercises */}
+                <div className="p-2 space-y-2">
+                  {blockExercises.map((workoutExercise: any) => (
+                    <Card key={workoutExercise.id} className="bg-gray-900/50 border-gray-800">
+                      <CardContent className="p-0">
+                        <div className="flex items-center justify-between p-3">
+                          <div>
+                            <p className="font-medium text-white">{workoutExercise.exercise.name}</p>
+                            <p className="text-xs text-gray-500">{workoutExercise.exercise.primaryMuscles?.join(', ')}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="bg-gray-800 text-gray-400">
+                              {workoutExercise.sets.filter((s: any) => s.completed).length}/{workoutExercise.sets.length}
+                            </Badge>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeExercise(workoutExercise.id)}
+                              className="h-8 w-8 text-gray-500 hover:text-red-400"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        {/* Sets */}
+                        <div className="px-3 pb-2 space-y-1">
+                          {workoutExercise.sets.map((set: any, idx: number) => (
+                            <div key={set.id} className="flex items-center gap-2 text-sm">
+                              <span className="w-6 text-gray-500">{idx + 1}</span>
+                              <Input
+                                type="number"
+                                placeholder="kg"
+                                value={set.weight || ''}
+                                onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
+                                className="w-16 h-8 text-center bg-gray-800 border-gray-700"
+                              />
+                              <span className="text-gray-600">×</span>
+                              <Input
+                                type="number"
+                                placeholder="reps"
+                                value={set.reps || ''}
+                                onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
+                                className="w-16 h-8 text-center bg-gray-800 border-gray-700"
+                              />
+                              <Button
+                                size="icon"
+                                variant={set.completed ? "default" : "outline"}
+                                onClick={() => set.completed 
+                                  ? uncompleteSet(workoutExercise.id, set.id)
+                                  : handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise.name)
+                                }
+                                className={cn(
+                                  "h-8 w-8",
+                                  set.completed ? "bg-emerald-500 hover:bg-emerald-600" : "border-gray-700"
+                                )}
+                              >
+                                <Check className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => addSet(workoutExercise.id)}
+                            className="w-full text-xs text-gray-500 hover:text-white"
+                          >
+                            <Plus className="w-3 h-3 mr-1" /> Add Set
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  
+                  {/* Add Exercise to Block */}
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setActiveBlockId(block.id);
+                      setShowExerciseModal(true);
+                    }}
+                    className={cn(
+                      "w-full h-10 border-2 border-dashed rounded-lg",
+                      block.type === 'warmup' && "border-yellow-500/30 text-yellow-400/70 hover:bg-yellow-500/10",
+                      block.type === 'strength' && "border-blue-500/30 text-blue-400/70 hover:bg-blue-500/10",
+                      block.type === 'circuit' && "border-orange-500/30 text-orange-400/70 hover:bg-orange-500/10",
+                    )}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Exercise
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+          
+          {/* Exercises without blocks */}
+          {activeWorkout.exercises.filter((e: any) => !e.blockId).map((workoutExercise, index) => {
             const pb = getPBForExercise(workoutExercise.exerciseId);
             
             // Check if this exercise is in a superset
@@ -702,235 +1041,174 @@ export default function ActiveWorkoutPage() {
             );
           })}
 
-          {/* Add Block Buttons - Colorful like Builder */}
-          <div className="space-y-3 pt-4">
-            <p className="text-xs text-gray-500 text-center font-medium uppercase tracking-wider">Add to Workout</p>
-            
-            {/* Block Type Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                onClick={() => handleSelectBlockType('warmup')}
-                className="h-20 flex-col gap-1 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-2 border-yellow-500/30 hover:border-yellow-400 hover:bg-yellow-500/30 text-yellow-400"
-                variant="outline"
-              >
-                <span className="text-2xl">🔥</span>
-                <span className="font-semibold">Warm-Up</span>
-              </Button>
-              
-              <Button
-                onClick={() => handleSelectBlockType('work')}
-                className="h-20 flex-col gap-1 bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-500/30 hover:border-blue-400 hover:bg-blue-500/30 text-blue-400"
-                variant="outline"
-              >
-                <span className="text-2xl">💪</span>
-                <span className="font-semibold">Main Work</span>
-              </Button>
-              
-              <Button
-                onClick={() => handleSelectBlockType('circuit')}
-                className="h-20 flex-col gap-1 bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-2 border-orange-500/30 hover:border-orange-400 hover:bg-orange-500/30 text-orange-400"
-                variant="outline"
-              >
-                <span className="text-2xl">⚡</span>
-                <span className="font-semibold">Circuit</span>
-              </Button>
-              
-              <Button
-                onClick={() => handleSelectBlockType('cooldown')}
-                className="h-20 flex-col gap-1 bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-2 border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/30 text-purple-400"
-                variant="outline"
-              >
-                <span className="text-2xl">🧘</span>
-                <span className="font-semibold">Cool Down</span>
-              </Button>
-            </div>
-            
-            {/* Quick Add Exercise (no block) */}
-            <Button
-              onClick={() => {
-                setSelectedBlockType(null);
-                setShowExerciseSearch(true);
-              }}
-              variant="outline"
-              className="w-full h-12 border-dashed border-2 border-gray-600 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Quick Add Exercise
-            </Button>
-          </div>
-
-          {/* Add Exercise Dialog */}
-          <Dialog open={showExerciseSearch} onOpenChange={(open) => {
-            setShowExerciseSearch(open);
-            if (!open) {
-              setSelectedBlockType(null);
-              setExerciseSearch('');
-            }
-          }}>
-            <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[85vh]">
-              <DialogHeader>
-                {selectedBlockType ? (
-                  <div className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg mb-2",
-                    selectedBlockType === 'warmup' && "bg-yellow-500/20 border border-yellow-500/30",
-                    selectedBlockType === 'work' && "bg-blue-500/20 border border-blue-500/30",
-                    selectedBlockType === 'circuit' && "bg-orange-500/20 border border-orange-500/30",
-                    selectedBlockType === 'cooldown' && "bg-purple-500/20 border border-purple-500/30",
-                  )}>
-                    <span className="text-2xl">
-                      {selectedBlockType === 'warmup' && '🔥'}
-                      {selectedBlockType === 'work' && '💪'}
-                      {selectedBlockType === 'circuit' && '⚡'}
-                      {selectedBlockType === 'cooldown' && '🧘'}
-                    </span>
-                    <div className="flex-1">
-                      <Input
-                        value={currentBlockName}
-                        onChange={(e) => setCurrentBlockName(e.target.value)}
-                        className={cn(
-                          "bg-transparent border-none text-lg font-semibold p-0 h-auto focus-visible:ring-0",
-                          selectedBlockType === 'warmup' && "text-yellow-400",
-                          selectedBlockType === 'work' && "text-blue-400",
-                          selectedBlockType === 'circuit' && "text-orange-400",
-                          selectedBlockType === 'cooldown' && "text-purple-400",
-                        )}
-                        placeholder="Block name..."
-                      />
-                      <p className="text-xs text-gray-400 capitalize">{selectedBlockType} Block</p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setSelectedBlockType(null)}
-                      className="text-gray-400 hover:text-white"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <DialogTitle className="text-white">Add Exercise</DialogTitle>
-                    <DialogDescription>Search and add exercises to your workout</DialogDescription>
-                  </>
-                )}
-              </DialogHeader>
-              
-              {/* Circuit Settings */}
-              {selectedBlockType === 'circuit' && (
-                <div className="mb-4 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                  <p className="text-sm font-medium text-orange-400 mb-3">Circuit Style</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {[
-                      { id: 'rounds', label: 'Rounds', icon: '🔄' },
-                      { id: 'amrap', label: 'AMRAP', icon: '♾️' },
-                      { id: 'emom', label: 'EMOM', icon: '⏱️' },
-                      { id: 'forTime', label: 'For Time', icon: '🏁' },
-                      { id: 'tabata', label: 'Tabata', icon: '⚡' },
-                    ].map((style) => (
-                      <Button
-                        key={style.id}
-                        type="button"
-                        size="sm"
-                        variant={circuitSettings.style === style.id ? 'default' : 'outline'}
-                        className={circuitSettings.style === style.id 
-                          ? 'bg-orange-500 hover:bg-orange-600 text-white' 
-                          : 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10'}
-                        onClick={() => setCircuitSettings({ ...circuitSettings, style: style.id as any })}
-                      >
-                        <span className="mr-1">{style.icon}</span>
-                        {style.label}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex gap-2">
-                    <div className="flex-1">
-                      <label className="text-xs text-gray-400">Rounds</label>
-                      <Input
-                        type="number"
-                        value={circuitSettings.rounds}
-                        onChange={(e) => setCircuitSettings({ ...circuitSettings, rounds: parseInt(e.target.value) || 1 })}
-                        className="h-8 bg-gray-800 border-gray-700"
-                        min={1}
-                      />
-                    </div>
-                    {circuitSettings.style === 'amrap' && (
-                      <div className="flex-1">
-                        <label className="text-xs text-gray-400">Time Cap</label>
-                        <Input
-                          value={circuitSettings.targetTime}
-                          onChange={(e) => setCircuitSettings({ ...circuitSettings, targetTime: e.target.value })}
-                          className="h-8 bg-gray-800 border-gray-700"
-                          placeholder="10min"
-                        />
-                      </div>
-                    )}
-                    {circuitSettings.style === 'tabata' && (
-                      <>
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-400">Work</label>
-                          <Input
-                            value={circuitSettings.workInterval}
-                            onChange={(e) => setCircuitSettings({ ...circuitSettings, workInterval: e.target.value })}
-                            className="h-8 bg-gray-800 border-gray-700"
-                            placeholder="20s"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-400">Rest</label>
-                          <Input
-                            value={circuitSettings.restInterval}
-                            onChange={(e) => setCircuitSettings({ ...circuitSettings, restInterval: e.target.value })}
-                            className="h-8 bg-gray-800 border-gray-700"
-                            placeholder="10s"
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-              
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
-                  placeholder="Search exercises..."
-                  value={exerciseSearch}
-                  onChange={(e) => setExerciseSearch(e.target.value)}
-                  className="pl-10 bg-gray-800 border-gray-700 text-white"
-                  autoFocus
-                />
-              </div>
-
-              <ScrollArea className="max-h-[40vh]">
-                <div className="space-y-2 pr-4">
-                  {filteredExercises.slice(0, 30).map((exercise) => (
-                    <Button
-                      key={exercise.id}
-                      variant="ghost"
-                      className={cn(
-                        "w-full justify-start h-auto py-3 px-4",
-                        selectedBlockType === 'warmup' && "hover:bg-yellow-500/10",
-                        selectedBlockType === 'work' && "hover:bg-blue-500/10",
-                        selectedBlockType === 'circuit' && "hover:bg-orange-500/10",
-                        selectedBlockType === 'cooldown' && "hover:bg-purple-500/10",
-                        !selectedBlockType && "hover:bg-gray-800",
-                      )}
-                      onClick={() => handleAddExercise(exercise)}
-                    >
-                      <div className="text-left">
-                        <p className="font-medium text-white">{exercise.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {exercise.primaryMuscles.map(m => getMuscleDisplayName(m)).join(', ')} • {exercise.equipment}
-                        </p>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </DialogContent>
-          </Dialog>
         </div>
       </ScrollArea>
+
+      {/* Exercise Modal */}
+      <Dialog open={showExerciseModal} onOpenChange={(open) => {
+        setShowExerciseModal(open);
+        if (!open) {
+          setExerciseSearch('');
+        }
+      }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            {activeBlockId && (() => {
+              const block = workoutBlocks.find(b => b.id === activeBlockId);
+              if (!block) return null;
+              const colors = {
+                warmup: { bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', text: 'text-yellow-400' },
+                strength: { bg: 'bg-blue-500/20', border: 'border-blue-500/30', text: 'text-blue-400' },
+                circuit: { bg: 'bg-orange-500/20', border: 'border-orange-500/30', text: 'text-orange-400' },
+              };
+              const style = colors[block.type];
+              return (
+                <div className={cn("flex items-center gap-3 p-3 rounded-lg", style.bg, style.border, "border")}>
+                  <span className="text-xl">
+                    {block.type === 'warmup' && '🔥'}
+                    {block.type === 'strength' && '💪'}
+                    {block.type === 'circuit' && '⚡'}
+                  </span>
+                  <div>
+                    <p className={cn("font-semibold", style.text)}>{block.name}</p>
+                    <p className="text-xs text-gray-400">
+                      {block.type === 'warmup' && 'Mobility & activation exercises'}
+                      {block.type === 'strength' && 'Compound & resistance exercises'}
+                      {block.type === 'circuit' && `${block.circuitStyle?.toUpperCase()} - ${Math.floor((block.circuitDuration || 0) / 60)}min`}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
+            {!activeBlockId && (
+              <>
+                <DialogTitle className="text-white">Add Exercise</DialogTitle>
+                <DialogDescription>Search and add exercises to your workout</DialogDescription>
+              </>
+            )}
+          </DialogHeader>
+          
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Input
+              placeholder="Search exercises..."
+              value={exerciseSearch}
+              onChange={(e) => setExerciseSearch(e.target.value)}
+              className="pl-10 bg-gray-800 border-gray-700 text-white"
+              autoFocus
+            />
+          </div>
+
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-1 pr-4">
+              {getFilteredExercises().slice(0, 40).map((exercise) => {
+                const block = workoutBlocks.find(b => b.id === activeBlockId);
+                return (
+                  <Button
+                    key={exercise.id}
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start h-auto py-3 px-4",
+                      block?.type === 'warmup' && "hover:bg-yellow-500/10",
+                      block?.type === 'strength' && "hover:bg-blue-500/10",
+                      block?.type === 'circuit' && "hover:bg-orange-500/10",
+                      !block && "hover:bg-gray-800",
+                    )}
+                    onClick={() => handleAddExercise(exercise)}
+                  >
+                    <div className="text-left">
+                      <p className="font-medium text-white">{exercise.name}</p>
+                      <p className="text-xs text-gray-500">
+                        {exercise.primaryMuscles.map(m => getMuscleDisplayName(m)).join(', ')} • {exercise.equipment}
+                      </p>
+                    </div>
+                  </Button>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Circuit Config Dialog */}
+      <Dialog open={showCircuitDialog} onOpenChange={setShowCircuitDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <span>⚡</span> Add Circuit Block
+            </DialogTitle>
+            <DialogDescription>Configure your circuit settings</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">Circuit Type</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'amrap', label: 'AMRAP', desc: 'As many rounds as possible', icon: '♾️' },
+                  { id: 'forTime', label: 'For Time', desc: 'Complete as fast as possible', icon: '🏁' },
+                  { id: 'emom', label: 'EMOM', desc: 'Every minute on the minute', icon: '⏱️' },
+                  { id: 'rounds', label: 'Rounds', desc: 'Fixed number of rounds', icon: '🔄' },
+                ].map((style) => (
+                  <Button
+                    key={style.id}
+                    type="button"
+                    variant={circuitConfig.style === style.id ? 'default' : 'outline'}
+                    className={cn(
+                      "h-auto py-3 flex-col items-start",
+                      circuitConfig.style === style.id 
+                        ? 'bg-orange-500 hover:bg-orange-600 text-white border-orange-500' 
+                        : 'border-gray-700 hover:bg-orange-500/10 hover:border-orange-500/50'
+                    )}
+                    onClick={() => setCircuitConfig({ ...circuitConfig, style: style.id as any })}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <span>{style.icon}</span>
+                      <span className="font-semibold">{style.label}</span>
+                    </div>
+                    <p className="text-xs opacity-70 mt-1">{style.desc}</p>
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {(circuitConfig.style === 'amrap' || circuitConfig.style === 'emom') && (
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Duration (minutes)</label>
+                  <Input
+                    type="number"
+                    value={Math.floor(circuitConfig.duration / 60)}
+                    onChange={(e) => setCircuitConfig({ ...circuitConfig, duration: (parseInt(e.target.value) || 1) * 60 })}
+                    className="bg-gray-800 border-gray-700"
+                    min={1}
+                  />
+                </div>
+              )}
+              {(circuitConfig.style === 'rounds' || circuitConfig.style === 'forTime') && (
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Rounds</label>
+                  <Input
+                    type="number"
+                    value={circuitConfig.rounds}
+                    onChange={(e) => setCircuitConfig({ ...circuitConfig, rounds: parseInt(e.target.value) || 1 })}
+                    className="bg-gray-800 border-gray-700"
+                    min={1}
+                  />
+                </div>
+              )}
+            </div>
+            
+            <Button 
+              onClick={() => addBlock('circuit')}
+              className="w-full bg-orange-500 hover:bg-orange-600"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Circuit
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Finish Dialog */}
       <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
