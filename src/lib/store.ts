@@ -1942,14 +1942,39 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       toggleSessionPaid: (sessionId) => {
+        const session = get().sessions.find(s => s.id === sessionId);
+        if (!session) return;
+        
+        const newPaidStatus = !session.paid;
+        
+        // Update session paid status
         set(state => ({
           sessions: state.sessions.map(s =>
-            s.id === sessionId ? { ...s, paid: !s.paid } : s
+            s.id === sessionId ? { ...s, paid: newPaidStatus } : s
           ),
         }));
-        // Sync to Supabase
-        const session = get().sessions.find(s => s.id === sessionId);
-        if (session) syncTrainerSessionToSupabase(session);
+        
+        // Update paidSessions count in the active package for this client
+        const packages = get().sessionPackages.filter(p => p.clientId === session.clientId && p.status === 'active');
+        const activePackage = packages[0];
+        if (activePackage) {
+          const currentPaid = activePackage.paidSessions || 0;
+          const newPaidCount = newPaidStatus ? currentPaid + 1 : Math.max(0, currentPaid - 1);
+          
+          set(state => ({
+            sessionPackages: state.sessionPackages.map(p =>
+              p.id === activePackage.id ? { ...p, paidSessions: newPaidCount } : p
+            ),
+          }));
+          
+          // Sync package to Supabase
+          const updatedPackage = get().sessionPackages.find(p => p.id === activePackage.id);
+          if (updatedPackage) syncSessionPackageToSupabase(updatedPackage);
+        }
+        
+        // Sync session to Supabase
+        const updatedSession = get().sessions.find(s => s.id === sessionId);
+        if (updatedSession) syncTrainerSessionToSupabase(updatedSession);
       },
 
       // Payments
