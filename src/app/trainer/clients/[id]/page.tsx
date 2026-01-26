@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target } from 'lucide-react';
+import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History } from 'lucide-react';
+import { getClientExerciseHistory } from '@/lib/supabaseSync';
 import { format, differenceInWeeks } from 'date-fns';
 import { VolumeChart, MuscleProgressChart } from '@/components/charts/VolumeChart';
 
@@ -26,6 +27,7 @@ export default function TrainerClientDetailPage() {
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [clientUser, setClientUser] = useState<any>(null);
   const [clientWorkouts, setClientWorkouts] = useState<any[]>([]);
+  const [exerciseHistory, setExerciseHistory] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -64,6 +66,11 @@ export default function TrainerClientDetailPage() {
     } else {
       setClientWorkouts(directClientWorkouts);
     }
+    
+    // Fetch exercise history from Supabase
+    getClientExerciseHistory(clientId).then(history => {
+      setExerciseHistory(history);
+    });
   }, [clientId]);
 
   const clientRecord = clients.find(c => c.clientId === clientId && c.trainerId === user?.id);
@@ -242,6 +249,44 @@ export default function TrainerClientDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {exerciseHistory.length > 0 && (
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  <History className="w-5 h-5 text-purple-400" />
+                  Exercise History
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {exerciseHistory.slice(0, 10).map((ex: any) => (
+                    <div key={ex.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{ex.exercise_name}</p>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <span>{ex.times_used}x used</span>
+                          {ex.block_type && (
+                            <Badge variant="outline" className="text-xs border-gray-700 text-gray-400">
+                              {ex.block_type}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        {ex.best_weight && (
+                          <p className="text-sm text-emerald-400 font-medium">{ex.best_weight}kg</p>
+                        )}
+                        {ex.best_reps && (
+                          <p className="text-xs text-gray-500">{ex.best_reps} reps</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader className="pb-2">
