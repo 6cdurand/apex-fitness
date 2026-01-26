@@ -2398,14 +2398,26 @@ export const useTrainerStore = create<TrainerState>()(
 
       // Update session package (for editing total, price, etc.)
       updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => {
+        // Find the existing package first
+        const existingPackage = get().sessionPackages.find(p => p.id === packageId);
+        if (!existingPackage) {
+          console.error('[Store] Package not found:', packageId);
+          return;
+        }
+        
+        // Create the updated package
+        const updatedPackage: SessionPackage = { ...existingPackage, ...updates };
+        
+        // Update state
         set(state => ({
           sessionPackages: state.sessionPackages.map(p =>
-            p.id === packageId ? { ...p, ...updates } : p
+            p.id === packageId ? updatedPackage : p
           ),
         }));
-        // Sync to Supabase
-        const updated = get().sessionPackages.find(p => p.id === packageId);
-        if (updated) syncSessionPackageToSupabase(updated);
+        
+        // Sync to Supabase immediately with the updated data
+        console.log('[Store] Updating package:', packageId, updates);
+        syncSessionPackageToSupabase(updatedPackage);
       },
     }),
     {

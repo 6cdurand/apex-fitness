@@ -509,7 +509,7 @@ export default function ClientDetailPage() {
                     /* Continuous package display */
                     <div className="grid grid-cols-3 gap-3 text-center">
                       <div className="bg-gray-900/50 rounded-lg p-2">
-                        <p className="text-2xl font-bold text-blue-400">{completedWorkouts}</p>
+                        <p className="text-2xl font-bold text-blue-400">{activePackage.usedSessions || 0}</p>
                         <p className="text-xs text-gray-400">Sessions Done</p>
                       </div>
                       <div className="bg-gray-900/50 rounded-lg p-2">
@@ -517,7 +517,7 @@ export default function ClientDetailPage() {
                         <p className="text-xs text-gray-400">Per Session</p>
                       </div>
                       <div className="bg-gray-900/50 rounded-lg p-2">
-                        <p className="text-2xl font-bold text-emerald-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
+                        <p className="text-2xl font-bold text-emerald-400">${((activePackage.usedSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
                         <p className="text-xs text-gray-400">Total Value</p>
                       </div>
                     </div>
@@ -526,7 +526,7 @@ export default function ClientDetailPage() {
                     <>
                       <div className="grid grid-cols-3 gap-3 text-center">
                         <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-emerald-400">{completedWorkouts}/{activePackage.totalSessions}</p>
+                          <p className="text-2xl font-bold text-emerald-400">{activePackage.usedSessions || 0}/{activePackage.totalSessions}</p>
                           <p className="text-xs text-gray-400">Sessions Used</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
@@ -534,7 +534,7 @@ export default function ClientDetailPage() {
                           <p className="text-xs text-gray-400">Per Session</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-blue-400">${(completedWorkouts * activePackage.pricePerSession).toFixed(0)}</p>
+                          <p className="text-2xl font-bold text-blue-400">${((activePackage.usedSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Total Value</p>
                         </div>
                       </div>
@@ -542,13 +542,13 @@ export default function ClientDetailPage() {
                       {/* Progress bar - only for fixed packages */}
                       <div className="mt-3">
                         <div className="flex justify-between text-xs text-gray-400 mb-1">
-                          <span>{completedWorkouts} completed</span>
-                          <span>{Math.max(0, activePackage.totalSessions - completedWorkouts)} remaining</span>
+                          <span>{activePackage.usedSessions || 0} completed</span>
+                          <span>{activePackage.remainingSessions || 0} remaining</span>
                         </div>
                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
-                            style={{ width: `${Math.min(100, (completedWorkouts / activePackage.totalSessions) * 100)}%` }}
+                            style={{ width: `${Math.min(100, ((activePackage.usedSessions || 0) / activePackage.totalSessions) * 100)}%` }}
                           />
                         </div>
                       </div>
