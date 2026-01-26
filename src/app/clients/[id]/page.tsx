@@ -178,6 +178,7 @@ export default function ClientDetailPage() {
   const [showCreatePackage, setShowCreatePackage] = useState(false);
   const [editPackageTotal, setEditPackageTotal] = useState('');
   const [editPackageUsed, setEditPackageUsed] = useState('');
+  const [editPackagePaid, setEditPackagePaid] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
   
   // Edit goals/notes state
@@ -351,6 +352,7 @@ export default function ClientDetailPage() {
         trainerId: user?.id || '',
         name: `${sessionsCount} Session Package`,
         totalSessions: sessionsCount,
+        paidSessions: sessionsCount, // All sessions paid upfront
         priceTotal: amount,
         pricePerSession: amount / sessionsCount,
         purchaseDate: new Date().toISOString(),
@@ -499,6 +501,7 @@ export default function ClientDetailPage() {
                       onClick={() => {
                         setEditPackageTotal(activePackage.totalSessions.toString());
                         setEditPackageUsed((activePackage.usedSessions || 0).toString());
+                        setEditPackagePaid((activePackage.paidSessions || 0).toString());
                         setEditPackagePrice(activePackage.pricePerSession.toString());
                         setShowEditPackage(true);
                       }}
@@ -509,20 +512,36 @@ export default function ClientDetailPage() {
                   
                   {activePackage.isContinuous ? (
                     /* Continuous package display */
-                    <div className="grid grid-cols-3 gap-3 text-center">
-                      <div className="bg-gray-900/50 rounded-lg p-2">
-                        <p className="text-2xl font-bold text-blue-400">{activePackage.usedSessions || 0}</p>
-                        <p className="text-xs text-gray-400">Sessions Done</p>
+                    <>
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-blue-400">{activePackage.usedSessions || 0}</p>
+                          <p className="text-xs text-gray-400">Sessions Done</p>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-emerald-400">{activePackage.paidSessions || 0}</p>
+                          <p className="text-xs text-gray-400">Sessions Paid</p>
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                          <p className="text-xs text-gray-400">Per Session</p>
+                        </div>
                       </div>
-                      <div className="bg-gray-900/50 rounded-lg p-2">
-                        <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
-                        <p className="text-xs text-gray-400">Per Session</p>
+                      
+                      {/* Payment status */}
+                      <div className="mt-3 grid grid-cols-2 gap-3">
+                        <div className="p-2 bg-emerald-500/10 rounded-lg text-center">
+                          <p className="text-lg font-bold text-emerald-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
+                          <p className="text-xs text-gray-400">Total Paid</p>
+                        </div>
+                        <div className={`p-2 rounded-lg text-center ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'bg-amber-500/10' : 'bg-gray-800'}`}>
+                          <p className={`text-lg font-bold ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'text-amber-400' : 'text-gray-400'}`}>
+                            ${(Math.max(0, (activePackage.usedSessions || 0) - (activePackage.paidSessions || 0)) * activePackage.pricePerSession).toFixed(0)}
+                          </p>
+                          <p className="text-xs text-gray-400">Outstanding</p>
+                        </div>
                       </div>
-                      <div className="bg-gray-900/50 rounded-lg p-2">
-                        <p className="text-2xl font-bold text-emerald-400">${((activePackage.usedSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
-                        <p className="text-xs text-gray-400">Total Value</p>
-                      </div>
-                    </div>
+                    </>
                   ) : (
                     /* Fixed package display */
                     <>
@@ -536,8 +555,8 @@ export default function ClientDetailPage() {
                           <p className="text-xs text-gray-400">Per Session</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-blue-400">${((activePackage.usedSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
-                          <p className="text-xs text-gray-400">Total Value</p>
+                          <p className="text-2xl font-bold text-blue-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
+                          <p className="text-xs text-gray-400">Total Paid</p>
                         </div>
                       </div>
                       
@@ -554,6 +573,18 @@ export default function ClientDetailPage() {
                           />
                         </div>
                       </div>
+                      
+                      {/* Outstanding payment warning */}
+                      {(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) && (
+                        <div className="mt-2 p-2 bg-amber-500/10 rounded-lg flex justify-between items-center">
+                          <span className="text-xs text-amber-400">
+                            {(activePackage.usedSessions || 0) - (activePackage.paidSessions || 0)} unpaid sessions
+                          </span>
+                          <span className="text-sm font-bold text-amber-400">
+                            ${((activePackage.usedSessions || 0) - (activePackage.paidSessions || 0)) * activePackage.pricePerSession}
+                          </span>
+                        </div>
+                      )}
                     </>
                   )}
                 </CardContent>
@@ -672,6 +703,7 @@ export default function ClientDetailPage() {
                           trainerId: user?.id || '',
                           name: 'Continuous Training',
                           totalSessions: -1,
+                          paidSessions: 0,
                           priceTotal: 0,
                           pricePerSession: price,
                           purchaseDate: new Date().toISOString(),
@@ -691,6 +723,7 @@ export default function ClientDetailPage() {
                           trainerId: user?.id || '',
                           name: `${total} Session Package`,
                           totalSessions: total,
+                          paidSessions: 0,
                           priceTotal: total * price,
                           pricePerSession: price,
                           purchaseDate: new Date().toISOString(),
@@ -714,12 +747,15 @@ export default function ClientDetailPage() {
             <Dialog open={showEditPackage} onOpenChange={setShowEditPackage}>
               <DialogContent className="bg-gray-900 border-gray-800">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Edit Session Package</DialogTitle>
+                  <DialogTitle className="text-white">
+                    {activePackage?.isContinuous ? 'Edit Continuous Training' : 'Edit Session Package'}
+                  </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* For fixed packages: show total sessions */}
+                  {!activePackage?.isContinuous && (
                     <div>
-                      <Label className="text-gray-300">Total Sessions</Label>
+                      <Label className="text-gray-300">Total Sessions in Package</Label>
                       <Input
                         type="number"
                         value={editPackageTotal}
@@ -728,8 +764,11 @@ export default function ClientDetailPage() {
                         placeholder="e.g., 10"
                       />
                     </div>
+                  )}
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-gray-300">Sessions Used</Label>
+                      <Label className="text-gray-300">Sessions Completed</Label>
                       <Input
                         type="number"
                         value={editPackageUsed}
@@ -738,7 +777,18 @@ export default function ClientDetailPage() {
                         placeholder="e.g., 5"
                       />
                     </div>
+                    <div>
+                      <Label className="text-gray-300">Sessions Paid</Label>
+                      <Input
+                        type="number"
+                        value={editPackagePaid}
+                        onChange={(e) => setEditPackagePaid(e.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        placeholder="e.g., 5"
+                      />
+                    </div>
                   </div>
+                  
                   <div>
                     <Label className="text-gray-300">Price Per Session ($)</Label>
                     <Input
@@ -749,38 +799,57 @@ export default function ClientDetailPage() {
                       placeholder="e.g., 50"
                     />
                   </div>
-                  {editPackageTotal && editPackagePrice && (
-                    <div className="p-3 bg-gray-800 rounded-lg space-y-2">
+                  
+                  {/* Summary */}
+                  <div className="p-3 bg-gray-800 rounded-lg space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Total Earned:</span>
+                      <span className="text-emerald-400 font-bold">
+                        ${((parseInt(editPackageUsed || '0')) * parseFloat(editPackagePrice || '0')).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-400">Total Paid:</span>
+                      <span className="text-blue-400 font-bold">
+                        ${((parseInt(editPackagePaid || '0')) * parseFloat(editPackagePrice || '0')).toFixed(2)}
+                      </span>
+                    </div>
+                    {parseInt(editPackageUsed || '0') > parseInt(editPackagePaid || '0') && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Package Total:</span>
-                        <span className="text-emerald-400 font-bold">
-                          ${(parseInt(editPackageTotal) * parseFloat(editPackagePrice)).toFixed(2)}
+                        <span className="text-amber-400">Outstanding:</span>
+                        <span className="text-amber-400 font-bold">
+                          ${((parseInt(editPackageUsed || '0') - parseInt(editPackagePaid || '0')) * parseFloat(editPackagePrice || '0')).toFixed(2)}
                         </span>
                       </div>
-                      <div className="flex justify-between text-sm">
+                    )}
+                    {!activePackage?.isContinuous && (
+                      <div className="flex justify-between text-sm border-t border-gray-700 pt-2 mt-2">
                         <span className="text-gray-400">Sessions Remaining:</span>
-                        <span className="text-blue-400 font-bold">
+                        <span className="text-white font-bold">
                           {Math.max(0, parseInt(editPackageTotal || '0') - parseInt(editPackageUsed || '0'))}
                         </span>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  
                   <Button
                     className="w-full bg-emerald-500 hover:bg-emerald-600"
                     onClick={() => {
-                      if (activePackage && editPackageTotal && editPackagePrice) {
-                        const newTotal = parseInt(editPackageTotal);
+                      if (activePackage && editPackagePrice) {
+                        const newTotal = activePackage.isContinuous ? -1 : parseInt(editPackageTotal || '0');
                         const newUsed = parseInt(editPackageUsed || '0');
+                        const newPaid = parseInt(editPackagePaid || '0');
                         const newPrice = parseFloat(editPackagePrice);
-                        const newRemaining = Math.max(0, newTotal - newUsed);
+                        const newRemaining = activePackage.isContinuous ? -1 : Math.max(0, newTotal - newUsed);
                         
                         updateSessionPackage(activePackage.id, {
                           totalSessions: newTotal,
                           usedSessions: newUsed,
+                          paidSessions: newPaid,
                           pricePerSession: newPrice,
-                          priceTotal: newTotal * newPrice,
+                          priceTotal: newUsed * newPrice,
                           remainingSessions: newRemaining,
-                          status: newRemaining > 0 ? 'active' : 'completed',
+                          status: activePackage.isContinuous ? 'active' : (newRemaining > 0 ? 'active' : 'completed'),
                         });
                         setShowEditPackage(false);
                         toast.success('Package updated');

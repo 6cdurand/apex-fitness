@@ -94,6 +94,7 @@ export default function ActiveWorkoutPage() {
   const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
+  const [sessionPaid, setSessionPaid] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
   
   // Block system state
@@ -513,9 +514,24 @@ export default function ActiveWorkoutPage() {
     if (workoutNotes.trim() && completedWorkoutData?.id) {
       useWorkoutStore.getState().updateWorkoutNotes(completedWorkoutData.id, workoutNotes.trim());
     }
+    
+    // Update session paid status and package if PT session
+    if (completedWorkoutData?.isPTSession && completedWorkoutData?.clientId && sessionPaid) {
+      const { getPackagesForClient, updateSessionPackage } = useTrainerStore.getState();
+      const packages = getPackagesForClient(completedWorkoutData.clientId);
+      const activePackage = packages.find(p => p.status === 'active');
+      if (activePackage) {
+        // Increment paid sessions
+        updateSessionPackage(activePackage.id, {
+          paidSessions: (activePackage.paidSessions || 0) + 1,
+        });
+      }
+    }
+    
     setShowSummary(false);
     setCompletedWorkoutData(null);
     setWorkoutNotes('');
+    setSessionPaid(false);
     router.push('/workout');
   };
 
@@ -1808,6 +1824,24 @@ export default function ActiveWorkoutPage() {
                     </Badge>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Session Paid Checkbox - Only for PT sessions */}
+            {completedWorkoutData?.isPTSession && (
+              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sessionPaid}
+                    onChange={(e) => setSessionPaid(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+                  />
+                  <div className="text-left">
+                    <span className="text-white font-medium">Session Paid</span>
+                    <p className="text-xs text-gray-400">Check if client has paid for this session</p>
+                  </div>
+                </label>
               </div>
             )}
 

@@ -179,6 +179,7 @@ CREATE TABLE IF NOT EXISTS session_packages (
   name TEXT,
   total_sessions INTEGER NOT NULL,  -- -1 for continuous/unlimited
   used_sessions INTEGER DEFAULT 0,
+  paid_sessions INTEGER DEFAULT 0,  -- How many sessions have been paid for
   remaining_sessions INTEGER DEFAULT 0,
   price_total NUMERIC DEFAULT 0,
   price_per_session NUMERIC,
@@ -199,6 +200,7 @@ CREATE TABLE IF NOT EXISTS session_packages (
 -- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS purchase_date TIMESTAMPTZ DEFAULT NOW();
 -- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS payment_id TEXT;
 -- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS is_continuous BOOLEAN DEFAULT false;
+-- ALTER TABLE session_packages ADD COLUMN IF NOT EXISTS paid_sessions INTEGER DEFAULT 0;
 -- ALTER TABLE session_packages RENAME COLUMN price TO price_per_session;
 -- ALTER TABLE session_packages RENAME COLUMN start_date TO purchase_date;
 

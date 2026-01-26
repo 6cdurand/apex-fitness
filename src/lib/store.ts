@@ -1594,6 +1594,7 @@ export const useTrainerStore = create<TrainerState>()(
               name: `${client.sessionsCovered} Session Package`,
               totalSessions: client.sessionsCovered,
               usedSessions: sessionsUsed,
+              paidSessions: client.sessionsCovered, // Assume all sessions paid
               remainingSessions: client.sessionsRemaining || 0,
               priceTotal: client.totalPaid || 0,
               pricePerSession: client.totalPaid ? Math.round(client.totalPaid / client.sessionsCovered) : 50,
@@ -2250,6 +2251,7 @@ export const useTrainerStore = create<TrainerState>()(
             name: 'Imported Package',
             totalSessions: sessionsLeft,
             usedSessions: 0,
+            paidSessions: sessionsLeft, // Assume all sessions paid
             remainingSessions: sessionsLeft,
             priceTotal: totalPaid > 0 ? totalPaid : 0,
             pricePerSession: totalPaid > 0 && sessionsLeft > 0 ? totalPaid / sessionsLeft : 0,

@@ -76,6 +76,7 @@ export default function TrainerClientDetailPage() {
       clientId,
       name: 'Imported Package',
       totalSessions: importForm.totalSessions,
+      paidSessions: importForm.totalSessions, // Assume all imported sessions are paid
       priceTotal: importForm.priceTotal,
       pricePerSession: importForm.priceTotal / importForm.totalSessions,
       purchaseDate: importForm.startDate,

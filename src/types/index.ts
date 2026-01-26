@@ -463,6 +463,7 @@ export interface SessionPackage {
   name: string;
   totalSessions: number;  // -1 for unlimited/continuous
   usedSessions: number;
+  paidSessions: number;  // How many sessions have been paid for
   remainingSessions: number;  // -1 for unlimited
   priceTotal: number;
   pricePerSession: number;
