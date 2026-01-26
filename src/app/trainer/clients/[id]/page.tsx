@@ -10,8 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History } from 'lucide-react';
+import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History, DollarSign, Edit2, Package, Check, X } from 'lucide-react';
 import { getClientExerciseHistory } from '@/lib/supabaseSync';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, differenceInWeeks } from 'date-fns';
 import { VolumeChart, MuscleProgressChart } from '@/components/charts/VolumeChart';
 
@@ -21,13 +23,34 @@ export default function TrainerClientDetailPage() {
   const clientId = params.id as string;
 
   const { user, isAuthenticated } = useAuthStore();
-  const { clients, calendarEvents } = useTrainerStore();
+  const { 
+    clients, 
+    calendarEvents, 
+    sessions, 
+    payments, 
+    sessionPackages,
+    updateSession,
+    updateSessionPackage,
+    addPayment,
+    getSessionsForClient,
+    getPackagesForClient,
+  } = useTrainerStore();
   const { getOrCreateConversation } = useMessageStore();
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [clientUser, setClientUser] = useState<any>(null);
   const [clientWorkouts, setClientWorkouts] = useState<any[]>([]);
   const [exerciseHistory, setExerciseHistory] = useState<any[]>([]);
+  
+  // Edit states
+  const [showEditPackage, setShowEditPackage] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<any>(null);
+  const [packageForm, setPackageForm] = useState({
+    totalSessions: 0,
+    usedSessions: 0,
+    priceTotal: 0,
+    pricePerSession: 0,
+  });
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -288,6 +311,115 @@ export default function TrainerClientDetailPage() {
             </Card>
           )}
 
+          {/* Session Packages */}
+          <Card className="bg-gray-900 border-gray-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                <Package className="w-5 h-5 text-blue-400" />
+                Session Packages
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {getPackagesForClient(clientId).length === 0 ? (
+                <p className="text-sm text-gray-500">No session packages for this client.</p>
+              ) : (
+                <div className="space-y-3">
+                  {getPackagesForClient(clientId).map((pkg: any) => (
+                    <div key={pkg.id} className="p-3 bg-gray-800/60 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="text-sm font-medium text-white">{pkg.name || 'Session Package'}</p>
+                          <p className="text-xs text-gray-500">
+                            {pkg.usedSessions}/{pkg.totalSessions} sessions used
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={pkg.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}>
+                            {pkg.status}
+                          </Badge>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingPackage(pkg);
+                              setPackageForm({
+                                totalSessions: pkg.totalSessions,
+                                usedSessions: pkg.usedSessions,
+                                priceTotal: pkg.priceTotal || 0,
+                                pricePerSession: pkg.pricePerSession || 0,
+                              });
+                              setShowEditPackage(true);
+                            }}
+                            className="h-8 w-8 text-gray-400 hover:text-white"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div className="p-2 bg-gray-900 rounded-lg">
+                          <p className="text-gray-500">Total Price</p>
+                          <p className="text-white font-medium">${pkg.priceTotal || 0}</p>
+                        </div>
+                        <div className="p-2 bg-gray-900 rounded-lg">
+                          <p className="text-gray-500">Per Session</p>
+                          <p className="text-white font-medium">${pkg.pricePerSession || 0}</p>
+                        </div>
+                        <div className="p-2 bg-gray-900 rounded-lg">
+                          <p className="text-gray-500">Remaining</p>
+                          <p className="text-emerald-400 font-medium">{pkg.remainingSessions} sessions</p>
+                        </div>
+                        <div className="p-2 bg-gray-900 rounded-lg">
+                          <p className="text-gray-500">Purchased</p>
+                          <p className="text-white font-medium">{pkg.purchaseDate ? format(new Date(pkg.purchaseDate), 'MMM d, yyyy') : 'N/A'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Client Sessions */}
+          <Card className="bg-gray-900 border-gray-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-white text-lg flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-green-400" />
+                Sessions & Payments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {getSessionsForClient(clientId).length === 0 ? (
+                <p className="text-sm text-gray-500">No sessions recorded yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {getSessionsForClient(clientId).slice(0, 10).map((session: any) => (
+                    <div key={session.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
+                      <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                        <Clock className="w-5 h-5 text-gray-300" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{session.type === 'pt_session' ? 'PT Session' : session.type}</p>
+                        <p className="text-xs text-gray-500">{format(new Date(session.date), 'MMM d, yyyy')}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={session.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}>
+                          {session.status}
+                        </Badge>
+                        {session.paid ? (
+                          <Badge className="bg-green-500/20 text-green-400">Paid</Badge>
+                        ) : (
+                          <Badge className="bg-amber-500/20 text-amber-400">Unpaid</Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-white text-lg flex items-center gap-2">
@@ -320,6 +452,89 @@ export default function TrainerClientDetailPage() {
           </Card>
         </div>
       </ScrollArea>
+
+      {/* Edit Package Dialog */}
+      <Dialog open={showEditPackage} onOpenChange={setShowEditPackage}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Session Package</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Total Sessions</label>
+                <Input
+                  type="number"
+                  value={packageForm.totalSessions}
+                  onChange={(e) => setPackageForm(prev => ({ 
+                    ...prev, 
+                    totalSessions: parseInt(e.target.value) || 0,
+                    pricePerSession: prev.priceTotal / (parseInt(e.target.value) || 1)
+                  }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Sessions Used</label>
+                <Input
+                  type="number"
+                  value={packageForm.usedSessions}
+                  onChange={(e) => setPackageForm(prev => ({ ...prev, usedSessions: parseInt(e.target.value) || 0 }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Total Price ($)</label>
+                <Input
+                  type="number"
+                  value={packageForm.priceTotal}
+                  onChange={(e) => setPackageForm(prev => ({ 
+                    ...prev, 
+                    priceTotal: parseFloat(e.target.value) || 0,
+                    pricePerSession: (parseFloat(e.target.value) || 0) / (prev.totalSessions || 1)
+                  }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Per Session ($)</label>
+                <Input
+                  type="number"
+                  value={packageForm.pricePerSession.toFixed(2)}
+                  disabled
+                  className="bg-gray-800 border-gray-700 text-gray-500"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowEditPackage(false)}
+                className="flex-1 border-gray-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (editingPackage) {
+                    updateSessionPackage(editingPackage.id, {
+                      totalSessions: packageForm.totalSessions,
+                      usedSessions: packageForm.usedSessions,
+                      remainingSessions: packageForm.totalSessions - packageForm.usedSessions,
+                      priceTotal: packageForm.priceTotal,
+                      pricePerSession: packageForm.pricePerSession,
+                    });
+                    setShowEditPackage(false);
+                  }
+                }}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
