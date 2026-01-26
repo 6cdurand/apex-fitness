@@ -481,10 +481,13 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetUserId = getActiveUserId();
         const pb = personalBests.find(p => p.exerciseId === exercise.id && p.userId === targetUserId);
         
+        // Extract block metadata if present
+        const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
+        
         const workoutExercise: WorkoutExercise = {
           id: uuidv4(),
           exerciseId: exercise.id,
-          exercise,
+          exercise: exerciseData.name ? exerciseData : exercise,
           sets: [{
             id: uuidv4(),
             setNumber: 1,
@@ -494,7 +497,11 @@ export const useWorkoutStore = create<WorkoutState>()(
             previousReps: pb?.bestReps,
           }],
           restTimerSeconds: 90,
-        };
+          // Preserve block metadata
+          ...(blockId && { blockId }),
+          ...(blockName && { blockName }),
+          ...(blockType && { blockType }),
+        } as any;
 
         set({
           activeWorkout: {

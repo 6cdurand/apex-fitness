@@ -113,6 +113,7 @@ export default function ActiveWorkoutPage() {
   });
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
+  const [circuitExerciseSelection, setCircuitExerciseSelection] = useState<Exercise[]>([]);
   
   // Check if blocks exist
   const hasWarmup = workoutBlocks.some(b => b.type === 'warmup');
@@ -192,6 +193,18 @@ export default function ActiveWorkoutPage() {
 
   const handleAddExercise = (exercise: Exercise) => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
+    
+    // For circuits, use multi-select mode
+    if (block?.type === 'circuit') {
+      const isSelected = circuitExerciseSelection.some(e => e.id === exercise.id);
+      if (isSelected) {
+        setCircuitExerciseSelection(circuitExerciseSelection.filter(e => e.id !== exercise.id));
+      } else {
+        setCircuitExerciseSelection([...circuitExerciseSelection, exercise]);
+      }
+      return;
+    }
+    
     const blockMetadata = block ? {
       blockName: block.name,
       blockType: block.type,
@@ -202,6 +215,25 @@ export default function ActiveWorkoutPage() {
     setShowExerciseModal(false);
     setExerciseSearch('');
     toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
+  };
+  
+  const handleSaveCircuitExercises = () => {
+    const block = workoutBlocks.find(b => b.id === activeBlockId);
+    if (!block) return;
+    
+    circuitExerciseSelection.forEach(exercise => {
+      addExercise({
+        ...exercise,
+        blockName: block.name,
+        blockType: block.type,
+        blockId: block.id,
+      } as any);
+    });
+    
+    setCircuitExerciseSelection([]);
+    setShowExerciseModal(false);
+    setExerciseSearch('');
+    toast.success(`Added ${circuitExerciseSelection.length} exercises to ${block.name}`);
   };
   
   const addBlock = (type: 'warmup' | 'strength' | 'circuit') => {
@@ -1049,9 +1081,10 @@ export default function ActiveWorkoutPage() {
         setShowExerciseModal(open);
         if (!open) {
           setExerciseSearch('');
+          setCircuitExerciseSelection([]);
         }
       }}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[85vh]">
           <DialogHeader>
             {activeBlockId && (() => {
               const block = workoutBlocks.find(b => b.id === activeBlockId);
@@ -1069,26 +1102,47 @@ export default function ActiveWorkoutPage() {
                     {block.type === 'strength' && '💪'}
                     {block.type === 'circuit' && '⚡'}
                   </span>
-                  <div>
+                  <div className="flex-1">
                     <p className={cn("font-semibold", style.text)}>{block.name}</p>
                     <p className="text-xs text-gray-400">
-                      {block.type === 'warmup' && 'Mobility & activation exercises'}
-                      {block.type === 'strength' && 'Compound & resistance exercises'}
-                      {block.type === 'circuit' && `${block.circuitStyle?.toUpperCase()} - ${Math.floor((block.circuitDuration || 0) / 60)}min`}
+                      {block.type === 'warmup' && 'Select warm-up & mobility exercises'}
+                      {block.type === 'strength' && 'Select strength & resistance exercises'}
+                      {block.type === 'circuit' && `Select exercises for ${block.circuitStyle?.toUpperCase()} circuit`}
                     </p>
                   </div>
+                  {block.type === 'circuit' && circuitExerciseSelection.length > 0 && (
+                    <Badge className="bg-orange-500">{circuitExerciseSelection.length} selected</Badge>
+                  )}
                 </div>
               );
             })()}
             {!activeBlockId && (
               <>
                 <DialogTitle className="text-white">Add Exercise</DialogTitle>
-                <DialogDescription>Search and add exercises to your workout</DialogDescription>
+                <DialogDescription>Search and add any exercise to your workout</DialogDescription>
               </>
             )}
           </DialogHeader>
           
-          <div className="relative mb-4">
+          {/* Exercise type indicator */}
+          {activeBlockId && (() => {
+            const block = workoutBlocks.find(b => b.id === activeBlockId);
+            if (!block) return null;
+            return (
+              <div className={cn(
+                "text-xs px-3 py-1.5 rounded-md mb-2",
+                block.type === 'warmup' && "bg-yellow-500/10 text-yellow-400",
+                block.type === 'strength' && "bg-blue-500/10 text-blue-400",
+                block.type === 'circuit' && "bg-orange-500/10 text-orange-400",
+              )}>
+                {block.type === 'warmup' && '🔥 Showing: Bands, stretches, bodyweight, mobility exercises'}
+                {block.type === 'strength' && '💪 Showing: Barbell, dumbbell, cable, machine exercises'}
+                {block.type === 'circuit' && '⚡ Showing: All exercises - tap to select multiple, then save'}
+              </div>
+            );
+          })()}
+          
+          <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
             <Input
               placeholder="Search exercises..."
@@ -1099,10 +1153,11 @@ export default function ActiveWorkoutPage() {
             />
           </div>
 
-          <ScrollArea className="max-h-[50vh]">
+          <ScrollArea className="max-h-[45vh]">
             <div className="space-y-1 pr-4">
-              {getFilteredExercises().slice(0, 40).map((exercise) => {
+              {getFilteredExercises().slice(0, 50).map((exercise) => {
                 const block = workoutBlocks.find(b => b.id === activeBlockId);
+                const isSelected = circuitExerciseSelection.some(e => e.id === exercise.id);
                 return (
                   <Button
                     key={exercise.id}
@@ -1112,11 +1167,20 @@ export default function ActiveWorkoutPage() {
                       block?.type === 'warmup' && "hover:bg-yellow-500/10",
                       block?.type === 'strength' && "hover:bg-blue-500/10",
                       block?.type === 'circuit' && "hover:bg-orange-500/10",
+                      block?.type === 'circuit' && isSelected && "bg-orange-500/20 border border-orange-500/50",
                       !block && "hover:bg-gray-800",
                     )}
                     onClick={() => handleAddExercise(exercise)}
                   >
-                    <div className="text-left">
+                    {block?.type === 'circuit' && (
+                      <div className={cn(
+                        "w-5 h-5 rounded border-2 mr-3 flex items-center justify-center",
+                        isSelected ? "bg-orange-500 border-orange-500" : "border-gray-600"
+                      )}>
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                    )}
+                    <div className="text-left flex-1">
                       <p className="font-medium text-white">{exercise.name}</p>
                       <p className="text-xs text-gray-500">
                         {exercise.primaryMuscles.map(m => getMuscleDisplayName(m)).join(', ')} • {exercise.equipment}
@@ -1127,6 +1191,25 @@ export default function ActiveWorkoutPage() {
               })}
             </div>
           </ScrollArea>
+          
+          {/* Circuit Save Button */}
+          {(() => {
+            const block = workoutBlocks.find(b => b.id === activeBlockId);
+            if (block?.type === 'circuit' && circuitExerciseSelection.length > 0) {
+              return (
+                <div className="pt-3 border-t border-gray-800">
+                  <Button
+                    onClick={handleSaveCircuitExercises}
+                    className="w-full bg-orange-500 hover:bg-orange-600"
+                  >
+                    <Check className="w-4 h-4 mr-2" />
+                    Add {circuitExerciseSelection.length} Exercise{circuitExerciseSelection.length > 1 ? 's' : ''} to Circuit
+                  </Button>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </DialogContent>
       </Dialog>
 
