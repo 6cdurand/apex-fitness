@@ -32,7 +32,8 @@ import {
   User,
   Users,
   Settings,
-  StickyNote
+  StickyNote,
+  History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -50,6 +51,7 @@ export default function ActiveWorkoutPage() {
     activeWorkout,
     workoutTimer,
     restTimer,
+    workoutHistory,
     addExercise,
     removeExercise,
     updateExercise,
@@ -161,18 +163,22 @@ export default function ActiveWorkoutPage() {
   // Get exercises based on active block type
   const getFilteredExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
-    if (!block) return exerciseLibrary;
     
-    let filtered = block.type === 'warmup' ? warmupExercises : 
-                   block.type === 'strength' ? strengthExercises : 
-                   exerciseLibrary;
-    
+    // When searching, search entire library first
     if (exerciseSearch) {
-      filtered = filtered.filter(e => 
-        e.name.toLowerCase().includes(exerciseSearch.toLowerCase())
+      return exerciseLibrary.filter(e => 
+        e.name.toLowerCase().includes(exerciseSearch.toLowerCase()) ||
+        e.primaryMuscles.some(m => m.toLowerCase().includes(exerciseSearch.toLowerCase())) ||
+        e.equipment.toLowerCase().includes(exerciseSearch.toLowerCase())
       );
     }
-    return filtered;
+    
+    // When not searching, filter by block type
+    if (!block) return exerciseLibrary;
+    
+    return block.type === 'warmup' ? warmupExercises : 
+           block.type === 'strength' ? strengthExercises : 
+           exerciseLibrary;
   };
 
   const handleAddExercise = (exercise: Exercise) => {
@@ -702,63 +708,46 @@ export default function ActiveWorkoutPage() {
         </div>
       </div>
 
-      {/* Rest Timer Overlay - Hevy/Strong style */}
+      {/* Rest Timer - Small inline banner at top */}
       {restTimer.isRunning && restTimer.seconds > 0 && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
-          <div className="w-full max-w-sm mx-4">
-            <div className="bg-gradient-to-b from-blue-600 to-blue-700 rounded-2xl p-6 shadow-2xl">
-              <div className="text-center mb-6">
-                <Timer className="w-10 h-10 text-white/80 mx-auto mb-2" />
-                <p className="text-white/80 text-sm font-medium uppercase tracking-wide">Rest Timer</p>
-              </div>
-              
-              {/* Big Timer Display */}
-              <div className="text-center mb-8">
-                <p className="text-7xl font-bold text-white font-mono tabular-nums">
-                  {formatTime(restTimer.seconds)}
-                </p>
-              </div>
-              
-              {/* Time Adjustment Buttons */}
-              <div className="flex items-center justify-center gap-4 mb-6">
-                <Button
-                  size="lg"
-                  variant="secondary"
-                  onClick={() => {
-                    const newTime = Math.max(0, restTimer.seconds - 15);
-                    if (newTime === 0) {
-                      resetRestTimer();
-                    } else {
-                      useWorkoutStore.getState().adjustRestTimer(-15);
-                    }
-                  }}
-                  className="bg-white/20 hover:bg-white/30 text-white h-14 w-14 rounded-full p-0"
-                >
-                  <span className="text-lg font-bold">-15</span>
-                </Button>
-                
-                <div className="w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
-                    <Timer className="w-8 h-8 text-white animate-pulse" />
-                  </div>
-                </div>
-                
-                <Button
-                  size="lg"
-                  variant="secondary"
-                  onClick={() => useWorkoutStore.getState().adjustRestTimer(15)}
-                  className="bg-white/20 hover:bg-white/30 text-white h-14 w-14 rounded-full p-0"
-                >
-                  <span className="text-lg font-bold">+15</span>
-                </Button>
-              </div>
-              
-              {/* Skip Button */}
+        <div className="fixed top-16 inset-x-0 z-40 px-4">
+          <div className="bg-blue-600 rounded-xl p-3 shadow-lg flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Timer className="w-5 h-5 text-white" />
+              <span className="text-2xl font-bold text-white font-mono tabular-nums">
+                {formatTime(restTimer.seconds)}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
               <Button
-                onClick={resetRestTimer}
-                className="w-full bg-white text-blue-600 hover:bg-white/90 font-semibold h-12"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const newTime = Math.max(0, restTimer.seconds - 15);
+                  if (newTime === 0) {
+                    resetRestTimer();
+                  } else {
+                    useWorkoutStore.getState().adjustRestTimer(-15);
+                  }
+                }}
+                className="text-white hover:bg-white/20 h-8 px-2"
               >
-                Skip Rest
+                -15s
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => useWorkoutStore.getState().adjustRestTimer(15)}
+                className="text-white hover:bg-white/20 h-8 px-2"
+              >
+                +15s
+              </Button>
+              <Button
+                size="sm"
+                onClick={resetRestTimer}
+                className="bg-white text-blue-600 hover:bg-white/90 h-8"
+              >
+                Skip
               </Button>
             </div>
           </div>
@@ -987,25 +976,51 @@ export default function ActiveWorkoutPage() {
                 ) : (
                   // WARMUP/STRENGTH LAYOUT - Full-width exercise cards with sets
                   <div className="divide-y divide-gray-800">
-                    {blockExercises.map((workoutExercise: any) => (
+                    {blockExercises.map((workoutExercise: any) => {
+                      const exercisePB = getPBForExercise(workoutExercise.exerciseId);
+                      const lastWorkout = workoutHistory.find((w: any) => 
+                        w.exercises?.some((e: any) => e.exerciseId === workoutExercise.exerciseId)
+                      );
+                      const lastSets = lastWorkout?.exercises?.find((e: any) => 
+                        e.exerciseId === workoutExercise.exerciseId
+                      )?.sets?.filter((s: any) => s.completed);
+                      
+                      return (
                       <div key={workoutExercise.id} className="bg-gray-900/30">
-                        <div className="flex items-center justify-between px-4 py-3">
-                          <div>
-                            <p className="font-medium text-white">{workoutExercise.exercise.name}</p>
-                            <p className="text-xs text-gray-500">{workoutExercise.exercise.primaryMuscles?.join(', ')}</p>
+                        <div className="px-4 py-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <p className="font-medium text-white">{workoutExercise.exercise.name}</p>
+                              <p className="text-xs text-gray-500">{workoutExercise.exercise.primaryMuscles?.join(', ')}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="bg-gray-800 text-gray-400">
+                                {workoutExercise.sets.filter((s: any) => s.completed).length}/{workoutExercise.sets.length}
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => removeExercise(workoutExercise.id)}
+                                className="h-8 w-8 text-gray-500 hover:text-red-400"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-gray-800 text-gray-400">
-                              {workoutExercise.sets.filter((s: any) => s.completed).length}/{workoutExercise.sets.length}
-                            </Badge>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => removeExercise(workoutExercise.id)}
-                              className="h-8 w-8 text-gray-500 hover:text-red-400"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                          {/* PB and Previous Results */}
+                          <div className="flex flex-wrap items-center gap-2 text-xs">
+                            {exercisePB && (
+                              <div className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 rounded">
+                                <Trophy className="w-3 h-3 text-amber-400" />
+                                <span className="text-amber-400">PB: {exercisePB.bestWeight}kg × {exercisePB.bestReps}</span>
+                              </div>
+                            )}
+                            {lastSets && lastSets.length > 0 && (
+                              <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 rounded">
+                                <History className="w-3 h-3 text-gray-400" />
+                                <span className="text-gray-400">Last: {lastSets.slice(0, 3).map((s: any) => `${s.weight}×${s.reps}`).join(', ')}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         {/* Sets */}
@@ -1148,7 +1163,7 @@ export default function ActiveWorkoutPage() {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 )}
                 

@@ -169,15 +169,18 @@ export default function ProfilePage() {
     const weekSessions = completedSessions.filter(s => new Date(s.date) >= oneWeekAgo);
     const monthSessions = completedSessions.filter(s => new Date(s.date) >= oneMonthAgo);
     
-    // Calculate earnings from packages
+    // Calculate earnings from completed sessions (using price per session from packages)
     const trainerPackages = sessionPackages.filter(p => p.trainerId === user.id);
-    const totalEarnings = trainerPackages.reduce((sum, p) => sum + (p.priceTotal || 0), 0);
-    const weekEarnings = trainerPackages
-      .filter(p => p.purchaseDate && new Date(p.purchaseDate) >= oneWeekAgo)
-      .reduce((sum, p) => sum + (p.priceTotal || 0), 0);
-    const monthEarnings = trainerPackages
-      .filter(p => p.purchaseDate && new Date(p.purchaseDate) >= oneMonthAgo)
-      .reduce((sum, p) => sum + (p.priceTotal || 0), 0);
+    
+    // Get average price per session from packages
+    const avgPricePerSession = trainerPackages.length > 0
+      ? trainerPackages.reduce((sum, p) => sum + (p.pricePerSession || 0), 0) / trainerPackages.length
+      : 0;
+    
+    // Earnings = completed sessions × price per session
+    const totalEarnings = completedSessions.length * avgPricePerSession;
+    const weekEarnings = weekSessions.length * avgPricePerSession;
+    const monthEarnings = monthSessions.length * avgPricePerSession;
     
     // Calculate averages
     const activeClients = clients.filter(c => c.trainerId === user.id && c.status === 'active').length;

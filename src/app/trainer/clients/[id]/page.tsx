@@ -32,8 +32,13 @@ export default function TrainerClientDetailPage() {
     updateSession,
     updateSessionPackage,
     addPayment,
+    addSession,
+    addSessionPackage,
     getSessionsForClient,
     getPackagesForClient,
+    markSessionComplete,
+    markSessionNoShow,
+    toggleSessionPaid,
   } = useTrainerStore();
   const { getOrCreateConversation } = useMessageStore();
 
@@ -51,6 +56,53 @@ export default function TrainerClientDetailPage() {
     priceTotal: 0,
     pricePerSession: 0,
   });
+  
+  // Import history states
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importForm, setImportForm] = useState({
+    totalSessions: 10,
+    usedSessions: 0,
+    priceTotal: 500,
+    startDate: new Date().toISOString().split('T')[0],
+  });
+  
+  const handleImportHistory = () => {
+    if (!user?.id) return;
+    
+    // Create package
+    addSessionPackage({
+      trainerId: user.id,
+      clientId,
+      name: 'Imported Package',
+      totalSessions: importForm.totalSessions,
+      priceTotal: importForm.priceTotal,
+      pricePerSession: importForm.priceTotal / importForm.totalSessions,
+      purchaseDate: importForm.startDate,
+      status: importForm.usedSessions >= importForm.totalSessions ? 'completed' : 'active',
+      paymentId: '',
+    });
+    
+    // Create completed sessions for used sessions
+    for (let i = 0; i < importForm.usedSessions; i++) {
+      const sessionDate = new Date(importForm.startDate);
+      sessionDate.setDate(sessionDate.getDate() + (i * 7)); // Weekly sessions
+      
+      addSession({
+        trainerId: user.id,
+        clientId,
+        date: sessionDate.toISOString(),
+        startTime: sessionDate.toISOString(),
+        endTime: new Date(sessionDate.getTime() + 60 * 60 * 1000).toISOString(),
+        duration: 60,
+        type: 'pt_session',
+        status: 'completed',
+        paid: true,
+      });
+    }
+    
+    setShowImportDialog(false);
+    setImportForm({ totalSessions: 10, usedSessions: 0, priceTotal: 500, startDate: new Date().toISOString().split('T')[0] });
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -314,10 +366,20 @@ export default function TrainerClientDetailPage() {
           {/* Session Packages */}
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                <Package className="w-5 h-5 text-blue-400" />
-                Session Packages
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-white text-lg flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-400" />
+                  Session Packages
+                </CardTitle>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowImportDialog(true)}
+                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-8"
+                >
+                  <History className="w-3 h-3 mr-1" /> Import History
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {getPackagesForClient(clientId).length === 0 ? (
@@ -395,24 +457,51 @@ export default function TrainerClientDetailPage() {
               ) : (
                 <div className="space-y-2">
                   {getSessionsForClient(clientId).slice(0, 10).map((session: any) => (
-                    <div key={session.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
-                      <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-gray-300" />
+                    <div key={session.id} className="p-3 bg-gray-800/60 rounded-xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                          <Clock className="w-5 h-5 text-gray-300" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{session.type === 'pt_session' ? 'PT Session' : session.type}</p>
+                          <p className="text-xs text-gray-500">{format(new Date(session.date), 'MMM d, yyyy')}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={
+                            session.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 
+                            session.status === 'no_show' ? 'bg-red-500/20 text-red-400' :
+                            'bg-blue-500/20 text-blue-400'
+                          }>
+                            {session.status === 'no_show' ? 'No Show' : session.status}
+                          </Badge>
+                          <Badge 
+                            className={session.paid ? 'bg-green-500/20 text-green-400 cursor-pointer' : 'bg-amber-500/20 text-amber-400 cursor-pointer'}
+                            onClick={() => toggleSessionPaid(session.id)}
+                          >
+                            {session.paid ? 'Paid' : 'Unpaid'}
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{session.type === 'pt_session' ? 'PT Session' : session.type}</p>
-                        <p className="text-xs text-gray-500">{format(new Date(session.date), 'MMM d, yyyy')}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={session.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}>
-                          {session.status}
-                        </Badge>
-                        {session.paid ? (
-                          <Badge className="bg-green-500/20 text-green-400">Paid</Badge>
-                        ) : (
-                          <Badge className="bg-amber-500/20 text-amber-400">Unpaid</Badge>
-                        )}
-                      </div>
+                      {/* Session Actions */}
+                      {session.status === 'scheduled' && (
+                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-700">
+                          <Button
+                            size="sm"
+                            onClick={() => markSessionComplete(session.id)}
+                            className="flex-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 h-8"
+                          >
+                            <Check className="w-3 h-3 mr-1" /> Complete
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => markSessionNoShow(session.id)}
+                            className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 h-8"
+                          >
+                            <X className="w-3 h-3 mr-1" /> No Show
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -530,6 +619,81 @@ export default function TrainerClientDetailPage() {
                 className="flex-1 bg-emerald-500 hover:bg-emerald-600"
               >
                 Save Changes
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import History Dialog */}
+      <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+        <DialogContent className="bg-gray-900 border-gray-700">
+          <DialogHeader>
+            <DialogTitle className="text-white">Import Historical Data</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-400">
+              Import previous session packages and completed sessions for this client.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Total Sessions in Package</label>
+                <Input
+                  type="number"
+                  value={importForm.totalSessions}
+                  onChange={(e) => setImportForm(prev => ({ ...prev, totalSessions: parseInt(e.target.value) || 0 }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Sessions Already Completed</label>
+                <Input
+                  type="number"
+                  value={importForm.usedSessions}
+                  onChange={(e) => setImportForm(prev => ({ ...prev, usedSessions: parseInt(e.target.value) || 0 }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Package Total ($)</label>
+                <Input
+                  type="number"
+                  value={importForm.priceTotal}
+                  onChange={(e) => setImportForm(prev => ({ ...prev, priceTotal: parseFloat(e.target.value) || 0 }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-400 mb-1 block">Start Date</label>
+                <Input
+                  type="date"
+                  value={importForm.startDate}
+                  onChange={(e) => setImportForm(prev => ({ ...prev, startDate: e.target.value }))}
+                  className="bg-gray-800 border-gray-700"
+                />
+              </div>
+            </div>
+            <div className="p-3 bg-gray-800 rounded-lg text-sm">
+              <p className="text-gray-300">This will create:</p>
+              <ul className="text-gray-400 mt-1 space-y-1">
+                <li>• 1 session package ({importForm.totalSessions} sessions, ${importForm.priceTotal})</li>
+                <li>• {importForm.usedSessions} completed session records</li>
+                <li>• Price per session: ${(importForm.priceTotal / (importForm.totalSessions || 1)).toFixed(2)}</li>
+              </ul>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowImportDialog(false)}
+                className="flex-1 border-gray-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleImportHistory}
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
+              >
+                Import History
               </Button>
             </div>
           </div>
