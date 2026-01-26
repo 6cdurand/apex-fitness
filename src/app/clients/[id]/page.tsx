@@ -177,6 +177,7 @@ export default function ClientDetailPage() {
   const [showEditPackage, setShowEditPackage] = useState(false);
   const [showCreatePackage, setShowCreatePackage] = useState(false);
   const [editPackageTotal, setEditPackageTotal] = useState('');
+  const [editPackageUsed, setEditPackageUsed] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
   
   // Edit goals/notes state
@@ -497,6 +498,7 @@ export default function ClientDetailPage() {
                       className="text-gray-400 hover:text-white"
                       onClick={() => {
                         setEditPackageTotal(activePackage.totalSessions.toString());
+                        setEditPackageUsed((activePackage.usedSessions || 0).toString());
                         setEditPackagePrice(activePackage.pricePerSession.toString());
                         setShowEditPackage(true);
                       }}
@@ -715,15 +717,27 @@ export default function ClientDetailPage() {
                   <DialogTitle className="text-white">Edit Session Package</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div>
-                    <Label className="text-gray-300">Total Sessions in Package</Label>
-                    <Input
-                      type="number"
-                      value={editPackageTotal}
-                      onChange={(e) => setEditPackageTotal(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white mt-1"
-                      placeholder="e.g., 10"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-300">Total Sessions</Label>
+                      <Input
+                        type="number"
+                        value={editPackageTotal}
+                        onChange={(e) => setEditPackageTotal(e.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        placeholder="e.g., 10"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-gray-300">Sessions Used</Label>
+                      <Input
+                        type="number"
+                        value={editPackageUsed}
+                        onChange={(e) => setEditPackageUsed(e.target.value)}
+                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        placeholder="e.g., 5"
+                      />
+                    </div>
                   </div>
                   <div>
                     <Label className="text-gray-300">Price Per Session ($)</Label>
@@ -736,11 +750,17 @@ export default function ClientDetailPage() {
                     />
                   </div>
                   {editPackageTotal && editPackagePrice && (
-                    <div className="p-3 bg-gray-800 rounded-lg">
+                    <div className="p-3 bg-gray-800 rounded-lg space-y-2">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Package Total:</span>
                         <span className="text-emerald-400 font-bold">
                           ${(parseInt(editPackageTotal) * parseFloat(editPackagePrice)).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Sessions Remaining:</span>
+                        <span className="text-blue-400 font-bold">
+                          {Math.max(0, parseInt(editPackageTotal || '0') - parseInt(editPackageUsed || '0'))}
                         </span>
                       </div>
                     </div>
@@ -750,11 +770,13 @@ export default function ClientDetailPage() {
                     onClick={() => {
                       if (activePackage && editPackageTotal && editPackagePrice) {
                         const newTotal = parseInt(editPackageTotal);
+                        const newUsed = parseInt(editPackageUsed || '0');
                         const newPrice = parseFloat(editPackagePrice);
-                        const newRemaining = Math.max(0, newTotal - activePackage.usedSessions);
+                        const newRemaining = Math.max(0, newTotal - newUsed);
                         
                         updateSessionPackage(activePackage.id, {
                           totalSessions: newTotal,
+                          usedSessions: newUsed,
                           pricePerSession: newPrice,
                           priceTotal: newTotal * newPrice,
                           remainingSessions: newRemaining,
