@@ -440,26 +440,45 @@ export default function ActiveWorkoutPage() {
             
             return (
               <React.Fragment key={workoutExercise.id}>
-                {/* Block Header */}
-                {showBlockHeader && (
-                  <div className="space-y-1 pt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="h-px flex-1 bg-gradient-to-r from-emerald-500/50 to-transparent" />
-                      <span className="text-sm font-semibold text-emerald-400 px-2">{currentBlockName}</span>
-                      <div className="h-px flex-1 bg-gradient-to-l from-emerald-500/50 to-transparent" />
-                    </div>
-                    {/* Circuit block timing info */}
-                    {(workoutExercise as any).blockType === 'circuit' && (workoutExercise as any).circuitRounds && (
-                      <div className="flex items-center justify-center gap-2 text-xs text-orange-400">
-                        <Clock className="w-3 h-3" />
-                        <span>
-                          {(workoutExercise as any).circuitRounds} rounds × {(workoutExercise as any).roundDuration || '5min'}
-                          {(workoutExercise as any).restBetweenRounds && ` • ${(workoutExercise as any).restBetweenRounds} rest`}
+                {/* Block Header - Color coded like builder */}
+                {showBlockHeader && (() => {
+                  const blockType = (workoutExercise as any).blockType;
+                  const colors: Record<string, { gradient: string; text: string; bg: string }> = {
+                    warmup: { gradient: 'from-yellow-500/50', text: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+                    work: { gradient: 'from-blue-500/50', text: 'text-blue-400', bg: 'bg-blue-500/10' },
+                    circuit: { gradient: 'from-orange-500/50', text: 'text-orange-400', bg: 'bg-orange-500/10' },
+                    cooldown: { gradient: 'from-purple-500/50', text: 'text-purple-400', bg: 'bg-purple-500/10' },
+                    cardio: { gradient: 'from-green-500/50', text: 'text-green-400', bg: 'bg-green-500/10' },
+                  };
+                  const style = colors[blockType] || colors.work;
+                  
+                  return (
+                    <div className={`space-y-2 pt-3 pb-2 px-3 rounded-lg ${style.bg} border border-${blockType === 'warmup' ? 'yellow' : blockType === 'circuit' ? 'orange' : blockType === 'cooldown' ? 'purple' : blockType === 'cardio' ? 'green' : 'blue'}-500/20`}>
+                      <div className="flex items-center gap-2">
+                        <div className={`h-px flex-1 bg-gradient-to-r ${style.gradient} to-transparent`} />
+                        <span className={`text-sm font-semibold ${style.text} px-2 flex items-center gap-2`}>
+                          {blockType === 'warmup' && '🔥'}
+                          {blockType === 'work' && '💪'}
+                          {blockType === 'circuit' && '⚡'}
+                          {blockType === 'cooldown' && '🧘'}
+                          {blockType === 'cardio' && '🏃'}
+                          {currentBlockName}
                         </span>
+                        <div className={`h-px flex-1 bg-gradient-to-l ${style.gradient} to-transparent`} />
                       </div>
-                    )}
-                  </div>
-                )}
+                      {/* Circuit block timing info */}
+                      {blockType === 'circuit' && (workoutExercise as any).circuitRounds && (
+                        <div className="flex items-center justify-center gap-2 text-xs text-orange-400">
+                          <Clock className="w-3 h-3" />
+                          <span>
+                            {(workoutExercise as any).circuitRounds} rounds × {(workoutExercise as any).roundDuration || '5min'}
+                            {(workoutExercise as any).restBetweenRounds && ` • ${(workoutExercise as any).restBetweenRounds} rest`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <Card 
                   className={cn(
                     "bg-gray-900 border-gray-800 overflow-hidden transition-all",
