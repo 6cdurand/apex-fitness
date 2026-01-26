@@ -1,34 +1,35 @@
 # APEX Fitness - Feature Requests Tracker
 
 ## Circuit Block Improvements
-- [ ] Stop timer after pressing final round
-- [ ] Add plus button to add extra round during circuit
-- [ ] Green button at bottom should finish circuit and stop timer
+- [x] Stop timer after pressing final round
+- [x] Add plus button to add extra round during circuit
+- [x] Green button at bottom should finish circuit and stop timer
 
 ## Strength Block Improvements
-- [ ] Personal best detection with proper cleanup (remove PB if workout/exercise deleted)
-- [ ] Split sets option
-- [ ] Drop sets option
-- [ ] Rest timer between sets (like Hevy/Strong apps)
+- [x] Personal best detection with proper cleanup (remove PB if workout/exercise deleted)
+- [x] Split sets option (via set type selector)
+- [x] Drop sets option (with nested drop entries)
+- [x] Rest timer between sets (Hevy/Strong style full-screen overlay)
 
 ## Client History Import (Trainer View)
-- [ ] Edit sessions already done
-- [ ] Edit payments already done
-- [ ] Edit cost per session
-- [ ] Update calculations based on edits
-- [ ] Sync all changes to Supabase
-- [ ] Display imported history in client file
+- [x] Edit sessions already done
+- [x] Edit payments already done
+- [x] Edit cost per session (via package editing)
+- [x] Update calculations based on edits
+- [x] Sync all changes to Supabase
+- [x] Display imported history in client file
 
 ## Trainer Profile Stats
-- [ ] Money earned each week
-- [ ] Workouts done each week
-- [ ] Session averages
-- [ ] Weekly/monthly summaries
+- [x] Money earned each week
+- [x] Workouts done each week
+- [x] Session averages
+- [x] Weekly/monthly summaries
 
 ## Database Schema Updates Needed
-- [ ] Add payment tracking table
-- [ ] Add session cost fields
-- [ ] Add trainer earnings tracking
+- [x] Payment tracking table (client_payments)
+- [x] Session cost fields (in session_packages)
+- [x] Trainer earnings tracking (calculated from packages)
 
 ---
 *Last updated: Jan 26, 2026*
+*All items completed!*
