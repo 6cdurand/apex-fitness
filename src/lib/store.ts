@@ -279,6 +279,7 @@ interface WorkoutState {
   
   // Edit completed workouts
   updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => void;
+  removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => void;
   
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
@@ -978,9 +979,18 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       deleteWorkout: (workoutId) => {
+        const { workoutHistory } = get();
+        const workoutToDelete = workoutHistory.find(w => w.id === workoutId);
+        const userId = workoutToDelete?.userId;
+        
         set(state => ({
           workoutHistory: state.workoutHistory.filter(w => w.id !== workoutId),
         }));
+        
+        // Recalculate PBs for the user after workout deletion
+        if (userId) {
+          get().recalculatePBsForUser(userId);
+        }
       },
 
       clearDataForUser: (userId: string) => {
@@ -1018,6 +1028,26 @@ export const useWorkoutStore = create<WorkoutState>()(
           
           // Recalculate PBs for the user after workout edit
           get().recalculatePBsForUser(updatedWorkout.userId);
+        }
+      },
+
+      removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => {
+        const workout = get().workoutHistory.find(w => w.id === workoutId);
+        if (!workout) return;
+        
+        const updatedExercises = workout.exercises.filter(e => e.id !== exerciseId);
+        
+        set(state => ({
+          workoutHistory: state.workoutHistory.map(w =>
+            w.id === workoutId ? { ...w, exercises: updatedExercises } : w
+          ),
+        }));
+        
+        // Sync to Supabase and recalculate PBs
+        const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
+        if (updatedWorkout) {
+          syncWorkoutToSupabase(updatedWorkout);
+          get().recalculatePBsForUser(workout.userId);
         }
       },
 
