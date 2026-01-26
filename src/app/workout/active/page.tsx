@@ -92,6 +92,16 @@ export default function ActiveWorkoutPage() {
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null); // Exercise ID being paired
+  const [showAddBlockDialog, setShowAddBlockDialog] = useState(false);
+  const [selectedBlockType, setSelectedBlockType] = useState<'warmup' | 'work' | 'circuit' | 'cooldown' | null>(null);
+  const [currentBlockName, setCurrentBlockName] = useState('');
+  const [circuitSettings, setCircuitSettings] = useState({
+    style: 'rounds' as 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata',
+    rounds: 3,
+    targetTime: '10min',
+    workInterval: '20s',
+    restInterval: '10s',
+  });
 
   // Redirect if not authenticated or no active workout
   useEffect(() => {
@@ -117,13 +127,25 @@ export default function ActiveWorkoutPage() {
   }, [restTimer.isRunning, tickRestTimer]);
 
   const handleAddExercise = (exercise: Exercise) => {
-    addExercise(exercise);
+    // Add exercise with block metadata if a block is selected
+    const blockMetadata = selectedBlockType ? {
+      blockName: currentBlockName || getDefaultBlockName(selectedBlockType),
+      blockType: selectedBlockType,
+      ...(selectedBlockType === 'circuit' && {
+        circuitStyle: circuitSettings.style,
+        circuitRounds: circuitSettings.rounds,
+        targetTime: circuitSettings.targetTime,
+        workInterval: circuitSettings.workInterval,
+        restInterval: circuitSettings.restInterval,
+      }),
+    } : {};
+    
+    addExercise({ ...exercise, ...blockMetadata } as any);
     setShowExerciseSearch(false);
     setExerciseSearch('');
     
     // If in superset pairing mode, automatically pair the new exercise
     if (supersetPairingId) {
-      // Small delay to ensure exercise is added first
       setTimeout(() => {
         const newExercise = useWorkoutStore.getState().activeWorkout?.exercises.slice(-1)[0];
         if (newExercise) {
@@ -137,8 +159,26 @@ export default function ActiveWorkoutPage() {
         }
       }, 100);
     } else {
-      toast.success(`Added ${exercise.name}`);
+      const blockLabel = selectedBlockType ? ` to ${currentBlockName || getDefaultBlockName(selectedBlockType)}` : '';
+      toast.success(`Added ${exercise.name}${blockLabel}`);
     }
+  };
+  
+  const getDefaultBlockName = (type: string) => {
+    const names: Record<string, string> = {
+      warmup: 'Warm-Up',
+      work: 'Main Work',
+      circuit: 'Circuit',
+      cooldown: 'Cool Down',
+    };
+    return names[type] || 'Block';
+  };
+  
+  const handleSelectBlockType = (type: 'warmup' | 'work' | 'circuit' | 'cooldown') => {
+    setSelectedBlockType(type);
+    setCurrentBlockName(getDefaultBlockName(type));
+    setShowAddBlockDialog(false);
+    setShowExerciseSearch(true);
   };
 
   const { startRestTimer } = useWorkoutStore();
@@ -662,22 +702,193 @@ export default function ActiveWorkoutPage() {
             );
           })}
 
-          {/* Add Exercise Button */}
-          <Dialog open={showExerciseSearch} onOpenChange={setShowExerciseSearch}>
-            <DialogTrigger asChild>
+          {/* Add Block Buttons - Colorful like Builder */}
+          <div className="space-y-3 pt-4">
+            <p className="text-xs text-gray-500 text-center font-medium uppercase tracking-wider">Add to Workout</p>
+            
+            {/* Block Type Grid */}
+            <div className="grid grid-cols-2 gap-3">
               <Button
+                onClick={() => handleSelectBlockType('warmup')}
+                className="h-20 flex-col gap-1 bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-2 border-yellow-500/30 hover:border-yellow-400 hover:bg-yellow-500/30 text-yellow-400"
                 variant="outline"
-                className="w-full h-14 border-dashed border-2 border-gray-700 bg-transparent hover:bg-gray-800 text-gray-400 hover:text-white"
               >
-                <Plus className="w-5 h-5 mr-2" />
-                Add Exercise
+                <span className="text-2xl">🔥</span>
+                <span className="font-semibold">Warm-Up</span>
               </Button>
-            </DialogTrigger>
-            <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+              
+              <Button
+                onClick={() => handleSelectBlockType('work')}
+                className="h-20 flex-col gap-1 bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-2 border-blue-500/30 hover:border-blue-400 hover:bg-blue-500/30 text-blue-400"
+                variant="outline"
+              >
+                <span className="text-2xl">💪</span>
+                <span className="font-semibold">Main Work</span>
+              </Button>
+              
+              <Button
+                onClick={() => handleSelectBlockType('circuit')}
+                className="h-20 flex-col gap-1 bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-2 border-orange-500/30 hover:border-orange-400 hover:bg-orange-500/30 text-orange-400"
+                variant="outline"
+              >
+                <span className="text-2xl">⚡</span>
+                <span className="font-semibold">Circuit</span>
+              </Button>
+              
+              <Button
+                onClick={() => handleSelectBlockType('cooldown')}
+                className="h-20 flex-col gap-1 bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-2 border-purple-500/30 hover:border-purple-400 hover:bg-purple-500/30 text-purple-400"
+                variant="outline"
+              >
+                <span className="text-2xl">🧘</span>
+                <span className="font-semibold">Cool Down</span>
+              </Button>
+            </div>
+            
+            {/* Quick Add Exercise (no block) */}
+            <Button
+              onClick={() => {
+                setSelectedBlockType(null);
+                setShowExerciseSearch(true);
+              }}
+              variant="outline"
+              className="w-full h-12 border-dashed border-2 border-gray-600 bg-transparent hover:bg-gray-800/50 text-gray-400 hover:text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Quick Add Exercise
+            </Button>
+          </div>
+
+          {/* Add Exercise Dialog */}
+          <Dialog open={showExerciseSearch} onOpenChange={(open) => {
+            setShowExerciseSearch(open);
+            if (!open) {
+              setSelectedBlockType(null);
+              setExerciseSearch('');
+            }
+          }}>
+            <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[85vh]">
               <DialogHeader>
-                <DialogTitle className="text-white">Add Exercise</DialogTitle>
-                <DialogDescription>Search and add exercises to your workout</DialogDescription>
+                {selectedBlockType ? (
+                  <div className={cn(
+                    "flex items-center gap-3 p-3 rounded-lg mb-2",
+                    selectedBlockType === 'warmup' && "bg-yellow-500/20 border border-yellow-500/30",
+                    selectedBlockType === 'work' && "bg-blue-500/20 border border-blue-500/30",
+                    selectedBlockType === 'circuit' && "bg-orange-500/20 border border-orange-500/30",
+                    selectedBlockType === 'cooldown' && "bg-purple-500/20 border border-purple-500/30",
+                  )}>
+                    <span className="text-2xl">
+                      {selectedBlockType === 'warmup' && '🔥'}
+                      {selectedBlockType === 'work' && '💪'}
+                      {selectedBlockType === 'circuit' && '⚡'}
+                      {selectedBlockType === 'cooldown' && '🧘'}
+                    </span>
+                    <div className="flex-1">
+                      <Input
+                        value={currentBlockName}
+                        onChange={(e) => setCurrentBlockName(e.target.value)}
+                        className={cn(
+                          "bg-transparent border-none text-lg font-semibold p-0 h-auto focus-visible:ring-0",
+                          selectedBlockType === 'warmup' && "text-yellow-400",
+                          selectedBlockType === 'work' && "text-blue-400",
+                          selectedBlockType === 'circuit' && "text-orange-400",
+                          selectedBlockType === 'cooldown' && "text-purple-400",
+                        )}
+                        placeholder="Block name..."
+                      />
+                      <p className="text-xs text-gray-400 capitalize">{selectedBlockType} Block</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedBlockType(null)}
+                      className="text-gray-400 hover:text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <DialogTitle className="text-white">Add Exercise</DialogTitle>
+                    <DialogDescription>Search and add exercises to your workout</DialogDescription>
+                  </>
+                )}
               </DialogHeader>
+              
+              {/* Circuit Settings */}
+              {selectedBlockType === 'circuit' && (
+                <div className="mb-4 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                  <p className="text-sm font-medium text-orange-400 mb-3">Circuit Style</p>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {[
+                      { id: 'rounds', label: 'Rounds', icon: '🔄' },
+                      { id: 'amrap', label: 'AMRAP', icon: '♾️' },
+                      { id: 'emom', label: 'EMOM', icon: '⏱️' },
+                      { id: 'forTime', label: 'For Time', icon: '🏁' },
+                      { id: 'tabata', label: 'Tabata', icon: '⚡' },
+                    ].map((style) => (
+                      <Button
+                        key={style.id}
+                        type="button"
+                        size="sm"
+                        variant={circuitSettings.style === style.id ? 'default' : 'outline'}
+                        className={circuitSettings.style === style.id 
+                          ? 'bg-orange-500 hover:bg-orange-600 text-white' 
+                          : 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10'}
+                        onClick={() => setCircuitSettings({ ...circuitSettings, style: style.id as any })}
+                      >
+                        <span className="mr-1">{style.icon}</span>
+                        {style.label}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-400">Rounds</label>
+                      <Input
+                        type="number"
+                        value={circuitSettings.rounds}
+                        onChange={(e) => setCircuitSettings({ ...circuitSettings, rounds: parseInt(e.target.value) || 1 })}
+                        className="h-8 bg-gray-800 border-gray-700"
+                        min={1}
+                      />
+                    </div>
+                    {circuitSettings.style === 'amrap' && (
+                      <div className="flex-1">
+                        <label className="text-xs text-gray-400">Time Cap</label>
+                        <Input
+                          value={circuitSettings.targetTime}
+                          onChange={(e) => setCircuitSettings({ ...circuitSettings, targetTime: e.target.value })}
+                          className="h-8 bg-gray-800 border-gray-700"
+                          placeholder="10min"
+                        />
+                      </div>
+                    )}
+                    {circuitSettings.style === 'tabata' && (
+                      <>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400">Work</label>
+                          <Input
+                            value={circuitSettings.workInterval}
+                            onChange={(e) => setCircuitSettings({ ...circuitSettings, workInterval: e.target.value })}
+                            className="h-8 bg-gray-800 border-gray-700"
+                            placeholder="20s"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400">Rest</label>
+                          <Input
+                            value={circuitSettings.restInterval}
+                            onChange={(e) => setCircuitSettings({ ...circuitSettings, restInterval: e.target.value })}
+                            className="h-8 bg-gray-800 border-gray-700"
+                            placeholder="10s"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
               
               <div className="relative mb-4">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -690,13 +901,20 @@ export default function ActiveWorkoutPage() {
                 />
               </div>
 
-              <ScrollArea className="max-h-[50vh]">
+              <ScrollArea className="max-h-[40vh]">
                 <div className="space-y-2 pr-4">
                   {filteredExercises.slice(0, 30).map((exercise) => (
                     <Button
                       key={exercise.id}
                       variant="ghost"
-                      className="w-full justify-start h-auto py-3 px-4 hover:bg-gray-800"
+                      className={cn(
+                        "w-full justify-start h-auto py-3 px-4",
+                        selectedBlockType === 'warmup' && "hover:bg-yellow-500/10",
+                        selectedBlockType === 'work' && "hover:bg-blue-500/10",
+                        selectedBlockType === 'circuit' && "hover:bg-orange-500/10",
+                        selectedBlockType === 'cooldown' && "hover:bg-purple-500/10",
+                        !selectedBlockType && "hover:bg-gray-800",
+                      )}
                       onClick={() => handleAddExercise(exercise)}
                     >
                       <div className="text-left">
