@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, differenceInWeeks } from 'date-fns';
 import { VolumeChart, MuscleProgressChart } from '@/components/charts/VolumeChart';
+import { toast } from 'sonner';
 
 export default function TrainerClientDetailPage() {
   const router = useRouter();
@@ -620,8 +621,11 @@ export default function TrainerClientDetailPage() {
                       remainingSessions: packageForm.totalSessions - packageForm.usedSessions,
                       priceTotal: packageForm.priceTotal,
                       pricePerSession: packageForm.pricePerSession,
+                      status: packageForm.usedSessions >= packageForm.totalSessions ? 'completed' : 'active',
                     });
                     setShowEditPackage(false);
+                    setEditingPackage(null);
+                    toast.success('Package updated successfully');
                   }
                 }}
                 className="flex-1 bg-emerald-500 hover:bg-emerald-600"

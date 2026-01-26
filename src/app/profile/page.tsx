@@ -81,8 +81,9 @@ export default function ProfilePage() {
   }, []);
 
   const handleLogout = () => {
-    logout();
     router.replace('/auth');
+    // Delay logout to allow redirect to complete first
+    setTimeout(() => logout(), 100);
   };
 
   const handleSwitchMode = () => {
@@ -143,8 +144,13 @@ export default function ProfilePage() {
 
   const isTrainerMode = user.mode === 'trainer';
   
-  // Filter workouts for current user only (exclude client training sessions)
-  const userWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy);
+  // For trainers: count sessions they've conducted (where assignedBy === their id)
+  // For regular users: count their own workouts (userId === their id, no assignedBy)
+  const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user.id);
+  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy);
+  
+  // Total workouts: trainer sees sessions conducted, user sees own workouts
+  const userWorkouts = isTrainerMode ? trainerConductedWorkouts : userOwnWorkouts;
   const totalWorkouts = userWorkouts.length;
   const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
   const userPosts = posts.filter(p => p.userId === user.id);
