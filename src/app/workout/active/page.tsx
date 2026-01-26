@@ -104,7 +104,13 @@ export default function ActiveWorkoutPage() {
     timerRunning?: boolean;
     timerSeconds?: number;
     completed?: boolean;
+    // Round tracking for circuits
+    roundsCompleted?: { roundNumber: number; completedAt: number; duration: number }[];
+    currentRoundStart?: number;
   }[]>([]);
+  
+  // Circuit exercise reps (exerciseId -> reps)
+  const [circuitExerciseReps, setCircuitExerciseReps] = useState<Record<string, number>>({});
   const [showCircuitDialog, setShowCircuitDialog] = useState(false);
   const [circuitConfig, setCircuitConfig] = useState({
     style: 'amrap' as 'amrap' | 'forTime' | 'rounds' | 'emom',
@@ -307,6 +313,37 @@ export default function ActiveWorkoutPage() {
         timerSeconds: isCountdown ? b.circuitDuration : 0, 
         timerRunning: false,
         completed: false,
+        roundsCompleted: [],
+        currentRoundStart: undefined,
+      };
+    }));
+  };
+  
+  const completeCircuitRound = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => {
+      if (b.id !== blockId) return b;
+      const currentRounds = b.roundsCompleted || [];
+      const roundNumber = currentRounds.length + 1;
+      const now = Date.now();
+      const duration = b.currentRoundStart ? Math.floor((now - b.currentRoundStart) / 1000) : (b.timerSeconds || 0);
+      
+      return {
+        ...b,
+        roundsCompleted: [...currentRounds, { roundNumber, completedAt: now, duration }],
+        currentRoundStart: now, // Start timing next round
+      };
+    }));
+    toast.success('Round completed!');
+  };
+  
+  const startCircuitRound = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => {
+      if (b.id !== blockId) return b;
+      return {
+        ...b,
+        currentRoundStart: Date.now(),
+        timerRunning: true,
+        timerSeconds: b.circuitStyle === 'forTime' ? 0 : b.timerSeconds,
       };
     }));
   };
@@ -737,12 +774,122 @@ export default function ActiveWorkoutPage() {
                   )}
                 </div>
                 
-                {/* Block Exercises */}
-                <div className="p-2 space-y-2">
-                  {blockExercises.map((workoutExercise: any) => (
-                    <Card key={workoutExercise.id} className="bg-gray-900/50 border-gray-800">
-                      <CardContent className="p-0">
-                        <div className="flex items-center justify-between p-3">
+                {/* Block Exercises - Different layout for circuits vs other blocks */}
+                {block.type === 'circuit' ? (
+                  // CIRCUIT LAYOUT - Exercise list with reps + round tracking
+                  <div className="p-3 space-y-3">
+                    {/* Exercise List */}
+                    <div className="space-y-1">
+                      {blockExercises.map((workoutExercise: any, idx: number) => (
+                        <div 
+                          key={workoutExercise.id} 
+                          className="flex items-center gap-3 p-2 bg-gray-800/50 rounded-lg"
+                        >
+                          <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs flex items-center justify-center font-bold">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-white font-medium text-sm">{workoutExercise.exercise.name}</p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Input
+                              type="number"
+                              value={circuitExerciseReps[workoutExercise.id] || workoutExercise.sets[0]?.reps || ''}
+                              onChange={(e) => {
+                                const reps = parseInt(e.target.value) || 0;
+                                setCircuitExerciseReps(prev => ({ ...prev, [workoutExercise.id]: reps }));
+                                if (workoutExercise.sets[0]) {
+                                  updateSet(workoutExercise.id, workoutExercise.sets[0].id, { reps });
+                                }
+                              }}
+                              className="w-14 h-7 text-center text-sm bg-gray-900 border-gray-700"
+                              placeholder="reps"
+                            />
+                            <span className="text-xs text-gray-500">reps</span>
+                          </div>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => removeExercise(workoutExercise.id)}
+                            className="h-6 w-6 text-gray-500 hover:text-red-400"
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Round Tracking */}
+                    {blockExercises.length > 0 && (
+                      <div className="border-t border-orange-500/20 pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium text-orange-400">Rounds</p>
+                          <span className="text-xs text-gray-500">
+                            {(block.roundsCompleted?.length || 0)}/{block.circuitRounds || '∞'} completed
+                          </span>
+                        </div>
+                        
+                        {/* Round checkboxes */}
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {Array.from({ length: block.circuitRounds || 5 }).map((_, idx) => {
+                            const roundNum = idx + 1;
+                            const completedRound = block.roundsCompleted?.find(r => r.roundNumber === roundNum);
+                            const isCompleted = !!completedRound;
+                            
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => !isCompleted && completeCircuitRound(block.id)}
+                                disabled={isCompleted || (block.roundsCompleted?.length || 0) !== idx}
+                                className={cn(
+                                  "w-12 h-12 rounded-lg border-2 flex flex-col items-center justify-center transition-all",
+                                  isCompleted 
+                                    ? "bg-orange-500 border-orange-500 text-white" 
+                                    : (block.roundsCompleted?.length || 0) === idx
+                                      ? "border-orange-500 text-orange-400 hover:bg-orange-500/20 cursor-pointer"
+                                      : "border-gray-700 text-gray-600 cursor-not-allowed"
+                                )}
+                              >
+                                {isCompleted ? (
+                                  <>
+                                    <Check className="w-4 h-4" />
+                                    <span className="text-[10px]">{formatTime(completedRound.duration)}</span>
+                                  </>
+                                ) : (
+                                  <span className="font-bold">{roundNum}</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        
+                        {/* Start/Complete Round Button */}
+                        {!block.currentRoundStart ? (
+                          <Button
+                            onClick={() => startCircuitRound(block.id)}
+                            className="w-full bg-orange-500 hover:bg-orange-600"
+                          >
+                            <Play className="w-4 h-4 mr-2" />
+                            Start Round {(block.roundsCompleted?.length || 0) + 1}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => completeCircuitRound(block.id)}
+                            className="w-full bg-green-500 hover:bg-green-600"
+                          >
+                            <Check className="w-4 h-4 mr-2" />
+                            Complete Round {(block.roundsCompleted?.length || 0) + 1}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // WARMUP/STRENGTH LAYOUT - Full-width exercise cards with sets
+                  <div className="divide-y divide-gray-800">
+                    {blockExercises.map((workoutExercise: any) => (
+                      <div key={workoutExercise.id} className="bg-gray-900/30">
+                        <div className="flex items-center justify-between px-4 py-3">
                           <div>
                             <p className="font-medium text-white">{workoutExercise.exercise.name}</p>
                             <p className="text-xs text-gray-500">{workoutExercise.exercise.primaryMuscles?.join(', ')}</p>
@@ -762,16 +909,18 @@ export default function ActiveWorkoutPage() {
                           </div>
                         </div>
                         {/* Sets */}
-                        <div className="px-3 pb-2 space-y-1">
+                        <div className="px-4 pb-3 space-y-2">
                           {workoutExercise.sets.map((set: any, idx: number) => (
-                            <div key={set.id} className="flex items-center gap-2 text-sm">
-                              <span className="w-6 text-gray-500">{idx + 1}</span>
+                            <div key={set.id} className="flex items-center gap-3 text-sm">
+                              <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-gray-400 font-medium">
+                                {idx + 1}
+                              </span>
                               <Input
                                 type="number"
                                 placeholder="kg"
                                 value={set.weight || ''}
                                 onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
-                                className="w-16 h-8 text-center bg-gray-800 border-gray-700"
+                                className="w-20 h-10 text-center bg-gray-800 border-gray-700"
                               />
                               <span className="text-gray-600">×</span>
                               <Input
@@ -779,7 +928,7 @@ export default function ActiveWorkoutPage() {
                                 placeholder="reps"
                                 value={set.reps || ''}
                                 onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
-                                className="w-16 h-8 text-center bg-gray-800 border-gray-700"
+                                className="w-20 h-10 text-center bg-gray-800 border-gray-700"
                               />
                               <Button
                                 size="icon"
@@ -789,11 +938,11 @@ export default function ActiveWorkoutPage() {
                                   : handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise.name)
                                 }
                                 className={cn(
-                                  "h-8 w-8",
+                                  "h-10 w-10 ml-auto",
                                   set.completed ? "bg-emerald-500 hover:bg-emerald-600" : "border-gray-700"
                                 )}
                               >
-                                <Check className="w-4 h-4" />
+                                <Check className="w-5 h-5" />
                               </Button>
                             </div>
                           ))}
@@ -801,16 +950,18 @@ export default function ActiveWorkoutPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => addSet(workoutExercise.id)}
-                            className="w-full text-xs text-gray-500 hover:text-white"
+                            className="w-full text-xs text-gray-500 hover:text-white h-8"
                           >
                             <Plus className="w-3 h-3 mr-1" /> Add Set
                           </Button>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  
-                  {/* Add Exercise to Block */}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Add Exercise to Block */}
+                <div className="p-2">
                   <Button
                     variant="ghost"
                     onClick={() => {
