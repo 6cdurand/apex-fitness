@@ -105,6 +105,7 @@ export default function ActiveWorkoutPage() {
     timerRunning?: boolean;
     timerSeconds?: number;
     completed?: boolean;
+    circuitComplete?: boolean;
     // Round tracking for circuits
     roundsCompleted?: { roundNumber: number; completedAt: number; duration: number }[];
     currentRoundStart?: number;
@@ -303,11 +304,15 @@ export default function ActiveWorkoutPage() {
       const roundNumber = currentRounds.length + 1;
       const now = Date.now();
       const duration = b.currentRoundStart ? Math.floor((now - b.currentRoundStart) / 1000) : (b.timerSeconds || 0);
+      const totalRounds = b.circuitRounds || 5;
+      const isLastRound = roundNumber >= totalRounds;
       
       return {
         ...b,
         roundsCompleted: [...currentRounds, { roundNumber, completedAt: now, duration }],
-        currentRoundStart: now, // Start timing next round
+        currentRoundStart: isLastRound ? undefined : now, // Stop timer on final round
+        timerRunning: isLastRound ? false : true,
+        circuitComplete: isLastRound,
       };
     }));
     toast.success('Round completed!');
@@ -323,6 +328,45 @@ export default function ActiveWorkoutPage() {
         timerSeconds: b.circuitStyle === 'forTime' ? 0 : b.timerSeconds,
       };
     }));
+  };
+  
+  const addCircuitRound = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => {
+      if (b.id !== blockId) return b;
+      return {
+        ...b,
+        circuitRounds: (b.circuitRounds || 5) + 1,
+        circuitComplete: false, // Reset complete status
+      };
+    }));
+    toast.success('Added extra round!');
+  };
+  
+  const finishCircuit = (blockId: string) => {
+    setWorkoutBlocks(blocks => blocks.map(b => {
+      if (b.id !== blockId) return b;
+      const now = Date.now();
+      const currentRounds = b.roundsCompleted || [];
+      
+      // Complete current round if timer is running
+      if (b.currentRoundStart) {
+        const duration = Math.floor((now - b.currentRoundStart) / 1000);
+        return {
+          ...b,
+          roundsCompleted: [...currentRounds, { roundNumber: currentRounds.length + 1, completedAt: now, duration }],
+          currentRoundStart: undefined,
+          timerRunning: false,
+          circuitComplete: true,
+        };
+      }
+      
+      return {
+        ...b,
+        timerRunning: false,
+        circuitComplete: true,
+      };
+    }));
+    toast.success('Circuit finished!');
   };
 
   const { startRestTimer } = useWorkoutStore();
@@ -861,10 +905,21 @@ export default function ActiveWorkoutPage() {
                               </button>
                             );
                           })}
+                          {/* Add Round Button */}
+                          <button
+                            onClick={() => addCircuitRound(block.id)}
+                            className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-600 flex items-center justify-center text-gray-500 hover:border-orange-500 hover:text-orange-400 transition-all"
+                          >
+                            <Plus className="w-5 h-5" />
+                          </button>
                         </div>
                         
                         {/* Start/Complete Round Button */}
-                        {!block.currentRoundStart ? (
+                        {block.circuitComplete ? (
+                          <div className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-center">
+                            <p className="text-green-400 font-medium">Circuit Complete! 🎉</p>
+                          </div>
+                        ) : !block.currentRoundStart ? (
                           <Button
                             onClick={() => startCircuitRound(block.id)}
                             className="w-full bg-orange-500 hover:bg-orange-600"
@@ -873,13 +928,23 @@ export default function ActiveWorkoutPage() {
                             Start Round {(block.roundsCompleted?.length || 0) + 1}
                           </Button>
                         ) : (
-                          <Button
-                            onClick={() => completeCircuitRound(block.id)}
-                            className="w-full bg-green-500 hover:bg-green-600"
-                          >
-                            <Check className="w-4 h-4 mr-2" />
-                            Complete Round {(block.roundsCompleted?.length || 0) + 1}
-                          </Button>
+                          <div className="space-y-2">
+                            <Button
+                              onClick={() => completeCircuitRound(block.id)}
+                              variant="outline"
+                              className="w-full border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                            >
+                              <Check className="w-4 h-4 mr-2" />
+                              Complete Round {(block.roundsCompleted?.length || 0) + 1}
+                            </Button>
+                            <Button
+                              onClick={() => finishCircuit(block.id)}
+                              className="w-full bg-green-500 hover:bg-green-600"
+                            >
+                              <Check className="w-4 h-4 mr-2" />
+                              Finish Circuit
+                            </Button>
+                          </div>
                         )}
                       </div>
                     )}
