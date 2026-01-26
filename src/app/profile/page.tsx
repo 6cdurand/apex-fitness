@@ -33,6 +33,7 @@ import {
 import { format } from 'date-fns';
 import { ProfileCard } from '@/components/ProfileCard';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
+import { TrainerStatsCharts } from '@/components/TrainerStatsCharts';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 
@@ -649,11 +650,22 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Workout Stats & Graphs */}
-        <WorkoutStatsCharts 
-          workoutHistory={userWorkouts} 
-          personalBests={userPBs} 
-        />
+        {/* Trainer Stats & Graphs - shown in trainer mode */}
+        {isTrainerMode && (
+          <TrainerStatsCharts 
+            sessionPackages={sessionPackages.filter(p => p.trainerId === user.id)}
+            sessions={sessions.filter(s => s.trainerId === user.id)}
+            clients={clients.filter(c => c.trainerId === user.id)}
+          />
+        )}
+
+        {/* Workout Stats & Graphs - shown in athlete mode */}
+        {!isTrainerMode && (
+          <WorkoutStatsCharts 
+            workoutHistory={userWorkouts} 
+            personalBests={userPBs} 
+          />
+        )}
 
         {/* Account Actions */}
         <Card className="bg-gray-900 border-gray-800">
