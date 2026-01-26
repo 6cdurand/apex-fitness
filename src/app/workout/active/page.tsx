@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName } from '@/lib/exercises';
+import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { cn } from '@/lib/utils';
 import { Exercise, WorkoutSet } from '@/types';
 import { 
@@ -395,6 +396,29 @@ export default function ActiveWorkoutPage() {
         if (activePackage) {
           useSessionFromPackage(activePackage.id);
         }
+      }
+
+      // Sync exercise history to Supabase for client tracking
+      const currentUser = useAuthStore.getState().user;
+      const targetUserId = clientId || currentUser?.id;
+      if (targetUserId && completed.exercises) {
+        completed.exercises.forEach((ex: any) => {
+          const bestSet = ex.sets.reduce((best: any, set: any) => {
+            if (!set.completed) return best;
+            const volume = (set.weight || 0) * (set.reps || 0);
+            const bestVolume = (best?.weight || 0) * (best?.reps || 0);
+            return volume > bestVolume ? set : best;
+          }, null);
+          
+          syncExerciseHistoryToSupabase(
+            targetUserId,
+            ex.exerciseId,
+            ex.exercise?.name || 'Unknown',
+            ex.blockType || null,
+            bestSet?.weight,
+            bestSet?.reps
+          );
+        });
       }
 
       // Show summary popup instead of redirecting
