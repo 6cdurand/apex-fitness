@@ -256,6 +256,7 @@ interface WorkoutState {
   pauseRestTimer: () => void;
   resetRestTimer: () => void;
   tickRestTimer: () => void;
+  adjustRestTimer: (delta: number) => void;
 
   // Template actions
   saveAsTemplate: (name: string, description?: string) => void;
@@ -734,6 +735,20 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({
           restTimer: { isRunning: false, seconds: 0, type: 'rest' },
         });
+      },
+
+      adjustRestTimer: (delta: number) => {
+        const { restTimer } = get();
+        const newSeconds = Math.max(0, restTimer.seconds + delta);
+        if (newSeconds === 0) {
+          set({
+            restTimer: { isRunning: false, seconds: 0, type: 'rest' },
+          });
+        } else {
+          set({
+            restTimer: { ...restTimer, seconds: newSeconds },
+          });
+        }
       },
 
       tickRestTimer: () => {

@@ -702,28 +702,63 @@ export default function ActiveWorkoutPage() {
         </div>
       </div>
 
-      {/* Rest Timer Overlay */}
+      {/* Rest Timer Overlay - Hevy/Strong style */}
       {restTimer.isRunning && restTimer.seconds > 0 && (
-        <div className="fixed inset-x-0 top-32 z-40 px-4">
-          <div className="bg-blue-500 rounded-xl p-4 shadow-lg flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Timer className="w-6 h-6 text-white animate-pulse" />
-              <div>
-                <p className="text-white font-semibold">Rest Timer</p>
-                <p className="text-4xl font-bold text-white font-mono">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+          <div className="w-full max-w-sm mx-4">
+            <div className="bg-gradient-to-b from-blue-600 to-blue-700 rounded-2xl p-6 shadow-2xl">
+              <div className="text-center mb-6">
+                <Timer className="w-10 h-10 text-white/80 mx-auto mb-2" />
+                <p className="text-white/80 text-sm font-medium uppercase tracking-wide">Rest Timer</p>
+              </div>
+              
+              {/* Big Timer Display */}
+              <div className="text-center mb-8">
+                <p className="text-7xl font-bold text-white font-mono tabular-nums">
                   {formatTime(restTimer.seconds)}
                 </p>
               </div>
-            </div>
-            <div className="flex gap-2">
+              
+              {/* Time Adjustment Buttons */}
+              <div className="flex items-center justify-center gap-4 mb-6">
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => {
+                    const newTime = Math.max(0, restTimer.seconds - 15);
+                    if (newTime === 0) {
+                      resetRestTimer();
+                    } else {
+                      useWorkoutStore.getState().adjustRestTimer(-15);
+                    }
+                  }}
+                  className="bg-white/20 hover:bg-white/30 text-white h-14 w-14 rounded-full p-0"
+                >
+                  <span className="text-lg font-bold">-15</span>
+                </Button>
+                
+                <div className="w-20 h-20 rounded-full border-4 border-white/30 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center">
+                    <Timer className="w-8 h-8 text-white animate-pulse" />
+                  </div>
+                </div>
+                
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => useWorkoutStore.getState().adjustRestTimer(15)}
+                  className="bg-white/20 hover:bg-white/30 text-white h-14 w-14 rounded-full p-0"
+                >
+                  <span className="text-lg font-bold">+15</span>
+                </Button>
+              </div>
+              
+              {/* Skip Button */}
               <Button
-                size="sm"
-                variant="secondary"
                 onClick={resetRestTimer}
-                className="bg-white/20 hover:bg-white/30 text-white"
+                className="w-full bg-white text-blue-600 hover:bg-white/90 font-semibold h-12"
               >
-                <RotateCcw className="w-4 h-4 mr-1" />
-                Skip
+                Skip Rest
               </Button>
             </div>
           </div>
