@@ -1059,80 +1059,131 @@ export default function ActiveWorkoutPage() {
                             )}
                           </div>
                         </div>
+                        {/* Sets Header */}
+                        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium">
+                          <div className="col-span-1">SET</div>
+                          <div className="col-span-3">PREVIOUS</div>
+                          <div className="col-span-3 text-center">KG</div>
+                          <div className="col-span-3 text-center">REPS</div>
+                          <div className="col-span-2"></div>
+                        </div>
                         {/* Sets */}
-                        <div className="px-4 pb-3 space-y-2">
-                          {workoutExercise.sets.map((set: any, idx: number) => (
-                            <div key={set.id} className="space-y-1">
-                              <div className="flex items-center gap-2 text-sm">
-                                {/* Set Type Selector */}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <button className={cn(
-                                      "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
-                                      set.type === 'warmup' && "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
-                                      set.type === 'dropset' && "bg-purple-500/20 text-purple-400 border border-purple-500/30",
-                                      set.type === 'failure' && "bg-red-500/20 text-red-400 border border-red-500/30",
-                                      (!set.type || set.type === 'normal') && "bg-gray-800 text-gray-400"
-                                    )}>
-                                      {set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : set.type === 'failure' ? 'F' : idx + 1}
-                                    </button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent className="bg-gray-900 border-gray-700">
-                                    <DropdownMenuItem 
-                                      onClick={() => updateSet(workoutExercise.id, set.id, { type: 'normal' })}
-                                      className="text-gray-300 focus:text-white focus:bg-gray-700"
+                        <div className="px-4 pb-3 divide-y divide-gray-800/50">
+                          {workoutExercise.sets.map((set: any, idx: number) => {
+                            const previousDisplay = set.previousWeight && set.previousReps 
+                              ? `${set.previousWeight}kg × ${set.previousReps}` 
+                              : '—';
+                            return (
+                            <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-emerald-500/10")}>
+                              <div className="grid grid-cols-12 gap-2 items-center text-sm">
+                                {/* Set Number/Type */}
+                                <div className="col-span-1">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <button className={cn(
+                                        "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
+                                        set.completed && "bg-emerald-500 text-white",
+                                        !set.completed && set.type === 'warmup' && "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
+                                        !set.completed && set.type === 'dropset' && "bg-purple-500/20 text-purple-400 border border-purple-500/30",
+                                        !set.completed && set.type === 'failure' && "bg-red-500/20 text-red-400 border border-red-500/30",
+                                        !set.completed && (!set.type || set.type === 'normal') && "bg-gray-800 text-gray-400"
+                                      )}>
+                                        {set.completed ? <Check className="w-4 h-4" /> : set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : set.type === 'failure' ? 'F' : idx + 1}
+                                      </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="bg-gray-900 border-gray-700">
+                                      <DropdownMenuItem 
+                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'normal' })}
+                                        className="text-gray-300 focus:text-white focus:bg-gray-700"
+                                      >
+                                        Normal Set
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'warmup' })}
+                                        className="text-yellow-400 focus:text-yellow-300 focus:bg-gray-700"
+                                      >
+                                        Warm-up Set
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'dropset' })}
+                                        className="text-purple-400 focus:text-purple-300 focus:bg-gray-700"
+                                      >
+                                        Drop Set
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem 
+                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'failure' })}
+                                        className="text-red-400 focus:text-red-300 focus:bg-gray-700"
+                                      >
+                                        Failure Set
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                                {/* Previous */}
+                                <div className="col-span-3">
+                                  <span className="text-xs text-gray-500">{previousDisplay}</span>
+                                </div>
+                                {/* Weight Input */}
+                                <div className="col-span-3">
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={set.weight || ''}
+                                    onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
+                                    disabled={set.completed}
+                                    className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                  />
+                                </div>
+                                {/* Reps Input */}
+                                <div className="col-span-3">
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={set.reps || ''}
+                                    onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
+                                    disabled={set.completed}
+                                    className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                  />
+                                </div>
+                                {/* Complete Button */}
+                                <div className="col-span-2 flex justify-end">
+                                  {!set.completed ? (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise.name)}
+                                      disabled={!set.weight || !set.reps}
+                                      className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
                                     >
-                                      Normal Set
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => updateSet(workoutExercise.id, set.id, { type: 'warmup' })}
-                                      className="text-yellow-400 focus:text-yellow-300 focus:bg-gray-700"
-                                    >
-                                      Warm-up Set
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => updateSet(workoutExercise.id, set.id, { type: 'dropset' })}
-                                      className="text-purple-400 focus:text-purple-300 focus:bg-gray-700"
-                                    >
-                                      Drop Set
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => updateSet(workoutExercise.id, set.id, { type: 'failure' })}
-                                      className="text-red-400 focus:text-red-300 focus:bg-gray-700"
-                                    >
-                                      Failure Set
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                                <Input
-                                  type="number"
-                                  placeholder="kg"
-                                  value={set.weight || ''}
-                                  onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
-                                  className="w-20 h-10 text-center bg-gray-800 border-gray-700"
-                                />
-                                <span className="text-gray-600">×</span>
-                                <Input
-                                  type="number"
-                                  placeholder="reps"
-                                  value={set.reps || ''}
-                                  onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
-                                  className="w-20 h-10 text-center bg-gray-800 border-gray-700"
-                                />
-                                <Button
-                                  size="icon"
-                                  variant={set.completed ? "default" : "outline"}
-                                  onClick={() => set.completed 
-                                    ? uncompleteSet(workoutExercise.id, set.id)
-                                    : handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise.name)
-                                  }
-                                  className={cn(
-                                    "h-10 w-10 ml-auto",
-                                    set.completed ? "bg-emerald-500 hover:bg-emerald-600" : "border-gray-700"
+                                      <Check className="w-5 h-5" />
+                                    </Button>
+                                  ) : (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-500">
+                                          <ChevronDown className="w-4 h-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                                        <DropdownMenuItem 
+                                          className="text-orange-400 focus:text-orange-300"
+                                          onClick={() => uncompleteSet(workoutExercise.id, set.id)}
+                                        >
+                                          <RotateCcw className="w-4 h-4 mr-2" />
+                                          Undo / Edit
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator className="bg-gray-700" />
+                                        <DropdownMenuItem 
+                                          className="text-red-400 focus:text-red-300"
+                                          onClick={() => removeSet(workoutExercise.id, set.id)}
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                          Delete Set
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   )}
-                                >
-                                  <Check className="w-5 h-5" />
-                                </Button>
+                                </div>
                               </div>
                               {/* Drop set additional weights */}
                               {set.type === 'dropset' && set.drops?.map((drop: any, dropIdx: number) => (
@@ -1188,7 +1239,7 @@ export default function ActiveWorkoutPage() {
                                 </Button>
                               )}
                             </div>
-                          ))}
+                          );})}
                           <Button
                             variant="ghost"
                             size="sm"
