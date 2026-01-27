@@ -262,6 +262,28 @@ const COMMON_EXERCISES = [
   { id: 'glute-kickback', name: 'Glute Kickback', pattern: 'hinge', aliases: ['cable kickback', 'donkey kick'] },
   { id: 'hyperextension', name: 'Hyperextension', pattern: 'hinge', aliases: ['back extension', '45 degree extension'] },
   { id: 'reverse-hyper', name: 'Reverse Hyperextension', pattern: 'hinge', aliases: ['reverse hyper', 'reverse back extension'] },
+  // Machine exercises
+  { id: 'machine-chest-press', name: 'Machine Chest Press', pattern: 'push', aliases: ['chest press machine', 'seated chest press', 'plate loaded chest press'] },
+  { id: 'machine-incline-press', name: 'Machine Incline Press', pattern: 'push', aliases: ['incline chest press machine', 'incline machine press'] },
+  { id: 'machine-shoulder-press', name: 'Machine Shoulder Press', pattern: 'push', aliases: ['shoulder press machine', 'seated shoulder machine'] },
+  { id: 'machine-lateral-raise', name: 'Machine Lateral Raise', pattern: 'push', aliases: ['lateral raise machine', 'side raise machine'] },
+  { id: 'machine-row', name: 'Machine Row', pattern: 'pull', aliases: ['row machine', 'plate loaded row', 'iso row'] },
+  { id: 'machine-high-row', name: 'Machine High Row', pattern: 'pull', aliases: ['high row machine', 'converging row'] },
+  { id: 'machine-lat-pulldown', name: 'Machine Lat Pulldown', pattern: 'pull', aliases: ['pulldown machine', 'plate loaded pulldown'] },
+  { id: 'machine-bicep-curl', name: 'Machine Bicep Curl', pattern: 'pull', aliases: ['bicep curl machine', 'preacher curl machine'] },
+  { id: 'machine-tricep-extension', name: 'Machine Tricep Extension', pattern: 'push', aliases: ['tricep machine', 'tricep extension machine'] },
+  { id: 'machine-chest-fly', name: 'Machine Chest Fly', pattern: 'push', aliases: ['chest fly machine', 'pec fly machine', 'butterfly machine'] },
+  { id: 'machine-rear-delt', name: 'Machine Rear Delt Fly', pattern: 'pull', aliases: ['rear delt machine', 'reverse pec deck'] },
+  { id: 'machine-leg-press', name: 'Machine Leg Press', pattern: 'squat', aliases: ['seated leg press', 'horizontal leg press', '45 degree leg press'] },
+  { id: 'machine-leg-curl', name: 'Machine Leg Curl', pattern: 'hinge', aliases: ['lying leg curl machine', 'prone leg curl'] },
+  { id: 'machine-seated-leg-curl', name: 'Machine Seated Leg Curl', pattern: 'hinge', aliases: ['seated hamstring curl', 'seated leg curl machine'] },
+  { id: 'machine-calf-raise', name: 'Machine Calf Raise', pattern: 'squat', aliases: ['standing calf machine', 'calf raise machine'] },
+  { id: 'machine-seated-calf', name: 'Machine Seated Calf Raise', pattern: 'squat', aliases: ['seated calf machine', 'soleus raise'] },
+  { id: 'machine-glute', name: 'Machine Glute Kickback', pattern: 'hinge', aliases: ['glute machine', 'glute kickback machine'] },
+  { id: 'machine-hip-thrust', name: 'Machine Hip Thrust', pattern: 'hinge', aliases: ['hip thrust machine', 'glute drive'] },
+  { id: 'machine-ab-crunch', name: 'Machine Ab Crunch', pattern: 'core', aliases: ['ab machine', 'crunch machine', 'abdominal machine'] },
+  { id: 'assisted-dip', name: 'Assisted Dip Machine', pattern: 'push', aliases: ['dip assist', 'gravitron dip'] },
+  { id: 'assisted-pull-up', name: 'Assisted Pull-Up Machine', pattern: 'pull', aliases: ['pull up assist', 'gravitron pull up'] },
 ];
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
