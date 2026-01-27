@@ -645,6 +645,103 @@ export async function getClientExerciseHistory(
   }
 }
 
+// Fetch workout history from Supabase for a user (or trainer's clients)
+export async function fetchWorkoutHistoryFromSupabase(userId: string, isTrainer: boolean = false): Promise<Workout[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    let query = supabase
+      .from('workouts')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (isTrainer) {
+      // For trainers, fetch workouts where they are the assigned_by (trainer who ran the session)
+      query = query.eq('assigned_by', userId);
+    } else {
+      // For regular users, fetch their own workouts
+      query = query.eq('user_id', userId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error('[WorkoutHistory Fetch] Error:', error.message);
+      return [];
+    }
+    
+    // Map from DB format to app format
+    return (data || []).map(w => ({
+      id: w.id,
+      name: w.name || 'Workout',
+      exercises: typeof w.exercises === 'string' ? JSON.parse(w.exercises) : (w.exercises || []),
+      startTime: w.start_time || w.created_at,
+      endTime: w.end_time || w.created_at,
+      duration: w.duration || 0,
+      totalVolume: w.total_volume || 0,
+      userId: w.user_id,
+      assignedBy: w.assigned_by,
+      status: w.status || 'completed',
+      notes: w.notes,
+      templateId: w.template_id,
+    }));
+  } catch (e) {
+    console.error('[WorkoutHistory Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// Fetch workout history for all trainer's clients
+export async function fetchClientWorkoutsFromSupabase(trainerId: string): Promise<Workout[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    // First get all client IDs for this trainer
+    const { data: clients, error: clientError } = await supabase
+      .from('trainer_clients')
+      .select('client_id')
+      .eq('trainer_id', trainerId);
+    
+    if (clientError || !clients?.length) {
+      console.log('[ClientWorkouts Fetch] No clients found or error:', clientError?.message);
+      return [];
+    }
+    
+    const clientIds = clients.map(c => c.client_id);
+    
+    // Fetch workouts for all clients
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .in('user_id', clientIds)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('[ClientWorkouts Fetch] Error:', error.message);
+      return [];
+    }
+    
+    // Map from DB format to app format
+    return (data || []).map(w => ({
+      id: w.id,
+      name: w.name || 'Workout',
+      exercises: typeof w.exercises === 'string' ? JSON.parse(w.exercises) : (w.exercises || []),
+      startTime: w.start_time || w.created_at,
+      endTime: w.end_time || w.created_at,
+      duration: w.duration || 0,
+      totalVolume: w.total_volume || 0,
+      userId: w.user_id,
+      assignedBy: w.assigned_by,
+      status: w.status || 'completed',
+      notes: w.notes,
+      templateId: w.template_id,
+    }));
+  } catch (e) {
+    console.error('[ClientWorkouts Fetch] Exception:', e);
+    return [];
+  }
+}
+
 // Sync a completed workout to Supabase
 export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> {
   if (!isSupabaseConfigured()) {

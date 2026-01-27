@@ -37,8 +37,10 @@ import {
   syncSessionWorkoutToSupabase,
   syncWorkoutLibraryToSupabase,
   syncCircuitLibraryToSupabase,
+  syncWorkoutToSupabase,
   isSupabaseConfigured,
 } from '@/lib/supabaseSync';
+import { useWorkoutStore } from '@/lib/store';
 import { Cloud, CloudUpload, RefreshCw, Database, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -58,6 +60,8 @@ export default function SettingsPage() {
     circuitLibrary,
     loadFromSupabase,
   } = useTrainerStore();
+  
+  const { workoutHistory } = useWorkoutStore();
   
   const [displayName, setDisplayName] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
@@ -343,6 +347,14 @@ export default function SettingsPage() {
       if (success) successCount++; else errorCount++;
     }
     setSyncStatus(s => ({ ...s, circuits: 'done' }));
+
+    // Sync workout history (completed workouts)
+    setSyncStatus(s => ({ ...s, history: 'syncing' }));
+    for (const workout of workoutHistory) {
+      const success = await syncWorkoutToSupabase(workout);
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, history: 'done' }));
 
     setIsSyncing(false);
     toast.success(`Synced ${successCount} items to Supabase!`, {
@@ -646,6 +658,10 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between bg-gray-800 rounded p-2">
                 <span className="text-gray-400">Circuit Templates</span>
                 <span className="text-white font-medium">{circuitLibrary.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Workout History</span>
+                <span className="text-white font-medium">{workoutHistory.length}</span>
               </div>
             </div>
 

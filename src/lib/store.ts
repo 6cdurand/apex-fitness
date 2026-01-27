@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 import { 
   syncWorkoutToSupabase, 
+  fetchWorkoutHistoryFromSupabase,
+  fetchClientWorkoutsFromSupabase,
   syncPBToSupabase, 
   syncMedalToSupabase, 
   registerUserToSupabase, 
@@ -289,6 +291,9 @@ interface WorkoutState {
   
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
+  
+  // Supabase sync for workout history
+  loadWorkoutHistoryFromSupabase: (userId: string, isTrainer?: boolean) => Promise<void>;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -1016,6 +1021,12 @@ export const useWorkoutStore = create<WorkoutState>()(
             w.id === workoutId ? { ...w, notes } : w
           ),
         }));
+        
+        // Sync updated workout to Supabase
+        const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
+        if (updatedWorkout) {
+          syncWorkoutToSupabase(updatedWorkout);
+        }
       },
 
       getWorkoutById: (workoutId: string) => {
@@ -1100,6 +1111,34 @@ export const useWorkoutStore = create<WorkoutState>()(
         
         // Recalculate strength rating
         useMedalStore.getState().calculateStrengthRatingForUser(userId);
+      },
+
+      loadWorkoutHistoryFromSupabase: async (userId: string, isTrainer: boolean = false) => {
+        console.log('[WorkoutStore] Loading workout history from Supabase for:', userId, isTrainer ? '(trainer)' : '');
+        
+        let workouts: Workout[] = [];
+        
+        if (isTrainer) {
+          // For trainers, fetch all client workouts
+          workouts = await fetchClientWorkoutsFromSupabase(userId);
+        } else {
+          // For regular users, fetch their own workouts
+          workouts = await fetchWorkoutHistoryFromSupabase(userId, false);
+        }
+        
+        if (workouts.length > 0) {
+          // Merge with existing workouts (avoid duplicates by ID)
+          const existingIds = new Set(get().workoutHistory.map(w => w.id));
+          const newWorkouts = workouts.filter(w => !existingIds.has(w.id));
+          
+          set(state => ({
+            workoutHistory: [...state.workoutHistory, ...newWorkouts],
+          }));
+          
+          console.log(`[WorkoutStore] ✅ Loaded ${newWorkouts.length} new workouts from Supabase (${workouts.length} total fetched)`);
+        } else {
+          console.log('[WorkoutStore] No workouts found in Supabase');
+        }
       },
     }),
     {
@@ -2572,6 +2611,9 @@ export const useTrainerStore = create<TrainerState>()(
           workoutLibrary: supabaseWorkoutLibrary.length,
           circuitLibrary: supabaseCircuitLibrary.length,
         });
+        
+        // Also load workout history for all clients
+        await useWorkoutStore.getState().loadWorkoutHistoryFromSupabase(trainerId, true);
       },
 
       // Update session package (for editing total, price, etc.)
