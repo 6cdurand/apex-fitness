@@ -68,9 +68,17 @@ export default function ActiveWorkoutPage() {
     startWorkoutTimer,
     resetRestTimer,
     getPBForExercise,
+    currentClientId,
   } = useWorkoutStore();
   const _medalStore = useMedalStore(); // Medal earning handled by store.ts endWorkout
   const { createPost } = useSocialStore();
+  const { clients } = useTrainerStore();
+  
+  // Get client name if this is a PT session
+  const currentClient = currentClientId 
+    ? clients.find(c => c.clientId === currentClientId)
+    : null;
+  const clientName = currentClient?.client?.displayName || currentClient?.client?.username || null;
 
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
@@ -572,6 +580,10 @@ export default function ActiveWorkoutPage() {
           </Button>
           <div className="text-center">
             <h1 className="text-lg font-semibold text-white">{activeWorkout.name}</h1>
+            {/* Client name for PT sessions */}
+            {clientName && (
+              <p className="text-white/90 text-sm font-medium">with {clientName}</p>
+            )}
             {/* PT vs Solo Session Indicator */}
             <div className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-1",
@@ -824,11 +836,12 @@ export default function ActiveWorkoutPage() {
               (e: any) => e.blockId === block.id
             );
             const colors: Record<string, { bg: string; border: string; text: string; accent: string }> = {
-              warmup: { bg: 'bg-yellow-500/5', border: 'border-yellow-500/30', text: 'text-yellow-400', accent: 'yellow' },
-              strength: { bg: 'bg-blue-500/5', border: 'border-blue-500/30', text: 'text-blue-400', accent: 'blue' },
-              circuit: { bg: 'bg-orange-500/5', border: 'border-orange-500/30', text: 'text-orange-400', accent: 'orange' },
+              warmup: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/50', text: 'text-yellow-400', accent: 'yellow' },
+              strength: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-400', accent: 'blue' },
+              circuit: { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-400', accent: 'orange' },
             };
-            const defaultStyle = { bg: 'bg-gray-500/5', border: 'border-gray-500/30', text: 'text-gray-400', accent: 'gray' };
+            // Default to strength style if block type is unrecognized
+            const defaultStyle = { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-400', accent: 'blue' };
             const style = colors[block.type] || defaultStyle;
             
             return (
@@ -837,9 +850,7 @@ export default function ActiveWorkoutPage() {
                 <div className={cn("flex items-center justify-between p-3 border-b", style.border)}>
                   <div className="flex items-center gap-2">
                     <span className="text-lg">
-                      {block.type === 'warmup' && '🔥'}
-                      {block.type === 'strength' && '💪'}
-                      {block.type === 'circuit' && '⚡'}
+                      {block.type === 'warmup' ? '🔥' : block.type === 'circuit' ? '⚡' : '💪'}
                     </span>
                     <div>
                       <h3 className={cn("font-semibold", style.text)}>{block.name}</h3>
@@ -1015,7 +1026,11 @@ export default function ActiveWorkoutPage() {
                   <div className="divide-y divide-gray-800">
                     {blockExercises.map((workoutExercise: any) => {
                       const exercisePB = getPBForExercise(workoutExercise.exerciseId);
-                      const lastWorkout = workoutHistory.find((w: any) => 
+                      // Filter workout history by current client/user to show only their previous results
+                      const clientWorkoutHistory = workoutHistory.filter((w: any) => 
+                        w.userId === activeWorkout.userId
+                      );
+                      const lastWorkout = clientWorkoutHistory.find((w: any) => 
                         w.exercises?.some((e: any) => e.exerciseId === workoutExercise.exerciseId)
                       );
                       const lastSets = lastWorkout?.exercises?.find((e: any) => 
@@ -1537,11 +1552,12 @@ export default function ActiveWorkoutPage() {
               const block = workoutBlocks.find(b => b.id === activeBlockId);
               if (!block) return null;
               const colors: Record<string, { bg: string; border: string; text: string }> = {
-                warmup: { bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', text: 'text-yellow-400' },
-                strength: { bg: 'bg-blue-500/20', border: 'border-blue-500/30', text: 'text-blue-400' },
-                circuit: { bg: 'bg-orange-500/20', border: 'border-orange-500/30', text: 'text-orange-400' },
+                warmup: { bg: 'bg-yellow-500/20', border: 'border-yellow-500/50', text: 'text-yellow-400' },
+                strength: { bg: 'bg-blue-500/20', border: 'border-blue-500/50', text: 'text-blue-400' },
+                circuit: { bg: 'bg-orange-500/20', border: 'border-orange-500/50', text: 'text-orange-400' },
               };
-              const defaultStyle = { bg: 'bg-gray-500/20', border: 'border-gray-500/30', text: 'text-gray-400' };
+              // Default to strength style
+              const defaultStyle = { bg: 'bg-blue-500/20', border: 'border-blue-500/50', text: 'text-blue-400' };
               const style = colors[block.type] || defaultStyle;
               return (
                 <div className={cn("flex items-center gap-3 p-3 rounded-lg", style.bg, style.border, "border")}>
