@@ -1944,3 +1944,161 @@ export async function deleteSessionWorkoutFromSupabase(workoutId: string): Promi
     return false;
   }
 }
+
+// ============ WORKOUT LIBRARY SYNC ============
+
+export async function syncWorkoutLibraryToSupabase(workout: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbWorkout = {
+      id: workout.id,
+      name: workout.name,
+      description: workout.description || null,
+      trainer_id: workout.trainerId || null,
+      blocks: JSON.stringify(workout.blocks || []),
+      tags: workout.tags || [],
+      estimated_minutes: workout.estimatedMinutes || null,
+      created_at: workout.createdAt || new Date().toISOString(),
+      updated_at: workout.updatedAt || new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('workout_library').upsert(dbWorkout, { onConflict: 'id' });
+    if (error) {
+      console.error('[Workout Library Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Workout Library Sync] ✅ Workout saved:', workout.id);
+    return true;
+  } catch (e) {
+    console.error('[Workout Library Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchWorkoutLibraryFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('workout_library')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Workout Library Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(w => ({
+      id: w.id,
+      name: w.name,
+      description: w.description,
+      trainerId: w.trainer_id,
+      blocks: typeof w.blocks === 'string' ? JSON.parse(w.blocks) : (w.blocks || []),
+      tags: w.tags || [],
+      estimatedMinutes: w.estimated_minutes,
+      createdAt: w.created_at,
+      updatedAt: w.updated_at,
+    }));
+  } catch (e) {
+    console.error('[Workout Library Fetch] Exception:', e);
+    return [];
+  }
+}
+
+export async function deleteWorkoutLibraryFromSupabase(workoutId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('workout_library').delete().eq('id', workoutId);
+    if (error) {
+      console.error('[Workout Library Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Workout Library Delete] Exception:', e);
+    return false;
+  }
+}
+
+// ============ CIRCUIT LIBRARY SYNC ============
+
+export async function syncCircuitLibraryToSupabase(circuit: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbCircuit = {
+      id: circuit.id,
+      name: circuit.name,
+      description: circuit.description || null,
+      trainer_id: circuit.trainerId || null,
+      exercises: JSON.stringify(circuit.exercises || []),
+      circuit_style: circuit.circuitStyle || 'rounds',
+      rounds: circuit.rounds || null,
+      duration: circuit.duration || null,
+      rest_between_rounds: circuit.restBetweenRounds || null,
+      tags: circuit.tags || [],
+      created_at: circuit.createdAt || new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('circuit_library').upsert(dbCircuit, { onConflict: 'id' });
+    if (error) {
+      console.error('[Circuit Library Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Circuit Library Sync] ✅ Circuit saved:', circuit.id);
+    return true;
+  } catch (e) {
+    console.error('[Circuit Library Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchCircuitLibraryFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('circuit_library')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Circuit Library Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(c => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      trainerId: c.trainer_id,
+      exercises: typeof c.exercises === 'string' ? JSON.parse(c.exercises) : (c.exercises || []),
+      circuitStyle: c.circuit_style || 'rounds',
+      rounds: c.rounds,
+      duration: c.duration,
+      restBetweenRounds: c.rest_between_rounds,
+      tags: c.tags || [],
+      createdAt: c.created_at,
+    }));
+  } catch (e) {
+    console.error('[Circuit Library Fetch] Exception:', e);
+    return [];
+  }
+}
+
+export async function deleteCircuitLibraryFromSupabase(circuitId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('circuit_library').delete().eq('id', circuitId);
+    if (error) {
+      console.error('[Circuit Library Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Circuit Library Delete] Exception:', e);
+    return false;
+  }
+}

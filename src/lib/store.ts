@@ -21,6 +21,12 @@ import {
   syncSessionWorkoutToSupabase,
   fetchSessionWorkoutsFromSupabase,
   deleteSessionWorkoutFromSupabase,
+  syncWorkoutLibraryToSupabase,
+  fetchWorkoutLibraryFromSupabase,
+  deleteWorkoutLibraryFromSupabase,
+  syncCircuitLibraryToSupabase,
+  fetchCircuitLibraryFromSupabase,
+  deleteCircuitLibraryFromSupabase,
   syncPaymentToSupabase,
   fetchPaymentsFromSupabase,
   syncClientProgramToSupabase,
@@ -2428,6 +2434,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           workoutLibrary: [...state.workoutLibrary, newWorkout],
         }));
+        // Sync to Supabase
+        syncWorkoutLibraryToSupabase(newWorkout);
         return newWorkout;
       },
 
@@ -2437,12 +2445,17 @@ export const useTrainerStore = create<TrainerState>()(
             w.id === workoutId ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w
           ),
         }));
+        // Sync to Supabase
+        const updated = get().workoutLibrary.find(w => w.id === workoutId);
+        if (updated) syncWorkoutLibraryToSupabase(updated);
       },
 
       deleteFromWorkoutLibrary: (workoutId) => {
         set(state => ({
           workoutLibrary: state.workoutLibrary.filter(w => w.id !== workoutId),
         }));
+        // Delete from Supabase
+        deleteWorkoutLibraryFromSupabase(workoutId);
       },
 
       getWorkoutFromLibrary: (workoutId) => {
@@ -2461,6 +2474,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           circuitLibrary: [...state.circuitLibrary, newCircuit],
         }));
+        // Sync to Supabase
+        syncCircuitLibraryToSupabase(newCircuit);
         return newCircuit;
       },
 
@@ -2470,12 +2485,17 @@ export const useTrainerStore = create<TrainerState>()(
             c.id === circuitId ? { ...c, ...updates } : c
           ),
         }));
+        // Sync to Supabase
+        const updated = get().circuitLibrary.find(c => c.id === circuitId);
+        if (updated) syncCircuitLibraryToSupabase(updated);
       },
 
       deleteCircuitTemplate: (circuitId) => {
         set(state => ({
           circuitLibrary: state.circuitLibrary.filter(c => c.id !== circuitId),
         }));
+        // Delete from Supabase
+        deleteCircuitLibraryFromSupabase(circuitId);
       },
 
       getCircuitTemplate: (circuitId) => {
@@ -2498,6 +2518,8 @@ export const useTrainerStore = create<TrainerState>()(
           supabasePrograms,
           supabaseBookings,
           supabaseSessionWorkouts,
+          supabaseWorkoutLibrary,
+          supabaseCircuitLibrary,
         ] = await Promise.all([
           fetchTrainerClientsFromSupabase(trainerId),
           fetchTrainerSessionsFromSupabase(trainerId),
@@ -2507,6 +2529,8 @@ export const useTrainerStore = create<TrainerState>()(
           fetchClientProgramsFromSupabase(trainerId),
           fetchBookingRequestsFromSupabase(trainerId),
           fetchSessionWorkoutsFromSupabase(trainerId),
+          fetchWorkoutLibraryFromSupabase(trainerId),
+          fetchCircuitLibraryFromSupabase(trainerId),
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
@@ -2532,6 +2556,8 @@ export const useTrainerStore = create<TrainerState>()(
           clientPrograms: supabasePrograms,
           bookingRequests: supabaseBookings,
           sessionWorkouts: supabaseSessionWorkouts,
+          workoutLibrary: supabaseWorkoutLibrary,
+          circuitLibrary: supabaseCircuitLibrary,
         });
         
         console.log(`[Trainer Store] ✅ REPLACED localStorage with Supabase data:`, {
@@ -2543,6 +2569,8 @@ export const useTrainerStore = create<TrainerState>()(
           programs: supabasePrograms.length,
           bookings: supabaseBookings.length,
           sessionWorkouts: supabaseSessionWorkouts.length,
+          workoutLibrary: supabaseWorkoutLibrary.length,
+          circuitLibrary: supabaseCircuitLibrary.length,
         });
       },
 

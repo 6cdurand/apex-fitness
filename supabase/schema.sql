@@ -349,6 +349,48 @@ ALTER TABLE session_workouts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Own session workouts" ON session_workouts FOR ALL USING (true);
 
 -- ==========================================
+-- WORKOUT LIBRARY (saved workout templates)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS workout_library (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  trainer_id TEXT NOT NULL,
+  blocks JSONB NOT NULL DEFAULT '[]',
+  tags TEXT[] DEFAULT '{}',
+  estimated_minutes INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_workout_library_trainer ON workout_library(trainer_id);
+
+ALTER TABLE workout_library ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own workout library" ON workout_library FOR ALL USING (true);
+
+-- ==========================================
+-- CIRCUIT LIBRARY (saved circuit templates)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS circuit_library (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  trainer_id TEXT NOT NULL,
+  exercises JSONB NOT NULL DEFAULT '[]',
+  circuit_style TEXT DEFAULT 'rounds',
+  rounds INTEGER,
+  duration INTEGER,
+  rest_between_rounds TEXT,
+  tags TEXT[] DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_circuit_library_trainer ON circuit_library(trainer_id);
+
+ALTER TABLE circuit_library ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own circuit library" ON circuit_library FOR ALL USING (true);
+
+-- ==========================================
 -- DONE! All tables created with:
 -- - Proper foreign key relationships
 -- - CASCADE DELETE (when user deleted, all their data is deleted)
