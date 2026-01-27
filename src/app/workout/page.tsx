@@ -24,8 +24,11 @@ import {
   Users,
   Calendar,
   Edit,
-  Check
+  Check,
+  DollarSign,
+  CheckCircle2
 } from 'lucide-react';
+import { ProfileCard } from '@/components/ProfileCard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { format } from 'date-fns';
 
@@ -33,8 +36,10 @@ export default function WorkoutPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates } = useWorkoutStore();
-  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram, sessionWorkouts, getSessionWorkout } = useTrainerStore();
+  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram, sessionWorkouts, getSessionWorkout, sessions, toggleSessionPaid, getPackagesForClient, addPayment } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showProfileCard, setShowProfileCard] = useState(false);
+  const [selectedProfileUser, setSelectedProfileUser] = useState<any>(null);
 
   // Get today's sessions for trainer mode
   const today = format(new Date(), 'yyyy-MM-dd');
@@ -309,6 +314,19 @@ export default function WorkoutPage() {
                   format(new Date(w.startTime), 'yyyy-MM-dd') === today
                 );
                 
+                // Find matching session record to check paid status
+                const matchingSessionRecord = sessions.find(s => 
+                  s.clientId === session.clientId && 
+                  s.date === today && 
+                  s.status === 'completed'
+                );
+                const isPaid = matchingSessionRecord?.paid || false;
+                
+                // Get client's package for price info
+                const clientPackages = session.clientId ? getPackagesForClient(session.clientId) : [];
+                const activePackage = clientPackages.find(p => p.status === 'active');
+                const pricePerSession = activePackage?.pricePerSession || 0;
+                
                 return (
                   <Card
                     key={session.id}
@@ -317,26 +335,66 @@ export default function WorkoutPage() {
                     <CardContent className="p-4">
                       {/* Workout Complete Banner */}
                       {sessionCompleted && (
-                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-emerald-500/20">
-                          <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                            <Check className="w-4 h-4 text-white" />
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-emerald-500/20">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                              <Check className="w-4 h-4 text-white" />
+                            </div>
+                            <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
                           </div>
-                          <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
+                          {/* Payment Status & Toggle */}
+                          {matchingSessionRecord && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className={`h-7 text-xs ${isPaid ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'}`}
+                              onClick={() => {
+                                if (matchingSessionRecord) {
+                                  toggleSessionPaid(matchingSessionRecord.id);
+                                }
+                              }}
+                            >
+                              {isPaid ? (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                                  Paid {pricePerSession > 0 && `$${pricePerSession}`}
+                                </>
+                              ) : (
+                                <>
+                                  <DollarSign className="w-3 h-3 mr-1" />
+                                  Mark Paid {pricePerSession > 0 && `$${pricePerSession}`}
+                                </>
+                              )}
+                            </Button>
+                          )}
                         </div>
                       )}
                       
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <Avatar className="w-10 h-10">
-                            <AvatarImage src={clientUser?.profilePhoto} />
-                            <AvatarFallback className="bg-gray-800 text-white">
-                              {clientUser?.displayName?.[0] || '?'}
-                            </AvatarFallback>
-                          </Avatar>
+                          {/* Clickable Avatar for Profile Card */}
+                          <button
+                            onClick={() => {
+                              setSelectedProfileUser(clientUser);
+                              setShowProfileCard(true);
+                            }}
+                            className="focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-full"
+                          >
+                            <Avatar className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all">
+                              <AvatarImage src={clientUser?.profilePhoto} />
+                              <AvatarFallback className="bg-gray-800 text-white">
+                                {clientUser?.displayName?.[0] || '?'}
+                              </AvatarFallback>
+                            </Avatar>
+                          </button>
                           <div>
-                            <h3 className="font-semibold text-white">
+                            {/* Clickable Client Name */}
+                            <button
+                              onClick={() => router.push(`/clients/${session.clientId}`)}
+                              className="font-semibold text-white hover:text-emerald-400 transition-colors text-left"
+                            >
                               {clientUser?.displayName || 'Client'}
-                            </h3>
+                            </button>
                             <p className="text-sm text-gray-400 flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {session.startTime} - {session.endTime}
@@ -1029,6 +1087,26 @@ export default function WorkoutPage() {
           </section>
         )}
       </div>
+
+      {/* Profile Card Dialog */}
+      <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
+        <DialogContent className="bg-transparent border-none shadow-none max-w-sm">
+          {selectedProfileUser && (
+            <ProfileCard
+              user={selectedProfileUser}
+              medals={[]}
+              strengthRating={null}
+              personalBests={[]}
+              stats={{
+                totalWorkouts: workoutHistory.filter(w => w.userId === selectedProfileUser.id).length,
+                totalVolume: workoutHistory.filter(w => w.userId === selectedProfileUser.id).reduce((sum, w) => sum + (w.totalVolume || 0), 0),
+                followers: 0,
+                following: 0,
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

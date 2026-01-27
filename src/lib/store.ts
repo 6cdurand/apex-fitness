@@ -351,10 +351,24 @@ export const useWorkoutStore = create<WorkoutState>()(
         const loggedInUserId = useAuthStore.getState().user?.id || '';
         const targetUserId = clientId || loggedInUserId;
         const pbs = get().personalBests.filter(p => p.userId === targetUserId);
+        const userWorkoutHistory = get().workoutHistory.filter(w => w.userId === targetUserId);
         
-        // Clone template exercises with previous data
+        // Clone template exercises with previous data from last workout
         const exercises: WorkoutExercise[] = (template.exercises || []).map(ex => {
           const pb = pbs.find(p => p.exerciseId === ex.exerciseId);
+          
+          // Find the most recent workout that contains this exercise
+          let lastExerciseData: { weight?: number; reps?: number }[] = [];
+          for (const workout of userWorkoutHistory) {
+            const matchingEx = workout.exercises?.find(e => e.exerciseId === ex.exerciseId);
+            if (matchingEx && matchingEx.sets?.length > 0) {
+              lastExerciseData = matchingEx.sets
+                .filter(s => s.completed && s.weight && s.reps)
+                .map(s => ({ weight: s.weight, reps: s.reps }));
+              break; // Use the most recent workout
+            }
+          }
+          
           return {
             ...ex,
             id: uuidv4(),
@@ -362,8 +376,9 @@ export const useWorkoutStore = create<WorkoutState>()(
               ...s,
               id: uuidv4(),
               completed: false,
-              previousWeight: pb?.bestWeight,
-              previousReps: pb?.bestReps,
+              // Use last workout's actual results for this set, fallback to PB
+              previousWeight: lastExerciseData[idx]?.weight || pb?.bestWeight,
+              previousReps: lastExerciseData[idx]?.reps || pb?.bestReps,
             })),
           };
         });
@@ -490,11 +505,25 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       addExercise: (exercise) => {
-        const { activeWorkout, personalBests, getActiveUserId } = get();
+        const { activeWorkout, personalBests, workoutHistory, getActiveUserId } = get();
         if (!activeWorkout) return;
 
         const targetUserId = getActiveUserId();
         const pb = personalBests.find(p => p.exerciseId === exercise.id && p.userId === targetUserId);
+        
+        // Find last workout data for this exercise
+        const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
+        let lastSetData: { weight?: number; reps?: number } | undefined;
+        for (const workout of userWorkoutHistory) {
+          const matchingEx = workout.exercises?.find(e => e.exerciseId === exercise.id);
+          if (matchingEx && matchingEx.sets?.length > 0) {
+            const completedSet = matchingEx.sets.find(s => s.completed && s.weight && s.reps);
+            if (completedSet) {
+              lastSetData = { weight: completedSet.weight, reps: completedSet.reps };
+              break;
+            }
+          }
+        }
         
         // Extract block metadata if present
         const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
@@ -508,8 +537,8 @@ export const useWorkoutStore = create<WorkoutState>()(
             setNumber: 1,
             type: 'normal',
             completed: false,
-            previousWeight: pb?.bestWeight,
-            previousReps: pb?.bestReps,
+            previousWeight: lastSetData?.weight || pb?.bestWeight,
+            previousReps: lastSetData?.reps || pb?.bestReps,
           }],
           restTimerSeconds: 90,
           // Preserve block metadata
@@ -553,7 +582,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       addSet: (exerciseId) => {
-        const { activeWorkout, personalBests, getActiveUserId } = get();
+        const { activeWorkout, personalBests, workoutHistory, getActiveUserId } = get();
         if (!activeWorkout) return;
 
         const exercise = activeWorkout.exercises.find(e => e.id === exerciseId);
@@ -562,6 +591,21 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetUserId = getActiveUserId();
         const pb = personalBests.find(p => p.exerciseId === exercise.exerciseId && p.userId === targetUserId);
         const lastSet = exercise.sets[exercise.sets.length - 1];
+        const newSetIndex = exercise.sets.length;
+        
+        // Find last workout data for this exercise at this set index
+        const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
+        let lastSetData: { weight?: number; reps?: number } | undefined;
+        for (const workout of userWorkoutHistory) {
+          const matchingEx = workout.exercises?.find(e => e.exerciseId === exercise.exerciseId);
+          if (matchingEx && matchingEx.sets?.length > newSetIndex) {
+            const historicalSet = matchingEx.sets[newSetIndex];
+            if (historicalSet?.completed && historicalSet.weight && historicalSet.reps) {
+              lastSetData = { weight: historicalSet.weight, reps: historicalSet.reps };
+              break;
+            }
+          }
+        }
 
         const newSet: WorkoutSet = {
           id: uuidv4(),
@@ -570,8 +614,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           weight: lastSet?.weight,
           reps: lastSet?.reps,
           completed: false,
-          previousWeight: pb?.bestWeight,
-          previousReps: pb?.bestReps,
+          previousWeight: lastSetData?.weight || pb?.bestWeight,
+          previousReps: lastSetData?.reps || pb?.bestReps,
         };
 
         set({
