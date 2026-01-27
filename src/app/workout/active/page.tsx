@@ -823,12 +823,13 @@ export default function ActiveWorkoutPage() {
             const blockExercises = activeWorkout.exercises.filter(
               (e: any) => e.blockId === block.id
             );
-            const colors = {
+            const colors: Record<string, { bg: string; border: string; text: string; accent: string }> = {
               warmup: { bg: 'bg-yellow-500/5', border: 'border-yellow-500/30', text: 'text-yellow-400', accent: 'yellow' },
               strength: { bg: 'bg-blue-500/5', border: 'border-blue-500/30', text: 'text-blue-400', accent: 'blue' },
               circuit: { bg: 'bg-orange-500/5', border: 'border-orange-500/30', text: 'text-orange-400', accent: 'orange' },
             };
-            const style = colors[block.type];
+            const defaultStyle = { bg: 'bg-gray-500/5', border: 'border-gray-500/30', text: 'text-gray-400', accent: 'gray' };
+            const style = colors[block.type] || defaultStyle;
             
             return (
               <div key={block.id} className={cn("rounded-xl border-2", style.border, style.bg)}>
@@ -1535,12 +1536,13 @@ export default function ActiveWorkoutPage() {
             {activeBlockId && (() => {
               const block = workoutBlocks.find(b => b.id === activeBlockId);
               if (!block) return null;
-              const colors = {
+              const colors: Record<string, { bg: string; border: string; text: string }> = {
                 warmup: { bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', text: 'text-yellow-400' },
                 strength: { bg: 'bg-blue-500/20', border: 'border-blue-500/30', text: 'text-blue-400' },
                 circuit: { bg: 'bg-orange-500/20', border: 'border-orange-500/30', text: 'text-orange-400' },
               };
-              const style = colors[block.type];
+              const defaultStyle = { bg: 'bg-gray-500/20', border: 'border-gray-500/30', text: 'text-gray-400' };
+              const style = colors[block.type] || defaultStyle;
               return (
                 <div className={cn("flex items-center gap-3 p-3 rounded-lg", style.bg, style.border, "border")}>
                   <span className="text-xl">
