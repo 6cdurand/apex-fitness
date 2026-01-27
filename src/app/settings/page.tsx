@@ -35,6 +35,8 @@ import {
   syncPaymentToSupabase,
   syncClientProgramToSupabase,
   syncSessionWorkoutToSupabase,
+  syncWorkoutLibraryToSupabase,
+  syncCircuitLibraryToSupabase,
   isSupabaseConfigured,
 } from '@/lib/supabaseSync';
 import { Cloud, CloudUpload, RefreshCw, Database, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -52,6 +54,8 @@ export default function SettingsPage() {
     payments,
     clientPrograms,
     sessionWorkouts,
+    workoutLibrary,
+    circuitLibrary,
     loadFromSupabase,
   } = useTrainerStore();
   
@@ -323,6 +327,22 @@ export default function SettingsPage() {
       if (success) successCount++; else errorCount++;
     }
     setSyncStatus(s => ({ ...s, workouts: 'done' }));
+
+    // Sync workout library
+    setSyncStatus(s => ({ ...s, library: 'syncing' }));
+    for (const workout of workoutLibrary) {
+      const success = await syncWorkoutLibraryToSupabase({ ...workout, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, library: 'done' }));
+
+    // Sync circuit library
+    setSyncStatus(s => ({ ...s, circuits: 'syncing' }));
+    for (const circuit of circuitLibrary) {
+      const success = await syncCircuitLibraryToSupabase({ ...circuit, trainerId });
+      if (success) successCount++; else errorCount++;
+    }
+    setSyncStatus(s => ({ ...s, circuits: 'done' }));
 
     setIsSyncing(false);
     toast.success(`Synced ${successCount} items to Supabase!`, {
@@ -618,6 +638,14 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between bg-gray-800 rounded p-2">
                 <span className="text-gray-400">Workouts</span>
                 <span className="text-white font-medium">{sessionWorkouts.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Library Templates</span>
+                <span className="text-white font-medium">{workoutLibrary.length}</span>
+              </div>
+              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
+                <span className="text-gray-400">Circuit Templates</span>
+                <span className="text-white font-medium">{circuitLibrary.length}</span>
               </div>
             </div>
 
