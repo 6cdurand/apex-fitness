@@ -381,7 +381,9 @@ function WorkoutBuilderContent() {
   const [libraryWorkoutTags, setLibraryWorkoutTags] = useState('');
   const [showEditOptionsDialog, setShowEditOptionsDialog] = useState(isEditMode);
   const [showCircuitLibraryDialog, setShowCircuitLibraryDialog] = useState(false);
+  const [showSaveCircuitDialog, setShowSaveCircuitDialog] = useState(false);
   const [circuitTemplateName, setCircuitTemplateName] = useState('');
+  const [activeCircuitBlockId, setActiveCircuitBlockId] = useState<string | null>(null);
   
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
@@ -725,6 +727,52 @@ function WorkoutBuilderContent() {
     toast.success(`Loaded "${libraryItem.name}" from library`);
   };
 
+  const handleSaveCircuitTemplate = () => {
+    if (!circuitTemplateName.trim() || !activeCircuitBlockId) {
+      toast.error('Please enter a circuit name');
+      return;
+    }
+    
+    const block = blocks.find(b => b.id === activeCircuitBlockId);
+    if (!block) return;
+    
+    saveCircuitTemplate({
+      name: circuitTemplateName,
+      trainerId: user?.id || '',
+      exercises: block.exercises,
+      circuitStyle: block.circuitStyle || 'rounds',
+      rounds: block.rounds,
+      duration: block.roundDuration ? parseInt(block.roundDuration) * 60 : undefined,
+      restBetweenRounds: block.restBetweenRounds,
+    });
+    
+    toast.success('Circuit saved to library!');
+    setShowSaveCircuitDialog(false);
+    setCircuitTemplateName('');
+    setActiveCircuitBlockId(null);
+  };
+
+  const handleLoadCircuitTemplate = (circuit: typeof circuitLibrary[0]) => {
+    if (!activeCircuitBlockId) return;
+    
+    setBlocks(blocks.map(b => 
+      b.id === activeCircuitBlockId 
+        ? { 
+            ...b, 
+            name: circuit.name,
+            exercises: circuit.exercises,
+            circuitStyle: circuit.circuitStyle,
+            rounds: circuit.rounds,
+            restBetweenRounds: circuit.restBetweenRounds,
+          } 
+        : b
+    ));
+    
+    setShowCircuitLibraryDialog(false);
+    setActiveCircuitBlockId(null);
+    toast.success(`Loaded "${circuit.name}" circuit`);
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl pb-24">
       <div className="mb-6">
@@ -999,9 +1047,40 @@ function WorkoutBuilderContent() {
                   {/* Circuit Block Settings */}
                   {block.type === 'circuit' && (
                     <div className="mb-4 p-3 bg-background/30 rounded-lg border border-orange-500/20">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Clock className="h-4 w-4 text-orange-400" />
-                        <span className="text-sm font-medium text-orange-400">Circuit Style</span>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-orange-400" />
+                          <span className="text-sm font-medium text-orange-400">Circuit Style</span>
+                        </div>
+                        <div className="flex gap-1">
+                          {circuitLibrary.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-orange-400 hover:bg-orange-500/10"
+                              onClick={() => {
+                                setActiveCircuitBlockId(block.id);
+                                setShowCircuitLibraryDialog(true);
+                              }}
+                            >
+                              📚 Load
+                            </Button>
+                          )}
+                          {block.exercises.length > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs text-orange-400 hover:bg-orange-500/10"
+                              onClick={() => {
+                                setActiveCircuitBlockId(block.id);
+                                setCircuitTemplateName(block.name || 'My Circuit');
+                                setShowSaveCircuitDialog(true);
+                              }}
+                            >
+                              💾 Save
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       
                       {/* Circuit Style Toggle */}
@@ -1861,6 +1940,91 @@ function WorkoutBuilderContent() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Circuit Template Dialog */}
+      <Dialog open={showSaveCircuitDialog} onOpenChange={setShowSaveCircuitDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>💾 Save Circuit Template</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <Label>Circuit Name</Label>
+              <Input
+                value={circuitTemplateName}
+                onChange={(e) => setCircuitTemplateName(e.target.value)}
+                placeholder="e.g., HIIT Finisher, Core Burner"
+                className="mt-2"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Save this circuit to reuse it in future workouts
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowSaveCircuitDialog(false);
+                  setActiveCircuitBlockId(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveCircuitTemplate}
+                className="flex-1 bg-orange-500 hover:bg-orange-600"
+              >
+                <Save className="h-4 w-4 mr-2" /> Save Circuit
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Circuit Library Dialog */}
+      <Dialog open={showCircuitLibraryDialog} onOpenChange={(open) => {
+        setShowCircuitLibraryDialog(open);
+        if (!open) setActiveCircuitBlockId(null);
+      }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>📚 Circuit Library</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[400px] pr-4">
+            {circuitLibrary.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No saved circuits yet.</p>
+                <p className="text-sm mt-2">Save circuits to reuse them in future workouts!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {circuitLibrary.map((circuit) => (
+                  <Card 
+                    key={circuit.id} 
+                    className="bg-gray-800 border-gray-700 cursor-pointer hover:border-orange-500/50 transition-colors"
+                    onClick={() => handleLoadCircuitTemplate(circuit)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-white">{circuit.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {circuit.exercises?.length || 0} exercises • {circuit.circuitStyle} • {circuit.rounds || '?'} rounds
+                          </p>
+                        </div>
+                        <Button size="sm" variant="ghost" className="text-orange-400">
+                          Load
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </div>
