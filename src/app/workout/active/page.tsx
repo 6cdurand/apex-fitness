@@ -893,17 +893,17 @@ export default function ActiveWorkoutPage() {
                             {idx + 1}
                           </span>
                           <div className="flex-1">
-                            <p className="text-white font-medium text-sm">{workoutExercise.exercise.name}</p>
+                            <p className="text-white font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
                           </div>
                           <div className="flex items-center gap-1">
                             <Input
                               type="number"
-                              value={circuitExerciseReps[workoutExercise.id] || workoutExercise.sets[0]?.reps || ''}
+                              value={circuitExerciseReps[workoutExercise.id] || (workoutExercise.sets || [])[0]?.reps || ''}
                               onChange={(e) => {
                                 const reps = parseInt(e.target.value) || 0;
                                 setCircuitExerciseReps(prev => ({ ...prev, [workoutExercise.id]: reps }));
-                                if (workoutExercise.sets[0]) {
-                                  updateSet(workoutExercise.id, workoutExercise.sets[0].id, { reps });
+                                if ((workoutExercise.sets || [])[0]) {
+                                  updateSet(workoutExercise.id, (workoutExercise.sets || [])[0].id, { reps });
                                 }
                               }}
                               className="w-14 h-7 text-center text-sm bg-gray-900 border-gray-700"
@@ -1026,12 +1026,12 @@ export default function ActiveWorkoutPage() {
                         <div className="px-4 py-3">
                           <div className="flex items-center justify-between mb-2">
                             <div>
-                              <p className="font-medium text-white">{workoutExercise.exercise.name}</p>
-                              <p className="text-xs text-gray-500">{workoutExercise.exercise.primaryMuscles?.join(', ')}</p>
+                              <p className="font-medium text-white">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                              <p className="text-xs text-gray-500">{workoutExercise.exercise?.primaryMuscles?.join(', ')}</p>
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary" className="bg-gray-800 text-gray-400">
-                                {workoutExercise.sets.filter((s: any) => s.completed).length}/{workoutExercise.sets.length}
+                                {(workoutExercise.sets || []).filter((s: any) => s.completed).length}/{(workoutExercise.sets || []).length}
                               </Badge>
                               <Button
                                 size="icon"
@@ -1069,7 +1069,7 @@ export default function ActiveWorkoutPage() {
                         </div>
                         {/* Sets */}
                         <div className="px-4 pb-3 divide-y divide-gray-800/50">
-                          {workoutExercise.sets.map((set: any, idx: number) => {
+                          {(workoutExercise.sets || []).map((set: any, idx: number) => {
                             const previousDisplay = set.previousWeight && set.previousReps 
                               ? `${set.previousWeight}kg × ${set.previousReps}` 
                               : '—';
@@ -1151,7 +1151,7 @@ export default function ActiveWorkoutPage() {
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise.name)}
+                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')}
                                       disabled={!set.weight || !set.reps}
                                       className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
                                     >
@@ -1370,7 +1370,7 @@ export default function ActiveWorkoutPage() {
                   <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white">{workoutExercise.exercise.name}</h3>
+                        <h3 className="font-semibold text-white">{workoutExercise.exercise?.name || 'Exercise'}</h3>
                         {pb && (
                           <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-400">
                             <Trophy className="w-3 h-3 mr-1" />
@@ -1394,7 +1394,7 @@ export default function ActiveWorkoutPage() {
                           className="text-gray-300 focus:text-white focus:bg-gray-700"
                           onClick={() => {
                             // Copy previous sets
-                            workoutExercise.sets.forEach((s, idx) => {
+                            (workoutExercise.sets || []).forEach((s, idx) => {
                               if (s.previousWeight && s.previousReps) {
                                 updateSet(workoutExercise.id, s.id, {
                                   weight: s.previousWeight,
@@ -1417,7 +1417,8 @@ export default function ActiveWorkoutPage() {
                           className="text-gray-300 focus:text-white focus:bg-gray-700"
                           onClick={() => {
                             // Add a drop set to the last completed set
-                            const lastSet = workoutExercise.sets[workoutExercise.sets.length - 1];
+                            const sets = workoutExercise.sets || [];
+                            const lastSet = sets[sets.length - 1];
                             if (lastSet) {
                               const currentDrops = lastSet.drops || [];
                               const newDrop = {
@@ -1489,14 +1490,14 @@ export default function ActiveWorkoutPage() {
 
                   {/* Sets */}
                   <div className="divide-y divide-gray-800/50">
-                    {workoutExercise.sets.map((set) => (
+                    {(workoutExercise.sets || []).map((set) => (
                       <SetRow
                         key={set.id}
                         set={set}
                         exerciseId={workoutExercise.id}
-                        exerciseName={workoutExercise.exercise.name}
+                        exerciseName={workoutExercise.exercise?.name || 'Exercise'}
                         onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
-                        onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise.name)}
+                        onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise?.name || 'Exercise')}
                         onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
                         onRemove={() => removeSet(workoutExercise.id, set.id)}
                       />
