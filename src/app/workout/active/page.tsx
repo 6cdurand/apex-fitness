@@ -105,6 +105,9 @@ export default function ActiveWorkoutPage() {
   const [sessionPaid, setSessionPaid] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
   
+  // Per-set rest timers (setId -> { remaining seconds, total seconds })
+  const [setRestTimers, setSetRestTimers] = useState<Record<string, { remaining: number; total: number }>>({});
+  
   // Block system state
   const [workoutBlocks, setWorkoutBlocks] = useState<{
     id: string;
@@ -180,6 +183,27 @@ export default function ActiveWorkoutPage() {
     const interval = setInterval(tickRestTimer, 1000);
     return () => clearInterval(interval);
   }, [restTimer.isRunning, tickRestTimer]);
+
+  // Per-set rest timers tick
+  useEffect(() => {
+    const hasActiveTimers = Object.values(setRestTimers).some(t => t.remaining > 0);
+    if (!hasActiveTimers) return;
+    
+    const interval = setInterval(() => {
+      setSetRestTimers(prev => {
+        const updated: Record<string, { remaining: number; total: number }> = {};
+        for (const [setId, timer] of Object.entries(prev)) {
+          if (timer.remaining > 0) {
+            updated[setId] = { ...timer, remaining: timer.remaining - 1 };
+          }
+          // Remove timers that hit zero (cleanup)
+        }
+        return updated;
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [setRestTimers]);
 
   // Warmup exercises - use category filter
   const warmupExercises = exerciseLibrary.filter(e => e.category === 'warmup');
@@ -412,6 +436,11 @@ export default function ActiveWorkoutPage() {
     // Auto-start rest timer if enabled
     if (autoRestEnabled && defaultRestTime > 0) {
       startRestTimer(defaultRestTime, exerciseId);
+      // Start per-set rest timer
+      setSetRestTimers(prev => ({
+        ...prev,
+        [setId]: { remaining: defaultRestTime, total: defaultRestTime }
+      }));
     }
     
     // Check for new PB
@@ -1161,8 +1190,17 @@ export default function ActiveWorkoutPage() {
                                     className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
                                   />
                                 </div>
-                                {/* Complete Button */}
-                                <div className="col-span-2 flex justify-end">
+                                {/* Complete Button / Rest Timer */}
+                                <div className="col-span-2 flex justify-end items-center gap-1">
+                                  {/* Per-set rest timer countdown */}
+                                  {setRestTimers[set.id]?.remaining > 0 && (
+                                    <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 rounded text-xs">
+                                      <Timer className="w-3 h-3 text-blue-400" />
+                                      <span className="text-blue-400 font-mono">
+                                        {Math.floor(setRestTimers[set.id].remaining / 60)}:{(setRestTimers[set.id].remaining % 60).toString().padStart(2, '0')}
+                                      </span>
+                                    </div>
+                                  )}
                                   {!set.completed ? (
                                     <Button
                                       size="icon"

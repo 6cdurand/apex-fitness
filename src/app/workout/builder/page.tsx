@@ -41,6 +41,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
+import { 
+  estimateWorkoutLengthSeconds, 
+  formatDuration, 
+  TEMPO_PRESETS, 
+  REST_PRESETS,
+  type EstimatorExercise,
+  type Tempo,
+  mapEquipmentToType 
+} from '@/lib/workoutEstimator';
 
 interface WorkoutExercise {
   id: string;
@@ -441,52 +450,78 @@ function WorkoutBuilderContent() {
     setSelectedPhaseId(newPhaseId);
   };
 
-  // Estimate workout duration
-  const estimatedDuration = useMemo(() => {
-    let totalSeconds = 0;
+  // Parse tempo string to Tempo array
+  const parseTempo = (tempoStr?: string): Tempo | undefined => {
+    if (!tempoStr) return undefined;
+    const digits = tempoStr.replace(/[^0-9]/g, '');
+    if (digits.length >= 4) {
+      return [parseInt(digits[0]), parseInt(digits[1]), parseInt(digits[2]), parseInt(digits[3])];
+    }
+    return undefined;
+  };
+
+  // Estimate workout duration using new estimator
+  const workoutEstimate = useMemo(() => {
+    const exercises: EstimatorExercise[] = [];
+    let cardioSeconds = 0;
     
     blocks.forEach(block => {
       if (block.type === 'circuit' && block.rounds && block.roundDuration) {
-        // Circuit blocks: use round duration × rounds + rest between rounds
+        // Circuit blocks: calculate total time
         const durationMatch = block.roundDuration.match(/(\d+)/);
         const roundMinutes = durationMatch ? parseInt(durationMatch[1]) : 5;
         const restMatch = block.restBetweenRounds?.match(/(\d+)/);
-        const restSeconds = restMatch ? parseInt(restMatch[1]) : 60;
-        
-        totalSeconds += block.rounds * roundMinutes * 60;
-        totalSeconds += (block.rounds - 1) * restSeconds;
+        const restSecs = restMatch ? parseInt(restMatch[1]) : 60;
+        cardioSeconds += block.rounds * roundMinutes * 60 + (block.rounds - 1) * restSecs;
       } else {
         block.exercises.forEach(exercise => {
-          // Time per set based on repType
-          let timePerSet = 35;
-          if (exercise.repType === 'time') {
-            // Parse time from reps (e.g., "30s", "60s", "2min")
-            const timeMatch = exercise.reps.match(/(\d+)(s|m|min)?/);
-            if (timeMatch) {
-              const value = parseInt(timeMatch[1]);
-              const unit = timeMatch[2];
-              timePerSet = unit === 'm' || unit === 'min' ? value * 60 : value;
+          // Parse reps - handle ranges like "8-12" by taking average
+          let reps = 10;
+          const repsMatch = exercise.reps.match(/(\d+)(?:-(\d+))?/);
+          if (repsMatch) {
+            if (repsMatch[2]) {
+              reps = Math.round((parseInt(repsMatch[1]) + parseInt(repsMatch[2])) / 2);
+            } else {
+              reps = parseInt(repsMatch[1]);
             }
-          } else {
-            timePerSet = block.type === 'warmup' ? 20 : 35;
           }
           
-          totalSeconds += exercise.sets * timePerSet;
-          
-          // Rest time between sets
+          // Parse rest time
           const restMatch = exercise.rest.match(/(\d+)/);
-          const restSeconds = restMatch ? parseInt(restMatch[1]) : 60;
-          totalSeconds += (exercise.sets - 1) * restSeconds;
+          const restSecs = restMatch ? parseInt(restMatch[1]) : 90;
           
-          // Transition time between exercises
-          totalSeconds += 30;
+          // Infer equipment type from exercise name
+          const name = exercise.exerciseName.toLowerCase();
+          let equipmentType: 'barbell' | 'machine' | 'cable' | 'dumbbell' | 'bodyweight' | 'other' = 'other';
+          if (name.includes('barbell') || name.includes('bb ') || name.includes('deadlift') || name.includes('bench press') || name.includes('squat')) {
+            equipmentType = 'barbell';
+          } else if (name.includes('dumbbell') || name.includes('db ')) {
+            equipmentType = 'dumbbell';
+          } else if (name.includes('cable') || name.includes('pulldown') || name.includes('face pull')) {
+            equipmentType = 'cable';
+          } else if (name.includes('machine') || name.includes('smith') || name.includes('leg press') || name.includes('pec deck') || name.includes('hack')) {
+            equipmentType = 'machine';
+          } else if (name.includes('push-up') || name.includes('pull-up') || name.includes('dip') || name.includes('plank')) {
+            equipmentType = 'bodyweight';
+          }
+          
+          exercises.push({
+            name: exercise.exerciseName,
+            sets: exercise.sets,
+            reps: reps,
+            restSeconds: restSecs,
+            tempo: parseTempo(exercise.tempo),
+            type: equipmentType,
+          });
         });
       }
     });
     
-    const minutes = Math.round(totalSeconds / 60);
-    return minutes;
+    const estimate = estimateWorkoutLengthSeconds(exercises, [{ name: 'circuits', durationSeconds: cardioSeconds }]);
+    return estimate;
   }, [blocks]);
+  
+  const estimatedDuration = Math.round(workoutEstimate.totalSeconds / 60);
 
   const filteredExercises = COMMON_EXERCISES.filter(ex => {
     const search = exerciseSearch.toLowerCase();
@@ -1446,29 +1481,70 @@ function WorkoutBuilderContent() {
                 </div>
                 <div>
                   <Label>Rest</Label>
-                  <Input
-                    value={editingExercise.exercise.rest}
-                    onChange={(e) => setEditingExercise({
-                      ...editingExercise,
-                      exercise: { ...editingExercise.exercise, rest: e.target.value }
-                    })}
-                    placeholder={editingExercise.exercise.setStyle === 'drop-set' ? 'No rest' : '60s'}
-                  />
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {REST_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.value}
+                        type="button"
+                        variant={editingExercise.exercise.rest === `${preset.value}s` ? 'default' : 'outline'}
+                        size="sm"
+                        className={`text-xs h-6 px-2 ${editingExercise.exercise.rest === `${preset.value}s` ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                        onClick={() => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, rest: `${preset.value}s` }
+                        })}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div>
-                <Label>Tempo (optional)</Label>
+                <Label className="mb-2 block">Tempo</Label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {Object.entries(TEMPO_PRESETS).map(([key, preset]) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant={editingExercise.exercise.tempo === preset.tempo.join('') ? 'default' : 'outline'}
+                      size="sm"
+                      className={`text-xs h-7 ${editingExercise.exercise.tempo === preset.tempo.join('') ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                      onClick={() => setEditingExercise({
+                        ...editingExercise,
+                        exercise: { ...editingExercise.exercise, tempo: preset.tempo.join('') }
+                      })}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant={!editingExercise.exercise.tempo ? 'default' : 'outline'}
+                    size="sm"
+                    className={`text-xs h-7 ${!editingExercise.exercise.tempo ? 'bg-gray-600' : ''}`}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, tempo: '' }
+                    })}
+                  >
+                    None
+                  </Button>
+                </div>
                 <Input
                   value={editingExercise.exercise.tempo || ''}
                   onChange={(e) => setEditingExercise({
                     ...editingExercise,
                     exercise: { ...editingExercise.exercise, tempo: e.target.value }
                   })}
-                  placeholder="3010 (eccentric-pause-concentric-pause)"
+                  placeholder="Custom: 3010"
+                  className="h-8"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Format: eccentric-bottom pause-concentric-top pause (e.g., 3010)
+                  {editingExercise.exercise.tempo 
+                    ? `${editingExercise.exercise.tempo[0] || 0}s down, ${editingExercise.exercise.tempo[1] || 0}s pause, ${editingExercise.exercise.tempo[2] || 0}s up, ${editingExercise.exercise.tempo[3] || 0}s top`
+                    : 'Eccentric-pause-concentric-pause (affects time estimate)'}
                 </p>
               </div>
 
@@ -1495,11 +1571,24 @@ function WorkoutBuilderContent() {
       {/* Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
         <div className="container mx-auto max-w-4xl flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">
-              {blocks.length} block{blocks.length !== 1 ? 's' : ''} • {' '}
-              {blocks.reduce((acc, b) => acc + b.exercises.length, 0)} exercises
-            </p>
+          <div className="flex items-center gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                {blocks.length} block{blocks.length !== 1 ? 's' : ''} • {' '}
+                {blocks.reduce((acc, b) => acc + b.exercises.length, 0)} exercises
+              </p>
+            </div>
+            {blocks.length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                <Clock className="h-4 w-4 text-emerald-400" />
+                <div className="text-sm">
+                  <span className="font-semibold text-emerald-400">~{estimatedDuration} min</span>
+                  <span className="text-xs text-muted-foreground ml-2">
+                    ({Math.round(workoutEstimate.workSeconds / 60)}m work, {Math.round(workoutEstimate.restSeconds / 60)}m rest)
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
           <Button 
             onClick={handleSave} 
