@@ -380,7 +380,7 @@ export default function WorkoutPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 text-xs text-gray-400 hover:text-white"
-                              onClick={() => router.push(`/workout/builder?eventId=${session.id}&clientId=${session.clientId}&templateId=${session.workoutId}`)}
+                              onClick={() => router.push(`/workout/builder?eventId=${session.id}&clientId=${session.clientId}&workoutId=${linkedSessionWorkout.id}`)}
                             >
                               <Edit className="w-3 h-3 mr-1" />
                               Edit
