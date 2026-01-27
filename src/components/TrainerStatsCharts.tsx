@@ -28,6 +28,7 @@ interface TrainerStatsChartsProps {
 
 export function TrainerStatsCharts({ sessionPackages, sessions, clients }: TrainerStatsChartsProps) {
   // Calculate weekly earnings data (last 8 weeks)
+  // Only counts PAID sessions, using each client's price per session
   const weeklyEarningsData = useMemo(() => {
     const weeks = eachWeekOfInterval({
       start: subWeeks(new Date(), 7),
@@ -36,30 +37,33 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
 
     return weeks.map(weekStart => {
       const weekEnd = endOfWeek(weekStart);
-      const weekSessions = sessions.filter(s => {
+      
+      // Filter sessions that are COMPLETED AND PAID within this week
+      const paidWeekSessions = sessions.filter(s => {
         const date = new Date(s.date);
-        return date >= weekStart && date <= weekEnd && s.status === 'completed';
+        return date >= weekStart && date <= weekEnd && s.status === 'completed' && s.paid === true;
       });
 
-      // Calculate earnings based on sessions and package prices
+      // Calculate earnings based on each client's package price
       let earnings = 0;
-      weekSessions.forEach(session => {
-        // Find the package for this client
-        const pkg = sessionPackages.find(p => p.clientId === session.clientId && p.status === 'active');
-        if (pkg) {
-          earnings += pkg.pricePerSession || 0;
+      paidWeekSessions.forEach(session => {
+        // Find any package for this client (active or not) to get their rate
+        const pkg = sessionPackages.find(p => p.clientId === session.clientId);
+        if (pkg && pkg.pricePerSession) {
+          earnings += pkg.pricePerSession;
         }
       });
 
       return {
         week: format(weekStart, 'MMM d'),
-        sessions: weekSessions.length,
+        sessions: paidWeekSessions.length,
         earnings: Math.round(earnings),
       };
     });
   }, [sessions, sessionPackages]);
 
   // Calculate monthly earnings data (last 6 months)
+  // Only counts PAID sessions
   const monthlyEarningsData = useMemo(() => {
     const months = eachMonthOfInterval({
       start: subMonths(new Date(), 5),
@@ -68,23 +72,25 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
 
     return months.map(monthStart => {
       const monthEnd = endOfMonth(monthStart);
-      const monthSessions = sessions.filter(s => {
+      
+      // Filter sessions that are COMPLETED AND PAID within this month
+      const paidMonthSessions = sessions.filter(s => {
         const date = new Date(s.date);
-        return date >= monthStart && date <= monthEnd && s.status === 'completed';
+        return date >= monthStart && date <= monthEnd && s.status === 'completed' && s.paid === true;
       });
 
-      // Calculate earnings based on sessions and package prices
+      // Calculate earnings based on each client's package price
       let earnings = 0;
-      monthSessions.forEach(session => {
+      paidMonthSessions.forEach(session => {
         const pkg = sessionPackages.find(p => p.clientId === session.clientId);
-        if (pkg) {
-          earnings += pkg.pricePerSession || 0;
+        if (pkg && pkg.pricePerSession) {
+          earnings += pkg.pricePerSession;
         }
       });
 
       return {
         month: format(monthStart, 'MMM'),
-        sessions: monthSessions.length,
+        sessions: paidMonthSessions.length,
         earnings: Math.round(earnings),
       };
     });
@@ -285,6 +291,71 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
                 <Bar dataKey="sessions" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Monthly Earnings Trend */}
+      <Card className="bg-gray-900 border-gray-800">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-white flex items-center gap-2 text-base">
+            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            Monthly Earnings Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={monthlyEarningsData}>
+                <defs>
+                  <linearGradient id="monthlyGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fill: '#9ca3af', fontSize: 10 }}
+                  axisLine={{ stroke: '#374151' }}
+                />
+                <YAxis 
+                  tick={{ fill: '#9ca3af', fontSize: 10 }}
+                  axisLine={{ stroke: '#374151' }}
+                  tickFormatter={(v) => `$${v}`}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#1f2937', 
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                  }}
+                  labelStyle={{ color: '#fff' }}
+                  formatter={(value: number, name: string) => [
+                    name === 'earnings' ? `$${value}` : value, 
+                    name === 'earnings' ? 'Earnings' : 'Sessions'
+                  ]}
+                />
+                <Legend />
+                <Area 
+                  type="monotone" 
+                  dataKey="earnings" 
+                  stroke="#8b5cf6" 
+                  fill="url(#monthlyGradient)" 
+                  strokeWidth={2}
+                  name="Earnings"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Monthly Summary Stats */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            {monthlyEarningsData.slice(-3).map((month, idx) => (
+              <div key={idx} className="text-center p-2 bg-gray-800 rounded-lg">
+                <p className="text-xs text-gray-400">{month.month}</p>
+                <p className="text-sm font-bold text-emerald-400">${month.earnings}</p>
+                <p className="text-xs text-gray-500">{month.sessions} sessions</p>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

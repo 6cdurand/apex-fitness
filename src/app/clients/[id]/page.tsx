@@ -167,6 +167,7 @@ export default function ClientDetailPage() {
   const [paymentDescription, setPaymentDescription] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer'>('cash');
   const [sessionsCovered, setSessionsCovered] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
   
   // Edit stats state for onboarding existing clients
   const [editSessionsDone, setEditSessionsDone] = useState('');
@@ -332,7 +333,7 @@ export default function ClientDetailPage() {
     const sessionsCount = sessionsCovered ? parseInt(sessionsCovered) : 0;
     const amount = parseFloat(paymentAmount);
     
-    // Add payment record
+    // Add payment record with the specified date
     addPayment({
       clientId,
       trainerId: user?.id || '',
@@ -343,6 +344,7 @@ export default function ClientDetailPage() {
       type: sessionsCount > 0 ? 'session_pack' : 'single_session',
       currency: 'USD',
       sessionsIncluded: sessionsCount > 0 ? sessionsCount : undefined,
+      paidAt: new Date(paymentDate).toISOString(),
     });
     
     // Create session package if sessions are covered
@@ -369,6 +371,7 @@ export default function ClientDetailPage() {
     setPaymentDescription('');
     setPaymentMethod('cash');
     setSessionsCovered('');
+    setPaymentDate(new Date().toISOString().split('T')[0]);
   };
 
   const handleSaveInitialStats = () => {
@@ -2109,15 +2112,25 @@ export default function ClientDetailPage() {
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-1 block">Sessions Covered</label>
+                <label className="text-sm text-gray-400 mb-1 block">Payment Date</label>
                 <Input
-                  type="number"
-                  placeholder="0"
-                  value={sessionsCovered}
-                  onChange={(e) => setSessionsCovered(e.target.value)}
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
                   className="bg-gray-800 border-gray-700 text-white"
                 />
               </div>
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Sessions Covered (optional)</label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={sessionsCovered}
+                onChange={(e) => setSessionsCovered(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
             </div>
             
             {/* Per Session Cost Display */}
