@@ -75,10 +75,35 @@ export default function ActiveWorkoutPage() {
   const { clients } = useTrainerStore();
   
   // Get client name if this is a PT session
+  // Try multiple lookup methods since clientId might be stored differently
   const currentClient = currentClientId 
-    ? clients.find(c => c.clientId === currentClientId)
-    : null;
-  const clientName = currentClient?.client?.displayName || currentClient?.client?.username || null;
+    ? clients.find(c => c.clientId === currentClientId || c.id === currentClientId)
+    : activeWorkout?.assignedBy 
+      ? clients.find(c => c.clientId === activeWorkout.userId)
+      : null;
+  
+  // Get display name from client object, or fall back to looking up in stored users
+  const [clientName, setClientName] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (currentClient?.client?.displayName || currentClient?.client?.username) {
+      setClientName(currentClient.client.displayName || currentClient.client.username || null);
+    } else if (currentClientId || (activeWorkout?.assignedBy && activeWorkout?.userId)) {
+      // Try to get from localStorage as fallback
+      const targetId = currentClientId || activeWorkout?.userId;
+      if (targetId) {
+        try {
+          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+          const user = storedUsers.find((u: any) => u.id === targetId);
+          if (user) {
+            setClientName(user.displayName || user.username || null);
+          }
+        } catch (e) {
+          console.error('Error looking up client name:', e);
+        }
+      }
+    }
+  }, [currentClient, currentClientId, activeWorkout]);
 
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
@@ -433,14 +458,16 @@ export default function ActiveWorkoutPage() {
   const handleCompleteSet = (exerciseId: string, setId: string, weight: number, reps: number, exerciseName: string) => {
     completeSet(exerciseId, setId);
     
+    // Clear all previous rest timers when starting a new set (auto-finish)
+    setSetRestTimers({});
+    
     // Auto-start rest timer if enabled
     if (autoRestEnabled && defaultRestTime > 0) {
       startRestTimer(defaultRestTime, exerciseId);
-      // Start per-set rest timer
-      setSetRestTimers(prev => ({
-        ...prev,
+      // Start per-set rest timer for this set only
+      setSetRestTimers({
         [setId]: { remaining: defaultRestTime, total: defaultRestTime }
-      }));
+      });
     }
     
     // Check for new PB
