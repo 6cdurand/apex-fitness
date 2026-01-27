@@ -1291,6 +1291,34 @@ interface SessionWorkout {
   createdAt: string;
 }
 
+// Saved workout for library
+interface SavedWorkout {
+  id: string;
+  name: string;
+  description?: string;
+  trainerId: string;
+  blocks: any[]; // WorkoutBlock[]
+  tags?: string[]; // e.g., 'upper', 'lower', 'full body', 'beginner'
+  estimatedMinutes?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Saved circuit template
+interface CircuitTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  trainerId: string;
+  exercises: any[]; // Circuit exercises
+  circuitStyle: 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';
+  rounds?: number;
+  duration?: number; // seconds
+  restBetweenRounds?: string;
+  tags?: string[];
+  createdAt: string;
+}
+
 interface TrainerState {
   clients: TrainerClient[];
   assignedWorkouts: Workout[];
@@ -1302,6 +1330,8 @@ interface TrainerState {
   clientPrograms: ClientProgram[];
   clientProfiles: ClientProgrammingProfile[];
   sessionWorkouts: SessionWorkout[]; // Workouts created in builder
+  workoutLibrary: SavedWorkout[]; // Saved workout templates
+  circuitLibrary: CircuitTemplate[]; // Saved circuit templates
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -1389,6 +1419,19 @@ interface TrainerState {
   getSessionWorkout: (workoutId: string) => SessionWorkout | undefined;
   getSessionWorkoutsForClient: (clientId: string) => SessionWorkout[];
   deleteSessionWorkout: (workoutId: string) => void;
+  updateSessionWorkout: (workoutId: string, updates: Partial<SessionWorkout>) => void;
+  
+  // Workout Library
+  saveToWorkoutLibrary: (workout: Omit<SavedWorkout, 'id' | 'createdAt' | 'updatedAt'>) => SavedWorkout;
+  updateWorkoutInLibrary: (workoutId: string, updates: Partial<SavedWorkout>) => void;
+  deleteFromWorkoutLibrary: (workoutId: string) => void;
+  getWorkoutFromLibrary: (workoutId: string) => SavedWorkout | undefined;
+  
+  // Circuit Library
+  saveCircuitTemplate: (circuit: Omit<CircuitTemplate, 'id' | 'createdAt'>) => CircuitTemplate;
+  updateCircuitTemplate: (circuitId: string, updates: Partial<CircuitTemplate>) => void;
+  deleteCircuitTemplate: (circuitId: string) => void;
+  getCircuitTemplate: (circuitId: string) => CircuitTemplate | undefined;
   
   // Supabase sync
   loadFromSupabase: (trainerId: string) => Promise<void>;
@@ -1410,6 +1453,8 @@ export const useTrainerStore = create<TrainerState>()(
       clientPrograms: [],
       clientProfiles: [],
       sessionWorkouts: [],
+      workoutLibrary: [],
+      circuitLibrary: [],
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -2357,6 +2402,84 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         // Delete from Supabase
         deleteSessionWorkoutFromSupabase(workoutId);
+      },
+
+      updateSessionWorkout: (workoutId, updates) => {
+        set(state => ({
+          sessionWorkouts: state.sessionWorkouts.map(w => 
+            w.id === workoutId ? { ...w, ...updates } : w
+          ),
+        }));
+        // Sync updated workout to Supabase
+        const updated = get().sessionWorkouts.find(w => w.id === workoutId);
+        if (updated) syncSessionWorkoutToSupabase(updated);
+      },
+
+      // Workout Library
+      saveToWorkoutLibrary: (workout) => {
+        const trainerId = useAuthStore.getState().user?.id || '';
+        const newWorkout: SavedWorkout = {
+          ...workout,
+          id: uuidv4(),
+          trainerId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        set(state => ({
+          workoutLibrary: [...state.workoutLibrary, newWorkout],
+        }));
+        return newWorkout;
+      },
+
+      updateWorkoutInLibrary: (workoutId, updates) => {
+        set(state => ({
+          workoutLibrary: state.workoutLibrary.map(w => 
+            w.id === workoutId ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w
+          ),
+        }));
+      },
+
+      deleteFromWorkoutLibrary: (workoutId) => {
+        set(state => ({
+          workoutLibrary: state.workoutLibrary.filter(w => w.id !== workoutId),
+        }));
+      },
+
+      getWorkoutFromLibrary: (workoutId) => {
+        return get().workoutLibrary.find(w => w.id === workoutId);
+      },
+
+      // Circuit Library
+      saveCircuitTemplate: (circuit) => {
+        const trainerId = useAuthStore.getState().user?.id || '';
+        const newCircuit: CircuitTemplate = {
+          ...circuit,
+          id: uuidv4(),
+          trainerId,
+          createdAt: new Date().toISOString(),
+        };
+        set(state => ({
+          circuitLibrary: [...state.circuitLibrary, newCircuit],
+        }));
+        return newCircuit;
+      },
+
+      updateCircuitTemplate: (circuitId, updates) => {
+        set(state => ({
+          circuitLibrary: state.circuitLibrary.map(c => 
+            c.id === circuitId ? { ...c, ...updates } : c
+          ),
+        }));
+      },
+
+      deleteCircuitTemplate: (circuitId) => {
+        set(state => ({
+          circuitLibrary: state.circuitLibrary.filter(c => c.id !== circuitId),
+        }));
+      },
+
+      getCircuitTemplate: (circuitId) => {
+        return get().circuitLibrary.find(c => c.id === circuitId);
       },
 
       // Load trainer data from Supabase for cross-device sync

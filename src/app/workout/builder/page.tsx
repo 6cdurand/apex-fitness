@@ -341,16 +341,47 @@ function WorkoutBuilderContent() {
   const eventId = searchParams.get('eventId');
   const clientId = searchParams.get('clientId');
   const templateId = searchParams.get('templateId');
+  const workoutId = searchParams.get('workoutId'); // For editing existing workout
+  const libraryId = searchParams.get('libraryId'); // For loading from library
   
   const { user } = useAuthStore();
-  const { clients, calendarEvents, updateCalendarEvent, addSessionWorkout } = useTrainerStore();
+  const { 
+    clients, 
+    calendarEvents, 
+    updateCalendarEvent, 
+    addSessionWorkout, 
+    getSessionWorkout,
+    updateSessionWorkout,
+    deleteSessionWorkout,
+    sessionWorkouts,
+    workoutLibrary,
+    circuitLibrary,
+    saveToWorkoutLibrary,
+    saveCircuitTemplate,
+  } = useTrainerStore();
   
   const client = clients.find(c => c.clientId === clientId);
   const event = calendarEvents.find(e => e.id === eventId);
   const template = defaultTemplates.find(t => t.id === templateId);
   
-  const [workoutName, setWorkoutName] = useState(template?.name || event?.title || 'Custom Workout');
+  // Get existing workout for edit mode
+  const existingWorkout = workoutId ? getSessionWorkout(workoutId) : null;
+  const libraryWorkout = libraryId ? workoutLibrary.find(w => w.id === libraryId) : null;
+  
+  // Track if we're in edit mode
+  const isEditMode = !!workoutId && !!existingWorkout;
+  
+  const [workoutName, setWorkoutName] = useState(
+    existingWorkout?.name || libraryWorkout?.name || template?.name || event?.title || 'Custom Workout'
+  );
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showLibraryDialog, setShowLibraryDialog] = useState(false);
+  const [showSaveToLibraryDialog, setShowSaveToLibraryDialog] = useState(false);
+  const [libraryWorkoutName, setLibraryWorkoutName] = useState('');
+  const [libraryWorkoutTags, setLibraryWorkoutTags] = useState('');
+  const [showEditOptionsDialog, setShowEditOptionsDialog] = useState(isEditMode);
+  const [showCircuitLibraryDialog, setShowCircuitLibraryDialog] = useState(false);
+  const [circuitTemplateName, setCircuitTemplateName] = useState('');
   
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
@@ -359,8 +390,15 @@ function WorkoutBuilderContent() {
   
   const clientUser = allUsers.find(u => u.id === clientId);
   
-  // Initialize blocks from template or empty
+  // Initialize blocks from existing workout, library, template, or empty
   const initialBlocks = useMemo(() => {
+    // Priority: existing workout > library workout > template > empty
+    if (existingWorkout?.blocks) {
+      return existingWorkout.blocks;
+    }
+    if (libraryWorkout?.blocks) {
+      return libraryWorkout.blocks;
+    }
     if (template?.exercises) {
       // Convert template exercises to blocks
       const workBlock: WorkoutBlock = {
@@ -382,7 +420,7 @@ function WorkoutBuilderContent() {
       return [workBlock];
     }
     return [];
-  }, [template]);
+  }, [existingWorkout, libraryWorkout, template]);
 
   const [blocks, setBlocks] = useState<WorkoutBlock[]>(initialBlocks);
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: WorkoutExercise } | null>(null);
@@ -600,20 +638,37 @@ function WorkoutBuilderContent() {
   };
 
   const handleSave = () => {
+    if (isEditMode && existingWorkout) {
+      // Update existing workout
+      updateSessionWorkout(existingWorkout.id, {
+        name: workoutName,
+        blocks,
+      });
+      
+      // Update calendar event if linked
+      if (existingWorkout.eventId) {
+        updateCalendarEvent(existingWorkout.eventId, { title: workoutName });
+      }
+      
+      toast.success('Workout updated!');
+      router.back();
+      return;
+    }
+    
     // Create a workout ID for this session
-    const workoutId = `session-workout-${Date.now()}`;
+    const newWorkoutId = `session-workout-${Date.now()}`;
     
     // Update the calendar event with the workout ID
     if (eventId) {
       updateCalendarEvent(eventId, { 
-        workoutId,
+        workoutId: newWorkoutId,
         title: workoutName,
       });
     }
     
     // Store the workout blocks using trainer store (persisted via Zustand)
     const workoutData = {
-      id: workoutId,
+      id: newWorkoutId,
       name: workoutName,
       clientId: clientId || selectedClientId || '',
       eventId: eventId || undefined,
@@ -632,14 +687,79 @@ function WorkoutBuilderContent() {
     router.back();
   };
 
+  const handleSaveToLibrary = () => {
+    if (!libraryWorkoutName.trim()) {
+      toast.error('Please enter a workout name');
+      return;
+    }
+    
+    const tags = libraryWorkoutTags.split(',').map(t => t.trim()).filter(Boolean);
+    
+    saveToWorkoutLibrary({
+      name: libraryWorkoutName,
+      trainerId: user?.id || '',
+      blocks,
+      tags,
+      estimatedMinutes: estimatedDuration,
+    });
+    
+    toast.success('Workout saved to library!');
+    setShowSaveToLibraryDialog(false);
+    setLibraryWorkoutName('');
+    setLibraryWorkoutTags('');
+  };
+
+  const handleDeleteAndRestart = () => {
+    if (isEditMode && existingWorkout) {
+      deleteSessionWorkout(existingWorkout.id);
+      toast.success('Workout deleted');
+    }
+    setBlocks([]);
+    setShowEditOptionsDialog(false);
+  };
+
+  const handleLoadFromLibrary = (libraryItem: typeof workoutLibrary[0]) => {
+    setBlocks(libraryItem.blocks);
+    setWorkoutName(libraryItem.name);
+    setShowLibraryDialog(false);
+    toast.success(`Loaded "${libraryItem.name}" from library`);
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl pb-24">
       <div className="mb-6">
-        <Button variant="ghost" onClick={() => router.back()} className="mb-4">
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back
-        </Button>
-        <h1 className="text-2xl font-bold">Workout Builder</h1>
-        <p className="text-muted-foreground">Create and assign workouts to clients</p>
+        <div className="flex items-center justify-between mb-4">
+          <Button variant="ghost" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back
+          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowLibraryDialog(true)}
+            >
+              📚 Load from Library
+            </Button>
+            {blocks.length > 0 && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setLibraryWorkoutName(workoutName);
+                  setShowSaveToLibraryDialog(true);
+                }}
+              >
+                💾 Save to Library
+              </Button>
+            )}
+          </div>
+        </div>
+        <h1 className="text-2xl font-bold">
+          {isEditMode ? 'Edit Workout' : 'Workout Builder'}
+        </h1>
+        <p className="text-muted-foreground">
+          {isEditMode ? 'Modify the existing workout or start fresh' : 'Create and assign workouts to clients'}
+        </p>
       </div>
 
       {/* Client Selection */}
@@ -1590,15 +1710,159 @@ function WorkoutBuilderContent() {
               </div>
             )}
           </div>
-          <Button 
-            onClick={handleSave} 
-            size="lg"
-            disabled={blocks.length === 0}
-          >
-            <Save className="h-4 w-4 mr-2" /> Save & Link to Session
-          </Button>
+          <div className="flex gap-2">
+            {isEditMode && (
+              <Button 
+                variant="destructive"
+                size="lg"
+                onClick={handleDeleteAndRestart}
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Delete & Restart
+              </Button>
+            )}
+            <Button 
+              onClick={handleSave} 
+              size="lg"
+              disabled={blocks.length === 0}
+            >
+              <Save className="h-4 w-4 mr-2" /> {isEditMode ? 'Update Workout' : 'Save & Link to Session'}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {/* Edit Options Dialog - shown when entering edit mode */}
+      <Dialog open={showEditOptionsDialog} onOpenChange={setShowEditOptionsDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>Edit Workout</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <p className="text-muted-foreground">
+              You're editing an existing workout: <strong>{existingWorkout?.name}</strong>
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button 
+                onClick={() => setShowEditOptionsDialog(false)}
+                className="w-full bg-emerald-500 hover:bg-emerald-600"
+              >
+                <Edit2 className="h-4 w-4 mr-2" /> Continue Editing
+              </Button>
+              <Button 
+                variant="destructive"
+                onClick={handleDeleteAndRestart}
+                className="w-full"
+              >
+                <Trash2 className="h-4 w-4 mr-2" /> Delete & Start Fresh
+              </Button>
+              <Button 
+                variant="outline"
+                onClick={() => router.back()}
+                className="w-full"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Workout Library Dialog */}
+      <Dialog open={showLibraryDialog} onOpenChange={setShowLibraryDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>📚 Workout Library</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[400px] pr-4">
+            {workoutLibrary.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No saved workouts yet.</p>
+                <p className="text-sm mt-2">Save workouts to your library to reuse them later!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {workoutLibrary.map((workout) => (
+                  <Card 
+                    key={workout.id} 
+                    className="bg-gray-800 border-gray-700 cursor-pointer hover:border-emerald-500/50 transition-colors"
+                    onClick={() => handleLoadFromLibrary(workout)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-white">{workout.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {workout.blocks?.length || 0} blocks • ~{workout.estimatedMinutes || '?'} min
+                          </p>
+                          {workout.tags && workout.tags.length > 0 && (
+                            <div className="flex gap-1 mt-2">
+                              {workout.tags.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Button size="sm" variant="ghost">
+                          Load
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save to Library Dialog */}
+      <Dialog open={showSaveToLibraryDialog} onOpenChange={setShowSaveToLibraryDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>💾 Save to Library</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <Label>Workout Name</Label>
+              <Input
+                value={libraryWorkoutName}
+                onChange={(e) => setLibraryWorkoutName(e.target.value)}
+                placeholder="e.g., Upper Body Push Day"
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>Tags (comma-separated)</Label>
+              <Input
+                value={libraryWorkoutTags}
+                onChange={(e) => setLibraryWorkoutTags(e.target.value)}
+                placeholder="e.g., upper, push, intermediate"
+                className="mt-2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Tags help you organize and find workouts later
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowSaveToLibraryDialog(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveToLibrary}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              >
+                <Save className="h-4 w-4 mr-2" /> Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
