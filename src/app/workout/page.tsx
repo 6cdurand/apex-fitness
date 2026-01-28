@@ -351,26 +351,7 @@ export default function WorkoutPage() {
                   format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
                 );
                 
-                // Find matching session record to check paid status
-                const matchingSessionRecord = sessions.find(s => 
-                  s.clientId === session.clientId && 
-                  s.date === selectedDateStr && 
-                  s.status === 'completed'
-                );
-                
-                // Check both session record AND payments array for payment status
-                const hasPaymentRecord = payments.some(p => 
-                  p.clientId === session.clientId && 
-                  p.paidAt && format(new Date(p.paidAt), 'yyyy-MM-dd') === selectedDateStr &&
-                  p.type === 'single_session'
-                );
-                const isPaid = matchingSessionRecord?.paid || hasPaymentRecord;
-                
-                // Get client's package for price info
-                const clientPackages = session.clientId ? getPackagesForClient(session.clientId) : [];
-                const activePackage = clientPackages.find(p => p.status === 'active');
-                const pricePerSession = activePackage?.pricePerSession || 0;
-                
+                                
                 return (
                   <Card
                     key={session.id}
@@ -379,38 +360,11 @@ export default function WorkoutPage() {
                     <CardContent className="p-4">
                       {/* Workout Complete Banner */}
                       {sessionCompleted && (
-                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-emerald-500/20">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                              <Check className="w-4 h-4 text-white" />
-                            </div>
-                            <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-emerald-500/20">
+                          <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                            <Check className="w-4 h-4 text-white" />
                           </div>
-                          {/* Payment Status & Toggle */}
-                          {matchingSessionRecord && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className={`h-7 text-xs ${isPaid ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'}`}
-                              onClick={() => {
-                                if (matchingSessionRecord) {
-                                  toggleSessionPaid(matchingSessionRecord.id);
-                                }
-                              }}
-                            >
-                              {isPaid ? (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3 mr-1" />
-                                  Paid {pricePerSession > 0 && `$${pricePerSession}`}
-                                </>
-                              ) : (
-                                <>
-                                  <DollarSign className="w-3 h-3 mr-1" />
-                                  Mark Paid {pricePerSession > 0 && `$${pricePerSession}`}
-                                </>
-                              )}
-                            </Button>
-                          )}
+                          <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
                         </div>
                       )}
                       
@@ -538,48 +492,6 @@ export default function WorkoutPage() {
                           Note: {session.notes}
                         </p>
                       )}
-                      
-                      {/* Payment Toggle - Always visible */}
-                      <div className="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
-                        <span className="text-xs text-gray-500">Payment Status</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-7 text-xs ${isPaid ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (matchingSessionRecord) {
-                              toggleSessionPaid(matchingSessionRecord.id);
-                            } else {
-                              // Create a session record and mark as paid
-                              const newPayment = {
-                                clientId: session.clientId!,
-                                trainerId: user?.id || '',
-                                amount: pricePerSession,
-                                currency: 'NZD',
-                                type: 'single_session' as const,
-                                status: 'paid' as const,
-                                method: 'cash' as const,
-                                description: `PT Session - ${session.title || 'Session'}`,
-                                paidAt: new Date().toISOString(),
-                              };
-                              addPayment(newPayment);
-                            }
-                          }}
-                        >
-                          {isPaid ? (
-                            <>
-                              <CheckCircle2 className="w-3 h-3 mr-1" />
-                              Paid {pricePerSession > 0 && `$${pricePerSession}`}
-                            </>
-                          ) : (
-                            <>
-                              <DollarSign className="w-3 h-3 mr-1" />
-                              Mark Paid {pricePerSession > 0 && `$${pricePerSession}`}
-                            </>
-                          )}
-                        </Button>
-                      </div>
                     </CardContent>
                   </Card>
                 );

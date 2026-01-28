@@ -706,6 +706,17 @@ export default function ProfilePage() {
               Edit Profile
               <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
             </Button>
+            {user.isTrainer && (
+              <Button
+                variant="ghost"
+                className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+                onClick={() => router.push('/payments')}
+              >
+                <DollarSign className="w-5 h-5 mr-3 text-gray-500" />
+                Payments
+                <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
+              </Button>
+            )}
             {!user.isTrainer && (
               <Button
                 variant="ghost"
