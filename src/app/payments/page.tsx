@@ -44,7 +44,7 @@ interface ClientPaymentSettings {
 export default function PaymentsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { sessions, payments, clients, sessionPackages, addPayment, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
+  const { sessions, payments, clients, sessionPackages, addPayment, updateSessionPackage, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('clients');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
@@ -81,11 +81,20 @@ export default function PaymentsPage() {
     localStorage.setItem('apex-payment-settings', JSON.stringify(settings));
   };
 
-  // Get client info helper
+  // Get client info helper - check TrainerClient.client first, then allUsers
   const getClientInfo = (clientId: string) => {
+    // First check if we have client info embedded in the clients array
+    const trainerClient = clients.find(c => c.clientId === clientId && c.trainerId === user?.id);
+    if (trainerClient?.client) {
+      return {
+        name: trainerClient.client.displayName || trainerClient.client.username || 'Client',
+        photo: trainerClient.client.profilePhoto,
+      };
+    }
+    // Fallback to allUsers lookup
     const clientUser = allUsers.find(u => u.id === clientId);
     return {
-      name: clientUser?.displayName || clientUser?.username || 'Client',
+      name: clientUser?.displayName || clientUser?.username || 'Unknown Client',
       photo: clientUser?.profilePhoto,
     };
   };
@@ -113,37 +122,58 @@ export default function PaymentsPage() {
   };
 
   // Get client payment data with outstanding balance calculation
+  // Prioritizes data from sessionPackages, then falls back to session/payment records
   const getClientPaymentData = (clientId: string) => {
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
-    const lastMonthStart = startOfMonth(subMonths(now, 1));
     
     const settings = paymentSettings[clientId];
-    const pkg = sessionPackages.find(p => p.clientId === clientId);
-    const pricePerSession = settings?.pricePerSession || pkg?.pricePerSession || 0;
+    // Get all packages for this client (could have multiple over time)
+    const clientPackages = sessionPackages.filter(p => p.clientId === clientId && p.trainerId === user?.id);
+    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
     
-    // Sessions this month
+    // Price per session: user settings > package > default
+    const pricePerSession = settings?.pricePerSession || activePackage?.pricePerSession || 0;
+    
+    // Sessions this month (from session records)
     const monthSessions = getSessionsInRange(clientId, monthStart, monthEnd);
     const totalSessionsThisMonth = monthSessions.length;
     
-    // All completed sessions ever
-    const allCompletedSessions = sessions.filter(s => 
-      s.clientId === clientId && 
-      s.trainerId === user?.id &&
-      s.status === 'completed'
-    );
+    // For totals, prefer package data if available (more accurate)
+    let totalSessionsEver: number;
+    let totalPaidSessions: number;
     
-    // All payments ever
-    const allPayments = payments.filter(p => 
-      p.clientId === clientId && 
-      p.trainerId === user?.id
-    );
+    if (activePackage) {
+      // Use package tracking - usedSessions is total done, paidSessions is total paid
+      totalSessionsEver = activePackage.usedSessions || 0;
+      totalPaidSessions = activePackage.paidSessions || 0;
+    } else {
+      // Fallback to counting session/payment records
+      const allCompletedSessions = sessions.filter(s => 
+        s.clientId === clientId && 
+        s.trainerId === user?.id &&
+        s.status === 'completed'
+      );
+      const allPayments = payments.filter(p => 
+        p.clientId === clientId && 
+        p.trainerId === user?.id
+      );
+      totalSessionsEver = allCompletedSessions.length;
+      totalPaidSessions = allPayments.length;
+    }
     
-    const totalSessionsEver = allCompletedSessions.length;
-    const totalPaidSessions = allPayments.length;
-    const outstandingSessions = totalSessionsEver - totalPaidSessions;
+    const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
     const outstandingAmount = outstandingSessions * pricePerSession;
+    
+    // Package info for display
+    const packageInfo = activePackage ? {
+      name: activePackage.name,
+      totalSessions: activePackage.totalSessions,
+      remainingSessions: activePackage.remainingSessions,
+      priceTotal: activePackage.priceTotal,
+      isContinuous: activePackage.isContinuous,
+    } : null;
     
     return {
       settings,
@@ -154,6 +184,7 @@ export default function PaymentsPage() {
       outstandingSessions,
       outstandingAmount,
       hasOutstanding: outstandingSessions > 0,
+      packageInfo,
     };
   };
 
@@ -161,6 +192,7 @@ export default function PaymentsPage() {
   const handleConfirmPayment = (clientId: string, sessionsToConfirm: number = 1) => {
     const data = getClientPaymentData(clientId);
     
+    // Add payment records
     for (let i = 0; i < sessionsToConfirm; i++) {
       addPayment({
         clientId,
@@ -173,6 +205,14 @@ export default function PaymentsPage() {
         description: `PT Session Payment`,
         paidAt: paymentDate + 'T12:00:00.000Z',
       });
+    }
+    
+    // Also update the session package's paidSessions count if there's an active package
+    const clientPackages = sessionPackages.filter(p => p.clientId === clientId && p.trainerId === user?.id);
+    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+    if (activePackage) {
+      const newPaidCount = (activePackage.paidSessions || 0) + sessionsToConfirm;
+      updateSessionPackage(activePackage.id, { paidSessions: newPaidCount });
     }
     
     setShowConfirmPaymentDialog(false);
@@ -238,7 +278,8 @@ export default function PaymentsPage() {
         info: getClientInfo(clientId),
       }))
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
-  }, [trainerClients, paymentSettings, sessions, payments]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainerClients, paymentSettings, sessions, payments, sessionPackages, clients, allUsers]);
 
   // Calculate totals
   const totalOutstanding = sortedClients.reduce((sum, c) => sum + c.outstandingAmount, 0);
@@ -323,6 +364,11 @@ export default function PaymentsPage() {
                             <p className="font-medium text-white">{client.info.name}</p>
                             <p className="text-xs text-gray-400">
                               ${client.pricePerSession}/session • {client.settings?.frequency?.replace('_', ' ') || 'per session'}
+                              {client.packageInfo && !client.packageInfo.isContinuous && (
+                                <span className="ml-1 text-blue-400">
+                                  ({client.packageInfo.remainingSessions}/{client.packageInfo.totalSessions} left)
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
