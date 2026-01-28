@@ -51,10 +51,10 @@ import { cn } from '@/lib/utils';
 export default function CalendarPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, addCalendarEvent } = useTrainerStore();
+  const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, addCalendarEvent, sessionWorkouts } = useTrainerStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week');
   const [editingEvent, setEditingEvent] = useState<any>(null);
   const [editTime, setEditTime] = useState('09:00');
   const [editEndTime, setEditEndTime] = useState('10:00');
@@ -504,6 +504,16 @@ export default function CalendarPage() {
                             <Badge variant="outline" className="text-xs border-gray-700 text-gray-400 capitalize">
                               {event.type}
                             </Badge>
+                            {event.workoutId || sessionWorkouts.find(w => w.eventId === event.id) ? (
+                              <Badge className="text-xs bg-emerald-500/20 text-emerald-400">
+                                <Dumbbell className="w-3 h-3 mr-1" />
+                                Planned
+                              </Badge>
+                            ) : event.type === 'session' && (
+                              <Badge className="text-xs bg-amber-500/20 text-amber-400">
+                                No Workout
+                              </Badge>
+                            )}
                             {(event as any).recurrence && (
                               <Badge className="text-xs bg-blue-500/20 text-blue-400">
                                 {(event as any).recurrence}

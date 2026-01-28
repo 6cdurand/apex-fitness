@@ -71,6 +71,7 @@ export interface WorkoutSet {
   notes?: string;
   rpe?: number; // Rate of Perceived Exertion 1-10
   drops?: DropSet[]; // Drop sets attached to this set
+  isAssisted?: boolean; // For assisted exercises (pull-up machine, dip machine) where weight = assistance
 }
 
 // Superset grouping

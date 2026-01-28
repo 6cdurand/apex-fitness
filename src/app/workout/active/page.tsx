@@ -33,7 +33,8 @@ import {
   Users,
   Settings,
   StickyNote,
-  History
+  History,
+  Link2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -72,7 +73,7 @@ export default function ActiveWorkoutPage() {
   } = useWorkoutStore();
   const _medalStore = useMedalStore(); // Medal earning handled by store.ts endWorkout
   const { createPost } = useSocialStore();
-  const { clients } = useTrainerStore();
+  const { clients, saveToWorkoutLibrary, saveCircuitTemplate } = useTrainerStore();
   
   // Get client name if this is a PT session
   // Try multiple lookup methods since clientId might be stored differently
@@ -130,6 +131,17 @@ export default function ActiveWorkoutPage() {
   const [sessionPaid, setSessionPaid] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
   
+  // Save workout state
+  const [showSaveWorkoutDialog, setShowSaveWorkoutDialog] = useState(false);
+  const [saveWorkoutName, setSaveWorkoutName] = useState('');
+  const [saveWorkoutDescription, setSaveWorkoutDescription] = useState('');
+  
+  // Save circuit state
+  const [showSaveCircuitDialog, setShowSaveCircuitDialog] = useState(false);
+  const [saveCircuitName, setSaveCircuitName] = useState('');
+  const [saveCircuitDescription, setSaveCircuitDescription] = useState('');
+  const [circuitToSave, setCircuitToSave] = useState<any>(null);
+  
   // Per-set rest timers (setId -> { remaining seconds, total seconds })
   const [setRestTimers, setSetRestTimers] = useState<Record<string, { remaining: number; total: number }>>({});
   
@@ -161,6 +173,13 @@ export default function ActiveWorkoutPage() {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [circuitExerciseSelection, setCircuitExerciseSelection] = useState<Exercise[]>([]);
+  const [showExerciseNotesDialog, setShowExerciseNotesDialog] = useState(false);
+  const [selectedExerciseForNotes, setSelectedExerciseForNotes] = useState<any>(null);
+  const [exerciseNotesText, setExerciseNotesText] = useState('');
+  
+  // Superset state
+  const [showSupersetPicker, setShowSupersetPicker] = useState(false);
+  const [supersetSourceExercise, setSupersetSourceExercise] = useState<any>(null);
   
   // Check if blocks exist
   const hasWarmup = workoutBlocks.some(b => b.type === 'warmup');
@@ -452,6 +471,17 @@ export default function ActiveWorkoutPage() {
     }));
     toast.success('Circuit finished!');
   };
+  
+  const deleteBlock = (blockId: string) => {
+    // Remove all exercises associated with this block
+    const blockExercises = activeWorkout?.exercises.filter((e: any) => e.blockId === blockId) || [];
+    blockExercises.forEach((ex: any) => {
+      removeExercise(ex.id);
+    });
+    // Remove the block itself
+    setWorkoutBlocks(blocks => blocks.filter(b => b.id !== blockId));
+    toast.success('Block deleted');
+  };
 
   const { startRestTimer } = useWorkoutStore();
   
@@ -482,6 +512,46 @@ export default function ActiveWorkoutPage() {
     }
   };
 
+  // Handle adding drop set to an exercise
+  const handleAddDropSet = (exerciseId: string) => {
+    const exercise = activeWorkout?.exercises.find(e => e.id === exerciseId);
+    if (!exercise) return;
+    
+    // Add drop set data to each set in this exercise
+    exercise.sets.forEach(set => {
+      const currentDrops = set.drops || [];
+      updateSet(exerciseId, set.id, {
+        drops: [...currentDrops, { id: `drop-${Date.now()}`, weight: 0, reps: 0 }]
+      });
+    });
+    toast.success('Drop set added to all sets');
+  };
+
+  // Handle creating superset between exercises
+  const handleCreateSuperset = (targetExerciseId: string) => {
+    if (!supersetSourceExercise || !activeWorkout) return;
+    
+    const groupId = `superset-${Date.now()}`;
+    
+    // Update source exercise with groupId
+    updateExercise(supersetSourceExercise.id, { 
+      groupId, 
+      groupType: 'superset',
+      groupOrder: 'A1'
+    });
+    
+    // Update target exercise with same groupId
+    updateExercise(targetExerciseId, { 
+      groupId, 
+      groupType: 'superset',
+      groupOrder: 'A2'
+    });
+    
+    setShowSupersetPicker(false);
+    setSupersetSourceExercise(null);
+    toast.success('Superset created!');
+  };
+
   const handleFinishWorkout = () => {
     // Capture workout info before ending
     const workoutName = activeWorkout?.name || 'Workout';
@@ -494,7 +564,7 @@ export default function ActiveWorkoutPage() {
       (sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0
     ) || 0;
     
-    const completed = endWorkout();
+    const completed = endWorkout(workoutNotes);
     if (completed) {
       // Create feed post with PB info
       const pbText = newPBs.length > 0 ? ` 🏆 ${newPBs.length} new PR${newPBs.length > 1 ? 's' : ''}!` : '';
@@ -579,11 +649,39 @@ export default function ActiveWorkoutPage() {
       useWorkoutStore.getState().updateWorkoutNotes(completedWorkoutData.id, workoutNotes.trim());
     }
     
-    // Update session paid status and package if PT session
+    // Update session paid status and add payment record for PT session
     if (completedWorkoutData?.isPTSession && completedWorkoutData?.clientId && sessionPaid) {
-      const { getPackagesForClient, updateSessionPackage } = useTrainerStore.getState();
+      const { getPackagesForClient, updateSessionPackage, addPayment, sessions, toggleSessionPaid } = useTrainerStore.getState();
       const packages = getPackagesForClient(completedWorkoutData.clientId);
       const activePackage = packages.find(p => p.status === 'active');
+      const pricePerSession = activePackage?.pricePerSession || 0;
+      
+      // Find the session record we just created and mark it as paid
+      const today = new Date().toISOString().split('T')[0];
+      const sessionRecord = sessions.find(s => 
+        s.clientId === completedWorkoutData.clientId && 
+        s.date === today && 
+        s.workoutId === completedWorkoutData.id
+      );
+      if (sessionRecord && !sessionRecord.paid) {
+        toggleSessionPaid(sessionRecord.id);
+      }
+      
+      // Add payment record for tracking
+      if (pricePerSession > 0) {
+        addPayment({
+          clientId: completedWorkoutData.clientId,
+          trainerId: useAuthStore.getState().user?.id || '',
+          amount: pricePerSession,
+          currency: 'NZD',
+          type: 'single_session',
+          status: 'paid',
+          method: 'cash',
+          description: `PT Session - ${completedWorkoutData.name}`,
+          paidAt: new Date().toISOString(),
+        });
+      }
+      
       if (activePackage) {
         // Increment paid sessions
         updateSessionPackage(activePackage.id, {
@@ -603,6 +701,78 @@ export default function ActiveWorkoutPage() {
     cancelWorkout();
     toast('Workout cancelled');
     router.push('/workout');
+  };
+
+  // Save current workout as template
+  const handleSaveWorkout = () => {
+    if (!saveWorkoutName.trim() || !activeWorkout) return;
+    
+    // Convert current exercises to blocks format
+    const blocks = workoutBlocks.map(block => {
+      const blockExercises = activeWorkout.exercises
+        .filter((ex: any) => ex.blockId === block.id)
+        .map((ex: any) => ({
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.exercise?.name,
+          sets: ex.sets.length,
+          reps: ex.sets[0]?.reps || 10,
+          rest: ex.restTimerSeconds || 90,
+        }));
+      return {
+        id: block.id,
+        type: block.type,
+        name: block.name,
+        exercises: blockExercises,
+        circuitStyle: block.circuitStyle,
+        circuitRounds: block.circuitRounds,
+        circuitDuration: block.circuitDuration,
+      };
+    });
+    
+    saveToWorkoutLibrary({
+      name: saveWorkoutName.trim(),
+      description: saveWorkoutDescription.trim() || undefined,
+      blocks,
+      estimatedMinutes: Math.round(workoutTimer.seconds / 60) || 45,
+      tags: [],
+    });
+    
+    toast.success('Workout saved to library!');
+    setShowSaveWorkoutDialog(false);
+    setSaveWorkoutName('');
+    setSaveWorkoutDescription('');
+  };
+
+  // Save circuit block as template
+  const handleSaveCircuit = () => {
+    if (!saveCircuitName.trim() || !circuitToSave) return;
+    
+    const blockExercises = activeWorkout?.exercises
+      .filter((ex: any) => ex.blockId === circuitToSave.id)
+      .map((ex: any) => ({
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exercise?.name,
+        sets: ex.sets.length,
+        reps: ex.sets[0]?.reps || 10,
+        rest: ex.restTimerSeconds || 30,
+      })) || [];
+    
+    saveCircuitTemplate({
+      name: saveCircuitName.trim(),
+      description: saveCircuitDescription.trim() || undefined,
+      exercises: blockExercises,
+      circuitStyle: circuitToSave.circuitStyle || 'rounds',
+      rounds: circuitToSave.circuitRounds,
+      duration: circuitToSave.circuitDuration,
+      restBetweenRounds: '60',
+      tags: [],
+    });
+    
+    toast.success('Circuit saved to library!');
+    setShowSaveCircuitDialog(false);
+    setSaveCircuitName('');
+    setSaveCircuitDescription('');
+    setCircuitToSave(null);
   };
 
   const filteredExercises = exerciseSearch 
@@ -660,14 +830,49 @@ export default function ActiveWorkoutPage() {
               )}
             </div>
           </div>
-          <Button
-            size="sm"
-            onClick={() => setShowFinishDialog(true)}
-            className="bg-white text-emerald-600 hover:bg-gray-100"
-          >
-            <Check className="w-4 h-4 mr-1" />
-            Finish
-          </Button>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="text-white hover:bg-white/20">
+                  <Settings className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                <DropdownMenuItem
+                  className="text-emerald-400 focus:text-emerald-300"
+                  onClick={() => {
+                    setSaveWorkoutName(activeWorkout.name || '');
+                    setShowSaveWorkoutDialog(true);
+                  }}
+                >
+                  <Copy className="w-4 h-4 mr-2" />
+                  Save as Template
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-gray-300 focus:text-white"
+                  onClick={() => setShowRestSettings(true)}
+                >
+                  <Timer className="w-4 h-4 mr-2" />
+                  Rest Timer Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-gray-300 focus:text-white"
+                  onClick={() => setShowNotesDialog(true)}
+                >
+                  <StickyNote className="w-4 h-4 mr-2" />
+                  Workout Notes
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              size="sm"
+              onClick={() => setShowFinishDialog(true)}
+              className="bg-white text-emerald-600 hover:bg-gray-100"
+            >
+              <Check className="w-4 h-4 mr-1" />
+              Finish
+            </Button>
+          </div>
         </div>
 
         {/* Timer Bar */}
@@ -917,8 +1122,41 @@ export default function ActiveWorkoutPage() {
                     </div>
                   </div>
                   
-                  {/* Circuit Timer */}
-                  {block.type === 'circuit' && (
+                  <div className="flex items-center gap-2">
+                    {/* Block Menu */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-gray-400">
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                        {block.type === 'circuit' && (
+                          <DropdownMenuItem 
+                            className="text-purple-400 focus:text-purple-300"
+                            onClick={() => {
+                              setSaveCircuitName(block.name || 'Circuit');
+                              setCircuitToSave(block);
+                              setShowSaveCircuitDialog(true);
+                            }}
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Save Circuit to Library
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator className="bg-gray-700" />
+                        <DropdownMenuItem 
+                          className="text-red-400 focus:text-red-300 focus:bg-red-500/20"
+                          onClick={() => deleteBlock(block.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete Block
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    
+                    {/* Circuit Timer */}
+                    {block.type === 'circuit' && (
                     <div className="flex items-center gap-2">
                       <div className={cn(
                         "text-2xl font-mono font-bold",
@@ -943,7 +1181,8 @@ export default function ActiveWorkoutPage() {
                         <RotateCcw className="w-4 h-4" />
                       </Button>
                     </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 
                 {/* Block Exercises - Different layout for circuits vs other blocks */}
@@ -1108,11 +1347,57 @@ export default function ActiveWorkoutPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                onClick={() => removeExercise(workoutExercise.id)}
-                                className="h-8 w-8 text-gray-500 hover:text-red-400"
+                                onClick={() => {
+                                  setSelectedExerciseForNotes(workoutExercise);
+                                  setShowExerciseNotesDialog(true);
+                                }}
+                                className={cn(
+                                  "h-8 w-8",
+                                  workoutExercise.trainerNotes || workoutExercise.notes 
+                                    ? "text-amber-400 hover:text-amber-300" 
+                                    : "text-gray-500 hover:text-gray-300"
+                                )}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <StickyNote className="w-4 h-4" />
                               </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-8 w-8 text-gray-500 hover:text-gray-300"
+                                  >
+                                    <MoreVertical className="w-4 h-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                                  <DropdownMenuItem
+                                    className="text-blue-400 focus:text-blue-300"
+                                    onClick={() => {
+                                      setSupersetSourceExercise(workoutExercise);
+                                      setShowSupersetPicker(true);
+                                    }}
+                                  >
+                                    <Link2 className="w-4 h-4 mr-2" />
+                                    {workoutExercise.groupId ? 'Edit Superset' : 'Create Superset'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-purple-400 focus:text-purple-300"
+                                    onClick={() => handleAddDropSet(workoutExercise.id)}
+                                  >
+                                    <ChevronDown className="w-4 h-4 mr-2" />
+                                    Add Drop Set
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator className="bg-gray-700" />
+                                  <DropdownMenuItem
+                                    className="text-red-400 focus:text-red-300"
+                                    onClick={() => removeExercise(workoutExercise.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Remove Exercise
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                           {/* PB and Previous Results */}
@@ -1232,8 +1517,8 @@ export default function ActiveWorkoutPage() {
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight || 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')}
-                                      disabled={!set.weight || !set.reps}
+                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')}
+                                      disabled={set.weight === undefined || set.weight === null || !set.reps}
                                       className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
                                     >
                                       <Check className="w-5 h-5" />
@@ -2106,6 +2391,214 @@ export default function ActiveWorkoutPage() {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {/* Exercise Notes Dialog */}
+      <Dialog 
+        open={showExerciseNotesDialog} 
+        onOpenChange={(open) => {
+          setShowExerciseNotesDialog(open);
+          if (!open) setSelectedExerciseForNotes(null);
+        }}
+      >
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <StickyNote className="w-5 h-5 text-amber-400" />
+              {selectedExerciseForNotes?.exercise?.name || 'Exercise'} Notes
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              View or add notes for this exercise (e.g., incline settings, form cues)
+            </DialogDescription>
+          </DialogHeader>
+          
+          {/* Display existing trainer notes if any */}
+          {selectedExerciseForNotes?.trainerNotes && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+              <p className="text-xs text-amber-400 font-medium mb-1">Trainer Notes:</p>
+              <p className="text-sm text-white">{selectedExerciseForNotes.trainerNotes}</p>
+            </div>
+          )}
+          
+          <textarea
+            value={selectedExerciseForNotes?.notes || ''}
+            onChange={(e) => {
+              if (selectedExerciseForNotes) {
+                updateExercise(selectedExerciseForNotes.id, { notes: e.target.value });
+              }
+            }}
+            placeholder="Add your notes for this exercise..."
+            className="w-full h-24 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          
+          <Button
+            onClick={() => {
+              setShowExerciseNotesDialog(false);
+              setSelectedExerciseForNotes(null);
+            }}
+            className="w-full bg-amber-500 hover:bg-amber-600"
+          >
+            Done
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Superset Picker Dialog */}
+      <Dialog 
+        open={showSupersetPicker} 
+        onOpenChange={(open) => {
+          setShowSupersetPicker(open);
+          if (!open) setSupersetSourceExercise(null);
+        }}
+      >
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-blue-400" />
+              Create Superset
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Select another exercise to pair with {supersetSourceExercise?.exercise?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="max-h-64">
+            <div className="space-y-2">
+              {activeWorkout?.exercises
+                .filter(ex => ex.id !== supersetSourceExercise?.id && !ex.groupId)
+                .map(ex => (
+                  <button
+                    key={ex.id}
+                    onClick={() => handleCreateSuperset(ex.id)}
+                    className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+                  >
+                    <p className="font-medium text-white">{ex.exercise?.name}</p>
+                    <p className="text-xs text-gray-500">{ex.sets.length} sets</p>
+                  </button>
+                ))}
+            </div>
+          </ScrollArea>
+          
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowSupersetPicker(false);
+              setSupersetSourceExercise(null);
+            }}
+            className="w-full border-gray-700 text-gray-400"
+          >
+            Cancel
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Workout Dialog */}
+      <Dialog open={showSaveWorkoutDialog} onOpenChange={setShowSaveWorkoutDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Copy className="w-5 h-5 text-emerald-400" />
+              Save Workout as Template
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Save this workout to your library for future use
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Workout Name</label>
+              <Input
+                value={saveWorkoutName}
+                onChange={(e) => setSaveWorkoutName(e.target.value)}
+                placeholder="e.g., Upper Body Push"
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Description (optional)</label>
+              <textarea
+                value={saveWorkoutDescription}
+                onChange={(e) => setSaveWorkoutDescription(e.target.value)}
+                placeholder="Brief description of this workout..."
+                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowSaveWorkoutDialog(false)}
+              className="flex-1 border-gray-700 text-gray-400"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveWorkout}
+              disabled={!saveWorkoutName.trim()}
+              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+            >
+              Save to Library
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Circuit Dialog */}
+      <Dialog open={showSaveCircuitDialog} onOpenChange={setShowSaveCircuitDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-purple-400" />
+              Save Circuit as Template
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Save this circuit to your library for future use
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Circuit Name</label>
+              <Input
+                value={saveCircuitName}
+                onChange={(e) => setSaveCircuitName(e.target.value)}
+                placeholder="e.g., HIIT Finisher"
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Description (optional)</label>
+              <textarea
+                value={saveCircuitDescription}
+                onChange={(e) => setSaveCircuitDescription(e.target.value)}
+                placeholder="Brief description of this circuit..."
+                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSaveCircuitDialog(false);
+                setCircuitToSave(null);
+              }}
+              className="flex-1 border-gray-700 text-gray-400"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCircuit}
+              disabled={!saveCircuitName.trim()}
+              className="flex-1 bg-purple-500 hover:bg-purple-600"
+            >
+              Save to Library
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2167,19 +2660,38 @@ function SetRow({
         </div>
         
         <div className="col-span-3">
-          <Input
-            type="number"
-            inputMode="decimal"
-            placeholder="0"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            onBlur={() => onUpdate({ weight: parseFloat(weight) || undefined })}
-            disabled={set.completed}
-            className={cn(
-              "h-9 text-center bg-gray-800 border-gray-700 text-white",
-              set.completed && "opacity-50"
-            )}
-          />
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              onClick={() => onUpdate({ isAssisted: !set.isAssisted })}
+              disabled={set.completed}
+              className={cn(
+                "h-7 w-7 shrink-0",
+                set.isAssisted 
+                  ? "text-blue-400 bg-blue-500/20 hover:bg-blue-500/30" 
+                  : "text-gray-500 hover:text-gray-400 hover:bg-gray-800"
+              )}
+              title={set.isAssisted ? "Assisted (weight helps you)" : "Normal weight"}
+            >
+              <span className="text-xs font-bold">{set.isAssisted ? '-' : '+'}</span>
+            </Button>
+            <Input
+              type="number"
+              inputMode="decimal"
+              placeholder="0"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              onBlur={() => onUpdate({ weight: parseFloat(weight) || undefined })}
+              disabled={set.completed}
+              className={cn(
+                "h-9 text-center bg-gray-800 border-gray-700 text-white flex-1",
+                set.completed && "opacity-50",
+                set.isAssisted && "border-blue-500/50"
+              )}
+            />
+          </div>
         </div>
         
         <div className="col-span-3">

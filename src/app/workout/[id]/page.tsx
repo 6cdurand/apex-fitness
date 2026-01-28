@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Workout } from '@/types';
 import { getMuscleDisplayName, calculate1RM } from '@/lib/exercises';
+import { cn } from '@/lib/utils';
 import { 
   Clock, 
   Dumbbell, 
@@ -384,7 +385,7 @@ export default function WorkoutDetailPage() {
                 }, null as typeof completedSets[0] | null);
 
                 const exerciseVolume = completedSets.reduce((sum, s) => 
-                  sum + ((s.weight || 0) * (s.reps || 0)), 0
+                  sum + (s.isAssisted ? 0 : ((s.weight || 0) * (s.reps || 0))), 0
                 );
 
                 return (
@@ -434,12 +435,19 @@ export default function WorkoutDetailPage() {
                               </>
                             ) : (
                               <>
-                                <div className="text-center text-white">{set.weight || 0} kg</div>
+                                <div className={cn("text-center", set.isAssisted ? "text-blue-400" : "text-white")}>
+                                  {set.isAssisted && <span className="text-xs mr-0.5">-</span>}
+                                  {set.weight || 0} kg
+                                </div>
                                 <div className="text-center text-white">{set.reps || 0}</div>
                               </>
                             )}
                             <div className="text-right text-gray-400">
-                              {((set.weight || 0) * (set.reps || 0)).toLocaleString()} kg
+                              {set.isAssisted ? (
+                                <span className="text-blue-400/70">assisted</span>
+                              ) : (
+                                <>{((set.weight || 0) * (set.reps || 0)).toLocaleString()} kg</>
+                              )}
                             </div>
                           </div>
                         ))}

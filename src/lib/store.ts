@@ -240,7 +240,8 @@ interface WorkoutState {
   startFromTemplate: (template: WorkoutTemplate, clientId?: string) => void;
   clearCurrentClient: () => void;
   getActiveUserId: () => string; // Get the ID of who we're currently training
-  endWorkout: () => Workout | null;
+  endWorkout: (notes?: string) => Workout | null;
+  updateActiveWorkoutNotes: (notes: string) => void;
   cancelWorkout: () => void;
   
   // Exercise actions
@@ -404,15 +405,21 @@ export const useWorkoutStore = create<WorkoutState>()(
         });
       },
 
-      endWorkout: () => {
+      updateActiveWorkoutNotes: (notes: string) => {
+        const { activeWorkout } = get();
+        if (!activeWorkout) return;
+        set({ activeWorkout: { ...activeWorkout, notes } });
+      },
+
+      endWorkout: (notes?: string) => {
         const { activeWorkout, workoutTimer } = get();
         if (!activeWorkout) return null;
 
-        // Calculate total volume
+        // Calculate total volume (exclude assisted sets)
         let totalVolume = 0;
         activeWorkout.exercises.forEach(ex => {
           ex.sets.forEach(s => {
-            if (s.completed && s.weight && s.reps) {
+            if (s.completed && s.weight && s.reps && !s.isAssisted) {
               totalVolume += s.weight * s.reps;
             }
           });
@@ -420,6 +427,7 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         const completedWorkout: Workout = {
           ...activeWorkout,
+          notes: notes || activeWorkout.notes || '',
           endTime: new Date().toISOString(),
           duration: workoutTimer.seconds,
           totalVolume,
@@ -1511,13 +1519,13 @@ interface TrainerState {
   updateSessionWorkout: (workoutId: string, updates: Partial<SessionWorkout>) => void;
   
   // Workout Library
-  saveToWorkoutLibrary: (workout: Omit<SavedWorkout, 'id' | 'createdAt' | 'updatedAt'>) => SavedWorkout;
+  saveToWorkoutLibrary: (workout: Omit<SavedWorkout, 'id' | 'trainerId' | 'createdAt' | 'updatedAt'>) => SavedWorkout;
   updateWorkoutInLibrary: (workoutId: string, updates: Partial<SavedWorkout>) => void;
   deleteFromWorkoutLibrary: (workoutId: string) => void;
   getWorkoutFromLibrary: (workoutId: string) => SavedWorkout | undefined;
   
   // Circuit Library
-  saveCircuitTemplate: (circuit: Omit<CircuitTemplate, 'id' | 'createdAt'>) => CircuitTemplate;
+  saveCircuitTemplate: (circuit: Omit<CircuitTemplate, 'id' | 'trainerId' | 'createdAt'>) => CircuitTemplate;
   updateCircuitTemplate: (circuitId: string, updates: Partial<CircuitTemplate>) => void;
   deleteCircuitTemplate: (circuitId: string) => void;
   getCircuitTemplate: (circuitId: string) => CircuitTemplate | undefined;
@@ -2629,16 +2637,45 @@ export const useTrainerStore = create<TrainerState>()(
           goals: sb.goals,
         }));
         
-        // REPLACE localStorage with Supabase data (no merging old data)
+        // Merge calendar events: preserve workoutId from local if Supabase doesn't have it
+        // This prevents losing workout links during sync race conditions
+        const currentCalendarEvents = get().calendarEvents;
+        const mergedCalendarEvents = supabaseCalendarEvents.map((sbEvent: any) => {
+          const localEvent = currentCalendarEvents.find(e => e.id === sbEvent.id);
+          // If local has workoutId but Supabase doesn't, preserve local workoutId
+          if (localEvent?.workoutId && !sbEvent.workoutId) {
+            // Also re-sync to Supabase to fix the data
+            const merged = { ...sbEvent, workoutId: localEvent.workoutId };
+            syncCalendarEventToSupabase(merged);
+            return merged;
+          }
+          return sbEvent;
+        });
+        
+        // Also include local events that don't exist in Supabase yet (newly created)
+        const localOnlyEvents = currentCalendarEvents.filter(
+          localEvent => !supabaseCalendarEvents.find((sbEvent: any) => sbEvent.id === localEvent.id)
+        );
+        // Sync these to Supabase
+        localOnlyEvents.forEach(event => syncCalendarEventToSupabase(event));
+        
+        // Same for session workouts - preserve local ones not yet synced
+        const currentSessionWorkouts = get().sessionWorkouts;
+        const localOnlyWorkouts = currentSessionWorkouts.filter(
+          localWorkout => !supabaseSessionWorkouts.find((sbWorkout: any) => sbWorkout.id === localWorkout.id)
+        );
+        localOnlyWorkouts.forEach(workout => syncSessionWorkoutToSupabase(workout));
+        
+        // REPLACE localStorage with merged Supabase data
         set({
           clients,
           sessions: supabaseSessions,
           sessionPackages: supabasePackages,
-          calendarEvents: supabaseCalendarEvents,
+          calendarEvents: [...mergedCalendarEvents, ...localOnlyEvents],
           payments: supabasePayments,
           clientPrograms: supabasePrograms,
           bookingRequests: supabaseBookings,
-          sessionWorkouts: supabaseSessionWorkouts,
+          sessionWorkouts: [...supabaseSessionWorkouts, ...localOnlyWorkouts],
           workoutLibrary: supabaseWorkoutLibrary,
           circuitLibrary: supabaseCircuitLibrary,
         });

@@ -699,7 +699,6 @@ function WorkoutBuilderContent() {
     
     saveToWorkoutLibrary({
       name: libraryWorkoutName,
-      trainerId: user?.id || '',
       blocks,
       tags,
       estimatedMinutes: estimatedDuration,
@@ -738,7 +737,6 @@ function WorkoutBuilderContent() {
     
     saveCircuitTemplate({
       name: circuitTemplateName,
-      trainerId: user?.id || '',
       exercises: block.exercises,
       circuitStyle: block.circuitStyle || 'rounds',
       rounds: block.rounds,
