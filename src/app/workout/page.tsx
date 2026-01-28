@@ -494,6 +494,48 @@ export default function WorkoutPage() {
                           Note: {session.notes}
                         </p>
                       )}
+                      
+                      {/* Payment Toggle - Always visible */}
+                      <div className="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
+                        <span className="text-xs text-gray-500">Payment Status</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-7 text-xs ${isPaid ? 'text-emerald-400 bg-emerald-500/10' : 'text-amber-400 bg-amber-500/10 hover:bg-amber-500/20'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (matchingSessionRecord) {
+                              toggleSessionPaid(matchingSessionRecord.id);
+                            } else {
+                              // Create a session record and mark as paid
+                              const newPayment = {
+                                clientId: session.clientId!,
+                                trainerId: user?.id || '',
+                                amount: pricePerSession,
+                                currency: 'NZD',
+                                type: 'single_session' as const,
+                                status: 'paid' as const,
+                                method: 'cash' as const,
+                                description: `PT Session - ${session.title || 'Session'}`,
+                                paidAt: new Date().toISOString(),
+                              };
+                              addPayment(newPayment);
+                            }
+                          }}
+                        >
+                          {isPaid ? (
+                            <>
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Paid {pricePerSession > 0 && `$${pricePerSession}`}
+                            </>
+                          ) : (
+                            <>
+                              <DollarSign className="w-3 h-3 mr-1" />
+                              Mark Paid {pricePerSession > 0 && `$${pricePerSession}`}
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );

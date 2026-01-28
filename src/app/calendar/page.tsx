@@ -325,12 +325,18 @@ export default function CalendarPage() {
                       {/* Event Indicators */}
                       {dayEvents.length > 0 && (
                         <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                          {dayEvents.slice(0, 3).map((event, i) => (
-                            <div
-                              key={i}
-                              className={cn("w-1.5 h-1.5 rounded-full", getEventColor(event.type))}
-                            />
-                          ))}
+                          {dayEvents.slice(0, 3).map((event, i) => {
+                            const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
+                            return (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "w-1.5 h-1.5 rounded-full", 
+                                  hasWorkout ? "bg-emerald-400 ring-1 ring-emerald-400/50" : getEventColor(event.type)
+                                )}
+                              />
+                            );
+                          })}
                         </div>
                       )}
                     </button>
@@ -394,18 +400,21 @@ export default function CalendarPage() {
                               }}
                               className="border-r border-gray-800/30 hover:bg-gray-800/50 relative"
                             >
-                              {dayEvents.map((event, i) => (
+                              {dayEvents.map((event, i) => {
+                                const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
+                                return (
                                 <div
                                   key={event.id}
                                   className={cn(
-                                    "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded text-xs p-1 truncate",
+                                    "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded text-xs p-1 truncate flex items-center gap-1",
                                     getEventColor(event.type), "text-white"
                                   )}
                                   onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
                                 >
+                                  {hasWorkout && <Dumbbell className="w-3 h-3 flex-shrink-0" />}
                                   {getClientName(event.clientId)}
                                 </div>
-                              ))}
+                              );})}
                             </button>
                           );
                         })}
@@ -445,7 +454,9 @@ export default function CalendarPage() {
                           {hour.toString().padStart(2, '0')}:00
                         </div>
                         <div className="flex-1 p-1 space-y-1">
-                          {hourEvents.map((event) => (
+                          {hourEvents.map((event) => {
+                            const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
+                            return (
                             <div
                               key={event.id}
                               onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
@@ -454,12 +465,19 @@ export default function CalendarPage() {
                                 getEventColor(event.type)
                               )}
                             >
-                              <p className="font-medium text-white text-sm">{event.title}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-white text-sm">{event.title}</p>
+                                {hasWorkout && (
+                                  <Badge className="text-xs bg-emerald-500/20 text-emerald-400 px-1 py-0">
+                                    <Dumbbell className="w-3 h-3" />
+                                  </Badge>
+                                )}
+                              </div>
                               <p className="text-xs text-white/80">
                                 {event.startTime} - {event.endTime} • {getClientName(event.clientId)}
                               </p>
                             </div>
-                          ))}
+                          );})}
                         </div>
                       </button>
                     );
