@@ -439,18 +439,19 @@ export default function CalendarPage() {
                                 const endMin = parseInt(event.endTime?.split(':')[1] || '0');
                                 const durationMins = (endHour - hour) * 60 + endMin - startMin;
                                 const topPercent = (startMin / 60) * 100;
-                                const heightPercent = Math.min((durationMins / 60) * 100, 100 - topPercent);
+                                // Allow height to extend beyond current hour (overflow into next hours)
+                                const heightPercent = (durationMins / 60) * 100;
                                 return (
                                 <div
                                   key={event.id}
                                   className={cn(
-                                    "absolute inset-x-0.5 rounded text-xs p-0.5 truncate flex items-center gap-1 z-10",
+                                    "absolute inset-x-0.5 rounded text-xs p-0.5 truncate flex items-center gap-1 z-10 overflow-hidden",
                                     getEventColor(event.type), "text-white"
                                   )}
                                   style={{
                                     top: `${topPercent}%`,
-                                    height: `${Math.max(heightPercent, 20)}%`,
-                                    minHeight: '10px'
+                                    height: `${Math.max(heightPercent, 25)}%`,
+                                    minHeight: '12px'
                                   }}
                                   onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
                                 >

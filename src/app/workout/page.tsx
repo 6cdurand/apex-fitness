@@ -27,7 +27,8 @@ import {
   Edit,
   Check,
   DollarSign,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { ProfileCard } from '@/components/ProfileCard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -62,6 +63,7 @@ export default function WorkoutPage() {
   const [rescheduleSession, setRescheduleSession] = useState<string | null>(null);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('09:00');
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Session start dialog state
   const [startSessionDialog, setStartSessionDialog] = useState<{
@@ -76,6 +78,15 @@ export default function WorkoutPage() {
       router.replace('/auth');
     }
   }, [isAuthenticated, router]);
+
+  // Auto-sync on mount to get latest calendar events
+  useEffect(() => {
+    if (user?.id && user?.mode === 'trainer') {
+      setIsSyncing(true);
+      useTrainerStore.getState().loadFromSupabase(user.id)
+        .finally(() => setIsSyncing(false));
+    }
+  }, [user?.id, user?.mode]);
 
   // Load users from localStorage (sessionWorkouts now from trainer store)
   useEffect(() => {
@@ -332,9 +343,12 @@ export default function WorkoutPage() {
                   <ChevronRight className="w-5 h-5" />
                 </Button>
               </div>
-              <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
-                {dateSessions.length} session{dateSessions.length !== 1 ? 's' : ''}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {isSyncing && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
+                <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
+                  {dateSessions.length} session{dateSessions.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
             </div>
             
             {dateSessions.length > 0 ? (
