@@ -1,0 +1,568 @@
+'use client';
+
+import React, { useEffect, useState, useMemo } from 'react';
+import { useRouter, useParams } from 'next/navigation';
+import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  ArrowLeft,
+  UsersRound,
+  Users,
+  Calendar,
+  DollarSign,
+  Settings,
+  Plus,
+  Trash2,
+  CheckCircle2,
+  Clock,
+  Edit,
+  MessageCircle,
+  Search,
+  ChevronRight,
+  AlertCircle
+} from 'lucide-react';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+
+export default function GroupDetailPage() {
+  const router = useRouter();
+  const params = useParams();
+  const groupId = params.id as string;
+  
+  const { user, isAuthenticated } = useAuthStore();
+  const { 
+    clientGroups, 
+    clients,
+    payments,
+    getClientGroup, 
+    updateClientGroup, 
+    deleteClientGroup,
+    addMemberToGroup,
+    removeMemberFromGroup,
+    getPackagesForClient,
+  } = useTrainerStore();
+  
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState('members');
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [showEditGroup, setShowEditGroup] = useState(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  
+  // Edit form state
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+  const [editColor, setEditColor] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.replace('/auth');
+    }
+  }, [isAuthenticated, router]);
+
+  // Load users
+  useEffect(() => {
+    const loadUsers = async () => {
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      setAllUsers(stored);
+      
+      try {
+        const supabaseUsers = await fetchAllUsersFromSupabase();
+        if (supabaseUsers && supabaseUsers.length > 0) {
+          const supabaseIds = new Set(supabaseUsers.map((u: any) => u.id));
+          const localOnly = stored.filter((u: any) => !supabaseIds.has(u.id));
+          setAllUsers([...supabaseUsers, ...localOnly]);
+        }
+      } catch (e) {
+        console.error('Error loading users:', e);
+      }
+    };
+    loadUsers();
+  }, []);
+
+  const group = clientGroups.find(g => g.id === groupId);
+  const trainerClients = clients.filter(c => c.trainerId === user?.id);
+
+  const getClientUser = (clientId: string) => {
+    return allUsers.find(u => u.id === clientId);
+  };
+
+  // Get members data with payment info
+  const membersData = useMemo(() => {
+    if (!group) return [];
+    
+    return group.memberIds.map(clientId => {
+      const clientUser = getClientUser(clientId);
+      const clientPayments = payments.filter(p => p.clientId === clientId && p.trainerId === user?.id);
+      const packages = getPackagesForClient(clientId);
+      const activePackage = packages.find(p => p.status === 'active');
+      
+      const totalPaid = clientPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const sessionsCompleted = activePackage?.usedSessions || 0;
+      const sessionsPaid = activePackage?.paidSessions || 0;
+      const outstanding = Math.max(0, sessionsCompleted - sessionsPaid) * (group.pricePerSession || 0);
+      
+      return {
+        clientId,
+        user: clientUser,
+        totalPaid,
+        sessionsCompleted,
+        sessionsPaid,
+        outstanding,
+        hasOutstanding: outstanding > 0,
+      };
+    });
+  }, [group, payments, user?.id, allUsers, getPackagesForClient]);
+
+  // Calculate group totals
+  const groupStats = useMemo(() => {
+    const totalMembers = membersData.length;
+    const totalOutstanding = membersData.reduce((sum, m) => sum + m.outstanding, 0);
+    const totalPaid = membersData.reduce((sum, m) => sum + m.totalPaid, 0);
+    const membersWithOutstanding = membersData.filter(m => m.hasOutstanding).length;
+    
+    return { totalMembers, totalOutstanding, totalPaid, membersWithOutstanding };
+  }, [membersData]);
+
+  // Available clients (not already in group)
+  const availableClients = trainerClients.filter(
+    c => !group?.memberIds.includes(c.clientId)
+  );
+
+  const filteredAvailableClients = memberSearchQuery
+    ? availableClients.filter(c => {
+        const clientUser = getClientUser(c.clientId);
+        return clientUser?.displayName?.toLowerCase().includes(memberSearchQuery.toLowerCase()) ||
+               clientUser?.username?.toLowerCase().includes(memberSearchQuery.toLowerCase());
+      })
+    : availableClients;
+
+  const openEditDialog = () => {
+    if (!group) return;
+    setEditName(group.name);
+    setEditDescription(group.description || '');
+    setEditPrice(group.pricePerSession?.toString() || '');
+    setEditColor(group.color || '#3b82f6');
+    setShowEditGroup(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editName.trim()) {
+      toast.error('Group name is required');
+      return;
+    }
+    
+    updateClientGroup(groupId, {
+      name: editName.trim(),
+      description: editDescription.trim() || undefined,
+      pricePerSession: editPrice ? parseFloat(editPrice) : undefined,
+      color: editColor,
+    });
+    
+    toast.success('Group updated');
+    setShowEditGroup(false);
+  };
+
+  const handleAddMember = (clientId: string) => {
+    addMemberToGroup(groupId, clientId);
+    toast.success('Member added to group');
+  };
+
+  const handleRemoveMember = (clientId: string) => {
+    const clientUser = getClientUser(clientId);
+    if (confirm(`Remove ${clientUser?.displayName || 'this member'} from the group?`)) {
+      removeMemberFromGroup(groupId, clientId);
+      toast.success('Member removed from group');
+    }
+  };
+
+  const handleDeleteGroup = () => {
+    if (confirm(`Delete group "${group?.name}"? This cannot be undone.`)) {
+      deleteClientGroup(groupId);
+      toast.success('Group deleted');
+      router.push('/clients');
+    }
+  };
+
+  if (!group) {
+    return (
+      <MainLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh]">
+          <UsersRound className="w-16 h-16 text-gray-600 mb-4" />
+          <p className="text-gray-400">Group not found</p>
+          <Button variant="outline" onClick={() => router.back()} className="mt-4">
+            Go Back
+          </Button>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  return (
+    <MainLayout>
+      {/* Header */}
+      <div className="sticky top-0 z-50 bg-gray-950 border-b border-gray-800">
+        <div className="flex items-center gap-4 px-4 pt-12 pb-4">
+          <Button variant="ghost" size="icon" onClick={() => router.push('/clients')}>
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <div 
+            className="w-12 h-12 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: group.color || '#3b82f6' }}
+          >
+            <UsersRound className="w-6 h-6 text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-lg font-semibold text-white">{group.name}</h1>
+            <p className="text-sm text-gray-400">{group.memberIds.length} members</p>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={openEditDialog}
+          >
+            <Settings className="w-5 h-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+        <TabsList className="grid grid-cols-3 mx-4 mt-4 bg-gray-900">
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="schedule">Schedule</TabsTrigger>
+        </TabsList>
+
+        <div className="px-4 pb-24">
+          {/* Stats Row */}
+          <div className="grid grid-cols-3 gap-3 my-4">
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-blue-400">{groupStats.totalMembers}</p>
+                <p className="text-xs text-gray-400">Members</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-bold text-emerald-400">${groupStats.totalPaid}</p>
+                <p className="text-xs text-gray-400">Total Paid</p>
+              </CardContent>
+            </Card>
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="p-3 text-center">
+                <p className={`text-2xl font-bold ${groupStats.totalOutstanding > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
+                  ${groupStats.totalOutstanding}
+                </p>
+                <p className="text-xs text-gray-400">Outstanding</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <TabsContent value="members" className="mt-0">
+            {/* Add Member Button */}
+            <Button 
+              className="w-full mb-4 bg-blue-500 hover:bg-blue-600"
+              onClick={() => setShowAddMember(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Member
+            </Button>
+
+            {/* Members List */}
+            <div className="space-y-3">
+              {membersData.map((member) => (
+                <Card 
+                  key={member.clientId}
+                  className={`bg-gray-900 border-gray-800 ${member.hasOutstanding ? 'border-l-4 border-l-amber-500' : ''}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div 
+                        className="flex items-center gap-3 flex-1 cursor-pointer"
+                        onClick={() => router.push(`/clients/${member.clientId}`)}
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={member.user?.profilePhoto} />
+                          <AvatarFallback className="bg-gray-800 text-white">
+                            {member.user?.displayName?.[0] || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium text-white">
+                            {member.user?.displayName || member.user?.username || 'Unknown'}
+                          </p>
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                            <span>{member.sessionsCompleted} sessions</span>
+                            {member.hasOutstanding && (
+                              <Badge className="bg-amber-500/20 text-amber-400 text-xs">
+                                ${member.outstanding} due
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-400 hover:text-red-400"
+                          onClick={() => handleRemoveMember(member.clientId)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                        <ChevronRight className="w-5 h-5 text-gray-600" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              
+              {membersData.length === 0 && (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardContent className="py-8 text-center">
+                    <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                    <p className="text-gray-400">No members yet</p>
+                    <p className="text-sm text-gray-500">Add members to this group</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="payments" className="mt-0">
+            {/* Payment Summary */}
+            {groupStats.membersWithOutstanding > 0 && (
+              <Card className="bg-amber-500/10 border-amber-500/50 mb-4">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <p className="text-amber-400 font-medium">
+                        {groupStats.membersWithOutstanding} member{groupStats.membersWithOutstanding > 1 ? 's' : ''} with outstanding payments
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Total outstanding: ${groupStats.totalOutstanding}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Members Payment Status */}
+            <div className="space-y-3">
+              {membersData.map((member) => (
+                <Card 
+                  key={member.clientId}
+                  className={`bg-gray-900 border-gray-800 ${member.hasOutstanding ? 'border-l-4 border-l-amber-500' : ''}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={member.user?.profilePhoto} />
+                          <AvatarFallback className="bg-gray-800 text-white text-xs">
+                            {member.user?.displayName?.[0] || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <p className="font-medium text-white">
+                          {member.user?.displayName || 'Unknown'}
+                        </p>
+                      </div>
+                      {member.hasOutstanding ? (
+                        <Badge className="bg-amber-500/20 text-amber-400">
+                          ${member.outstanding} due
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-emerald-500/20 text-emerald-400">
+                          Paid up
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                      <div className="bg-gray-800 rounded p-2">
+                        <p className="text-gray-400 text-xs">Sessions</p>
+                        <p className="text-white font-bold">{member.sessionsCompleted}</p>
+                      </div>
+                      <div className="bg-gray-800 rounded p-2">
+                        <p className="text-gray-400 text-xs">Paid</p>
+                        <p className="text-emerald-400 font-bold">{member.sessionsPaid}</p>
+                      </div>
+                      <div className="bg-gray-800 rounded p-2">
+                        <p className="text-gray-400 text-xs">Total Paid</p>
+                        <p className="text-blue-400 font-bold">${member.totalPaid}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="schedule" className="mt-0">
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="py-8 text-center">
+                <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                <p className="text-gray-400">Schedule coming soon</p>
+                <p className="text-sm text-gray-500">
+                  Set recurring class times for this group
+                </p>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </div>
+      </Tabs>
+
+      {/* Add Member Dialog */}
+      <Dialog open={showAddMember} onOpenChange={setShowAddMember}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Add Member</DialogTitle>
+            <DialogDescription>
+              Select a client to add to {group.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Input
+                placeholder="Search clients..."
+                value={memberSearchQuery}
+                onChange={(e) => setMemberSearchQuery(e.target.value)}
+                className="pl-10 bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <ScrollArea className="h-64">
+              <div className="space-y-2">
+                {filteredAvailableClients.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">
+                    {availableClients.length === 0 
+                      ? 'All clients are already in this group'
+                      : 'No clients match your search'}
+                  </p>
+                ) : (
+                  filteredAvailableClients.map((client) => {
+                    const clientUser = getClientUser(client.clientId);
+                    return (
+                      <div
+                        key={client.id}
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-800 cursor-pointer"
+                        onClick={() => {
+                          handleAddMember(client.clientId);
+                          setShowAddMember(false);
+                          setMemberSearchQuery('');
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={clientUser?.profilePhoto} />
+                            <AvatarFallback className="bg-gray-700 text-white">
+                              {clientUser?.displayName?.[0] || '?'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="text-white">
+                            {clientUser?.displayName || clientUser?.username || 'Unknown'}
+                          </span>
+                        </div>
+                        <Plus className="w-5 h-5 text-blue-400" />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Group Dialog */}
+      <Dialog open={showEditGroup} onOpenChange={setShowEditGroup}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Group</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-gray-300">Group Name</Label>
+              <Input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-gray-300">Description</Label>
+              <Input
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-gray-300">Price per Session ($)</Label>
+                <Input
+                  type="number"
+                  value={editPrice}
+                  onChange={(e) => setEditPrice(e.target.value)}
+                  className="bg-gray-800 border-gray-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">Color</Label>
+                <Input
+                  type="color"
+                  value={editColor}
+                  onChange={(e) => setEditColor(e.target.value)}
+                  className="bg-gray-800 border-gray-700 h-10 cursor-pointer"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                className="flex-1 border-gray-700"
+                onClick={() => setShowEditGroup(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-blue-500 hover:bg-blue-600"
+                onClick={handleSaveEdit}
+              >
+                Save Changes
+              </Button>
+            </div>
+            
+            <Button
+              variant="ghost"
+              className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              onClick={handleDeleteGroup}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Group
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </MainLayout>
+  );
+}

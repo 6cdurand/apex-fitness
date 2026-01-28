@@ -38,7 +38,11 @@ import {
   Link2,
   ArrowLeft,
   Loader2,
-  DollarSign
+  DollarSign,
+  UsersRound,
+  Plus,
+  Trash2,
+  Edit
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -48,7 +52,7 @@ import { registerUserToSupabase, fetchAllUsersFromSupabase, linkClientToTrainer 
 export default function ClientsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { clients, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent } = useTrainerStore();
+  const { clients, clientGroups, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent, addClientGroup, updateClientGroup, deleteClientGroup } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   const { getOrCreateConversation } = useMessageStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -87,6 +91,18 @@ export default function ClientsPage() {
   
   // Sync state
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // View mode (clients or groups)
+  const [viewMode, setViewMode] = useState<'clients' | 'groups'>('clients');
+  
+  // Group management state
+  const [showAddGroup, setShowAddGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
+  const [newGroupPrice, setNewGroupPrice] = useState('');
+  const [newGroupColor, setNewGroupColor] = useState('#3b82f6');
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -334,9 +350,52 @@ export default function ClientsPage() {
     }
   };
 
+  // Handle create group
+  const handleCreateGroup = () => {
+    if (!newGroupName.trim()) {
+      toast.error('Please enter a group name');
+      return;
+    }
+    if (selectedGroupMembers.length === 0) {
+      toast.error('Please select at least one member');
+      return;
+    }
+    
+    addClientGroup({
+      trainerId: user?.id || '',
+      name: newGroupName.trim(),
+      description: newGroupDescription.trim() || undefined,
+      memberIds: selectedGroupMembers,
+      color: newGroupColor,
+      pricePerSession: newGroupPrice ? parseFloat(newGroupPrice) : undefined,
+      status: 'active',
+    });
+    
+    toast.success(`Group "${newGroupName}" created with ${selectedGroupMembers.length} members`);
+    
+    // Reset form
+    setShowAddGroup(false);
+    setNewGroupName('');
+    setNewGroupDescription('');
+    setNewGroupPrice('');
+    setNewGroupColor('#3b82f6');
+    setSelectedGroupMembers([]);
+    setGroupSearchQuery('');
+  };
+
+  // Toggle member selection for group
+  const toggleGroupMember = (clientId: string) => {
+    setSelectedGroupMembers(prev => 
+      prev.includes(clientId) 
+        ? prev.filter(id => id !== clientId)
+        : [...prev, clientId]
+    );
+  };
+
   if (!isAuthenticated || user?.mode !== 'trainer') return null;
 
   const trainerClients = clients.filter(c => c.trainerId === user?.id);
+  const trainerGroups = clientGroups.filter(g => g.trainerId === user?.id);
   const activeClients = trainerClients.filter(c => c.status === 'active');
   const pendingClients = trainerClients.filter(c => c.status === 'pending');
 
@@ -599,19 +658,41 @@ export default function ClientsPage() {
       />
 
       <div className="px-4 py-4 pb-24">
-        {/* Search */}
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-          <Input
-            placeholder="Search clients..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-800 border-gray-700 text-white"
-          />
+        {/* View Mode Tabs */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant={viewMode === 'clients' ? 'default' : 'outline'}
+            className={viewMode === 'clients' ? 'bg-rose-500 hover:bg-rose-600' : 'border-gray-700'}
+            onClick={() => setViewMode('clients')}
+          >
+            <Users className="w-4 h-4 mr-2" />
+            Clients ({trainerClients.length})
+          </Button>
+          <Button
+            variant={viewMode === 'groups' ? 'default' : 'outline'}
+            className={viewMode === 'groups' ? 'bg-blue-500 hover:bg-blue-600' : 'border-gray-700'}
+            onClick={() => setViewMode('groups')}
+          >
+            <UsersRound className="w-4 h-4 mr-2" />
+            Groups ({trainerGroups.length})
+          </Button>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3 mb-6">
+        {viewMode === 'clients' ? (
+          <>
+            {/* Search */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Input
+                placeholder="Search clients..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+
+            {/* Stats Row */}
+            <div className="grid grid-cols-3 gap-3 mb-6">
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-rose-400">{activeClients.length}</p>
@@ -807,7 +888,222 @@ export default function ClientsPage() {
             </div>
           )}
         </div>
+          </>
+        ) : (
+          /* Groups View */
+          <div className="space-y-4">
+            {/* Add Group Button */}
+            <Button 
+              className="w-full bg-blue-500 hover:bg-blue-600"
+              onClick={() => setShowAddGroup(true)}
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create New Group
+            </Button>
+
+            {/* Groups List */}
+            {trainerGroups.length === 0 ? (
+              <Card className="bg-gray-900 border-gray-800">
+                <CardContent className="py-16 text-center">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                    <UsersRound className="w-10 h-10 text-gray-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-400 mb-2">No groups yet</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Create groups for your group fitness classes
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {trainerGroups.map((group) => {
+                  const memberCount = group.memberIds.length;
+                  const memberPreviews = group.memberIds.slice(0, 4).map(id => getClientUser(id));
+                  
+                  return (
+                    <Card 
+                      key={group.id}
+                      className="bg-gray-900 border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
+                      onClick={() => router.push(`/clients/group/${group.id}`)}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="w-10 h-10 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: group.color || '#3b82f6' }}
+                            >
+                              <UsersRound className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <h3 className="font-semibold text-white">{group.name}</h3>
+                              <p className="text-sm text-gray-400">
+                                {memberCount} member{memberCount !== 1 ? 's' : ''}
+                                {group.pricePerSession && ` • $${group.pricePerSession}/session`}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-gray-400 hover:text-red-400"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`Delete group "${group.name}"?`)) {
+                                  deleteClientGroup(group.id);
+                                  toast.success('Group deleted');
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                            <ChevronRight className="w-5 h-5 text-gray-600" />
+                          </div>
+                        </div>
+                        
+                        {/* Member Avatars */}
+                        <div className="flex items-center gap-1">
+                          <div className="flex -space-x-2">
+                            {memberPreviews.map((member, i) => (
+                              <Avatar key={i} className="w-8 h-8 border-2 border-gray-900">
+                                <AvatarImage src={member?.profilePhoto} />
+                                <AvatarFallback className="bg-gray-800 text-white text-xs">
+                                  {member?.displayName?.[0] || '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                          {memberCount > 4 && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              +{memberCount - 4} more
+                            </span>
+                          )}
+                        </div>
+                        
+                        {group.description && (
+                          <p className="text-sm text-gray-500 mt-2 truncate">{group.description}</p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Add Group Dialog */}
+      <Dialog open={showAddGroup} onOpenChange={setShowAddGroup}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Create Group</DialogTitle>
+            <DialogDescription>
+              Create a group for group fitness classes
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-gray-300">Group Name *</Label>
+              <Input
+                placeholder="e.g., Morning Bootcamp"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-gray-300">Description</Label>
+              <Input
+                placeholder="e.g., High intensity group training"
+                value={newGroupDescription}
+                onChange={(e) => setNewGroupDescription(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-gray-300">Price per Session ($)</Label>
+                <Input
+                  type="number"
+                  placeholder="e.g., 25"
+                  value={newGroupPrice}
+                  onChange={(e) => setNewGroupPrice(e.target.value)}
+                  className="bg-gray-800 border-gray-700 text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-gray-300">Color</Label>
+                <Input
+                  type="color"
+                  value={newGroupColor}
+                  onChange={(e) => setNewGroupColor(e.target.value)}
+                  className="bg-gray-800 border-gray-700 h-10 cursor-pointer"
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-gray-300">Select Members ({selectedGroupMembers.length} selected)</Label>
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  placeholder="Search clients..."
+                  value={groupSearchQuery}
+                  onChange={(e) => setGroupSearchQuery(e.target.value)}
+                  className="pl-10 bg-gray-800 border-gray-700 text-white"
+                />
+              </div>
+              <ScrollArea className="h-48 border border-gray-700 rounded-lg">
+                <div className="p-2 space-y-1">
+                  {trainerClients
+                    .filter(c => {
+                      if (!groupSearchQuery) return true;
+                      const clientUser = getClientUser(c.clientId);
+                      return clientUser?.displayName?.toLowerCase().includes(groupSearchQuery.toLowerCase()) ||
+                             clientUser?.username?.toLowerCase().includes(groupSearchQuery.toLowerCase());
+                    })
+                    .map((client) => {
+                      const clientUser = getClientUser(client.clientId);
+                      const isSelected = selectedGroupMembers.includes(client.clientId);
+                      return (
+                        <div
+                          key={client.id}
+                          className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-500/20 border border-blue-500' : 'hover:bg-gray-800'
+                          }`}
+                          onClick={() => toggleGroupMember(client.clientId)}
+                        >
+                          <Avatar className="w-8 h-8">
+                            <AvatarImage src={clientUser?.profilePhoto} />
+                            <AvatarFallback className="bg-gray-700 text-white text-xs">
+                              {clientUser?.displayName?.[0] || '?'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="flex-1 text-white text-sm">
+                            {clientUser?.displayName || clientUser?.username || 'Unknown'}
+                          </span>
+                          {isSelected && <CheckCircle2 className="w-5 h-5 text-blue-400" />}
+                        </div>
+                      );
+                    })}
+                </div>
+              </ScrollArea>
+            </div>
+            
+            <Button 
+              className="w-full bg-blue-500 hover:bg-blue-600"
+              onClick={handleCreateGroup}
+            >
+              Create Group
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Booking Dialog */}
       <Dialog open={showBooking} onOpenChange={setShowBooking}>

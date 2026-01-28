@@ -50,6 +50,7 @@ import {
   Medal,
   FeedPost,
   TrainerClient,
+  ClientGroup,
   CalendarEvent,
   WeeklyReport,
   Notification,
@@ -1418,6 +1419,7 @@ interface CircuitTemplate {
 
 interface TrainerState {
   clients: TrainerClient[];
+  clientGroups: ClientGroup[];
   assignedWorkouts: Workout[];
   calendarEvents: CalendarEvent[];
   sessions: ClientSession[];
@@ -1535,12 +1537,21 @@ interface TrainerState {
   
   // Update package (for editing)
   updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => void;
+  
+  // Client Groups
+  addClientGroup: (group: Omit<ClientGroup, 'id' | 'createdAt'>) => ClientGroup;
+  updateClientGroup: (groupId: string, updates: Partial<ClientGroup>) => void;
+  deleteClientGroup: (groupId: string) => void;
+  getClientGroup: (groupId: string) => ClientGroup | undefined;
+  addMemberToGroup: (groupId: string, clientId: string) => void;
+  removeMemberFromGroup: (groupId: string, clientId: string) => void;
 }
 
 export const useTrainerStore = create<TrainerState>()(
   persist(
     (set, get) => ({
       clients: [],
+      clientGroups: [],
       assignedWorkouts: [],
       calendarEvents: [],
       sessions: [],
@@ -2737,6 +2748,63 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase immediately with the updated data
         console.log('[Store] Updating package:', packageId, updates);
         syncSessionPackageToSupabase(updatedPackage);
+      },
+
+      // Client Groups
+      addClientGroup: (group) => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return {} as ClientGroup;
+        
+        const newGroup: ClientGroup = {
+          id: uuidv4(),
+          ...group,
+          trainerId,
+          createdAt: new Date().toISOString(),
+        };
+        
+        set(state => ({
+          clientGroups: [...state.clientGroups, newGroup],
+        }));
+        
+        return newGroup;
+      },
+
+      updateClientGroup: (groupId, updates) => {
+        set(state => ({
+          clientGroups: state.clientGroups.map(g =>
+            g.id === groupId ? { ...g, ...updates } : g
+          ),
+        }));
+      },
+
+      deleteClientGroup: (groupId) => {
+        set(state => ({
+          clientGroups: state.clientGroups.filter(g => g.id !== groupId),
+        }));
+      },
+
+      getClientGroup: (groupId) => {
+        return get().clientGroups.find(g => g.id === groupId);
+      },
+
+      addMemberToGroup: (groupId, clientId) => {
+        set(state => ({
+          clientGroups: state.clientGroups.map(g =>
+            g.id === groupId && !g.memberIds.includes(clientId)
+              ? { ...g, memberIds: [...g.memberIds, clientId] }
+              : g
+          ),
+        }));
+      },
+
+      removeMemberFromGroup: (groupId, clientId) => {
+        set(state => ({
+          clientGroups: state.clientGroups.map(g =>
+            g.id === groupId
+              ? { ...g, memberIds: g.memberIds.filter(id => id !== clientId) }
+              : g
+          ),
+        }));
       },
     }),
     {

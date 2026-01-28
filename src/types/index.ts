@@ -299,6 +299,24 @@ export interface TrainerClient {
   onboardingComplete: boolean;
 }
 
+// Client Group (for group fitness classes)
+export interface ClientGroup {
+  id: string;
+  trainerId: string;
+  name: string;
+  description?: string;
+  memberIds: string[];  // Array of client IDs
+  color?: string;  // For visual identification
+  pricePerSession?: number;  // Group class price per person
+  schedule?: {
+    dayOfWeek: number;  // 0-6 (Sunday-Saturday)
+    time: string;  // e.g., "09:00"
+    duration: number;  // minutes
+  }[];
+  createdAt: string;
+  status: 'active' | 'paused' | 'archived';
+}
+
 // Client Onboarding
 export interface ClientOnboarding {
   id: string;
