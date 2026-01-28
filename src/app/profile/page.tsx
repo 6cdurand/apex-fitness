@@ -163,7 +163,7 @@ export default function ProfilePage() {
   // Filter medals for current user only - must be earned AND belong to user
   const userMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
   
-  // Trainer stats calculation - uses actual payment data from sessions
+  // Trainer stats calculation - uses payments array and sessionPackages for accurate data
   const trainerStats = useMemo(() => {
     if (!user?.id || user.mode !== 'trainer') return null;
     
@@ -171,65 +171,64 @@ export default function ProfilePage() {
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     
-    // Filter sessions for this trainer
-    const trainerSessions = sessions.filter(s => s.trainerId === user.id);
-    const completedSessions = trainerSessions.filter(s => s.status === 'completed');
-    const paidSessions = completedSessions.filter(s => s.paid === true);
-    
-    // Get all trainer packages
+    // Get all trainer packages - this is the source of truth for session/payment counts
     const trainerPackages = sessionPackages.filter(p => p.trainerId === user.id);
     
-    // Calculate earnings from PAID sessions using each client's actual rate
-    const calculateSessionEarnings = (sessionList: typeof paidSessions) => {
-      let total = 0;
-      sessionList.forEach(session => {
-        const pkg = trainerPackages.find(p => p.clientId === session.clientId);
-        if (pkg?.pricePerSession) {
-          total += pkg.pricePerSession;
-        }
-      });
-      return total;
-    };
+    // Get all payments for this trainer
+    const trainerPayments = payments.filter(p => p.trainerId === user.id);
     
-    // Filter paid sessions by time period
-    const weekPaidSessions = paidSessions.filter(s => new Date(s.date) >= oneWeekAgo);
-    const monthPaidSessions = paidSessions.filter(s => new Date(s.date) >= oneMonthAgo);
-    
-    // Calculate actual earnings from paid sessions
-    const weekEarnings = calculateSessionEarnings(weekPaidSessions);
-    const monthEarnings = calculateSessionEarnings(monthPaidSessions);
-    const totalEarnings = calculateSessionEarnings(paidSessions);
-    
-    // Calculate total used sessions (completed)
-    const totalUsedSessions = completedSessions.length;
-    const totalPaidSessions = paidSessions.length;
-    
-    // Outstanding amount (sessions done but not paid)
-    const unpaidSessions = completedSessions.filter(s => !s.paid);
+    // Calculate total sessions and paid sessions from packages
+    let totalUsedSessions = 0;
+    let totalPaidSessionsFromPackages = 0;
     let outstandingAmount = 0;
-    unpaidSessions.forEach(session => {
-      const pkg = trainerPackages.find(p => p.clientId === session.clientId);
-      if (pkg?.pricePerSession) {
-        outstandingAmount += pkg.pricePerSession;
-      }
+    
+    trainerPackages.forEach(pkg => {
+      const used = pkg.usedSessions || 0;
+      const paid = pkg.paidSessions || 0;
+      totalUsedSessions += used;
+      totalPaidSessionsFromPackages += paid;
+      
+      // Outstanding = sessions done but not paid
+      const unpaid = Math.max(0, used - paid);
+      outstandingAmount += unpaid * (pkg.pricePerSession || 0);
     });
     
+    // Calculate earnings from actual payment records
+    const weekPayments = trainerPayments.filter(p => {
+      const paidDate = p.paidAt ? new Date(p.paidAt) : null;
+      return paidDate && paidDate >= oneWeekAgo;
+    });
+    const monthPayments = trainerPayments.filter(p => {
+      const paidDate = p.paidAt ? new Date(p.paidAt) : null;
+      return paidDate && paidDate >= oneMonthAgo;
+    });
+    
+    const weekEarnings = weekPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const monthEarnings = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalEarnings = trainerPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    
     // Get average price per session from packages
-    const avgPricePerSession = trainerPackages.length > 0
-      ? trainerPackages.reduce((sum, p) => sum + (p.pricePerSession || 0), 0) / trainerPackages.length
+    const packagesWithPrice = trainerPackages.filter(p => p.pricePerSession > 0);
+    const avgPricePerSession = packagesWithPrice.length > 0
+      ? packagesWithPrice.reduce((sum, p) => sum + p.pricePerSession, 0) / packagesWithPrice.length
       : 0;
     
     // Calculate averages
     const activeClients = clients.filter(c => c.trainerId === user.id && c.status === 'active').length;
-    const avgSessionsPerWeek = monthPaidSessions.length / 4; // Average over 4 weeks
-    const avgPerSession = totalPaidSessions > 0 
-      ? totalEarnings / totalPaidSessions 
+    
+    // Sessions per week: total sessions / weeks since first session (or 4 if no data)
+    const weeksActive = Math.max(1, Math.ceil((now.getTime() - oneMonthAgo.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    const avgSessionsPerWeek = totalUsedSessions > 0 ? totalUsedSessions / weeksActive : 0;
+    
+    // Avg per session: from actual payments or package prices
+    const avgPerSession = trainerPayments.length > 0 
+      ? totalEarnings / trainerPayments.length 
       : avgPricePerSession;
     
     return {
-      totalSessions: totalUsedSessions || completedSessions.length,
-      weekSessions: weekPaidSessions.length,
-      monthSessions: monthPaidSessions.length,
+      totalSessions: totalUsedSessions,
+      weekSessions: weekPayments.length,
+      monthSessions: monthPayments.length,
       totalEarnings,
       weekEarnings,
       monthEarnings,
@@ -237,10 +236,10 @@ export default function ProfilePage() {
       avgSessionsPerWeek: avgSessionsPerWeek.toFixed(1),
       avgPerSession: avgPerSession.toFixed(0),
       outstandingAmount,
-      totalPaidSessions,
-      totalUnpaidSessions: Math.max(0, totalUsedSessions - totalPaidSessions),
+      totalPaidSessions: totalPaidSessionsFromPackages,
+      totalUnpaidSessions: Math.max(0, totalUsedSessions - totalPaidSessionsFromPackages),
     };
-  }, [user, sessions, sessionPackages, clients]);
+  }, [user, sessions, sessionPackages, clients, payments]);
   
 
   const getTierColor = (tier?: string) => {
