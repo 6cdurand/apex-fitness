@@ -16,7 +16,8 @@ import {
   Play, 
   Clock, 
   Dumbbell, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronLeft,
   Zap,
   Target,
   Flame,
@@ -30,20 +31,25 @@ import {
 } from 'lucide-react';
 import { ProfileCard } from '@/components/ProfileCard';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { format } from 'date-fns';
+import { format, addDays, subDays } from 'date-fns';
 
 export default function WorkoutPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates } = useWorkoutStore();
-  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram, sessionWorkouts, getSessionWorkout, sessions, toggleSessionPaid, getPackagesForClient, addPayment } = useTrainerStore();
+  const { clients, calendarEvents, getEventsForDate, getScheduledSessionsForUser, confirmSession, updateCalendarEvent, getActiveProgram, sessionWorkouts, getSessionWorkout, sessions, toggleSessionPaid, getPackagesForClient, addPayment, payments, addSession } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [selectedProfileUser, setSelectedProfileUser] = useState<any>(null);
 
-  // Get today's sessions for trainer mode
+  // Day navigation state
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const today = format(new Date(), 'yyyy-MM-dd');
-  const todaysSessions = getEventsForDate(today).filter(e => e.type === 'session' && e.status === 'scheduled');
+  const isToday = today === selectedDateStr;
+  
+  // Get sessions for selected date
+  const dateSessions = getEventsForDate(selectedDateStr).filter(e => e.type === 'session' && e.status === 'scheduled');
   
   // Get scheduled sessions for client mode (sessions booked by trainer)
   const clientScheduledSessions = user?.id ? getScheduledSessionsForUser(user.id) : [];
@@ -289,20 +295,51 @@ export default function WorkoutPage() {
           </section>
         )}
 
-        {/* Today's Client Sessions - Trainer Mode */}
-        {user?.mode === 'trainer' && todaysSessions.length > 0 && (
+        {/* Client Sessions - Trainer Mode with Day Navigation */}
+        {user?.mode === 'trainer' && (
           <section className="mb-6">
+            {/* Day Navigation Bar */}
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-emerald-400" />
-                Today's Sessions
-              </h2>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-400 hover:text-white"
+                  onClick={() => setSelectedDate(subDays(selectedDate, 1))}
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+                <button
+                  onClick={() => setSelectedDate(new Date())}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
+                >
+                  <Calendar className="w-4 h-4 text-emerald-400" />
+                  <span className="font-semibold text-white">
+                    {isToday ? "Today" : format(selectedDate, 'EEE, MMM d')}
+                  </span>
+                  {!isToday && (
+                    <Badge variant="outline" className="text-xs border-gray-700 text-gray-400 ml-1">
+                      {format(selectedDate, 'yyyy')}
+                    </Badge>
+                  )}
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-gray-400 hover:text-white"
+                  onClick={() => setSelectedDate(addDays(selectedDate, 1))}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              </div>
               <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
-                {todaysSessions.length} scheduled
+                {dateSessions.length} session{dateSessions.length !== 1 ? 's' : ''}
               </Badge>
             </div>
+            
+            {dateSessions.length > 0 ? (
             <div className="space-y-3">
-              {todaysSessions.map((session) => {
+              {dateSessions.map((session) => {
                 const clientUser = allUsers.find(u => u.id === session.clientId);
                 const linkedTemplate = session.workoutId ? defaultTemplates.find(t => t.id === session.workoutId) : null;
                 const linkedSessionWorkout = session.workoutId ? sessionWorkouts.find(w => w.id === session.workoutId) : null;
@@ -311,16 +348,23 @@ export default function WorkoutPage() {
                 // Check if this session's workout has been completed today
                 const sessionCompleted = workoutHistory.some(w => 
                   w.userId === session.clientId && 
-                  format(new Date(w.startTime), 'yyyy-MM-dd') === today
+                  format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
                 );
                 
                 // Find matching session record to check paid status
                 const matchingSessionRecord = sessions.find(s => 
                   s.clientId === session.clientId && 
-                  s.date === today && 
+                  s.date === selectedDateStr && 
                   s.status === 'completed'
                 );
-                const isPaid = matchingSessionRecord?.paid || false;
+                
+                // Check both session record AND payments array for payment status
+                const hasPaymentRecord = payments.some(p => 
+                  p.clientId === session.clientId && 
+                  p.paidAt && format(new Date(p.paidAt), 'yyyy-MM-dd') === selectedDateStr &&
+                  p.type === 'single_session'
+                );
+                const isPaid = matchingSessionRecord?.paid || hasPaymentRecord;
                 
                 // Get client's package for price info
                 const clientPackages = session.clientId ? getPackagesForClient(session.clientId) : [];
@@ -541,24 +585,24 @@ export default function WorkoutPage() {
                 );
               })}
             </div>
+            ) : (
+              <Card className="bg-gray-900 border-gray-800">
+                <CardContent className="py-6 text-center">
+                  <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                  <p className="text-gray-400">
+                    No sessions scheduled for {isToday ? 'today' : format(selectedDate, 'EEEE, MMM d')}
+                  </p>
+                  <Button
+                    variant="link"
+                    className="text-emerald-400 mt-2"
+                    onClick={() => router.push('/clients')}
+                  >
+                    Book a session
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </section>
-        )}
-
-        {/* No sessions today message for trainers */}
-        {user?.mode === 'trainer' && todaysSessions.length === 0 && (
-          <Card className="bg-gray-900 border-gray-800 mb-6">
-            <CardContent className="py-6 text-center">
-              <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-              <p className="text-gray-400">No client sessions scheduled for today</p>
-              <Button
-                variant="link"
-                className="text-emerald-400 mt-2"
-                onClick={() => router.push('/clients')}
-              >
-                Book a session
-              </Button>
-            </CardContent>
-          </Card>
         )}
 
         {/* Upcoming Sessions for Clients */}
