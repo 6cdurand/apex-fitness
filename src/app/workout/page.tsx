@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { defaultTemplates } from '@/lib/templates';
+import { syncSessionWorkoutToSupabase, syncCalendarEventToSupabase } from '@/lib/supabaseSync';
 import { WorkoutTemplate } from '@/types';
 import { 
   Plus, 
@@ -97,6 +98,31 @@ export default function WorkoutPage() {
     };
     syncData();
   }, [user?.id]);
+
+  // Force push all local data to Supabase
+  const forceUploadAll = async () => {
+    if (!user?.id) return;
+    setIsSyncing(true);
+    console.log('[Force Upload] Starting...');
+    
+    // Upload all session workouts
+    const workouts = useTrainerStore.getState().sessionWorkouts;
+    console.log('[Force Upload] Uploading', workouts.length, 'session workouts');
+    for (const w of workouts) {
+      await syncSessionWorkoutToSupabase(w);
+    }
+    
+    // Upload all calendar events
+    const events = useTrainerStore.getState().calendarEvents;
+    console.log('[Force Upload] Uploading', events.length, 'calendar events');
+    for (const e of events) {
+      await syncCalendarEventToSupabase(e);
+    }
+    
+    console.log('[Force Upload] Done!');
+    setIsSyncing(false);
+    alert('All data uploaded to cloud! Open iPad and refresh.');
+  };
 
   // Load users from localStorage (sessionWorkouts now from trainer store)
   useEffect(() => {
@@ -354,7 +380,15 @@ export default function WorkoutPage() {
                 </Button>
               </div>
               <div className="flex items-center gap-2">
-                {isSyncing && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="h-7 text-xs border-gray-700"
+                  onClick={forceUploadAll}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Sync'}
+                </Button>
                 <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
                   {dateSessions.length} session{dateSessions.length !== 1 ? 's' : ''}
                 </Badge>
