@@ -1,14 +1,31 @@
 -- APEX FITNESS - Migration 2026-01-29
--- Run this in Supabase SQL Editor to add missing tables and columns
--- for payment plans, client groups, and fix calendar sync
+-- Run this ENTIRE script in Supabase SQL Editor
 
 -- ==========================================
--- FIX CALENDAR_EVENTS TABLE
--- The table was created with TIMESTAMPTZ for start_time/end_time
--- but app sends TEXT like "09:00". Fix column types.
+-- 1. SESSION_WORKOUTS TABLE (stores workout content for sessions)
+-- THIS IS CRITICAL - without this, Today's workouts won't sync
 -- ==========================================
+DROP TABLE IF EXISTS session_workouts CASCADE;
 
--- Drop and recreate calendar_events with correct column types
+CREATE TABLE session_workouts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  client_id TEXT,
+  event_id TEXT,
+  trainer_id TEXT NOT NULL,
+  blocks JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_session_workouts_trainer ON session_workouts(trainer_id);
+CREATE INDEX idx_session_workouts_event ON session_workouts(event_id);
+
+ALTER TABLE session_workouts DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON session_workouts TO anon, authenticated;
+
+-- ==========================================
+-- 2. CALENDAR_EVENTS TABLE (stores scheduled sessions)
+-- ==========================================
 DROP TABLE IF EXISTS calendar_events CASCADE;
 
 CREATE TABLE calendar_events (
@@ -27,12 +44,14 @@ CREATE TABLE calendar_events (
   workout_id TEXT,
   client_confirmed BOOLEAN DEFAULT false,
   client_confirmed_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX idx_calendar_events_trainer ON calendar_events(trainer_id);
 CREATE INDEX idx_calendar_events_date ON calendar_events(date);
+
+ALTER TABLE calendar_events DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON calendar_events TO anon, authenticated;
 
 -- ==========================================
 -- ADD PAYMENT PLAN FIELDS TO SESSION_PACKAGES
