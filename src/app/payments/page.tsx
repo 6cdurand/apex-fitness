@@ -166,6 +166,22 @@ export default function PaymentsPage() {
     const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
     const outstandingAmount = outstandingSessions * pricePerSession;
     
+    // Payment plan tracking
+    const sessionsPerWeek = activePackage?.sessionsPerWeek || settings?.sessionsPerWeek || 1;
+    const paymentFrequency = activePackage?.paymentFrequency || settings?.frequency || 'per_session';
+    const sessionsPerCycle = activePackage?.sessionsPerPaymentCycle || 
+      (paymentFrequency === 'per_session' ? 1 
+        : paymentFrequency === 'weekly' ? sessionsPerWeek
+        : paymentFrequency === 'fortnightly' ? sessionsPerWeek * 2
+        : sessionsPerWeek * 4);
+    
+    // Calculate sessions since last payment cycle
+    // Payment is due when: (totalSessionsEver - totalPaidSessions) >= sessionsPerCycle
+    const sessionsSinceLastPayment = outstandingSessions;
+    const paymentDue = sessionsSinceLastPayment >= sessionsPerCycle;
+    const sessionsUntilPaymentDue = Math.max(0, sessionsPerCycle - sessionsSinceLastPayment);
+    const paymentCycleAmount = sessionsPerCycle * pricePerSession;
+    
     // Package info for display
     const packageInfo = activePackage ? {
       name: activePackage.name,
@@ -185,6 +201,13 @@ export default function PaymentsPage() {
       outstandingAmount,
       hasOutstanding: outstandingSessions > 0,
       packageInfo,
+      // Payment plan data
+      sessionsPerWeek,
+      paymentFrequency,
+      sessionsPerCycle,
+      paymentDue,
+      sessionsUntilPaymentDue,
+      paymentCycleAmount,
     };
   };
 
@@ -228,6 +251,25 @@ export default function PaymentsPage() {
       [editingSettings.clientId]: editingSettings,
     };
     savePaymentSettings(newSettings);
+    
+    // Also update the session package with payment plan settings
+    const clientPackages = sessionPackages.filter(p => p.clientId === editingSettings.clientId && p.trainerId === user?.id);
+    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+    if (activePackage) {
+      // Calculate sessions per payment cycle based on frequency
+      const sessionsPerCycle = editingSettings.frequency === 'per_session' ? 1 
+        : editingSettings.frequency === 'weekly' ? editingSettings.sessionsPerWeek
+        : editingSettings.frequency === 'fortnightly' ? editingSettings.sessionsPerWeek * 2
+        : editingSettings.sessionsPerWeek * 4; // monthly
+      
+      updateSessionPackage(activePackage.id, {
+        pricePerSession: editingSettings.pricePerSession,
+        sessionsPerWeek: editingSettings.sessionsPerWeek,
+        paymentFrequency: editingSettings.frequency,
+        sessionsPerPaymentCycle: sessionsPerCycle,
+      });
+    }
+    
     setShowSettingsDialog(false);
     setEditingSettings(null);
   };
@@ -400,8 +442,28 @@ export default function PaymentsPage() {
                         </div>
                       </div>
                       
+                      {/* Payment Plan Status */}
+                      {client.paymentFrequency !== 'per_session' && (
+                        <div className={`flex items-center justify-between rounded-lg p-2 mb-2 ${
+                          client.paymentDue ? 'bg-red-500/10' : 'bg-gray-800'
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <Clock className={`w-4 h-4 ${client.paymentDue ? 'text-red-400' : 'text-gray-400'}`} />
+                            <span className={`text-xs ${client.paymentDue ? 'text-red-400 font-medium' : 'text-gray-400'}`}>
+                              {client.paymentDue 
+                                ? `Payment due! (${client.sessionsPerCycle} sessions @ $${client.paymentCycleAmount})`
+                                : `${client.sessionsUntilPaymentDue} session${client.sessionsUntilPaymentDue !== 1 ? 's' : ''} until payment due`
+                              }
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            {client.paymentFrequency === 'weekly' ? 'Weekly' : client.paymentFrequency === 'fortnightly' ? 'Fortnightly' : 'Monthly'}
+                          </span>
+                        </div>
+                      )}
+                      
                       {/* Outstanding Alert & Confirm Button */}
-                      {client.hasOutstanding && (
+                      {client.paymentDue && (
                         <div className="flex items-center justify-between bg-amber-500/10 rounded-lg p-3">
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-400" />
@@ -631,6 +693,17 @@ export default function PaymentsPage() {
                     </div>
                     
                     <div className="flex flex-col gap-2 pt-2">
+                      {/* Payment cycle button (for fortnightly/monthly plans) */}
+                      {data.paymentFrequency !== 'per_session' && data.sessionsPerCycle > 1 && data.outstandingSessions >= data.sessionsPerCycle && (
+                        <Button
+                          className="w-full bg-blue-500 hover:bg-blue-600"
+                          onClick={() => handleConfirmPayment(selectedClient, data.sessionsPerCycle)}
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Confirm {data.paymentFrequency === 'weekly' ? 'Weekly' : data.paymentFrequency === 'fortnightly' ? 'Fortnightly' : 'Monthly'} Payment ({data.sessionsPerCycle} sessions - ${data.paymentCycleAmount})
+                        </Button>
+                      )}
+                      
                       <Button
                         className="w-full bg-emerald-500 hover:bg-emerald-600"
                         onClick={() => handleConfirmPayment(selectedClient, 1)}
@@ -639,7 +712,7 @@ export default function PaymentsPage() {
                         Confirm 1 Session (${data.pricePerSession})
                       </Button>
                       
-                      {data.outstandingSessions > 1 && (
+                      {data.outstandingSessions > 1 && data.outstandingSessions !== data.sessionsPerCycle && (
                         <Button
                           variant="outline"
                           className="w-full border-emerald-500 text-emerald-400 hover:bg-emerald-500/10"

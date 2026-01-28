@@ -473,6 +473,11 @@ export interface SessionPackage {
   paymentId: string;
   status: 'active' | 'expired' | 'completed';
   isContinuous?: boolean;  // true for ongoing/unlimited packages
+  // Payment plan settings
+  sessionsPerWeek?: number;  // e.g., 2 sessions per week
+  paymentFrequency?: 'per_session' | 'weekly' | 'fortnightly' | 'monthly';  // when payment is due
+  sessionsPerPaymentCycle?: number;  // e.g., 4 sessions before payment due (auto-calculated or manual)
+  lastPaymentDate?: string;  // track when last payment was made
 }
 
 // ============ TRAINER PROGRAMMING SYSTEM ============

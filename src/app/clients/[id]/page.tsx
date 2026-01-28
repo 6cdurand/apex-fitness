@@ -2083,12 +2083,24 @@ export default function ClientDetailPage() {
             Message
           </Button>
           <Button 
+            className="flex-1 bg-blue-500 hover:bg-blue-600"
+            onClick={() => {
+              // Start a blank workout for this client
+              const { startWorkout } = useWorkoutStore.getState();
+              startWorkout(`Session - ${clientUser?.displayName || 'Client'}`, clientId, user?.id);
+              router.push('/workout/active');
+            }}
+          >
+            <Dumbbell className="w-4 h-4 mr-2" />
+            Start Workout
+          </Button>
+          <Button 
             variant="outline" 
             className="flex-1"
             onClick={() => router.push(`/clients/${clientId}/book`)}
           >
             <Calendar className="w-4 h-4 mr-2" />
-            Book Session
+            Book
           </Button>
         </div>
       </div>

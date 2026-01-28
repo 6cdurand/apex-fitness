@@ -1352,6 +1352,7 @@ export default function ActiveWorkoutPage() {
                                 variant="ghost"
                                 onClick={() => {
                                   setSelectedExerciseForNotes(workoutExercise);
+                                  setExerciseNotesText(workoutExercise.notes || '');
                                   setShowExerciseNotesDialog(true);
                                 }}
                                 className={cn(
@@ -2399,8 +2400,15 @@ export default function ActiveWorkoutPage() {
       <Dialog 
         open={showExerciseNotesDialog} 
         onOpenChange={(open) => {
+          if (!open && selectedExerciseForNotes) {
+            // Save notes when closing
+            updateExercise(selectedExerciseForNotes.id, { notes: exerciseNotesText });
+          }
           setShowExerciseNotesDialog(open);
-          if (!open) setSelectedExerciseForNotes(null);
+          if (!open) {
+            setSelectedExerciseForNotes(null);
+            setExerciseNotesText('');
+          }
         }}
       >
         <DialogContent className="bg-gray-900 border-gray-800">
@@ -2423,20 +2431,20 @@ export default function ActiveWorkoutPage() {
           )}
           
           <textarea
-            value={selectedExerciseForNotes?.notes || ''}
-            onChange={(e) => {
-              if (selectedExerciseForNotes) {
-                updateExercise(selectedExerciseForNotes.id, { notes: e.target.value });
-              }
-            }}
+            value={exerciseNotesText}
+            onChange={(e) => setExerciseNotesText(e.target.value)}
             placeholder="Add your notes for this exercise..."
             className="w-full h-24 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
           
           <Button
             onClick={() => {
+              if (selectedExerciseForNotes) {
+                updateExercise(selectedExerciseForNotes.id, { notes: exerciseNotesText });
+              }
               setShowExerciseNotesDialog(false);
               setSelectedExerciseForNotes(null);
+              setExerciseNotesText('');
             }}
             className="w-full bg-amber-500 hover:bg-amber-600"
           >
