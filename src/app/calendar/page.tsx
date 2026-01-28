@@ -21,7 +21,8 @@ import {
   LayoutGrid,
   List,
   FileText,
-  Sparkles
+  Sparkles,
+  Loader2
 } from 'lucide-react';
 import { defaultTemplates } from '@/lib/templates';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -73,6 +74,7 @@ export default function CalendarPage() {
   // Workout customization state
   const [showWorkoutPicker, setShowWorkoutPicker] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -81,6 +83,15 @@ export default function CalendarPage() {
       router.replace('/workout');
     }
   }, [isAuthenticated, user?.mode, router]);
+
+  // Auto-sync on mount
+  useEffect(() => {
+    if (user?.id) {
+      setIsSyncing(true);
+      useTrainerStore.getState().loadFromSupabase(user.id)
+        .finally(() => setIsSyncing(false));
+    }
+  }, [user?.id]);
 
   if (!isAuthenticated || user?.mode !== 'trainer') return null;
 
@@ -214,10 +225,27 @@ export default function CalendarPage() {
         title="Calendar" 
         subtitle={format(currentMonth, 'MMMM yyyy')}
         action={
-          <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={openAddEvent}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Event
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              size="sm" 
+              variant="outline"
+              className="border-gray-700"
+              disabled={isSyncing}
+              onClick={async () => {
+                if (!user?.id) return;
+                setIsSyncing(true);
+                await useTrainerStore.getState().loadFromSupabase(user.id);
+                setIsSyncing(false);
+              }}
+            >
+              <Loader2 className={`w-4 h-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
+              {isSyncing ? 'Syncing...' : 'Sync'}
+            </Button>
+            <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={openAddEvent}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Event
+            </Button>
+          </div>
         }
       />
 
@@ -405,17 +433,29 @@ export default function CalendarPage() {
                             >
                               {dayEvents.map((event, i) => {
                                 const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
+                                // Calculate position and height based on time
+                                const startMin = parseInt(event.startTime?.split(':')[1] || '0');
+                                const endHour = parseInt(event.endTime?.split(':')[0] || String(hour + 1));
+                                const endMin = parseInt(event.endTime?.split(':')[1] || '0');
+                                const durationMins = (endHour - hour) * 60 + endMin - startMin;
+                                const topPercent = (startMin / 60) * 100;
+                                const heightPercent = Math.min((durationMins / 60) * 100, 100 - topPercent);
                                 return (
                                 <div
                                   key={event.id}
                                   className={cn(
-                                    "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded text-xs p-1 truncate flex items-center gap-1",
+                                    "absolute inset-x-0.5 rounded text-xs p-0.5 truncate flex items-center gap-1 z-10",
                                     getEventColor(event.type), "text-white"
                                   )}
+                                  style={{
+                                    top: `${topPercent}%`,
+                                    height: `${Math.max(heightPercent, 20)}%`,
+                                    minHeight: '10px'
+                                  }}
                                   onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
                                 >
                                   {hasWorkout && <Dumbbell className="w-3 h-3 flex-shrink-0" />}
-                                  {getClientName(event.clientId)}
+                                  <span className="truncate">{getClientName(event.clientId)}</span>
                                 </div>
                               );})}
                             </button>
