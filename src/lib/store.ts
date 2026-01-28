@@ -2037,10 +2037,13 @@ export const useTrainerStore = create<TrainerState>()(
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
           syncTrainerSessionToSupabase(session);
-          // Decrement from active package if exists (only for PT sessions)
+          // Update package session count (only for PT sessions)
           if (session.type === 'pt_session') {
+            // Find active package - handle both continuous (-1) and regular packages
             const activePackage = get().sessionPackages.find(
-              p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
+              p => p.clientId === session.clientId && 
+                   p.status === 'active' && 
+                   (p.remainingSessions === -1 || p.remainingSessions > 0)
             );
             if (activePackage) {
               get().useSessionFromPackage(activePackage.id);
@@ -2073,8 +2076,11 @@ export const useTrainerStore = create<TrainerState>()(
         if (session) {
           syncTrainerSessionToSupabase(session);
           if (session.type === 'pt_session') {
+            // Handle both continuous (-1) and regular packages
             const activePackage = get().sessionPackages.find(
-              p => p.clientId === session.clientId && p.status === 'active' && p.remainingSessions > 0
+              p => p.clientId === session.clientId && 
+                   p.status === 'active' && 
+                   (p.remainingSessions === -1 || p.remainingSessions > 0)
             );
             if (activePackage) {
               get().useSessionFromPackage(activePackage.id);
@@ -2178,16 +2184,28 @@ export const useTrainerStore = create<TrainerState>()(
 
       useSessionFromPackage: (packageId) => {
         set(state => ({
-          sessionPackages: state.sessionPackages.map(p =>
-            p.id === packageId && p.remainingSessions > 0
-              ? { 
-                  ...p, 
-                  usedSessions: p.usedSessions + 1, 
-                  remainingSessions: p.remainingSessions - 1,
-                  status: p.remainingSessions - 1 === 0 ? 'completed' as const : p.status,
-                }
-              : p
-          ),
+          sessionPackages: state.sessionPackages.map(p => {
+            if (p.id !== packageId) return p;
+            
+            // Handle continuous packages (remainingSessions === -1) or regular packages
+            const isContinuous = p.remainingSessions === -1 || p.totalSessions === -1;
+            if (isContinuous) {
+              // Continuous package: just increment usedSessions, don't touch remainingSessions
+              return { 
+                ...p, 
+                usedSessions: (p.usedSessions || 0) + 1,
+              };
+            } else if (p.remainingSessions > 0) {
+              // Regular package with sessions remaining
+              return { 
+                ...p, 
+                usedSessions: (p.usedSessions || 0) + 1, 
+                remainingSessions: p.remainingSessions - 1,
+                status: p.remainingSessions - 1 === 0 ? 'completed' as const : p.status,
+              };
+            }
+            return p;
+          }),
         }));
         // Sync updated package to Supabase
         const updated = get().sessionPackages.find(p => p.id === packageId);

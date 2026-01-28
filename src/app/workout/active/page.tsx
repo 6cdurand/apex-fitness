@@ -595,9 +595,12 @@ export default function ActiveWorkoutPage() {
           workoutId: completed.id,
         });
         
-        // Use session from active package if exists
+        // Use session from active package if exists (handle both continuous and regular packages)
         const packages = getPackagesForClient(clientId);
-        const activePackage = packages.find(p => p.status === 'active' && p.remainingSessions > 0);
+        const activePackage = packages.find(p => 
+          p.status === 'active' && 
+          (p.remainingSessions === -1 || p.remainingSessions > 0)
+        );
         if (activePackage) {
           useSessionFromPackage(activePackage.id);
         }
