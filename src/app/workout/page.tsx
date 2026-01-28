@@ -81,12 +81,22 @@ export default function WorkoutPage() {
 
   // Auto-sync on mount to get latest calendar events
   useEffect(() => {
-    if (user?.id && user?.mode === 'trainer') {
-      setIsSyncing(true);
-      useTrainerStore.getState().loadFromSupabase(user.id)
-        .finally(() => setIsSyncing(false));
-    }
-  }, [user?.id, user?.mode]);
+    const syncData = async () => {
+      if (user?.id) {
+        console.log('[Workout Page] Starting sync for user:', user.id, 'mode:', user.mode);
+        setIsSyncing(true);
+        try {
+          await useTrainerStore.getState().loadFromSupabase(user.id);
+          console.log('[Workout Page] Sync complete');
+        } catch (e) {
+          console.error('[Workout Page] Sync failed:', e);
+        } finally {
+          setIsSyncing(false);
+        }
+      }
+    };
+    syncData();
+  }, [user?.id]);
 
   // Load users from localStorage (sessionWorkouts now from trainer store)
   useEffect(() => {
