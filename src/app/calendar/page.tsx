@@ -146,10 +146,13 @@ export default function CalendarPage() {
   };
 
   const handleAddEvent = () => {
-    if (!newEventDate || !newEventClient) return;
+    // Consultations don't require a client
+    if (!newEventDate || (!newEventClient && newEventType !== 'consultation')) return;
     
-    const clientUser = allUsers.find((u: any) => u.id === newEventClient);
-    const title = newEventTitle || `Session with ${clientUser?.displayName || 'Client'}`;
+    const clientUser = newEventClient ? allUsers.find((u: any) => u.id === newEventClient) : null;
+    const title = newEventTitle || (clientUser 
+      ? `${newEventType === 'consultation' ? 'Consultation' : 'Session'} with ${clientUser?.displayName || 'Client'}`
+      : 'Consultation');
     
     // Create the base event
     const createEvent = (date: string) => {
@@ -159,7 +162,7 @@ export default function CalendarPage() {
         date,
         startTime: newEventStartTime,
         endTime: newEventEndTime,
-        clientId: newEventClient,
+        clientId: newEventClient || undefined,
         trainerId: user?.id,
         status: 'scheduled',
         notes: newEventRecurrence !== 'none' ? `Recurring: ${newEventRecurrence}` : '',
@@ -636,21 +639,35 @@ export default function CalendarPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-gray-400">Start Time</Label>
-                <Input
-                  type="time"
+                <select
                   value={editTime}
                   onChange={(e) => setEditTime(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
+                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                >
+                  {Array.from({ length: 24 * 4 }, (_, i) => {
+                    const hour = Math.floor(i / 4) ;
+                    const minute = (i % 4) * 15;
+                    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    const label = `${hour > 12 ? hour - 12 : hour || 12}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+                    return <option key={time} value={time}>{label}</option>;
+                  })}
+                </select>
               </div>
               <div>
                 <Label className="text-gray-400">End Time</Label>
-                <Input
-                  type="time"
+                <select
                   value={editEndTime}
                   onChange={(e) => setEditEndTime(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
+                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                >
+                  {Array.from({ length: 24 * 4 }, (_, i) => {
+                    const hour = Math.floor(i / 4);
+                    const minute = (i % 4) * 15;
+                    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    const label = `${hour > 12 ? hour - 12 : hour || 12}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+                    return <option key={time} value={time}>{label}</option>;
+                  })}
+                </select>
               </div>
             </div>
 
@@ -784,25 +801,6 @@ export default function CalendarPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-gray-400">Client</Label>
-              <select
-                value={newEventClient}
-                onChange={(e) => setNewEventClient(e.target.value)}
-                className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
-              >
-                <option value="">Select a client...</option>
-                {clients.filter(c => c.trainerId === user?.id).map((client) => {
-                  const clientUser = allUsers.find((u: any) => u.id === client.clientId);
-                  return (
-                    <option key={client.clientId} value={client.clientId}>
-                      {clientUser?.displayName || clientUser?.username || 'Unknown'}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-
-            <div>
               <Label className="text-gray-400">Session Type</Label>
               <select
                 value={newEventType}
@@ -814,6 +812,40 @@ export default function CalendarPage() {
                 <option value="assessment">Assessment</option>
               </select>
             </div>
+
+            <div>
+              <Label className="text-gray-400">
+                Client {newEventType === 'consultation' && <span className="text-gray-500">(optional)</span>}
+              </Label>
+              <select
+                value={newEventClient}
+                onChange={(e) => setNewEventClient(e.target.value)}
+                className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+              >
+                <option value="">{newEventType === 'consultation' ? 'No client (new lead)' : 'Select a client...'}</option>
+                {clients.filter(c => c.trainerId === user?.id).map((client) => {
+                  const clientUser = allUsers.find((u: any) => u.id === client.clientId);
+                  return (
+                    <option key={client.clientId} value={client.clientId}>
+                      {clientUser?.displayName || clientUser?.username || 'Unknown'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* Consultation name field when no client selected */}
+            {newEventType === 'consultation' && !newEventClient && (
+              <div>
+                <Label className="text-gray-400">Contact Name</Label>
+                <Input
+                  placeholder="e.g., John Smith"
+                  value={newEventTitle}
+                  onChange={(e) => setNewEventTitle(e.target.value)}
+                  className="bg-gray-800 border-gray-700 text-white"
+                />
+              </div>
+            )}
 
             <div>
               <Label className="text-gray-400">Date</Label>
@@ -828,21 +860,35 @@ export default function CalendarPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-gray-400">Start Time</Label>
-                <Input
-                  type="time"
+                <select
                   value={newEventStartTime}
                   onChange={(e) => setNewEventStartTime(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
+                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                >
+                  {Array.from({ length: 24 * 4 }, (_, i) => {
+                    const hour = Math.floor(i / 4);
+                    const minute = (i % 4) * 15;
+                    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    const label = `${hour > 12 ? hour - 12 : hour || 12}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+                    return <option key={time} value={time}>{label}</option>;
+                  })}
+                </select>
               </div>
               <div>
                 <Label className="text-gray-400">End Time</Label>
-                <Input
-                  type="time"
+                <select
                   value={newEventEndTime}
                   onChange={(e) => setNewEventEndTime(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
+                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                >
+                  {Array.from({ length: 24 * 4 }, (_, i) => {
+                    const hour = Math.floor(i / 4);
+                    const minute = (i % 4) * 15;
+                    const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                    const label = `${hour > 12 ? hour - 12 : hour || 12}:${minute.toString().padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+                    return <option key={time} value={time}>{label}</option>;
+                  })}
+                </select>
               </div>
             </div>
 
@@ -878,9 +924,9 @@ export default function CalendarPage() {
             <Button
               className="w-full bg-emerald-500 hover:bg-emerald-600"
               onClick={handleAddEvent}
-              disabled={!newEventClient || !newEventDate}
+              disabled={(!newEventClient && newEventType !== 'consultation') || !newEventDate}
             >
-              {newEventRecurrence !== 'none' ? 'Create Recurring Sessions' : 'Book Session'}
+              {newEventRecurrence !== 'none' ? 'Create Recurring Sessions' : newEventType === 'consultation' ? 'Book Consultation' : 'Book Session'}
             </Button>
           </div>
         </DialogContent>
