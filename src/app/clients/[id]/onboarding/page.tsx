@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,8 +13,8 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useTrainerStore, useAuthStore } from '@/lib/store';
-import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import { useTrainerStore, useAuthStore, useSocialStore } from '@/lib/store';
+import { registerUserToSupabase, fetchAllUsersFromSupabase, syncSessionPackageToSupabase } from '@/lib/supabaseSync';
 import { toast } from 'sonner';
 import { 
   TrainingGoal, 
@@ -38,8 +38,11 @@ import {
   Mail,
   Lock,
   CheckCircle2,
-  UserPlus,
-  Link2
+  Package,
+  DollarSign,
+  Bell,
+  Loader2,
+  Ruler
 } from 'lucide-react';
 
 const GOALS: { value: TrainingGoal; label: string; description: string }[] = [
@@ -78,6 +81,13 @@ const PHASES: { value: TrainingPhase; label: string; description: string; icon: 
   { value: 'performance', label: 'Performance', description: 'Power, speed, and athletic performance', icon: <Zap className="h-5 w-5" /> },
 ];
 
+const PAYMENT_FREQUENCIES = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'fortnightly', label: 'Fortnightly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'per_session', label: 'Per Session' },
+];
+
 interface OnboardingData {
   primaryGoal: TrainingGoal | '';
   secondaryGoal: TrainingGoal | '';
@@ -86,31 +96,27 @@ interface OnboardingData {
   experienceLevel: ExperienceLevel | '';
   injuryFlags: InjuryFlag[];
   injuryNotes: string;
-  daysPerWeek: number;
   ptSessionsPerWeek: number;
   personalSessionsPerWeek: number;
   preferredPTDays: string[];
-  preferredPersonalDays: string[];
   sessionLength: number;
   trainAloneOutsidePT: 'yes' | 'maybe' | 'no' | '';
-  movementConfidence: {
-    squat: number;
-    hinge: number;
-    push: number;
-    pull: number;
-    core: number;
-  };
-  wantsClasses: 'yes_asap' | 'later' | 'maybe' | 'no' | '';
+  movementConfidence: { squat: number; hinge: number; push: number; pull: number; core: number };
   sleepQuality: number;
   stressLevel: number;
   jobActivity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | '';
   currentPhase: TrainingPhase | '';
-  // First session booking
+  height: string;
+  weight: string;
+  packageName: string;
+  packageSessions: number;
+  packagePrice: number;
+  paymentFrequency: 'weekly' | 'fortnightly' | 'monthly' | 'per_session' | '';
   firstSessionDate: string;
   firstSessionTime: string;
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 export default function ClientOnboardingPage() {
   const params = useParams();
@@ -118,11 +124,11 @@ export default function ClientOnboardingPage() {
   const clientId = params.id as string;
   
   const { user } = useAuthStore();
-  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession } = useTrainerStore();
+  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession, addSessionPackage } = useTrainerStore();
+  const { addNotification } = useSocialStore();
   const client = clients.find(c => c.clientId === clientId);
   
   // Account creation state
-  const [accountMode, setAccountMode] = useState<'create' | 'link' | null>(null); // null = show choice first
   const [accountName, setAccountName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
   const [accountUsername, setAccountUsername] = useState('');
@@ -130,11 +136,8 @@ export default function ClientOnboardingPage() {
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
   const [accountCreated, setAccountCreated] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
-  const [createdClientId, setCreatedClientId] = useState<string | null>(null); // Track the new UUID
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedExistingUser, setSelectedExistingUser] = useState<any>(null);
-  const [supabaseUsers, setSupabaseUsers] = useState<any[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+  const [linkedExistingAccount, setLinkedExistingAccount] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<OnboardingData>({
@@ -145,39 +148,40 @@ export default function ClientOnboardingPage() {
     experienceLevel: '',
     injuryFlags: [],
     injuryNotes: '',
-    daysPerWeek: 3,
-    ptSessionsPerWeek: 1,
-    personalSessionsPerWeek: 2,
+    ptSessionsPerWeek: 2,
+    personalSessionsPerWeek: 0,
     preferredPTDays: [],
-    preferredPersonalDays: [],
     sessionLength: 60,
     trainAloneOutsidePT: '',
     movementConfidence: { squat: 3, hinge: 3, push: 3, pull: 3, core: 3 },
-    wantsClasses: '',
     sleepQuality: 3,
     stressLevel: 3,
     jobActivity: '',
     currentPhase: '',
+    height: '',
+    weight: '',
+    packageName: '',
+    packageSessions: 10,
+    packagePrice: 0,
+    paymentFrequency: '',
     firstSessionDate: '',
     firstSessionTime: '09:00',
   });
 
   const progress = (currentStep / TOTAL_STEPS) * 100;
+  const isSkippableStep = currentStep >= 6;
 
   const canProceed = () => {
     switch (currentStep) {
-      case 1: return accountCreated; // Account must be created first
+      case 1: return accountCreated;
       case 2: return data.primaryGoal !== '';
       case 3: return data.experienceLevel !== '' && data.trainingPreference !== '';
       case 4: return data.injuryFlags.length > 0;
       case 5: return data.ptSessionsPerWeek > 0 && data.trainAloneOutsidePT !== '';
-      case 6: return data.jobActivity !== '';
-      case 7: return data.currentPhase !== '';
-      default: return true;
+      default: return true; // Steps 6-8 are skippable
     }
   };
   
-  // Generate a proper UUID
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = Math.random() * 16 | 0;
@@ -186,31 +190,53 @@ export default function ClientOnboardingPage() {
     });
   };
 
-  // Create account and sync to Supabase - SAME FLOW AS clients/page.tsx handleAddClient
+  // Auto-link: Check if email exists when creating account
   const handleCreateAccount = async () => {
-    if (!accountName.trim()) {
-      toast.error('Please enter client name');
-      return;
-    }
-    if (!accountEmail.trim()) {
-      toast.error('Please enter client email');
-      return;
-    }
-    if (!accountUsername.trim()) {
-      toast.error('Please enter a username');
+    if (!accountName.trim() || !accountEmail.trim()) {
+      toast.error('Please enter name and email');
       return;
     }
     
     setIsCreatingAccount(true);
     
-    // Generate proper UUID for Supabase (not client-XXXX format)
-    const newClientId = generateUUID();
+    // Check if email already exists - auto-link if so
+    try {
+      const existingUsers = await fetchAllUsersFromSupabase();
+      const existingUser = existingUsers.find((u: any) => 
+        u.email?.toLowerCase() === accountEmail.toLowerCase().trim()
+      );
+      
+      if (existingUser) {
+        // Auto-link existing account
+        console.log('[Onboarding] Auto-linking existing account:', existingUser.email);
+        const { addClient } = useTrainerStore.getState();
+        addClient(existingUser.id, {
+          goals: [],
+          onboardingComplete: false,
+          status: 'active',
+        });
+        
+        setCreatedClientId(existingUser.id);
+        setAccountName(existingUser.displayName || accountName);
+        setAccountUsername(existingUser.username || '');
+        setLinkedExistingAccount(true);
+        setAccountCreated(true);
+        setIsCreatingAccount(false);
+        toast.success(`Linked to existing account: ${existingUser.email}`);
+        return;
+      }
+    } catch (e) {
+      console.log('[Onboarding] Could not check for existing users, creating new');
+    }
     
-    // Create user entry with proper UUID
+    // Create new account
+    const newClientId = generateUUID();
+    const username = accountUsername.trim() || accountName.toLowerCase().replace(/\s+/g, '_');
+    
     const newClientUser = {
       id: newClientId,
       email: accountEmail.toLowerCase().trim(),
-      username: accountUsername.toLowerCase().replace(/\s+/g, '_'),
+      username: username,
       displayName: accountName,
       phone: '',
       gender: accountGender,
@@ -223,30 +249,23 @@ export default function ClientOnboardingPage() {
       following: [],
       trainerId: user?.id,
       password: accountPassword,
+      height: data.height || undefined,
+      weight: data.weight || undefined,
     };
     
-    // Add to localStorage
-    const existingUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const filteredUsers = existingUsers.filter((u: any) => u.id !== newClientId);
-    localStorage.setItem('apex-users', JSON.stringify([...filteredUsers, newClientUser]));
+    // Save to localStorage
+    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    localStorage.setItem('apex-users', JSON.stringify([...existingLocalUsers.filter((u: any) => u.id !== newClientId), newClientUser]));
     
     // Sync to Supabase
     try {
-      console.log('[Onboarding] Syncing new client to Supabase:', newClientUser.email);
-      const synced = await registerUserToSupabase(newClientUser as any, accountPassword);
-      if (synced) {
-        console.log('[Onboarding] ✅ Client synced to Supabase:', newClientUser.email);
-        toast.success(`Account created! Login: ${newClientUser.email} / ${accountPassword}`);
-      } else {
-        console.log('[Onboarding] ⚠️ Client saved locally only (Supabase sync failed)');
-        toast.success(`Account saved locally. Login: ${newClientUser.email} / ${accountPassword}`);
-      }
+      await registerUserToSupabase(newClientUser as any, accountPassword);
+      toast.success(`Account created! Login: ${newClientUser.email}`);
     } catch (e) {
-      console.error('[Onboarding] Error syncing to Supabase:', e);
-      toast.success(`Account saved locally. Login: ${newClientUser.email} / ${accountPassword}`);
+      toast.success(`Account saved locally`);
     }
     
-    // Add the new client to trainer's client list with proper UUID
+    // Add to trainer's client list
     const { addClient } = useTrainerStore.getState();
     addClient(newClientId, {
       goals: [],
@@ -254,87 +273,10 @@ export default function ClientOnboardingPage() {
       status: 'active',
     });
     
-    // Track the new client ID for use in onboarding completion
     setCreatedClientId(newClientId);
+    setAccountUsername(username);
     setAccountCreated(true);
     setIsCreatingAccount(false);
-  };
-  
-  // Fetch Supabase users when link mode is selected
-  useEffect(() => {
-    if (accountMode === 'link' && supabaseUsers.length === 0) {
-      setIsLoadingUsers(true);
-      fetchAllUsersFromSupabase()
-        .then(users => {
-          setSupabaseUsers(users);
-          console.log('[Onboarding] Loaded', users.length, 'users from Supabase for linking');
-        })
-        .finally(() => setIsLoadingUsers(false));
-    }
-  }, [accountMode, supabaseUsers.length]);
-  
-  // Filter users by search query - use Supabase users
-  const filteredUsers = useMemo(() => {
-    if (!searchQuery.trim()) return supabaseUsers; // Show all when no search
-    const query = searchQuery.toLowerCase();
-    return supabaseUsers.filter((u: any) => 
-      u.displayName?.toLowerCase().includes(query) || 
-      u.username?.toLowerCase().includes(query) ||
-      u.email?.toLowerCase().includes(query)
-    );
-  }, [searchQuery, supabaseUsers]);
-  
-  // Link existing user to this client slot
-  const handleLinkExisting = async () => {
-    if (!selectedExistingUser) {
-      toast.error('Please select a user to link');
-      return;
-    }
-    
-    const { addClient, getClientById } = useTrainerStore.getState();
-    
-    // Check if this user is already linked to this trainer
-    const existingClientRelation = getClientById(selectedExistingUser.id);
-    if (existingClientRelation) {
-      // User already exists as a client - continue with existing account
-      toast.info(`${selectedExistingUser.displayName || selectedExistingUser.email} is already your client. Continuing with existing account.`);
-      setCreatedClientId(selectedExistingUser.id);
-      setAccountCreated(true);
-      setAccountName(selectedExistingUser.displayName || '');
-      setAccountUsername(selectedExistingUser.username || '');
-      return;
-    }
-    
-    // Check if user already has a different trainer linked
-    if (selectedExistingUser.trainerId && selectedExistingUser.trainerId !== user?.id) {
-      toast.warning(`This user is already linked to another trainer. They will now be linked to you.`);
-    }
-    
-    // Add the linked user to trainer's client list
-    addClient(selectedExistingUser.id, {
-      goals: [],
-      onboardingComplete: false,
-      status: 'active',
-    });
-    
-    // Update the user's trainerId in Supabase
-    const { linkClientToTrainer } = await import('@/lib/supabaseSync');
-    if (user?.id) {
-      await linkClientToTrainer(selectedExistingUser.id, user.id);
-    }
-    
-    // Also save to localStorage for local login with updated trainerId
-    const existingLocalUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const updatedUser = { ...selectedExistingUser, trainerId: user?.id };
-    const filteredUsers = existingLocalUsers.filter((u: any) => u.id !== selectedExistingUser.id);
-    localStorage.setItem('apex-users', JSON.stringify([...filteredUsers, updatedUser]));
-    
-    // Track the linked client ID for completion
-    setCreatedClientId(selectedExistingUser.id);
-    toast.success(`Linked to ${selectedExistingUser.displayName || selectedExistingUser.email}`);
-    setAccountCreated(true);
-    setAccountName(selectedExistingUser.displayName || '');
-    setAccountUsername(selectedExistingUser.username || '');
   };
 
   const handleNext = () => {
@@ -351,8 +293,20 @@ export default function ClientOnboardingPage() {
     }
   };
 
+  const toggleInjury = (injury: InjuryFlag) => {
+    if (injury === 'none') {
+      setData({ ...data, injuryFlags: ['none'] });
+    } else {
+      const newFlags = data.injuryFlags.filter(i => i !== 'none');
+      if (newFlags.includes(injury)) {
+        setData({ ...data, injuryFlags: newFlags.filter(i => i !== injury) });
+      } else {
+        setData({ ...data, injuryFlags: [...newFlags, injury] });
+      }
+    }
+  };
+
   const handleComplete = () => {
-    // Use the created client ID (UUID) or fall back to URL param
     const actualClientId = createdClientId || clientId;
     const trainerId = user?.id || '';
     
@@ -361,6 +315,7 @@ export default function ClientOnboardingPage() {
       return;
     }
     
+    // Save programming profile
     const profile: ClientProgrammingProfile = {
       id: `profile-${actualClientId}`,
       clientId: actualClientId,
@@ -376,20 +331,18 @@ export default function ClientOnboardingPage() {
       sessionLength: data.sessionLength,
       trainAloneOutsidePT: data.trainAloneOutsidePT as 'yes' | 'maybe' | 'no',
       movementConfidence: data.movementConfidence,
-      wantsClasses: data.wantsClasses as 'yes_asap' | 'later' | 'maybe' | 'no',
+      wantsClasses: 'maybe',
       classReady: data.experienceLevel === 'confident' || data.experienceLevel === 'advanced',
       sleepQuality: data.sleepQuality as 1 | 2 | 3 | 4 | 5,
       stressLevel: data.stressLevel as 1 | 2 | 3 | 4 | 5,
       jobActivity: data.jobActivity as 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active',
-      currentPhase: data.currentPhase as TrainingPhase,
+      currentPhase: data.currentPhase as TrainingPhase || 'foundation',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-
-    // Save full profile to store
     saveClientProfile(profile);
 
-    // Update client with onboarding data using the actual UUID
+    // Update client record
     updateClient(actualClientId, {
       goals: data.primaryGoal ? [data.primaryGoal, data.secondaryGoal].filter(Boolean) as string[] : [],
       injuryHistory: data.injuryFlags.filter(i => i !== 'none').join(', ') + (data.injuryNotes ? ` - ${data.injuryNotes}` : ''),
@@ -397,64 +350,92 @@ export default function ClientOnboardingPage() {
       onboardingComplete: true,
     });
 
-    // Book first session if date was selected
+    // Create package if filled out
+    if (data.packageName && data.packagePrice > 0) {
+      const newPackage = {
+        trainerId,
+        clientId: actualClientId,
+        name: data.packageName,
+        totalSessions: data.packageSessions,
+        paidSessions: data.packageSessions,
+        priceTotal: data.packagePrice,
+        pricePerSession: data.packagePrice / data.packageSessions,
+        purchaseDate: new Date().toISOString(),
+        paymentId: `pay-${generateUUID()}`,
+        status: 'active' as const,
+        paymentFrequency: data.paymentFrequency || undefined,
+        nextPaymentDue: data.paymentFrequency && data.paymentFrequency !== 'per_session' 
+          ? calculateNextPaymentDate(data.paymentFrequency) 
+          : undefined,
+      };
+      addSessionPackage(newPackage);
+    }
+
+    // Book first session if date selected
     if (data.firstSessionDate) {
       const sessionDate = new Date(data.firstSessionDate);
       const [hours, minutes] = data.firstSessionTime.split(':').map(Number);
       sessionDate.setHours(hours, minutes, 0, 0);
       
-      // Add to calendar
+      const endHour = hours + Math.floor((minutes + data.sessionLength) / 60);
+      const endMin = (minutes + data.sessionLength) % 60;
+      const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
+      
+      // Add calendar event
       addCalendarEvent({
         title: 'PT Session',
         type: 'session',
         date: sessionDate.toISOString(),
         startTime: data.firstSessionTime,
-        endTime: `${String(hours + Math.floor((minutes + data.sessionLength) / 60)).padStart(2, '0')}:${String((minutes + data.sessionLength) % 60).padStart(2, '0')}`,
+        endTime,
         clientId: actualClientId,
         trainerId,
         status: 'scheduled',
       });
       
       // Add session record
-      const endHour = hours + Math.floor((minutes + data.sessionLength) / 60);
-      const endMin = (minutes + data.sessionLength) % 60;
       addSession({
         trainerId,
         clientId: actualClientId,
         date: sessionDate.toISOString(),
         startTime: data.firstSessionTime,
-        endTime: `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`,
+        endTime,
         duration: data.sessionLength,
         type: 'pt_session',
         status: 'scheduled',
         paid: false,
       });
       
-      toast.success(`Onboarding complete! First session booked for ${sessionDate.toLocaleDateString()}`);
+      // Send in-app notification to client
+      addNotification({
+        userId: actualClientId,
+        type: 'workout_assigned',
+        title: 'Session Booked',
+        message: `Your first PT session is booked for ${sessionDate.toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at ${data.firstSessionTime}`,
+      });
+      
+      toast.success(`Onboarding complete! First session booked.`);
     } else {
       toast.success('Onboarding complete!');
     }
     
-    // Navigate to template selection using actual UUID
-    router.push(`/clients/${actualClientId}/program/select`);
+    // Navigate to client file
+    router.push(`/clients/${actualClientId}`);
   };
-
-  const toggleInjury = (injury: InjuryFlag) => {
-    if (injury === 'none') {
-      setData({ ...data, injuryFlags: ['none'] });
-    } else {
-      const newFlags = data.injuryFlags.filter(i => i !== 'none');
-      if (newFlags.includes(injury)) {
-        setData({ ...data, injuryFlags: newFlags.filter(i => i !== injury) });
-      } else {
-        setData({ ...data, injuryFlags: [...newFlags, injury] });
-      }
+  
+  const calculateNextPaymentDate = (frequency: string): string => {
+    const now = new Date();
+    switch (frequency) {
+      case 'weekly': now.setDate(now.getDate() + 7); break;
+      case 'fortnightly': now.setDate(now.getDate() + 14); break;
+      case 'monthly': now.setMonth(now.getMonth() + 1); break;
+      default: break;
     }
+    return now.toISOString();
   };
 
-  const handleSkipOnboarding = () => {
-    updateClient(clientId, { onboardingComplete: true });
-    router.push(`/clients/${clientId}`);
+  const handleSkipToFinish = () => {
+    handleComplete();
   };
 
   return (
@@ -464,14 +445,19 @@ export default function ClientOnboardingPage() {
           <Button variant="ghost" onClick={() => router.back()}>
             <ArrowLeft className="h-4 w-4 mr-2" /> Back
           </Button>
-          <Button variant="outline" size="sm" onClick={handleSkipOnboarding}>
-            Skip Onboarding
-          </Button>
+          {accountCreated && (
+            <Button variant="outline" size="sm" onClick={handleSkipToFinish}>
+              Finish & Save
+            </Button>
+          )}
         </div>
         <h1 className="text-2xl font-bold">Client Onboarding</h1>
-        <p className="text-muted-foreground">{client?.client?.displayName || 'New Client'}</p>
+        <p className="text-muted-foreground">{accountName || 'New Client'}</p>
         <Progress value={progress} className="mt-4" />
-        <p className="text-sm text-muted-foreground mt-2">Step {currentStep} of {TOTAL_STEPS}</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Step {currentStep} of {TOTAL_STEPS}
+          {isSkippableStep && <span className="text-emerald-400 ml-2">(Optional)</span>}
+        </p>
       </div>
 
       {/* Step 1: Account Creation */}
@@ -482,248 +468,134 @@ export default function ClientOnboardingPage() {
               <User className="h-5 w-5" /> Client Account
             </CardTitle>
             <CardDescription>
-              Create a new account or link an existing one
+              Create account for your client (auto-links if email exists)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {!accountCreated ? (
               <>
-                {/* Show choice first when accountMode is null */}
-                {accountMode === null ? (
-                  <div className="space-y-4">
-                    <p className="text-center text-muted-foreground">
-                      Does this client already have an account?
-                    </p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <Card 
-                        className="cursor-pointer hover:border-emerald-500 transition-colors p-4"
-                        onClick={() => setAccountMode('create')}
-                      >
-                        <div className="text-center space-y-2">
-                          <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
-                            <UserPlus className="h-6 w-6 text-emerald-400" />
-                          </div>
-                          <h3 className="font-semibold">Create New</h3>
-                          <p className="text-xs text-muted-foreground">
-                            New client, no existing account
-                          </p>
-                        </div>
-                      </Card>
-                      <Card 
-                        className="cursor-pointer hover:border-blue-500 transition-colors p-4"
-                        onClick={() => setAccountMode('link')}
-                      >
-                        <div className="text-center space-y-2">
-                          <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto">
-                            <Link2 className="h-6 w-6 text-blue-400" />
-                          </div>
-                          <h3 className="font-semibold">Link Existing</h3>
-                          <p className="text-xs text-muted-foreground">
-                            Has account from another device
-                          </p>
-                        </div>
-                      </Card>
-                    </div>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="name" className="flex items-center gap-2">
+                      <User className="h-4 w-4" /> Client Name *
+                    </Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g. John Smith"
+                      value={accountName}
+                      onChange={(e) => setAccountName(e.target.value)}
+                      className="mt-2"
+                    />
                   </div>
-                ) : (
-                  <>
-                    {/* Back button to return to choice */}
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => {
-                        setAccountMode(null);
-                        setSelectedExistingUser(null);
-                        setSearchQuery('');
-                      }}
-                      className="mb-2"
-                    >
-                      <ArrowLeft className="h-4 w-4 mr-2" /> Back to choice
-                    </Button>
-                    
-                    {accountMode === 'create' ? (
-                  <>
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                      <p className="text-sm text-emerald-400 font-medium mb-1">
-                        Create a new login account for your client
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        They'll be able to log in and see their workouts, track progress, and communicate with you.
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="name" className="flex items-center gap-2">
-                          <User className="h-4 w-4" /> Client Name *
-                        </Label>
-                        <Input
-                          id="name"
-                          type="text"
-                          placeholder="e.g. John Smith"
-                          value={accountName}
-                          onChange={(e) => setAccountName(e.target.value)}
-                          className="mt-2"
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="email" className="flex items-center gap-2">
-                          <Mail className="h-4 w-4" /> Email *
-                        </Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="e.g. john@example.com"
-                          value={accountEmail}
-                          onChange={(e) => setAccountEmail(e.target.value)}
-                          className="mt-2"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          This will be their login email
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="username" className="flex items-center gap-2">
-                          <User className="h-4 w-4" /> Username *
-                        </Label>
-                        <Input
-                          id="username"
-                          type="text"
-                          placeholder="e.g. john.smith"
-                          value={accountUsername}
-                          onChange={(e) => setAccountUsername(e.target.value)}
-                          className="mt-2"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Display name in the app
-                        </p>
-                      </div>
-                      
-                      <div>
-                        <Label htmlFor="password" className="flex items-center gap-2">
-                          <Lock className="h-4 w-4" /> Password
-                        </Label>
-                        <Input
-                          id="password"
-                          type="text"
-                          value={accountPassword}
-                          onChange={(e) => setAccountPassword(e.target.value)}
-                          className="mt-2"
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label className="flex items-center gap-2">
-                          <User className="h-4 w-4" /> Gender
-                        </Label>
-                        <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
-                          <SelectTrigger className="mt-2">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="male">Male</SelectItem>
-                            <SelectItem value="female">Female</SelectItem>
-                            <SelectItem value="other">Other / Prefer not to say</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    
-                    <Button 
-                      onClick={handleCreateAccount} 
-                      className="w-full bg-emerald-500 hover:bg-emerald-600"
-                      disabled={isCreatingAccount}
-                    >
-                      {isCreatingAccount ? 'Creating Account...' : 'Create Account'}
-                    </Button>
-                  </>
-                ) : (
-                  /* Link Existing Account Mode */
-                  <>
-                    <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                      <p className="text-sm text-blue-400 font-medium mb-1">
-                        Link an existing account
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Search for a client who already has an account in the system.
-                      </p>
-                    </div>
-                    
+                  
+                  <div>
+                    <Label htmlFor="email" className="flex items-center gap-2">
+                      <Mail className="h-4 w-4" /> Email *
+                    </Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="e.g. john@example.com"
+                      value={accountEmail}
+                      onChange={(e) => setAccountEmail(e.target.value)}
+                      className="mt-2"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      If this email exists, we'll link to their account automatically
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="username">Username (optional)</Label>
+                    <Input
+                      id="username"
+                      placeholder="Auto-generated if blank"
+                      value={accountUsername}
+                      onChange={(e) => setAccountUsername(e.target.value)}
+                      className="mt-2"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label htmlFor="search" className="flex items-center gap-2">
-                        <User className="h-4 w-4" /> Search by name or username
+                      <Label htmlFor="password" className="flex items-center gap-2">
+                        <Lock className="h-4 w-4" /> Password
                       </Label>
                       <Input
-                        id="search"
+                        id="password"
                         type="text"
-                        placeholder="Start typing to search..."
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          setSelectedExistingUser(null);
-                        }}
+                        value={accountPassword}
+                        onChange={(e) => setAccountPassword(e.target.value)}
                         className="mt-2"
                       />
                     </div>
-                    
-                    {filteredUsers.length > 0 && (
-                      <div className="space-y-2">
-                        <Label>Select a user:</Label>
-                        {filteredUsers.map((u: any) => (
-                          <div
-                            key={u.id}
-                            onClick={() => setSelectedExistingUser(u)}
-                            className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                              selectedExistingUser?.id === u.id
-                                ? 'border-emerald-500 bg-emerald-500/10'
-                                : 'border-border hover:border-muted-foreground'
-                            }`}
-                          >
-                            <p className="font-medium">{u.displayName}</p>
-                            <p className="text-sm text-muted-foreground">@{u.username}</p>
-                          </div>
-                        ))}
+                    <div>
+                      <Label>Gender</Label>
+                      <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
+                        <SelectTrigger className="mt-2">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  {/* Optional Height/Weight */}
+                  <div className="pt-4 border-t">
+                    <Label className="flex items-center gap-2 text-muted-foreground">
+                      <Ruler className="h-4 w-4" /> Height & Weight (optional)
+                    </Label>
+                    <div className="grid grid-cols-2 gap-4 mt-2">
+                      <div>
+                        <Input
+                          placeholder="Height (cm)"
+                          value={data.height}
+                          onChange={(e) => setData({ ...data, height: e.target.value })}
+                        />
                       </div>
-                    )}
-                    
-                    {searchQuery && filteredUsers.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No users found matching "{searchQuery}"
-                      </p>
-                    )}
-                    
-                    <Button 
-                      onClick={handleLinkExisting} 
-                      className="w-full bg-blue-500 hover:bg-blue-600"
-                      disabled={!selectedExistingUser}
-                    >
-                      Link Account
-                    </Button>
-                  </>
-                )}
-                  </>
-                )}
+                      <div>
+                        <Input
+                          placeholder="Weight (kg)"
+                          value={data.weight}
+                          onChange={(e) => setData({ ...data, weight: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Client can update these later in their profile
+                    </p>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={handleCreateAccount} 
+                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  disabled={isCreatingAccount}
+                >
+                  {isCreatingAccount ? (
+                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</>
+                  ) : (
+                    'Create Account'
+                  )}
+                </Button>
               </>
             ) : (
               <div className="text-center py-6">
                 <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-emerald-400 mb-2">Account Created!</h3>
+                <h3 className="text-lg font-semibold text-emerald-400 mb-2">
+                  {linkedExistingAccount ? 'Account Linked!' : 'Account Created!'}
+                </h3>
                 <div className="p-4 bg-muted rounded-lg text-left space-y-2">
-                  <p className="text-sm">
-                    <strong>Name:</strong> {accountName}
-                  </p>
-                  <p className="text-sm">
-                    <strong>Username:</strong> {accountUsername}
-                  </p>
-                  <p className="text-sm">
-                    <strong>Password:</strong> {accountPassword}
-                  </p>
+                  <p className="text-sm"><strong>Name:</strong> {accountName}</p>
+                  <p className="text-sm"><strong>Email:</strong> {accountEmail}</p>
+                  {!linkedExistingAccount && (
+                    <p className="text-sm"><strong>Password:</strong> {accountPassword}</p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-4">
-                  Share these credentials with your client so they can log in.
-                </p>
               </div>
             )}
           </CardContent>
@@ -737,7 +609,7 @@ export default function ClientOnboardingPage() {
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" /> Goals
             </CardTitle>
-            <CardDescription>What does {(client?.client?.displayName || 'this client').split(' ')[0]} want to achieve?</CardDescription>
+            <CardDescription>What does {accountName.split(' ')[0] || 'this client'} want to achieve?</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
@@ -827,7 +699,6 @@ export default function ClientOnboardingPage() {
 
             <div>
               <Label className="text-base font-medium">Training Preference *</Label>
-              <p className="text-sm text-muted-foreground mb-3">How does this client prefer to train?</p>
               <RadioGroup
                 value={data.trainingPreference}
                 onValueChange={(v) => setData({ ...data, trainingPreference: v as any })}
@@ -837,28 +708,21 @@ export default function ClientOnboardingPage() {
                   <RadioGroupItem value="1:1" id="pref-1" className="mt-0.5" />
                   <div>
                     <Label htmlFor="pref-1" className="font-medium cursor-pointer">1 on 1 Personal Training</Label>
-                    <p className="text-sm text-muted-foreground">In-person sessions with you as their trainer</p>
+                    <p className="text-sm text-muted-foreground">In-person sessions with you</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
                   <RadioGroupItem value="group" id="pref-2" className="mt-0.5" />
                   <div>
-                    <Label htmlFor="pref-2" className="font-medium cursor-pointer">Group Training / Classes</Label>
-                    <p className="text-sm text-muted-foreground">Group sessions, bootcamps, or fitness classes</p>
+                    <Label htmlFor="pref-2" className="font-medium cursor-pointer">Group Training</Label>
+                    <p className="text-sm text-muted-foreground">Classes or group sessions</p>
                   </div>
                 </div>
                 <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="solo" id="pref-3" className="mt-0.5" />
+                  <RadioGroupItem value="mixed" id="pref-3" className="mt-0.5" />
                   <div>
-                    <Label htmlFor="pref-3" className="font-medium cursor-pointer">Training by Themselves</Label>
-                    <p className="text-sm text-muted-foreground">Online programming, app-based training, trains independently</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="mixed" id="pref-4" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="pref-4" className="font-medium cursor-pointer">Mix of Options</Label>
-                    <p className="text-sm text-muted-foreground">Combination of PT, classes, and/or independent training</p>
+                    <Label htmlFor="pref-3" className="font-medium cursor-pointer">Mix of Options</Label>
+                    <p className="text-sm text-muted-foreground">PT + classes and/or independent</p>
                   </div>
                 </div>
               </RadioGroup>
@@ -867,7 +731,7 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 4: Injuries & Limitations */}
+      {/* Step 4: Injuries */}
       {currentStep === 4 && (
         <Card>
           <CardHeader>
@@ -879,8 +743,7 @@ export default function ClientOnboardingPage() {
           <CardContent className="space-y-6">
             <div>
               <Label className="text-base font-medium">Current Pain or Injury Areas *</Label>
-              <p className="text-sm text-muted-foreground mb-3">Select all that apply</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 mt-3">
                 {INJURIES.map(injury => (
                   <div
                     key={injury.value}
@@ -900,9 +763,9 @@ export default function ClientOnboardingPage() {
 
             {data.injuryFlags.length > 0 && !data.injuryFlags.includes('none') && (
               <div>
-                <Label className="text-base font-medium">Injury Details</Label>
+                <Label>Injury Details</Label>
                 <Textarea
-                  placeholder="Any additional details about injuries or limitations..."
+                  placeholder="Any additional details..."
                   value={data.injuryNotes}
                   onChange={(e) => setData({ ...data, injuryNotes: e.target.value })}
                   className="mt-2"
@@ -913,14 +776,11 @@ export default function ClientOnboardingPage() {
             <div>
               <Label className="text-base font-medium">Movement Confidence</Label>
               <p className="text-sm text-muted-foreground mb-4">Rate confidence in each pattern (1-5)</p>
-              
               {(['squat', 'hinge', 'push', 'pull', 'core'] as const).map(pattern => (
                 <div key={pattern} className="mb-4">
                   <div className="flex justify-between mb-2">
                     <Label className="capitalize">{pattern}</Label>
-                    <span className="text-sm text-muted-foreground">
-                      {data.movementConfidence[pattern]}
-                    </span>
+                    <span className="text-sm text-muted-foreground">{data.movementConfidence[pattern]}</span>
                   </div>
                   <Slider
                     value={[data.movementConfidence[pattern]]}
@@ -939,22 +799,20 @@ export default function ClientOnboardingPage() {
         </Card>
       )}
 
-      {/* Step 5: Availability */}
+      {/* Step 5: Schedule */}
       {currentStep === 5 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" /> Availability
+              <Calendar className="h-5 w-5" /> Schedule
             </CardTitle>
-            <CardDescription>PT sessions and personal training schedule</CardDescription>
+            <CardDescription>PT sessions and training schedule</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* PT Sessions */}
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-4">
               <div>
                 <Label className="text-base font-medium text-emerald-400">PT Sessions Per Week *</Label>
-                <p className="text-sm text-muted-foreground mb-3">Sessions with you as their trainer</p>
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-3">
                   {[1, 2, 3, 4, 5].map(days => (
                     <Button
                       key={days}
@@ -969,7 +827,7 @@ export default function ClientOnboardingPage() {
               </div>
               
               <div>
-                <Label className="text-sm">Preferred PT Days</Label>
+                <Label className="text-sm">Preferred Days</Label>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
                     <Button
@@ -990,9 +848,8 @@ export default function ClientOnboardingPage() {
               </div>
             </div>
 
-            {/* Personal Sessions */}
             <div>
-              <Label className="text-base font-medium">Will they train alone outside PT sessions? *</Label>
+              <Label className="text-base font-medium">Will they train alone outside PT? *</Label>
               <RadioGroup
                 value={data.trainAloneOutsidePT}
                 onValueChange={(v) => setData({ ...data, trainAloneOutsidePT: v as any })}
@@ -1000,69 +857,17 @@ export default function ClientOnboardingPage() {
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="yes" id="alone-1" />
-                  <Label htmlFor="alone-1">Yes, they want homework workouts</Label>
+                  <Label htmlFor="alone-1">Yes, homework workouts</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="maybe" id="alone-2" />
-                  <Label htmlFor="alone-2">Maybe, let's see how it goes</Label>
+                  <Label htmlFor="alone-2">Maybe, let's see</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="no" id="alone-3" />
                   <Label htmlFor="alone-3">No, PT sessions only</Label>
                 </div>
               </RadioGroup>
-            </div>
-
-            {data.trainAloneOutsidePT === 'yes' && (
-              <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg space-y-4">
-                <div>
-                  <Label className="text-base font-medium text-blue-400">Personal Sessions Per Week</Label>
-                  <p className="text-sm text-muted-foreground mb-3">Solo gym sessions (homework)</p>
-                  <div className="flex gap-2">
-                    {[1, 2, 3, 4].map(days => (
-                      <Button
-                        key={days}
-                        variant={data.personalSessionsPerWeek === days ? 'default' : 'outline'}
-                        onClick={() => setData({ ...data, personalSessionsPerWeek: days })}
-                        className="flex-1"
-                      >
-                        {days}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <Label className="text-sm">Preferred Personal Days</Label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                      <Button
-                        key={day}
-                        size="sm"
-                        variant={data.preferredPersonalDays.includes(day) ? 'default' : 'outline'}
-                        onClick={() => {
-                          const newDays = data.preferredPersonalDays.includes(day)
-                            ? data.preferredPersonalDays.filter(d => d !== day)
-                            : [...data.preferredPersonalDays, day];
-                          setData({ ...data, preferredPersonalDays: newDays });
-                        }}
-                      >
-                        {day}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Total Summary */}
-            <div className="p-3 bg-muted rounded-lg">
-              <p className="text-sm">
-                <strong>Total Training Days:</strong> {data.ptSessionsPerWeek + (data.trainAloneOutsidePT === 'yes' ? data.personalSessionsPerWeek : 0)} days/week
-                <span className="text-muted-foreground ml-2">
-                  ({data.ptSessionsPerWeek} PT{data.trainAloneOutsidePT === 'yes' ? ` + ${data.personalSessionsPerWeek} personal` : ''})
-                </span>
-              </p>
             </div>
 
             <div>
@@ -1080,70 +885,23 @@ export default function ClientOnboardingPage() {
                 ))}
               </div>
             </div>
-
-            {/* Book First Session */}
-            <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg space-y-4">
-              <div>
-                <Label className="text-base font-medium text-purple-400 flex items-center gap-2">
-                  <Calendar className="h-4 w-4" /> Book First PT Session
-                </Label>
-                <p className="text-sm text-muted-foreground mb-3">Schedule their first session now (optional)</p>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-sm">Date</Label>
-                  <Input
-                    type="date"
-                    value={data.firstSessionDate}
-                    onChange={(e) => setData({ ...data, firstSessionDate: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm">Time</Label>
-                  <Select
-                    value={data.firstSessionTime}
-                    onValueChange={(v) => setData({ ...data, firstSessionTime: v })}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', 
-                        '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
-                        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-                        '18:00', '18:30', '19:00', '19:30', '20:00'].map(time => (
-                        <SelectItem key={time} value={time}>{time}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              
-              {data.firstSessionDate && (
-                <div className="p-2 bg-purple-500/20 rounded text-sm text-purple-300">
-                  ✓ First session: {new Date(data.firstSessionDate).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at {data.firstSessionTime}
-                </div>
-              )}
-            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 6: Lifestyle */}
+      {/* Step 6: Lifestyle (Skippable) */}
       {currentStep === 6 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Heart className="h-5 w-5" /> Lifestyle Factors
+              <Badge variant="secondary" className="ml-2">Optional</Badge>
             </CardTitle>
             <CardDescription>Understanding recovery capacity</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
-              <Label className="text-base font-medium">Job Activity Level *</Label>
+              <Label className="text-base font-medium">Job Activity Level</Label>
               <RadioGroup
                 value={data.jobActivity}
                 onValueChange={(v) => setData({ ...data, jobActivity: v as any })}
@@ -1155,7 +913,7 @@ export default function ClientOnboardingPage() {
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="light" id="job-2" />
-                  <Label htmlFor="job-2">Light (some walking/standing)</Label>
+                  <Label htmlFor="job-2">Light (some walking)</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="moderate" id="job-3" />
@@ -1165,21 +923,14 @@ export default function ClientOnboardingPage() {
                   <RadioGroupItem value="active" id="job-4" />
                   <Label htmlFor="job-4">Active (physical job)</Label>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="very_active" id="job-5" />
-                  <Label htmlFor="job-5">Very Active (labor intensive)</Label>
-                </div>
               </RadioGroup>
             </div>
 
             <div>
               <div className="flex justify-between mb-2">
-                <Label className="text-base font-medium">Sleep Quality</Label>
+                <Label>Sleep Quality</Label>
                 <span className="text-sm text-muted-foreground">
-                  {data.sleepQuality === 1 ? 'Poor' : 
-                   data.sleepQuality === 2 ? 'Below Average' :
-                   data.sleepQuality === 3 ? 'Average' :
-                   data.sleepQuality === 4 ? 'Good' : 'Excellent'}
+                  {['Poor', 'Below Avg', 'Average', 'Good', 'Excellent'][data.sleepQuality - 1]}
                 </span>
               </div>
               <Slider
@@ -1193,12 +944,9 @@ export default function ClientOnboardingPage() {
 
             <div>
               <div className="flex justify-between mb-2">
-                <Label className="text-base font-medium">Stress Level</Label>
+                <Label>Stress Level</Label>
                 <span className="text-sm text-muted-foreground">
-                  {data.stressLevel === 1 ? 'Very Low' : 
-                   data.stressLevel === 2 ? 'Low' :
-                   data.stressLevel === 3 ? 'Moderate' :
-                   data.stressLevel === 4 ? 'High' : 'Very High'}
+                  {['Very Low', 'Low', 'Moderate', 'High', 'Very High'][data.stressLevel - 1]}
                 </span>
               </div>
               <Slider
@@ -1209,63 +957,199 @@ export default function ClientOnboardingPage() {
                 step={1}
               />
             </div>
+
+            <div>
+              <Label className="text-base font-medium">Training Phase</Label>
+              <div className="space-y-3 mt-3">
+                {PHASES.map(phase => (
+                  <div
+                    key={phase.value}
+                    onClick={() => setData({ ...data, currentPhase: phase.value })}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      data.currentPhase === phase.value 
+                        ? 'border-primary bg-primary/10' 
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-full ${
+                        data.currentPhase === phase.value ? 'bg-primary text-primary-foreground' : 'bg-muted'
+                      }`}>
+                        {phase.icon}
+                      </div>
+                      <div>
+                        <p className="font-medium">{phase.label}</p>
+                        <p className="text-sm text-muted-foreground">{phase.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 7: Phase Selection */}
+      {/* Step 7: Package Creation (Skippable) */}
       {currentStep === 7 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Dumbbell className="h-5 w-5" /> Training Phase
+              <Package className="h-5 w-5" /> Session Package
+              <Badge variant="secondary" className="ml-2">Optional</Badge>
             </CardTitle>
-            <CardDescription>Select the appropriate starting phase</CardDescription>
+            <CardDescription>Create a session package with payment plan</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-3">
-              {PHASES.map(phase => (
-                <div
-                  key={phase.value}
-                  onClick={() => setData({ ...data, currentPhase: phase.value })}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                    data.currentPhase === phase.value 
-                      ? 'border-primary bg-primary/10' 
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-full ${
-                      data.currentPhase === phase.value ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                    }`}>
-                      {phase.icon}
-                    </div>
-                    <div>
-                      <p className="font-medium">{phase.label}</p>
-                      <p className="text-sm text-muted-foreground">{phase.description}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+              <p className="text-sm text-blue-400">
+                You can also create packages later from the client file or skip this step entirely.
+              </p>
             </div>
 
-            {data.currentPhase && (
-              <div className="p-4 bg-muted rounded-lg">
-                <p className="font-medium mb-2">Summary</p>
-                <div className="space-y-1 text-sm">
-                  <p><strong>Goal:</strong> {GOALS.find(g => g.value === data.primaryGoal)?.label}</p>
-                  <p><strong>Experience:</strong> {EXPERIENCE_LEVELS.find(e => e.value === data.experienceLevel)?.label}</p>
-                  <p><strong>PT Sessions:</strong> {data.ptSessionsPerWeek}/week {data.preferredPTDays.length > 0 && `(${data.preferredPTDays.join(', ')})`}</p>
-                  {data.trainAloneOutsidePT === 'yes' && (
-                    <p><strong>Personal Sessions:</strong> {data.personalSessionsPerWeek}/week {data.preferredPersonalDays.length > 0 && `(${data.preferredPersonalDays.join(', ')})`}</p>
-                  )}
-                  <p><strong>Phase:</strong> {PHASES.find(p => p.value === data.currentPhase)?.label}</p>
-                  {data.injuryFlags.length > 0 && !data.injuryFlags.includes('none') && (
-                    <p><strong>Considerations:</strong> {data.injuryFlags.join(', ')}</p>
-                  )}
-                </div>
+            <div>
+              <Label>Package Name</Label>
+              <Input
+                placeholder="e.g. 10 Session Bundle"
+                value={data.packageName}
+                onChange={(e) => setData({ ...data, packageName: e.target.value })}
+                className="mt-2"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Number of Sessions</Label>
+                <Select 
+                  value={String(data.packageSessions)} 
+                  onValueChange={(v) => setData({ ...data, packageSessions: parseInt(v) })}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[5, 10, 15, 20, 25, 30, 40, 50].map(n => (
+                      <SelectItem key={n} value={String(n)}>{n} sessions</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Total Price ($)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={data.packagePrice || ''}
+                  onChange={(e) => setData({ ...data, packagePrice: parseFloat(e.target.value) || 0 })}
+                  className="mt-2"
+                />
+              </div>
+            </div>
+
+            {data.packagePrice > 0 && data.packageSessions > 0 && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm">
+                  <strong>Price per session:</strong> ${(data.packagePrice / data.packageSessions).toFixed(2)}
+                </p>
               </div>
             )}
+
+            <div>
+              <Label className="flex items-center gap-2">
+                <DollarSign className="h-4 w-4" /> Payment Frequency
+              </Label>
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                {PAYMENT_FREQUENCIES.map(freq => (
+                  <div
+                    key={freq.value}
+                    onClick={() => setData({ ...data, paymentFrequency: freq.value as any })}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all text-center ${
+                      data.paymentFrequency === freq.value 
+                        ? 'border-emerald-500 bg-emerald-500/10' 
+                        : 'border-border hover:border-emerald-500/50'
+                    }`}
+                  >
+                    <p className="font-medium">{freq.label}</p>
+                  </div>
+                ))}
+              </div>
+              {data.paymentFrequency && data.paymentFrequency !== 'per_session' && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Next payment will be tracked automatically
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 8: Book First Session (Skippable) */}
+      {currentStep === 8 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" /> Book First Session
+              <Badge variant="secondary" className="ml-2">Optional</Badge>
+            </CardTitle>
+            <CardDescription>Schedule their first PT session</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
+              <p className="text-sm text-purple-400 flex items-center gap-2">
+                <Bell className="h-4 w-4" />
+                Client will receive an in-app notification when you book
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={data.firstSessionDate}
+                  onChange={(e) => setData({ ...data, firstSessionDate: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label>Time</Label>
+                <Select
+                  value={data.firstSessionTime}
+                  onValueChange={(v) => setData({ ...data, firstSessionTime: v })}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', 
+                      '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
+                      '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
+                      '18:00', '18:30', '19:00', '19:30', '20:00'].map(time => (
+                      <SelectItem key={time} value={time}>{time}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {data.firstSessionDate && (
+              <div className="p-3 bg-purple-500/20 rounded-lg text-sm text-purple-300 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                {new Date(data.firstSessionDate).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at {data.firstSessionTime}
+              </div>
+            )}
+
+            {/* Summary */}
+            <div className="p-4 bg-muted rounded-lg space-y-2">
+              <p className="font-medium mb-3">Onboarding Summary</p>
+              <p className="text-sm"><strong>Goal:</strong> {GOALS.find(g => g.value === data.primaryGoal)?.label || 'Not set'}</p>
+              <p className="text-sm"><strong>Experience:</strong> {EXPERIENCE_LEVELS.find(e => e.value === data.experienceLevel)?.label || 'Not set'}</p>
+              <p className="text-sm"><strong>PT Sessions:</strong> {data.ptSessionsPerWeek}/week</p>
+              {data.packageName && (
+                <p className="text-sm"><strong>Package:</strong> {data.packageName} (${data.packagePrice})</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1280,24 +1164,12 @@ export default function ClientOnboardingPage() {
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
         <div className="flex gap-2">
-          {/* Exit Onboarding Button - visible after account creation */}
-          {accountCreated && (
+          {isSkippableStep && currentStep < TOTAL_STEPS && (
             <Button
               variant="ghost"
-              className="text-gray-400 hover:text-white"
-              onClick={() => {
-                // Save current progress
-                const actualClientId = createdClientId || clientId;
-                updateClient(actualClientId, { 
-                  onboardingComplete: true,
-                  goals: data.primaryGoal ? [data.primaryGoal, data.secondaryGoal].filter(Boolean) as string[] : [],
-                  notes: data.customGoalText,
-                });
-                toast.success('Onboarding saved! You can continue later.');
-                router.push(`/clients/${actualClientId}`);
-              }}
+              onClick={() => setCurrentStep(currentStep + 1)}
             >
-              Exit & Save
+              Skip
             </Button>
           )}
           <Button

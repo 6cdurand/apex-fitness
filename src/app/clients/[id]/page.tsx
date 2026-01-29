@@ -1128,13 +1128,22 @@ export default function ClientDetailPage() {
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-sm">Onboarding complete</span>
                     </div>
-                    <Button 
-                      onClick={() => router.push(`/clients/${clientId}/program/select`)}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Select Program
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        onClick={() => router.push(`/clients/${clientId}/program/select`)}
+                        className="bg-emerald-500 hover:bg-emerald-600"
+                      >
+                        <ClipboardList className="w-4 h-4 mr-1" />
+                        Select
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Create
+                      </Button>
+                    </div>
                   </div>
                 )}
               </CardContent>
