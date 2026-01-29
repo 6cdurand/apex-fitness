@@ -242,6 +242,43 @@ export default function PaymentsPage() {
     setSelectedClient(null);
   };
 
+  // Handle log payment from settings dialog
+  const handleLogPaymentFromSettings = () => {
+    if (!editingSettings) return;
+    
+    // Save settings first
+    const newSettings = {
+      ...paymentSettings,
+      [editingSettings.clientId]: editingSettings,
+    };
+    savePaymentSettings(newSettings);
+    
+    // Create payment record
+    addPayment({
+      clientId: editingSettings.clientId,
+      trainerId: user?.id || '',
+      amount: editingSettings.pricePerSession,
+      currency: 'NZD',
+      type: 'single_session',
+      description: `Session payment (${editingSettings.method.replace('_', ' ')})`,
+      status: 'paid',
+      paidAt: new Date().toISOString(),
+      method: editingSettings.method,
+    });
+    
+    // Update session package paid count
+    const clientPackages = sessionPackages.filter(p => p.clientId === editingSettings.clientId && p.trainerId === user?.id);
+    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+    if (activePackage) {
+      updateSessionPackage(activePackage.id, {
+        paidSessions: (activePackage.paidSessions || 0) + 1,
+      });
+    }
+    
+    setShowSettingsDialog(false);
+    setEditingSettings(null);
+  };
+
   // Handle save settings
   const handleSaveSettings = () => {
     if (!editingSettings) return;
@@ -631,20 +668,30 @@ export default function PaymentsPage() {
                 </div>
               )}
               
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-col gap-2 pt-2">
                 <Button
-                  variant="outline"
-                  className="flex-1 border-gray-700 text-gray-300"
-                  onClick={() => setShowSettingsDialog(false)}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  onClick={handleLogPaymentFromSettings}
                 >
-                  Cancel
+                  <DollarSign className="w-4 h-4 mr-2" />
+                  Log Payment (${editingSettings.pricePerSession})
                 </Button>
-                <Button
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600"
-                  onClick={handleSaveSettings}
-                >
-                  Save Settings
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-gray-700 text-gray-300"
+                    onClick={() => setShowSettingsDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-gray-700 text-gray-300"
+                    onClick={handleSaveSettings}
+                  >
+                    Save Settings
+                  </Button>
+                </div>
               </div>
             </div>
           )}
