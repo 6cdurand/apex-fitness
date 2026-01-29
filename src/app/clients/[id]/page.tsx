@@ -37,6 +37,7 @@ import {
   Trash2,
   Edit,
   Package,
+  Settings,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, endOfWeek, isWithinInterval, addDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -65,6 +66,7 @@ export default function ClientDetailPage() {
     markPaymentPaid,
     addSession,
     addPayment,
+    updatePayment,
     addSessionPackage,
     removeClient,
     setInitialClientStats,
@@ -181,6 +183,13 @@ export default function ClientDetailPage() {
   const [editPackageUsed, setEditPackageUsed] = useState('');
   const [editPackagePaid, setEditPackagePaid] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
+  
+  // Edit payment state
+  const [showEditPayment, setShowEditPayment] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<any>(null);
+  const [editPaymentMethod, setEditPaymentMethod] = useState<'cash' | 'card' | 'bank_transfer'>('cash');
+  const [editPaymentDate, setEditPaymentDate] = useState('');
+  const [editPaymentAmount, setEditPaymentAmount] = useState('');
   
   // Edit goals/notes state
   const [showEditGoals, setShowEditGoals] = useState(false);
@@ -390,6 +399,29 @@ export default function ClientDetailPage() {
     setEditSessionsDone('');
     setEditSessionsLeft('');
     setEditTotalPaid('');
+  };
+
+  const handleEditPayment = (payment: any) => {
+    setEditingPayment(payment);
+    setEditPaymentMethod(payment.method || 'cash');
+    setEditPaymentDate(payment.paidAt ? new Date(payment.paidAt).toISOString().split('T')[0] : new Date(payment.createdAt).toISOString().split('T')[0]);
+    setEditPaymentAmount(payment.amount?.toString() || '');
+    setShowEditPayment(true);
+  };
+
+  const handleSavePaymentEdit = () => {
+    if (!editingPayment) return;
+    
+    updatePayment(editingPayment.id, {
+      method: editPaymentMethod,
+      paidAt: new Date(editPaymentDate).toISOString(),
+      amount: parseFloat(editPaymentAmount) || editingPayment.amount,
+      status: 'paid',
+    });
+    
+    toast.success('Payment updated');
+    setShowEditPayment(false);
+    setEditingPayment(null);
   };
 
   // Workout editing handlers
@@ -2056,18 +2088,28 @@ export default function ClientDetailPage() {
                               </p>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <p className="text-white font-bold">${payment.amount}</p>
-                            {payment.status === 'pending' && (
-                              <Button 
-                                size="sm" 
-                                variant="ghost" 
-                                className="text-emerald-400 text-xs h-6 px-2"
-                                onClick={() => handleMarkPaymentPaid(payment.id)}
-                              >
-                                Mark Paid
-                              </Button>
-                            )}
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className="text-white font-bold">${payment.amount}</p>
+                              {payment.status === 'pending' && (
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="text-emerald-400 text-xs h-6 px-2"
+                                  onClick={() => handleMarkPaymentPaid(payment.id)}
+                                >
+                                  Mark Paid
+                                </Button>
+                              )}
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-gray-400 hover:text-white"
+                              onClick={() => handleEditPayment(payment)}
+                            >
+                              <Settings className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       </CardContent>
@@ -2094,7 +2136,8 @@ export default function ClientDetailPage() {
             onClick={() => {
               // Start a blank workout for this client
               const { startWorkout } = useWorkoutStore.getState();
-              startWorkout(`Session - ${clientUser?.displayName || 'Client'}`, clientId, user?.id);
+              // Parameters: name, templateId (undefined for blank), clientId
+              startWorkout(`Session - ${clientUser?.displayName || 'Client'}`, undefined, clientId);
               router.push('/workout/active');
             }}
           >
@@ -2211,6 +2254,77 @@ export default function ClientDetailPage() {
             >
               <DollarSign className="w-4 h-4 mr-2" />
               Record Payment
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Payment Dialog */}
+      <Dialog open={showEditPayment} onOpenChange={setShowEditPayment}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Amount ($)</label>
+              <Input
+                type="number"
+                value={editPaymentAmount}
+                onChange={(e) => setEditPaymentAmount(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Payment Date</label>
+              <Input
+                type="date"
+                value={editPaymentDate}
+                onChange={(e) => setEditPaymentDate(e.target.value)}
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">Payment Method</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={editPaymentMethod === 'cash' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEditPaymentMethod('cash')}
+                  className={editPaymentMethod === 'cash' ? 'bg-emerald-500' : ''}
+                >
+                  Cash
+                </Button>
+                <Button
+                  type="button"
+                  variant={editPaymentMethod === 'card' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEditPaymentMethod('card')}
+                  className={editPaymentMethod === 'card' ? 'bg-emerald-500' : ''}
+                >
+                  Card
+                </Button>
+                <Button
+                  type="button"
+                  variant={editPaymentMethod === 'bank_transfer' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setEditPaymentMethod('bank_transfer')}
+                  className={editPaymentMethod === 'bank_transfer' ? 'bg-emerald-500' : ''}
+                >
+                  Transfer
+                </Button>
+              </div>
+            </div>
+            
+            <Button 
+              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              onClick={handleSavePaymentEdit}
+            >
+              <Check className="w-4 h-4 mr-2" />
+              Save Payment
             </Button>
           </div>
         </DialogContent>
