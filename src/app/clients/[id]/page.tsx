@@ -2051,14 +2051,14 @@ export default function ClientDetailPage() {
                             <div>
                               <p className="text-white font-medium">{payment.description}</p>
                               <p className="text-gray-400 text-sm">
-                                {format(new Date(payment.createdAt), 'MMM d, yyyy')}
-                                {payment.invoiceNumber && ` • ${payment.invoiceNumber}`}
+                                {format(new Date(payment.paidAt || payment.createdAt), 'MMM d, yyyy')}
+                                {payment.method && ` • ${payment.method.replace('_', ' ')}`}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
                             <p className="text-white font-bold">${payment.amount}</p>
-                            {payment.status === 'pending' ? (
+                            {payment.status === 'pending' && (
                               <Button 
                                 size="sm" 
                                 variant="ghost" 
@@ -2067,8 +2067,6 @@ export default function ClientDetailPage() {
                               >
                                 Mark Paid
                               </Button>
-                            ) : (
-                              <p className="text-emerald-400 text-xs capitalize">{payment.method}</p>
                             )}
                           </div>
                         </div>

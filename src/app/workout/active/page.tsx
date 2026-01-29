@@ -500,12 +500,15 @@ export default function ActiveWorkoutPage() {
       });
     }
     
-    // Check for new PB
+    // Check for new PB - only show toast if the lift actually became the new PB
     const exercise = activeWorkout?.exercises.find(e => e.id === exerciseId);
     if (exercise) {
-      const pb = getPBForExercise(exercise.exerciseId);
       const newRM = calculate1RM(weight, reps);
-      if (!pb || newRM > pb.oneRepMax) {
+      // After completeSet runs, getPBForExercise returns the updated PB
+      // If our lift became the new PB, the stored PB will match our lift
+      const pb = getPBForExercise(exercise.exerciseId);
+      if (newRM !== null && pb && pb.bestWeight === weight && pb.bestReps === reps) {
+        // Our lift just became the new PB
         setNewPBs(prev => [...prev, exerciseName]);
         toast.success(`New Personal Best! 🏆 ${exerciseName}: ${Math.round(newRM)}kg 1RM`);
       }
