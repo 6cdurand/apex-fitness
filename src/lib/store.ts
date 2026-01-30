@@ -522,13 +522,13 @@ export const useWorkoutStore = create<WorkoutState>()(
         
         // Find last workout data for this exercise
         const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
-        let lastSetData: { weight?: number; reps?: number } | undefined;
+        let lastSetData: { weight?: number; reps?: number; duration?: number } | undefined;
         for (const workout of userWorkoutHistory) {
           const matchingEx = workout.exercises?.find(e => e.exerciseId === exercise.id);
           if (matchingEx && matchingEx.sets?.length > 0) {
-            const completedSet = matchingEx.sets.find(s => s.completed && s.weight && s.reps);
+            const completedSet = matchingEx.sets.find(s => s.completed && (s.weight || s.duration));
             if (completedSet) {
-              lastSetData = { weight: completedSet.weight, reps: completedSet.reps };
+              lastSetData = { weight: completedSet.weight, reps: completedSet.reps, duration: completedSet.duration };
               break;
             }
           }
@@ -537,19 +537,30 @@ export const useWorkoutStore = create<WorkoutState>()(
         // Extract block metadata if present
         const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
         
+        // Check if this is a stretching exercise - default to timed with 2 rounds
+        const isStretching = exercise.category === 'stretching';
+        const defaultDuration = 30; // 30 seconds per stretch
+        
+        const sets = isStretching 
+          ? [
+              { id: uuidv4(), setNumber: 1, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
+              { id: uuidv4(), setNumber: 2, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
+            ]
+          : [{
+              id: uuidv4(),
+              setNumber: 1,
+              type: 'normal' as const,
+              completed: false,
+              previousWeight: lastSetData?.weight || pb?.bestWeight,
+              previousReps: lastSetData?.reps || pb?.bestReps,
+            }];
+        
         const workoutExercise: WorkoutExercise = {
           id: uuidv4(),
           exerciseId: exercise.id,
           exercise: exerciseData.name ? exerciseData : exercise,
-          sets: [{
-            id: uuidv4(),
-            setNumber: 1,
-            type: 'normal',
-            completed: false,
-            previousWeight: lastSetData?.weight || pb?.bestWeight,
-            previousReps: lastSetData?.reps || pb?.bestReps,
-          }],
-          restTimerSeconds: 90,
+          sets,
+          restTimerSeconds: isStretching ? 10 : 90, // Short rest for stretches
           // Preserve block metadata
           ...(blockId && { blockId }),
           ...(blockName && { blockName }),

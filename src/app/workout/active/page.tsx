@@ -145,6 +145,9 @@ export default function ActiveWorkoutPage() {
   // Per-set rest timers (setId -> { remaining seconds, total seconds })
   const [setRestTimers, setSetRestTimers] = useState<Record<string, { remaining: number; total: number }>>({});
   
+  // Active stretch/timed set timers (setId -> { remaining, total, isRunning })
+  const [activeSetTimers, setActiveSetTimers] = useState<Record<string, { remaining: number; total: number; isRunning: boolean }>>({});
+  
   // Block system state
   const [workoutBlocks, setWorkoutBlocks] = useState<{
     id: string;
@@ -227,6 +230,27 @@ export default function ActiveWorkoutPage() {
     const interval = setInterval(tickRestTimer, 1000);
     return () => clearInterval(interval);
   }, [restTimer.isRunning, tickRestTimer]);
+
+  // Active set timers (for timed exercises like stretches)
+  useEffect(() => {
+    const hasRunningTimer = Object.values(activeSetTimers).some(t => t.isRunning && t.remaining > 0);
+    if (!hasRunningTimer) return;
+    
+    const interval = setInterval(() => {
+      setActiveSetTimers(prev => {
+        const updated = { ...prev };
+        Object.keys(updated).forEach(setId => {
+          if (updated[setId].isRunning && updated[setId].remaining > 0) {
+            updated[setId] = { ...updated[setId], remaining: updated[setId].remaining - 1 };
+          } else if (updated[setId].isRunning && updated[setId].remaining === 0) {
+            updated[setId] = { ...updated[setId], isRunning: false };
+          }
+        });
+        return updated;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeSetTimers]);
 
   // Per-set rest timers tick
   useEffect(() => {
@@ -515,6 +539,43 @@ export default function ActiveWorkoutPage() {
         toast.success(`New Personal Best! 🏆 ${exerciseName}: ${Math.round(newRM)}kg 1RM`);
       }
     }
+  };
+
+  // Handle starting/stopping a timed set timer (for stretches)
+  const handleToggleSetTimer = (setId: string, duration: number, exerciseId: string) => {
+    const existingTimer = activeSetTimers[setId];
+    
+    if (existingTimer?.isRunning) {
+      // Stop the timer
+      setActiveSetTimers(prev => ({
+        ...prev,
+        [setId]: { ...prev[setId], isRunning: false }
+      }));
+    } else if (existingTimer && existingTimer.remaining > 0) {
+      // Resume the timer
+      setActiveSetTimers(prev => ({
+        ...prev,
+        [setId]: { ...prev[setId], isRunning: true }
+      }));
+    } else {
+      // Start new timer
+      setActiveSetTimers(prev => ({
+        ...prev,
+        [setId]: { remaining: duration, total: duration, isRunning: true }
+      }));
+    }
+  };
+
+  // Handle completing a timed set
+  const handleCompleteTimedSet = (exerciseId: string, setId: string, exerciseName: string) => {
+    completeSet(exerciseId, setId);
+    // Clear the timer for this set
+    setActiveSetTimers(prev => {
+      const updated = { ...prev };
+      delete updated[setId];
+      return updated;
+    });
+    toast.success(`${exerciseName} completed!`);
   };
 
   // Handle adding drop set to an exercise
@@ -1428,9 +1489,18 @@ export default function ActiveWorkoutPage() {
                         {/* Sets Header */}
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium">
                           <div className="col-span-1">SET</div>
-                          <div className="col-span-3">PREVIOUS</div>
-                          <div className="col-span-3 text-center">KG</div>
-                          <div className="col-span-3 text-center">REPS</div>
+                          {workoutExercise.exercise?.category === 'stretching' ? (
+                            <>
+                              <div className="col-span-4 text-center">TIME (sec)</div>
+                              <div className="col-span-5 text-center">TIMER</div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="col-span-3">PREVIOUS</div>
+                              <div className="col-span-3 text-center">KG</div>
+                              <div className="col-span-3 text-center">REPS</div>
+                            </>
+                          )}
                           <div className="col-span-2"></div>
                         </div>
                         {/* Sets */}
@@ -1439,78 +1509,101 @@ export default function ActiveWorkoutPage() {
                             const previousDisplay = set.previousWeight && set.previousReps 
                               ? `${set.previousWeight}kg × ${set.previousReps}` 
                               : '—';
+                            const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching';
+                            const setTimer = activeSetTimers[set.id];
                             return (
                             <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-emerald-500/10")}>
                               <div className="grid grid-cols-12 gap-2 items-center text-sm">
                                 {/* Set Number/Type */}
                                 <div className="col-span-1">
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button className={cn(
-                                        "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
-                                        set.completed && "bg-emerald-500 text-white",
-                                        !set.completed && set.type === 'warmup' && "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30",
-                                        !set.completed && set.type === 'dropset' && "bg-purple-500/20 text-purple-400 border border-purple-500/30",
-                                        !set.completed && set.type === 'failure' && "bg-red-500/20 text-red-400 border border-red-500/30",
-                                        !set.completed && (!set.type || set.type === 'normal') && "bg-gray-800 text-gray-400"
-                                      )}>
-                                        {set.completed ? <Check className="w-4 h-4" /> : set.type === 'warmup' ? 'W' : set.type === 'dropset' ? 'D' : set.type === 'failure' ? 'F' : idx + 1}
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="bg-gray-900 border-gray-700">
-                                      <DropdownMenuItem 
-                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'normal' })}
-                                        className="text-gray-300 focus:text-white focus:bg-gray-700"
-                                      >
-                                        Normal Set
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem 
-                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'warmup' })}
-                                        className="text-yellow-400 focus:text-yellow-300 focus:bg-gray-700"
-                                      >
-                                        Warm-up Set
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem 
-                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'dropset' })}
-                                        className="text-purple-400 focus:text-purple-300 focus:bg-gray-700"
-                                      >
-                                        Drop Set
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem 
-                                        onClick={() => updateSet(workoutExercise.id, set.id, { type: 'failure' })}
-                                        className="text-red-400 focus:text-red-300 focus:bg-gray-700"
-                                      >
-                                        Failure Set
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
+                                  <button className={cn(
+                                    "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
+                                    set.completed && "bg-emerald-500 text-white",
+                                    !set.completed && "bg-gray-800 text-gray-400"
+                                  )}>
+                                    {set.completed ? <Check className="w-4 h-4" /> : idx + 1}
+                                  </button>
                                 </div>
-                                {/* Previous */}
-                                <div className="col-span-3">
-                                  <span className="text-xs text-gray-500">{previousDisplay}</span>
-                                </div>
-                                {/* Weight Input */}
-                                <div className="col-span-3">
-                                  <Input
-                                    type="number"
-                                    placeholder="0"
-                                    value={set.weight || ''}
-                                    onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
-                                    disabled={set.completed}
-                                    className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
-                                  />
-                                </div>
-                                {/* Reps Input */}
-                                <div className="col-span-3">
-                                  <Input
-                                    type="number"
-                                    placeholder="0"
-                                    value={set.reps || ''}
-                                    onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
-                                    disabled={set.completed}
-                                    className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
-                                  />
-                                </div>
+                                
+                                {isTimedSet ? (
+                                  <>
+                                    {/* Duration Input for timed sets */}
+                                    <div className="col-span-4">
+                                      <Input
+                                        type="number"
+                                        placeholder="30"
+                                        value={set.duration || ''}
+                                        onChange={(e) => updateSet(workoutExercise.id, set.id, { duration: parseInt(e.target.value) || 30 })}
+                                        disabled={set.completed || setTimer?.isRunning}
+                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                      />
+                                    </div>
+                                    {/* Timer display and controls */}
+                                    <div className="col-span-5 flex items-center justify-center gap-2">
+                                      {setTimer?.isRunning || (setTimer && setTimer.remaining > 0) ? (
+                                        <div className={cn(
+                                          "flex items-center gap-2 px-3 py-1.5 rounded-lg",
+                                          setTimer.isRunning ? "bg-orange-500/20" : "bg-gray-700"
+                                        )}>
+                                          <span className={cn(
+                                            "font-mono text-lg font-bold",
+                                            setTimer.isRunning ? "text-orange-400" : "text-gray-400"
+                                          )}>
+                                            {Math.floor((setTimer?.remaining || 0) / 60)}:{((setTimer?.remaining || 0) % 60).toString().padStart(2, '0')}
+                                          </span>
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => handleToggleSetTimer(set.id, set.duration || 30, workoutExercise.id)}
+                                            className="h-7 w-7"
+                                          >
+                                            {setTimer.isRunning ? <Pause className="w-4 h-4 text-orange-400" /> : <Play className="w-4 h-4 text-gray-400" />}
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => handleToggleSetTimer(set.id, set.duration || 30, workoutExercise.id)}
+                                          disabled={set.completed}
+                                          className="border-orange-500/50 text-orange-400 hover:bg-orange-500/20"
+                                        >
+                                          <Play className="w-4 h-4 mr-1" />
+                                          Start
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Previous */}
+                                    <div className="col-span-3">
+                                      <span className="text-xs text-gray-500">{previousDisplay}</span>
+                                    </div>
+                                    {/* Weight Input */}
+                                    <div className="col-span-3">
+                                      <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={set.weight || ''}
+                                        onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
+                                        disabled={set.completed}
+                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                      />
+                                    </div>
+                                    {/* Reps Input */}
+                                    <div className="col-span-3">
+                                      <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={set.reps || ''}
+                                        onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
+                                        disabled={set.completed}
+                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                      />
+                                    </div>
+                                  </>
+                                )}
                                 {/* Complete Button / Rest Timer */}
                                 <div className="col-span-2 flex justify-end items-center gap-1">
                                   {/* Per-set rest timer countdown */}
@@ -1526,8 +1619,11 @@ export default function ActiveWorkoutPage() {
                                     <Button
                                       size="icon"
                                       variant="ghost"
-                                      onClick={() => handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')}
-                                      disabled={set.weight === undefined || set.weight === null || !set.reps}
+                                      onClick={() => isTimedSet 
+                                        ? handleCompleteTimedSet(workoutExercise.id, set.id, workoutExercise.exercise?.name || 'Exercise')
+                                        : handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')
+                                      }
+                                      disabled={isTimedSet ? !set.duration : (set.weight === undefined || set.weight === null || !set.reps)}
                                       className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
                                     >
                                       <Check className="w-5 h-5" />

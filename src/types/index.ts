@@ -64,6 +64,7 @@ export interface WorkoutSet {
   type: SetType;
   weight?: number;
   reps?: number;
+  duration?: number; // seconds - for timed exercises like stretches
   completed: boolean;
   previousWeight?: number;
   previousReps?: number;
@@ -72,6 +73,7 @@ export interface WorkoutSet {
   rpe?: number; // Rate of Perceived Exertion 1-10
   drops?: DropSet[]; // Drop sets attached to this set
   isAssisted?: boolean; // For assisted exercises (pull-up machine, dip machine) where weight = assistance
+  isTimed?: boolean; // true for timed exercises (stretches)
 }
 
 // Superset grouping
