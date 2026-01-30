@@ -395,6 +395,18 @@ function WorkoutBuilderContent() {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   
+  // Custom exercise state
+  const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
+  const [customExerciseName, setCustomExerciseName] = useState('');
+  const [customExerciseType, setCustomExerciseType] = useState<'normal' | 'cardio'>('normal');
+  const [customExercises, setCustomExercises] = useState<Array<{ id: string; name: string; type: 'normal' | 'cardio' }>>(() => {
+    if (typeof window !== 'undefined') {
+      return JSON.parse(localStorage.getItem('apex-custom-exercises') || '[]');
+    }
+    return [];
+  });
+  const [pendingBlockId, setPendingBlockId] = useState<string | null>(null);
+  
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
@@ -573,12 +585,60 @@ function WorkoutBuilderContent() {
   
   const estimatedDuration = Math.round(workoutEstimate.totalSeconds / 60);
 
-  const filteredExercises = COMMON_EXERCISES.filter(ex => {
+  // Combine library exercises with custom exercises
+  const allExercises = [
+    ...COMMON_EXERCISES,
+    ...customExercises.map(ce => ({
+      id: ce.id,
+      name: ce.name,
+      pattern: ce.type === 'cardio' ? 'cardio' : 'compound',
+      aliases: [],
+      isCustom: true,
+    })),
+  ];
+  
+  const filteredExercises = allExercises.filter(ex => {
     const search = exerciseSearch.toLowerCase();
     // Search by name or any alias
     return ex.name.toLowerCase().includes(search) ||
-      ex.aliases?.some(alias => alias.toLowerCase().includes(search));
+      (ex.aliases?.some(alias => alias.toLowerCase().includes(search)) ?? false);
   });
+  
+  // Handler to save custom exercise
+  const handleCreateCustomExercise = () => {
+    if (!customExerciseName.trim()) {
+      toast.error('Please enter an exercise name');
+      return;
+    }
+    
+    const newExercise = {
+      id: `custom-${Date.now()}`,
+      name: customExerciseName.trim(),
+      type: customExerciseType,
+    };
+    
+    const updated = [...customExercises, newExercise];
+    setCustomExercises(updated);
+    localStorage.setItem('apex-custom-exercises', JSON.stringify(updated));
+    
+    toast.success(`"${customExerciseName}" added to your exercises!`);
+    
+    // Add to the current block if we have a pending block
+    if (pendingBlockId) {
+      const exerciseToAdd = {
+        id: newExercise.id,
+        name: newExercise.name,
+        pattern: newExercise.type === 'cardio' ? 'cardio' : 'compound',
+        aliases: [],
+      };
+      addExercise(pendingBlockId, exerciseToAdd as typeof COMMON_EXERCISES[0]);
+    }
+    
+    setShowCreateExerciseDialog(false);
+    setCustomExerciseName('');
+    setCustomExerciseType('normal');
+    setPendingBlockId(null);
+  };
 
   const sortBlocks = (blocksToSort: WorkoutBlock[]): WorkoutBlock[] => {
     const order: Record<BlockType, number> = { warmup: 0, work: 1, cardio: 2, circuit: 3, cooldown: 4 };
@@ -1074,16 +1134,14 @@ function WorkoutBuilderContent() {
                     {blockType.label}
                   </Button>
                 ))}
-                {savedBlocks.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowBlockLibraryDialog(true)}
-                    className="gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
-                  >
-                    📚 Block Library
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBlockLibraryDialog(true)}
+                  className="gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+                >
+                  📚 Block Library {savedBlocks.length > 0 && `(${savedBlocks.length})`}
+                </Button>
               </div>
             </div>
           </CardContent>
@@ -1415,19 +1473,50 @@ function WorkoutBuilderContent() {
                         </div>
                         <ScrollArea className="h-40">
                           <div className="space-y-1">
-                            {filteredExercises.map((ex) => (
-                              <Button
-                                key={ex.id}
-                                variant="ghost"
-                                className="w-full justify-start h-auto py-2"
-                                onClick={() => addExercise(block.id, ex)}
-                              >
-                                <div className="text-left">
-                                  <p className="font-medium text-sm">{ex.name}</p>
-                                  <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
-                                </div>
-                              </Button>
-                            ))}
+                            {filteredExercises.length === 0 && exerciseSearch.trim() ? (
+                              <div className="text-center py-4">
+                                <p className="text-sm text-muted-foreground mb-2">No exercises found</p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-emerald-500/50 text-emerald-400"
+                                  onClick={() => {
+                                    setPendingBlockId(block.id);
+                                    setCustomExerciseName(exerciseSearch);
+                                    setShowCreateExerciseDialog(true);
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-1" /> Create "{exerciseSearch}"
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                {filteredExercises.map((ex) => (
+                                  <Button
+                                    key={ex.id}
+                                    variant="ghost"
+                                    className="w-full justify-start h-auto py-2"
+                                    onClick={() => addExercise(block.id, ex)}
+                                  >
+                                    <div className="text-left">
+                                      <p className="font-medium text-sm">{ex.name} {(ex as any).isCustom && <span className="text-xs text-emerald-400">(custom)</span>}</p>
+                                      <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
+                                    </div>
+                                  </Button>
+                                ))}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-emerald-400 hover:text-emerald-300"
+                                  onClick={() => {
+                                    setPendingBlockId(block.id);
+                                    setShowCreateExerciseDialog(true);
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-1" /> Create Custom Exercise
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </ScrollArea>
                         <Button
@@ -2236,6 +2325,72 @@ function WorkoutBuilderContent() {
               </div>
             )}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Custom Exercise Dialog */}
+      <Dialog open={showCreateExerciseDialog} onOpenChange={setShowCreateExerciseDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>✨ Create Custom Exercise</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Exercise Name</Label>
+              <Input
+                value={customExerciseName}
+                onChange={(e) => setCustomExerciseName(e.target.value)}
+                placeholder="e.g., Band Pull-Aparts, Sled Push"
+                className="mt-2"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label>Exercise Type</Label>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  variant={customExerciseType === 'normal' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomExerciseType('normal')}
+                  className="flex-1"
+                >
+                  💪 Normal (Strength)
+                </Button>
+                <Button
+                  variant={customExerciseType === 'cardio' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomExerciseType('cardio')}
+                  className="flex-1"
+                >
+                  🏃 Cardio
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {customExerciseType === 'cardio' 
+                  ? 'Cardio exercises default to time-based sets (e.g., 30s)'
+                  : 'Normal exercises default to rep-based sets (e.g., 8-12 reps)'}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowCreateExerciseDialog(false);
+                  setCustomExerciseName('');
+                  setPendingBlockId(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleCreateCustomExercise}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Create Exercise
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
