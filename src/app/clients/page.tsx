@@ -792,11 +792,6 @@ export default function ClientsPage() {
                             >
                               {client.status}
                             </Badge>
-                            {!client.onboardingComplete && (
-                              <Badge className="bg-orange-500/20 text-orange-400">
-                                Needs Onboarding
-                              </Badge>
-                            )}
                           </div>
                           
                           <div className="flex items-center gap-3 text-sm">

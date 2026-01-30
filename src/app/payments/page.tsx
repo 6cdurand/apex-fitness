@@ -85,11 +85,22 @@ export default function PaymentsPage() {
   const getClientInfo = (clientId: string) => {
     // First check if we have client info embedded in the clients array
     const trainerClient = clients.find(c => c.clientId === clientId && c.trainerId === user?.id);
-    if (trainerClient?.client) {
-      return {
-        name: trainerClient.client.displayName || trainerClient.client.username || 'Client',
-        photo: trainerClient.client.profilePhoto,
-      };
+    if (trainerClient) {
+      // Check nested client object first
+      if (trainerClient.client?.displayName) {
+        return {
+          name: trainerClient.client.displayName,
+          photo: trainerClient.client.profilePhoto,
+        };
+      }
+      // Check for displayName stored directly (from onboarding)
+      const storedName = (trainerClient as any).displayName;
+      if (storedName) {
+        return {
+          name: storedName,
+          photo: (trainerClient as any).profilePhoto,
+        };
+      }
     }
     // Fallback to allUsers lookup
     const clientUser = allUsers.find(u => u.id === clientId);

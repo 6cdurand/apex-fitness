@@ -407,6 +407,10 @@ function WorkoutBuilderContent() {
   });
   const [pendingBlockId, setPendingBlockId] = useState<string | null>(null);
   
+  // Block type selection dialog state
+  const [showBlockTypeDialog, setShowBlockTypeDialog] = useState(false);
+  const [selectedBlockType, setSelectedBlockType] = useState<BlockType | null>(null);
+  
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
@@ -646,6 +650,19 @@ function WorkoutBuilderContent() {
   };
 
   const addBlock = (type: BlockType) => {
+    // Check if there are saved blocks of this type
+    const savedBlocksOfType = savedBlocks.filter(b => b.type === type);
+    if (savedBlocksOfType.length > 0) {
+      // Show dialog to choose between empty or saved block
+      setSelectedBlockType(type);
+      setShowBlockTypeDialog(true);
+      return;
+    }
+    // No saved blocks, add empty block directly
+    addEmptyBlock(type);
+  };
+  
+  const addEmptyBlock = (type: BlockType) => {
     const newBlock: WorkoutBlock = {
       id: `block-${Date.now()}`,
       type,
@@ -659,6 +676,8 @@ function WorkoutBuilderContent() {
       }),
     };
     setBlocks(sortBlocks([...blocks, newBlock]));
+    setShowBlockTypeDialog(false);
+    setSelectedBlockType(null);
   };
 
   const removeBlock = (blockId: string) => {
@@ -2325,6 +2344,80 @@ function WorkoutBuilderContent() {
               </div>
             )}
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block Type Selection Dialog */}
+      <Dialog open={showBlockTypeDialog} onOpenChange={(open) => {
+        setShowBlockTypeDialog(open);
+        if (!open) setSelectedBlockType(null);
+      }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedBlockType && BLOCK_TYPES.find(t => t.value === selectedBlockType)?.icon}
+              Add {selectedBlockType && BLOCK_TYPES.find(t => t.value === selectedBlockType)?.label} Block
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full justify-start h-auto py-3 border-gray-700"
+              onClick={() => selectedBlockType && addEmptyBlock(selectedBlockType)}
+            >
+              <div className="flex items-center gap-3">
+                <Plus className="w-5 h-5 text-gray-400" />
+                <div className="text-left">
+                  <p className="font-medium">Empty Block</p>
+                  <p className="text-xs text-muted-foreground">Start fresh with no exercises</p>
+                </div>
+              </div>
+            </Button>
+            
+            {selectedBlockType && savedBlocks.filter(b => b.type === selectedBlockType).length > 0 && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-gray-700" />
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="bg-gray-900 px-2 text-muted-foreground">or choose from library</span>
+                  </div>
+                </div>
+                
+                <ScrollArea className="max-h-[300px]">
+                  <div className="space-y-2">
+                    {savedBlocks.filter(b => b.type === selectedBlockType).map((block) => {
+                      const blockStyle = getBlockStyles(block.type);
+                      return (
+                        <Button
+                          key={block.id}
+                          variant="outline"
+                          className={`w-full justify-start h-auto py-3 ${blockStyle.border} hover:${blockStyle.bg}`}
+                          onClick={() => {
+                            handleLoadBlock(block);
+                            setShowBlockTypeDialog(false);
+                            setSelectedBlockType(null);
+                          }}
+                        >
+                          <div className="flex items-center gap-3 w-full">
+                            {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
+                            <div className="text-left flex-1">
+                              <p className="font-medium">{block.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {block.exercises?.length || 0} exercises
+                                {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
+                              </p>
+                            </div>
+                          </div>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 

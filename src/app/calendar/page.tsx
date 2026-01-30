@@ -127,8 +127,17 @@ export default function CalendarPage() {
 
   const getClientName = (clientId?: string) => {
     if (!clientId) return 'Unknown';
-    const client = allUsers.find((u: any) => u.id === clientId);
-    return client?.displayName || client?.username || 'Unknown';
+    // First check trainer clients (synced from Supabase)
+    const trainerClient = clients.find(c => c.clientId === clientId);
+    if (trainerClient) {
+      const clientData = trainerClient.client;
+      if (clientData?.displayName) return clientData.displayName;
+      const storedName = (trainerClient as any).displayName;
+      if (storedName) return storedName;
+    }
+    // Fallback to localStorage users
+    const localUser = allUsers.find((u: any) => u.id === clientId);
+    return localUser?.displayName || localUser?.username || 'Unknown';
   };
 
   const handleEditEvent = (event: any) => {
@@ -865,10 +874,9 @@ export default function CalendarPage() {
               >
                 <option value="">{newEventType === 'consultation' ? 'No client (new lead)' : 'Select a client...'}</option>
                 {clients.filter(c => c.trainerId === user?.id).map((client) => {
-                  const clientUser = allUsers.find((u: any) => u.id === client.clientId);
                   return (
                     <option key={client.clientId} value={client.clientId}>
-                      {clientUser?.displayName || clientUser?.username || 'Unknown'}
+                      {getClientName(client.clientId)}
                     </option>
                   );
                 })}

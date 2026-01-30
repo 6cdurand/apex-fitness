@@ -130,6 +130,36 @@ export default function WorkoutPage() {
     setAllUsers(stored);
   }, []);
 
+  // Helper to get client display info - prioritizes trainer store clients (synced from Supabase)
+  const getClientInfo = (clientId: string) => {
+    // First check trainer clients (synced from Supabase) - check client.displayName or notes for stored name
+    const trainerClient = clients.find(c => c.clientId === clientId);
+    if (trainerClient) {
+      // Client data might be in the nested client object or stored in notes/goals
+      const clientData = trainerClient.client;
+      if (clientData?.displayName) {
+        return {
+          displayName: clientData.displayName,
+          profilePhoto: clientData.profilePhoto,
+        };
+      }
+      // Some trainer clients have name stored directly (from onboarding)
+      const storedName = (trainerClient as any).displayName;
+      if (storedName) {
+        return {
+          displayName: storedName,
+          profilePhoto: (trainerClient as any).profilePhoto,
+        };
+      }
+    }
+    // Fallback to localStorage users
+    const localUser = allUsers.find(u => u.id === clientId);
+    return {
+      displayName: localUser?.displayName || localUser?.username,
+      profilePhoto: localUser?.profilePhoto,
+    };
+  };
+
   useEffect(() => {
     if (activeWorkout) {
       router.push('/workout/active');
@@ -398,7 +428,7 @@ export default function WorkoutPage() {
             {dateSessions.length > 0 ? (
             <div className="space-y-3">
               {dateSessions.map((session) => {
-                const clientUser = allUsers.find(u => u.id === session.clientId);
+                const clientInfo = session.clientId ? getClientInfo(session.clientId) : null;
                 const linkedTemplate = session.workoutId ? defaultTemplates.find(t => t.id === session.workoutId) : null;
                 const linkedSessionWorkout = session.workoutId ? sessionWorkouts.find(w => w.id === session.workoutId) : null;
                 const clientProgram = session.clientId ? getActiveProgram(session.clientId) : null;
@@ -431,15 +461,15 @@ export default function WorkoutPage() {
                           {/* Clickable Avatar for Profile Card */}
                           <button
                             onClick={() => {
-                              setSelectedProfileUser(clientUser);
+                              setSelectedProfileUser({ displayName: clientInfo?.displayName, profilePhoto: clientInfo?.profilePhoto });
                               setShowProfileCard(true);
                             }}
                             className="focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-full"
                           >
                             <Avatar className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all">
-                              <AvatarImage src={clientUser?.profilePhoto} />
+                              <AvatarImage src={clientInfo?.profilePhoto} />
                               <AvatarFallback className="bg-gray-800 text-white">
-                                {clientUser?.displayName?.[0] || '?'}
+                                {clientInfo?.displayName?.[0] || '?'}
                               </AvatarFallback>
                             </Avatar>
                           </button>
@@ -449,7 +479,7 @@ export default function WorkoutPage() {
                               onClick={() => router.push(`/clients/${session.clientId}`)}
                               className="font-semibold text-white hover:text-emerald-400 transition-colors text-left"
                             >
-                              {clientUser?.displayName || 'Client'}
+                              {clientInfo?.displayName || 'Client'}
                             </button>
                             <p className="text-sm text-gray-400 flex items-center gap-1">
                               <Clock className="w-3 h-3" />
@@ -470,7 +500,7 @@ export default function WorkoutPage() {
                             onClick={() => {
                               setStartSessionDialog({
                                 clientId: session.clientId!,
-                                clientName: clientUser?.displayName || 'Client',
+                                clientName: clientInfo?.displayName || 'Client',
                                 sessionTitle: session.title || session.notes,
                                 workoutId: session.workoutId,
                               });
