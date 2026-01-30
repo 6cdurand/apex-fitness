@@ -114,6 +114,56 @@ export interface WorkoutBlock {
   }[];
 }
 
+// Saved Block for Block Library
+export interface SavedBlock {
+  id: string;
+  name: string;
+  type: BlockType;
+  trainerId: string;
+  exercises: {
+    id: string;
+    exerciseId: string;
+    exerciseName: string;
+    sets: number;
+    reps: string;
+    repType?: 'reps' | 'time';
+    rest: string;
+    tempo?: string;
+    notes?: string;
+    setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+  }[];
+  // Circuit-specific settings
+  circuitStyle?: 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';
+  circuitRounds?: number;
+  circuitDuration?: number; // seconds for AMRAP/For Time
+  circuitRestBetween?: number; // seconds between rounds
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Block Performance Record - tracks client performance on named blocks
+export interface BlockPerformance {
+  id: string;
+  blockId: string; // Reference to SavedBlock
+  blockName: string;
+  clientId: string;
+  trainerId: string;
+  workoutId: string;
+  // Circuit stats
+  completionTime?: number; // seconds for timed circuits
+  roundsCompleted?: number;
+  // Strength stats
+  totalVolume?: number;
+  exerciseStats?: {
+    exerciseId: string;
+    exerciseName: string;
+    bestWeight?: number;
+    bestReps?: number;
+    oneRepMax?: number;
+  }[];
+  performedAt: string;
+}
+
 // Workout Template
 export interface WorkoutTemplate {
   id: string;

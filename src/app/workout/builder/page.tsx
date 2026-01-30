@@ -358,6 +358,9 @@ function WorkoutBuilderContent() {
     circuitLibrary,
     saveToWorkoutLibrary,
     saveCircuitTemplate,
+    savedBlocks,
+    saveBlock,
+    getBlocksByType,
   } = useTrainerStore();
   
   const client = clients.find(c => c.clientId === clientId);
@@ -384,6 +387,13 @@ function WorkoutBuilderContent() {
   const [showSaveCircuitDialog, setShowSaveCircuitDialog] = useState(false);
   const [circuitTemplateName, setCircuitTemplateName] = useState('');
   const [activeCircuitBlockId, setActiveCircuitBlockId] = useState<string | null>(null);
+  
+  // Block Library state
+  const [showBlockLibraryDialog, setShowBlockLibraryDialog] = useState(false);
+  const [showSaveBlockDialog, setShowSaveBlockDialog] = useState(false);
+  const [blockLibraryName, setBlockLibraryName] = useState('');
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
@@ -771,6 +781,67 @@ function WorkoutBuilderContent() {
     toast.success(`Loaded "${circuit.name}" circuit`);
   };
 
+  // Block Library handlers
+  const handleSaveBlock = () => {
+    if (!blockLibraryName.trim() || !activeBlockId) {
+      toast.error('Please enter a block name');
+      return;
+    }
+    
+    const block = blocks.find(b => b.id === activeBlockId);
+    if (!block) return;
+    
+    saveBlock({
+      name: blockLibraryName,
+      type: block.type,
+      exercises: block.exercises.map(ex => ({
+        id: ex.id,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        sets: ex.sets,
+        reps: ex.reps,
+        repType: ex.repType,
+        rest: ex.rest,
+        tempo: ex.tempo,
+        notes: ex.notes,
+        setStyle: ex.setStyle,
+      })),
+      circuitStyle: block.circuitStyle,
+      circuitRounds: block.rounds,
+      circuitDuration: block.roundDuration ? parseInt(block.roundDuration) * 60 : undefined,
+      circuitRestBetween: block.restBetweenRounds ? parseInt(block.restBetweenRounds) : undefined,
+    });
+    
+    toast.success(`"${blockLibraryName}" saved to block library!`);
+    setShowSaveBlockDialog(false);
+    setBlockLibraryName('');
+    setActiveBlockId(null);
+  };
+
+  const handleLoadBlock = (savedBlock: typeof savedBlocks[0]) => {
+    // Create a new block with the saved block's data
+    const newBlock: WorkoutBlock = {
+      id: `block-${Date.now()}`,
+      type: savedBlock.type,
+      name: savedBlock.name,
+      exercises: savedBlock.exercises.map(ex => ({
+        ...ex,
+        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        movementPattern: 'compound' as MovementPattern,
+        repType: ex.repType || 'reps',
+        setStyle: ex.setStyle || 'fixed',
+      })),
+      circuitStyle: savedBlock.circuitStyle,
+      rounds: savedBlock.circuitRounds,
+      roundDuration: savedBlock.circuitDuration ? `${Math.floor(savedBlock.circuitDuration / 60)}min` : undefined,
+      restBetweenRounds: savedBlock.circuitRestBetween ? `${savedBlock.circuitRestBetween}s` : undefined,
+    };
+    
+    setBlocks(sortBlocks([...blocks, newBlock]));
+    setShowBlockLibraryDialog(false);
+    toast.success(`Loaded "${savedBlock.name}" block`);
+  };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl pb-24">
       <div className="mb-6">
@@ -1003,6 +1074,16 @@ function WorkoutBuilderContent() {
                     {blockType.label}
                   </Button>
                 ))}
+                {savedBlocks.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowBlockLibraryDialog(true)}
+                    className="gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+                  >
+                    📚 Block Library
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
@@ -1031,14 +1112,30 @@ function WorkoutBuilderContent() {
                         {block.type}
                       </Badge>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-red-400 hover:text-red-300"
-                      onClick={() => removeBlock(block.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      {block.exercises.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                          onClick={() => {
+                            setActiveBlockId(block.id);
+                            setBlockLibraryName(block.name || 'My Block');
+                            setShowSaveBlockDialog(true);
+                          }}
+                        >
+                          <Save className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300"
+                        onClick={() => removeBlock(block.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -2020,6 +2117,122 @@ function WorkoutBuilderContent() {
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save Block Dialog */}
+      <Dialog open={showSaveBlockDialog} onOpenChange={setShowSaveBlockDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>💾 Save Block to Library</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Block Name</Label>
+              <Input
+                value={blockLibraryName}
+                onChange={(e) => setBlockLibraryName(e.target.value)}
+                placeholder="e.g., Upper Body Strength, Leg Day Warmup"
+                className="mt-2"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Save this block to reuse it in future workouts. Client performance will be tracked.
+            </p>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowSaveBlockDialog(false);
+                  setActiveBlockId(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSaveBlock}
+                className="flex-1 bg-purple-500 hover:bg-purple-600"
+              >
+                <Save className="h-4 w-4 mr-2" /> Save Block
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block Library Dialog */}
+      <Dialog open={showBlockLibraryDialog} onOpenChange={(open) => {
+        setShowBlockLibraryDialog(open);
+        if (!open) setBlockLibraryFilter('all');
+      }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>📚 Block Library</DialogTitle>
+          </DialogHeader>
+          <div className="flex gap-2 mb-4 flex-wrap">
+            <Button
+              variant={blockLibraryFilter === 'all' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setBlockLibraryFilter('all')}
+            >
+              All
+            </Button>
+            {BLOCK_TYPES.map((bt) => (
+              <Button
+                key={bt.value}
+                variant={blockLibraryFilter === bt.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setBlockLibraryFilter(bt.value)}
+                className="gap-1"
+              >
+                {bt.icon}
+                {bt.label}
+              </Button>
+            ))}
+          </div>
+          <ScrollArea className="h-[400px] pr-4">
+            {savedBlocks.filter(b => blockLibraryFilter === 'all' || b.type === blockLibraryFilter).length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p>No saved blocks yet.</p>
+                <p className="text-sm mt-2">Save blocks from your workouts to reuse them!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {savedBlocks
+                  .filter(b => blockLibraryFilter === 'all' || b.type === blockLibraryFilter)
+                  .map((block) => {
+                    const blockStyle = getBlockStyles(block.type);
+                    return (
+                      <Card 
+                        key={block.id} 
+                        className={`${blockStyle.bg} ${blockStyle.border} cursor-pointer hover:opacity-80 transition-opacity`}
+                        onClick={() => handleLoadBlock(block)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
+                                <h4 className="font-semibold text-white">{block.name}</h4>
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {block.exercises?.length || 0} exercises
+                                {block.circuitStyle && ` • ${block.circuitStyle}`}
+                                {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className={blockStyle.badge}>
+                              {block.type}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
               </div>
             )}
           </ScrollArea>

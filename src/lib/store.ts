@@ -63,6 +63,9 @@ import {
   BookingRequest,
   ClientProgram,
   ClientProgrammingProfile,
+  SavedBlock,
+  BlockPerformance,
+  BlockType,
 } from '@/types';
 import { calculate1RM, exerciseLibrary } from './exercises';
 
@@ -1442,6 +1445,8 @@ interface TrainerState {
   sessionWorkouts: SessionWorkout[]; // Workouts created in builder
   workoutLibrary: SavedWorkout[]; // Saved workout templates
   circuitLibrary: CircuitTemplate[]; // Saved circuit templates
+  savedBlocks: SavedBlock[]; // Block library
+  blockPerformances: BlockPerformance[]; // Client performance records on blocks
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -1543,6 +1548,18 @@ interface TrainerState {
   deleteCircuitTemplate: (circuitId: string) => void;
   getCircuitTemplate: (circuitId: string) => CircuitTemplate | undefined;
   
+  // Block Library
+  saveBlock: (block: Omit<SavedBlock, 'id' | 'trainerId' | 'createdAt' | 'updatedAt'>) => SavedBlock;
+  updateBlock: (blockId: string, updates: Partial<SavedBlock>) => void;
+  deleteBlock: (blockId: string) => void;
+  getBlock: (blockId: string) => SavedBlock | undefined;
+  getBlocksByType: (type: BlockType) => SavedBlock[];
+  
+  // Block Performance Tracking
+  recordBlockPerformance: (performance: Omit<BlockPerformance, 'id' | 'performedAt'>) => BlockPerformance;
+  getBlockPerformances: (blockId: string, clientId?: string) => BlockPerformance[];
+  getBestBlockPerformance: (blockId: string, clientId: string) => BlockPerformance | undefined;
+  
   // Supabase sync
   loadFromSupabase: (trainerId: string) => Promise<void>;
   
@@ -1574,6 +1591,8 @@ export const useTrainerStore = create<TrainerState>()(
       sessionWorkouts: [],
       workoutLibrary: [],
       circuitLibrary: [],
+      savedBlocks: [],
+      blockPerformances: [],
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -2631,6 +2650,89 @@ export const useTrainerStore = create<TrainerState>()(
 
       getCircuitTemplate: (circuitId) => {
         return get().circuitLibrary.find(c => c.id === circuitId);
+      },
+
+      // Block Library
+      saveBlock: (block) => {
+        const trainerId = useAuthStore.getState().user?.id || '';
+        const newBlock: SavedBlock = {
+          ...block,
+          id: uuidv4(),
+          trainerId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        set(state => ({
+          savedBlocks: [...state.savedBlocks, newBlock],
+        }));
+        return newBlock;
+      },
+
+      updateBlock: (blockId, updates) => {
+        set(state => ({
+          savedBlocks: state.savedBlocks.map(b =>
+            b.id === blockId ? { ...b, ...updates, updatedAt: new Date().toISOString() } : b
+          ),
+        }));
+      },
+
+      deleteBlock: (blockId) => {
+        set(state => ({
+          savedBlocks: state.savedBlocks.filter(b => b.id !== blockId),
+        }));
+      },
+
+      getBlock: (blockId) => {
+        return get().savedBlocks.find(b => b.id === blockId);
+      },
+
+      getBlocksByType: (type) => {
+        const trainerId = useAuthStore.getState().user?.id;
+        return get().savedBlocks.filter(b => b.type === type && b.trainerId === trainerId);
+      },
+
+      // Block Performance Tracking
+      recordBlockPerformance: (performance) => {
+        const newPerformance: BlockPerformance = {
+          ...performance,
+          id: uuidv4(),
+          performedAt: new Date().toISOString(),
+        };
+        set(state => ({
+          blockPerformances: [...state.blockPerformances, newPerformance],
+        }));
+        return newPerformance;
+      },
+
+      getBlockPerformances: (blockId, clientId) => {
+        const performances = get().blockPerformances.filter(p => p.blockId === blockId);
+        if (clientId) {
+          return performances.filter(p => p.clientId === clientId);
+        }
+        return performances;
+      },
+
+      getBestBlockPerformance: (blockId, clientId) => {
+        const performances = get().blockPerformances.filter(
+          p => p.blockId === blockId && p.clientId === clientId
+        );
+        if (performances.length === 0) return undefined;
+        
+        // For timed circuits, best is lowest time
+        // For rounds, best is highest rounds
+        // For strength, best is highest volume
+        return performances.reduce((best, current) => {
+          if (current.completionTime && best.completionTime) {
+            return current.completionTime < best.completionTime ? current : best;
+          }
+          if (current.roundsCompleted && best.roundsCompleted) {
+            return current.roundsCompleted > best.roundsCompleted ? current : best;
+          }
+          if (current.totalVolume && best.totalVolume) {
+            return current.totalVolume > best.totalVolume ? current : best;
+          }
+          return best;
+        });
       },
 
       // Load trainer data from Supabase for cross-device sync

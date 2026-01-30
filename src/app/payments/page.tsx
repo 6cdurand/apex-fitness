@@ -253,14 +253,18 @@ export default function PaymentsPage() {
     };
     savePaymentSettings(newSettings);
     
+    // Calculate total based on sessions per week
+    const sessionsCount = editingSettings.sessionsPerWeek || 1;
+    const totalAmount = editingSettings.pricePerSession * sessionsCount;
+    
     // Create payment record
     addPayment({
       clientId: editingSettings.clientId,
       trainerId: user?.id || '',
-      amount: editingSettings.pricePerSession,
+      amount: totalAmount,
       currency: 'NZD',
-      type: 'single_session',
-      description: `Session payment (${editingSettings.method.replace('_', ' ')})`,
+      type: sessionsCount > 1 ? 'session_pack' : 'single_session',
+      description: `${sessionsCount} session${sessionsCount > 1 ? 's' : ''} payment (${editingSettings.method.replace('_', ' ')})`,
       status: 'paid',
       paidAt: new Date().toISOString(),
       method: editingSettings.method,
@@ -271,7 +275,7 @@ export default function PaymentsPage() {
     const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
     if (activePackage) {
       updateSessionPackage(activePackage.id, {
-        paidSessions: (activePackage.paidSessions || 0) + 1,
+        paidSessions: (activePackage.paidSessions || 0) + sessionsCount,
       });
     }
     
@@ -674,7 +678,7 @@ export default function PaymentsPage() {
                   onClick={handleLogPaymentFromSettings}
                 >
                   <DollarSign className="w-4 h-4 mr-2" />
-                  Log Payment (${editingSettings.pricePerSession})
+                  Log Payment (${editingSettings.pricePerSession * (editingSettings.sessionsPerWeek || 1)} for {editingSettings.sessionsPerWeek || 1} session{(editingSettings.sessionsPerWeek || 1) > 1 ? 's' : ''})
                 </Button>
                 <div className="flex gap-2">
                   <Button
