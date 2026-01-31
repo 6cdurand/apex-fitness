@@ -43,7 +43,7 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
-import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase, sendClientInvitation } from '@/lib/supabaseSync';
 import { Workout, PersonalBest } from '@/types';
 
 export default function ClientDetailPage() {
@@ -206,6 +206,11 @@ export default function ClientDetailPage() {
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [editedWorkoutExercises, setEditedWorkoutExercises] = useState<Workout['exercises'] | null>(null);
   
+  // Email editing and invitation state
+  const [showEditEmail, setShowEditEmail] = useState(false);
+  const [editEmail, setEditEmail] = useState('');
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  
   // Calculate per-session cost
   const perSessionCost = paymentAmount && sessionsCovered && parseInt(sessionsCovered) > 0
     ? (parseFloat(paymentAmount) / parseInt(sessionsCovered)).toFixed(2)
@@ -331,6 +336,58 @@ export default function ClientDetailPage() {
       console.error('Sync error:', e);
       toast.error('Failed to sync client account');
     }
+  };
+
+  // Send email invitation to client
+  const handleSendInvitation = async (emailToUse?: string) => {
+    const targetEmail = emailToUse || clientUser?.email;
+    if (!targetEmail) {
+      toast.error('No email address provided');
+      return;
+    }
+    
+    setIsSendingInvite(true);
+    try {
+      const result = await sendClientInvitation(
+        user?.id || '',
+        clientId,
+        targetEmail,
+        user?.displayName || 'Your Trainer',
+        clientUser?.displayName || 'Client'
+      );
+      
+      if (result.success) {
+        toast.success(`Invitation sent to ${targetEmail}!`);
+        setShowEditEmail(false);
+      } else {
+        toast.error(result.error || 'Failed to send invitation');
+      }
+    } catch (e) {
+      console.error('Invitation error:', e);
+      toast.error('Failed to send invitation');
+    }
+    setIsSendingInvite(false);
+  };
+
+  // Update client email and send invitation
+  const handleUpdateEmailAndInvite = async () => {
+    if (!editEmail || !editEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    
+    // Update client email in localStorage
+    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const updatedUsers = storedUsers.map((u: UserType) => 
+      u.id === clientId ? { ...u, email: editEmail } : u
+    );
+    localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
+    
+    // Update local state
+    setAllUsers(updatedUsers);
+    
+    // Send invitation to new email
+    await handleSendInvitation(editEmail);
   };
 
   const handleAddPayment = () => {
@@ -1022,11 +1079,39 @@ export default function ClientDetailPage() {
                     <span className="text-white">{clientUser.weight}kg</span>
                   </div>
                 )}
-                <div className="pt-3 border-t border-gray-800">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-gray-400">Login Email</span>
-                    <span className="text-white text-xs">{clientUser.email}</span>
+                <div className="pt-3 border-t border-gray-800 space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-400">Email</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-white text-xs truncate max-w-[140px]">{clientUser.email}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => {
+                          setEditEmail(clientUser.email || '');
+                          setShowEditEmail(true);
+                        }}
+                      >
+                        <Edit className="w-3 h-3 text-gray-400" />
+                      </Button>
+                    </div>
                   </div>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full text-xs border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                    onClick={() => handleSendInvitation()}
+                    disabled={isSendingInvite}
+                  >
+                    <Send className="w-3 h-3 mr-2" />
+                    {isSendingInvite ? 'Sending...' : 'Send App Invitation'}
+                  </Button>
+                  <p className="text-xs text-gray-500 text-center">
+                    Sends email with link to download app
+                  </p>
+                  
                   <Button
                     variant="outline"
                     size="sm"
@@ -1036,9 +1121,6 @@ export default function ClientDetailPage() {
                     <CheckCircle2 className="w-3 h-3 mr-2" />
                     Sync Account to Cloud
                   </Button>
-                  <p className="text-xs text-gray-500 mt-1 text-center">
-                    Enables login from any device
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -2456,6 +2538,52 @@ export default function ClientDetailPage() {
               </p>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Email Dialog */}
+      <Dialog open={showEditEmail} onOpenChange={setShowEditEmail}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Update Client Email</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-gray-300">Email Address</Label>
+              <Input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                placeholder="client@gmail.com"
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+              <p className="text-xs text-gray-500">
+                Enter the client&apos;s Google email to link their account
+              </p>
+            </div>
+            
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1 border-gray-700"
+                onClick={() => setShowEditEmail(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                onClick={handleUpdateEmailAndInvite}
+                disabled={isSendingInvite || !editEmail}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isSendingInvite ? 'Sending...' : 'Update & Send Invite'}
+              </Button>
+            </div>
+            
+            <p className="text-xs text-gray-500 text-center">
+              This will update the email and send an invitation to the new address
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
     </MainLayout>

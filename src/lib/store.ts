@@ -75,6 +75,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
+  loginWithSupabaseUser: (supabaseUser: { id: string; email: string; displayName: string; profilePhoto?: string }) => Promise<boolean>;
   register: (userData: Partial<User> & { password: string }) => Promise<boolean>;
   logout: () => void;
   deleteAccount: () => void;
@@ -125,6 +126,72 @@ export const useAuthStore = create<AuthState>()(
         console.log('[Auth] ❌ Login failed - user not found in localStorage or Supabase');
         set({ isLoading: false });
         return false;
+      },
+
+      // Login with Supabase Auth user (from Google OAuth, etc.)
+      loginWithSupabaseUser: async (supabaseUser) => {
+        set({ isLoading: true });
+        
+        console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email);
+        
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        
+        // Check if user already exists locally (by email or id)
+        let existingUser = storedUsers.find((u: User) => 
+          u.id === supabaseUser.id || u.email?.toLowerCase() === supabaseUser.email.toLowerCase()
+        );
+        
+        if (existingUser) {
+          console.log('[Auth] ✅ Found existing user, logging in');
+          // Update with latest info from Supabase
+          existingUser = {
+            ...existingUser,
+            id: supabaseUser.id, // Use Supabase ID
+            profilePhoto: supabaseUser.profilePhoto || existingUser.profilePhoto,
+            displayName: supabaseUser.displayName || existingUser.displayName,
+          };
+          
+          // Update in localStorage
+          const updatedUsers = storedUsers.map((u: User) => 
+            u.email?.toLowerCase() === supabaseUser.email.toLowerCase() ? existingUser : u
+          );
+          localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
+          
+          set({ user: existingUser, isAuthenticated: true, isLoading: false });
+          return true;
+        }
+        
+        // Create new user from Supabase auth
+        console.log('[Auth] Creating new user from Supabase auth');
+        const newUser: User = {
+          id: supabaseUser.id,
+          email: supabaseUser.email,
+          username: supabaseUser.email.split('@')[0],
+          displayName: supabaseUser.displayName,
+          profilePhoto: supabaseUser.profilePhoto,
+          gender: 'other',
+          mode: 'user',
+          isTrainer: false,
+          isVerifiedTrainer: false,
+          preferredUnit: 'kg',
+          createdAt: new Date().toISOString(),
+          followers: [],
+          following: [],
+        };
+        
+        // Save to localStorage (no password needed for OAuth users)
+        storedUsers.push({ ...newUser, password: `oauth_${supabaseUser.id}` });
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        
+        // Sync to Supabase users table
+        try {
+          await registerUserToSupabase(newUser, `oauth_${supabaseUser.id}`);
+        } catch (e) {
+          console.error('[Auth] Supabase sync error:', e);
+        }
+        
+        set({ user: newUser, isAuthenticated: true, isLoading: false });
+        return true;
       },
 
       register: async (userData) => {

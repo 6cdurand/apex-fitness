@@ -503,6 +503,47 @@ ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS display_name TEXT;
 ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS profile_photo TEXT;
 
 -- ==========================================
+-- CLIENT INVITATIONS (track email invites sent to clients)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS client_invitations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  trainer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  status TEXT DEFAULT 'pending',  -- 'pending', 'sent', 'accepted', 'expired'
+  invite_token TEXT UNIQUE,
+  sent_at TIMESTAMPTZ,
+  accepted_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days'),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_client_invitations_trainer ON client_invitations(trainer_id);
+CREATE INDEX IF NOT EXISTS idx_client_invitations_email ON client_invitations(email);
+CREATE INDEX IF NOT EXISTS idx_client_invitations_token ON client_invitations(invite_token);
+
+ALTER TABLE client_invitations ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own client invitations" ON client_invitations FOR ALL USING (auth.uid() = trainer_id);
+
+-- Allow clients to read invitations sent to them (by email match)
+CREATE POLICY "Client can view own invitation" ON client_invitations FOR SELECT 
+  USING (email = (SELECT email FROM users WHERE id = auth.uid()));
+
+-- ==========================================
+-- UPDATE WORKOUTS RLS - Allow trainers to manage client workouts
+-- ==========================================
+-- Drop old restrictive policy and create new one
+DROP POLICY IF EXISTS "Own workouts" ON workouts;
+CREATE POLICY "Own or trainer workouts" ON workouts FOR ALL USING (
+  auth.uid() = user_id 
+  OR auth.uid() = assigned_by
+  OR EXISTS (
+    SELECT 1 FROM trainer_clients 
+    WHERE trainer_id = auth.uid() AND client_id = user_id
+  )
+);
+
+-- ==========================================
 -- DONE! All tables created with:
 -- - Proper foreign key relationships
 -- - CASCADE DELETE (when user deleted, all their data is deleted)

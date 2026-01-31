@@ -2199,3 +2199,172 @@ export async function deleteCircuitLibraryFromSupabase(circuitId: string): Promi
     return false;
   }
 }
+
+// ============ CLIENT INVITATIONS ============
+
+// Generate a unique invite token
+function generateInviteToken(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = '';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+// Send client invitation email via Supabase Edge Function
+export async function sendClientInvitation(
+  trainerId: string,
+  clientId: string,
+  clientEmail: string,
+  trainerName: string,
+  clientName: string
+): Promise<{ success: boolean; inviteToken?: string; error?: string }> {
+  if (!isSupabaseConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    const inviteToken = generateInviteToken();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+
+    // Create invitation record in database
+    const { error: dbError } = await supabase.from('client_invitations').upsert({
+      trainer_id: trainerId,
+      client_id: clientId,
+      email: clientEmail,
+      status: 'pending',
+      invite_token: inviteToken,
+      expires_at: expiresAt,
+      created_at: new Date().toISOString(),
+    }, {
+      onConflict: 'invite_token',
+    });
+
+    if (dbError) {
+      console.error('[Client Invitation] DB Error:', dbError.message);
+      return { success: false, error: dbError.message };
+    }
+
+    // Call Supabase Edge Function to send email
+    const { data, error: fnError } = await supabase.functions.invoke('send-client-invite', {
+      body: {
+        to: clientEmail,
+        clientName,
+        trainerName,
+        inviteToken,
+        appUrl: typeof window !== 'undefined' ? window.location.origin : 'https://apex-fitness.app',
+      },
+    });
+
+    if (fnError) {
+      console.error('[Client Invitation] Function Error:', fnError.message);
+      // Update status to failed
+      await supabase.from('client_invitations')
+        .update({ status: 'failed' })
+        .eq('invite_token', inviteToken);
+      return { success: false, error: fnError.message };
+    }
+
+    // Update invitation status to sent
+    await supabase.from('client_invitations')
+      .update({ status: 'sent', sent_at: new Date().toISOString() })
+      .eq('invite_token', inviteToken);
+
+    console.log('[Client Invitation] ✅ Invitation sent to:', clientEmail);
+    return { success: true, inviteToken };
+  } catch (e) {
+    console.error('[Client Invitation] Exception:', e);
+    return { success: false, error: 'Failed to send invitation' };
+  }
+}
+
+// Check invitation status by token
+export async function checkInvitationByToken(token: string): Promise<{
+  valid: boolean;
+  trainerId?: string;
+  clientId?: string;
+  email?: string;
+  expired?: boolean;
+}> {
+  if (!isSupabaseConfigured()) {
+    return { valid: false };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('client_invitations')
+      .select('*')
+      .eq('invite_token', token)
+      .single();
+
+    if (error || !data) {
+      return { valid: false };
+    }
+
+    const isExpired = new Date(data.expires_at) < new Date();
+    if (isExpired) {
+      return { valid: false, expired: true };
+    }
+
+    return {
+      valid: true,
+      trainerId: data.trainer_id,
+      clientId: data.client_id,
+      email: data.email,
+    };
+  } catch (e) {
+    return { valid: false };
+  }
+}
+
+// Mark invitation as accepted
+export async function acceptInvitation(token: string, userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    const { error } = await supabase
+      .from('client_invitations')
+      .update({
+        status: 'accepted',
+        accepted_at: new Date().toISOString(),
+        client_id: userId,
+      })
+      .eq('invite_token', token);
+
+    return !error;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Get pending invitations for a trainer
+export async function getPendingInvitations(trainerId: string): Promise<Array<{
+  id: string;
+  email: string;
+  status: string;
+  sentAt?: string;
+  clientId?: string;
+}>> {
+  if (!isSupabaseConfigured()) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('client_invitations')
+      .select('*')
+      .eq('trainer_id', trainerId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) return [];
+
+    return data.map(inv => ({
+      id: inv.id,
+      email: inv.email,
+      status: inv.status,
+      sentAt: inv.sent_at,
+      clientId: inv.client_id,
+    }));
+  } catch (e) {
+    return [];
+  }
+}
