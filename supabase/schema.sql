@@ -523,11 +523,9 @@ CREATE INDEX IF NOT EXISTS idx_client_invitations_email ON client_invitations(em
 CREATE INDEX IF NOT EXISTS idx_client_invitations_token ON client_invitations(invite_token);
 
 ALTER TABLE client_invitations ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Own client invitations" ON client_invitations FOR ALL USING (auth.uid() = trainer_id);
-
--- Allow clients to read invitations sent to them (by email match)
-CREATE POLICY "Client can view own invitation" ON client_invitations FOR SELECT 
-  USING (email = (SELECT email FROM users WHERE id = auth.uid()));
+-- Permissive policy since app uses custom auth (not Supabase Auth)
+CREATE POLICY "Allow all client invitations" ON client_invitations 
+  FOR ALL USING (true) WITH CHECK (true);
 
 -- ==========================================
 -- UPDATE WORKOUTS RLS - Allow trainers to manage client workouts

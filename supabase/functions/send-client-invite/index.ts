@@ -41,7 +41,7 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'APEX Fitness <noreply@apex-fitness.app>',
+        from: 'APEX Fitness <onboarding@resend.dev>',
         to: [to],
         subject: `${trainerName} has invited you to APEX Fitness`,
         html: `
