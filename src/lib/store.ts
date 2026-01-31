@@ -293,9 +293,15 @@ interface WorkoutState {
   // Edit completed workouts
   updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => void;
   removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => void;
+  removeSetFromCompletedWorkout: (workoutId: string, exerciseId: string, setId: string) => void;
   
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
+  
+  // Exercise notes (persistent across workouts)
+  exerciseNotes: Record<string, string>;  // exerciseId -> notes
+  getExerciseNotes: (exerciseId: string) => string;
+  setExerciseNotes: (exerciseId: string, notes: string) => void;
   
   // Supabase sync for workout history
   loadWorkoutHistoryFromSupabase: (userId: string, isTrainer?: boolean) => Promise<void>;
@@ -308,6 +314,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       workoutHistory: [],
       templates: [],
       personalBests: [],
+      exerciseNotes: {},
       workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
       restTimer: { isRunning: false, seconds: 0, type: 'rest' },
       currentClientId: null,
@@ -1135,6 +1142,51 @@ export const useWorkoutStore = create<WorkoutState>()(
           syncWorkoutToSupabase(updatedWorkout);
           get().recalculatePBsForUser(workout.userId);
         }
+      },
+
+      removeSetFromCompletedWorkout: (workoutId: string, exerciseId: string, setId: string) => {
+        const workout = get().workoutHistory.find(w => w.id === workoutId);
+        if (!workout) return;
+        
+        const updatedExercises = workout.exercises.map(ex => {
+          if (ex.id === exerciseId) {
+            return {
+              ...ex,
+              sets: ex.sets
+                .filter(s => s.id !== setId)
+                .map((s, idx) => ({ ...s, setNumber: idx + 1 })),
+            };
+          }
+          return ex;
+        });
+        
+        set(state => ({
+          workoutHistory: state.workoutHistory.map(w =>
+            w.id === workoutId ? { ...w, exercises: updatedExercises } : w
+          ),
+        }));
+        
+        // Sync to Supabase and recalculate PBs (this handles PB reversion)
+        const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
+        if (updatedWorkout) {
+          syncWorkoutToSupabase(updatedWorkout);
+          get().recalculatePBsForUser(workout.userId);
+        }
+      },
+
+      // Exercise notes - persist across workouts
+      getExerciseNotes: (exerciseId: string) => {
+        return get().exerciseNotes[exerciseId] || '';
+      },
+
+      setExerciseNotes: (exerciseId: string, notes: string) => {
+        set(state => ({
+          exerciseNotes: {
+            ...state.exerciseNotes,
+            [exerciseId]: notes,
+          },
+        }));
+        // TODO: Sync to Supabase when exercise_notes table is ready
       },
 
       recalculatePBsForUser: (userId: string) => {

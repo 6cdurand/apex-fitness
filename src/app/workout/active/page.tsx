@@ -70,6 +70,8 @@ export default function ActiveWorkoutPage() {
     resetRestTimer,
     getPBForExercise,
     currentClientId,
+    getExerciseNotes,
+    setExerciseNotes,
   } = useWorkoutStore();
   const _medalStore = useMedalStore(); // Medal earning handled by store.ts endWorkout
   const { createPost } = useSocialStore();
@@ -1418,12 +1420,14 @@ export default function ActiveWorkoutPage() {
                                 variant="ghost"
                                 onClick={() => {
                                   setSelectedExerciseForNotes(workoutExercise);
-                                  setExerciseNotesText(workoutExercise.notes || '');
+                                  // Load persistent notes if workout notes are empty
+                                  const persistentNotes = getExerciseNotes(workoutExercise.exerciseId);
+                                  setExerciseNotesText(workoutExercise.notes || persistentNotes || '');
                                   setShowExerciseNotesDialog(true);
                                 }}
                                 className={cn(
                                   "h-8 w-8",
-                                  workoutExercise.trainerNotes || workoutExercise.notes 
+                                  workoutExercise.trainerNotes || workoutExercise.notes || getExerciseNotes(workoutExercise.exerciseId)
                                     ? "text-amber-400 hover:text-amber-300" 
                                     : "text-gray-500 hover:text-gray-300"
                                 )}
@@ -2502,8 +2506,9 @@ export default function ActiveWorkoutPage() {
         open={showExerciseNotesDialog} 
         onOpenChange={(open) => {
           if (!open && selectedExerciseForNotes) {
-            // Save notes when closing
+            // Save notes when closing - to both workout and persistent store
             updateExercise(selectedExerciseForNotes.id, { notes: exerciseNotesText });
+            setExerciseNotes(selectedExerciseForNotes.exerciseId, exerciseNotesText);
           }
           setShowExerciseNotesDialog(open);
           if (!open) {
@@ -2541,7 +2546,10 @@ export default function ActiveWorkoutPage() {
           <Button
             onClick={() => {
               if (selectedExerciseForNotes) {
+                // Save to current workout exercise
                 updateExercise(selectedExerciseForNotes.id, { notes: exerciseNotesText });
+                // Also save to persistent store so notes appear next time
+                setExerciseNotes(selectedExerciseForNotes.exerciseId, exerciseNotesText);
               }
               setShowExerciseNotesDialog(false);
               setSelectedExerciseForNotes(null);
@@ -2549,7 +2557,7 @@ export default function ActiveWorkoutPage() {
             }}
             className="w-full bg-amber-500 hover:bg-amber-600"
           >
-            Done
+            Save Notes
           </Button>
         </DialogContent>
       </Dialog>

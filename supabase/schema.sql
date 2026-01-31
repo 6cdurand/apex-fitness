@@ -391,6 +391,118 @@ ALTER TABLE circuit_library ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Own circuit library" ON circuit_library FOR ALL USING (true);
 
 -- ==========================================
+-- SAVED BLOCKS (block library for reusable workout blocks)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS saved_blocks (
+  id TEXT PRIMARY KEY,
+  trainer_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL,  -- 'warmup', 'work', 'circuit', 'cooldown', 'cardio'
+  exercises JSONB NOT NULL DEFAULT '[]',
+  circuit_rounds INTEGER,
+  circuit_duration TEXT,
+  rest_between_rounds TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_blocks_trainer ON saved_blocks(trainer_id);
+CREATE INDEX IF NOT EXISTS idx_saved_blocks_type ON saved_blocks(type);
+
+ALTER TABLE saved_blocks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own saved blocks" ON saved_blocks FOR ALL USING (true);
+
+-- ==========================================
+-- BLOCK PERFORMANCES (track client performance on blocks)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS block_performances (
+  id TEXT PRIMARY KEY,
+  block_id TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  trainer_id TEXT NOT NULL,
+  workout_id TEXT,
+  completion_time INTEGER,  -- seconds
+  total_rounds INTEGER,
+  total_volume NUMERIC,
+  exercise_stats JSONB,
+  performed_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_block_performances_block ON block_performances(block_id);
+CREATE INDEX IF NOT EXISTS idx_block_performances_client ON block_performances(client_id);
+CREATE INDEX IF NOT EXISTS idx_block_performances_trainer ON block_performances(trainer_id);
+
+ALTER TABLE block_performances ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own block performances" ON block_performances FOR ALL USING (true);
+
+-- ==========================================
+-- CUSTOM EXERCISES (user-created exercises)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS custom_exercises (
+  id TEXT PRIMARY KEY,
+  trainer_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'normal',  -- 'normal' or 'cardio'
+  category TEXT,
+  muscles TEXT[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_custom_exercises_trainer ON custom_exercises(trainer_id);
+
+ALTER TABLE custom_exercises ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own custom exercises" ON custom_exercises FOR ALL USING (true);
+
+-- ==========================================
+-- EXERCISE NOTES (persistent notes per exercise per user)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS exercise_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  exercise_id TEXT NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, exercise_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_exercise_notes_user ON exercise_notes(user_id);
+CREATE INDEX IF NOT EXISTS idx_exercise_notes_exercise ON exercise_notes(exercise_id);
+
+ALTER TABLE exercise_notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own exercise notes" ON exercise_notes FOR ALL USING (auth.uid() = user_id);
+
+-- ==========================================
+-- PERSONAL BESTS HISTORY (track PB history for reversion)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS personal_bests_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  exercise_id TEXT NOT NULL,
+  weight NUMERIC,
+  reps INTEGER,
+  one_rm NUMERIC,
+  workout_id TEXT,
+  set_id TEXT,
+  achieved_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pb_history_user ON personal_bests_history(user_id);
+CREATE INDEX IF NOT EXISTS idx_pb_history_exercise ON personal_bests_history(exercise_id);
+CREATE INDEX IF NOT EXISTS idx_pb_history_workout ON personal_bests_history(workout_id);
+
+ALTER TABLE personal_bests_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Own pb history" ON personal_bests_history FOR ALL USING (auth.uid() = user_id);
+
+-- ==========================================
+-- TRAINER CLIENTS - Add display_name and profile_photo columns
+-- ==========================================
+ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS display_name TEXT;
+ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS profile_photo TEXT;
+
+-- ==========================================
 -- DONE! All tables created with:
 -- - Proper foreign key relationships
 -- - CASCADE DELETE (when user deleted, all their data is deleted)
