@@ -53,14 +53,12 @@ export default function StrengthCategoryPage() {
   const userPBs = personalBests.filter(pb => pb.userId === user.id);
   const category = calculateCategory(categoryDef, userPBs, isMale);
   
-  // Debug logging
-  console.log('[Strength Category] Category:', categoryId, 'Slices:', category.slices.map(s => ({
-    name: s.name,
-    oneRM: s.oneRM,
-    tier: s.tier,
-    progressPercent: s.progressPercent,
-    contributingLift: s.contributingLift
-  })));
+  // Debug logging - trace progressPercent values
+  console.log('=== STRENGTH CATEGORY DEBUG ===');
+  console.log('Category:', categoryId, 'Overall tier:', category.tier);
+  category.slices.forEach(s => {
+    console.log(`Slice: ${s.name} | oneRM: ${s.oneRM}kg | Tier: ${s.tier} | Progress: ${s.progressPercent}% | Lift: ${s.contributingLift}`);
+  });
   
   const getTierRangeForSlice = (slice: StrengthSlice) => {
     if (!slice.contributingLift) return null;
