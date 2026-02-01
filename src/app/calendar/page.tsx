@@ -117,7 +117,7 @@ export default function CalendarPage() {
 
   const getEventColor = (type: string) => {
     switch (type) {
-      case 'workout': return 'bg-emerald-500';
+      case 'workout': return 'bg-sky-500';
       case 'consultation': return 'bg-blue-500';
       case 'assessment': return 'bg-purple-500';
       case 'rest': return 'bg-gray-500';
@@ -372,7 +372,7 @@ export default function CalendarPage() {
                                 key={i}
                                 className={cn(
                                   "w-1.5 h-1.5 rounded-full", 
-                                  hasWorkout ? "bg-emerald-400 ring-1 ring-emerald-400/50" : getEventColor(event.type)
+                                  hasWorkout ? "bg-sky-400 ring-1 ring-sky-400/50" : getEventColor(event.type)
                                 )}
                               />
                             );
@@ -521,7 +521,7 @@ export default function CalendarPage() {
                               <div className="flex items-center gap-2">
                                 <p className="font-medium text-white text-sm">{event.title}</p>
                                 {hasWorkout && (
-                                  <Badge className="text-xs bg-emerald-500/20 text-emerald-400 px-1 py-0">
+                                  <Badge className="text-xs bg-sky-500/20 text-sky-400 px-1 py-0">
                                     <Dumbbell className="w-3 h-3" />
                                   </Badge>
                                 )}
@@ -576,7 +576,7 @@ export default function CalendarPage() {
                               {event.type}
                             </Badge>
                             {event.workoutId || sessionWorkouts.find(w => w.eventId === event.id) ? (
-                              <Badge className="text-xs bg-emerald-500/20 text-emerald-400">
+                              <Badge className="text-xs bg-sky-500/20 text-sky-400">
                                 <Dumbbell className="w-3 h-3 mr-1" />
                                 Planned
                               </Badge>
@@ -628,8 +628,8 @@ export default function CalendarPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                  <Dumbbell className="w-5 h-5 text-emerald-400" />
+                <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
+                  <Dumbbell className="w-5 h-5 text-sky-400" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold text-white">
@@ -726,8 +726,8 @@ export default function CalendarPage() {
               <div className="border-t border-gray-700 pt-4">
                 <Label className="text-gray-400 mb-2 block">Session Workout</Label>
                 {editingEvent?.workoutId ? (
-                  <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
-                    <div className="flex items-center gap-2 text-emerald-400">
+                  <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
+                    <div className="flex items-center gap-2 text-sky-400">
                       <Dumbbell className="w-4 h-4" />
                       <span className="text-sm font-medium">Workout assigned</span>
                     </div>
@@ -773,7 +773,7 @@ export default function CalendarPage() {
 
             <div className="flex gap-2 pt-4">
               <Button
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-sky-500 hover:bg-sky-600"
                 onClick={handleSaveEdit}
               >
                 Save Changes
@@ -804,7 +804,7 @@ export default function CalendarPage() {
                   className={cn(
                     "p-3 rounded-lg border cursor-pointer transition-colors",
                     selectedTemplateId === template.id
-                      ? "border-emerald-500 bg-emerald-500/10"
+                      ? "border-sky-500 bg-sky-500/10"
                       : "border-gray-700 hover:border-gray-600"
                   )}
                   onClick={() => setSelectedTemplateId(template.id)}
@@ -826,7 +826,7 @@ export default function CalendarPage() {
               Cancel
             </Button>
             <Button
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              className="flex-1 bg-sky-500 hover:bg-sky-600"
               disabled={!selectedTemplateId}
               onClick={() => {
                 if (editingEvent && selectedTemplateId) {
@@ -971,7 +971,7 @@ export default function CalendarPage() {
             </div>
 
             <Button
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               onClick={handleAddEvent}
               disabled={(!newEventClient && newEventType !== 'consultation') || !newEventDate}
             >

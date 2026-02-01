@@ -225,7 +225,7 @@ export default function TrainerClientDetailPage() {
                         <Badge
                           className={
                             clientRecord.status === 'active'
-                              ? 'bg-emerald-500/20 text-emerald-400'
+                              ? 'bg-sky-500/20 text-sky-400'
                               : 'bg-amber-500/20 text-amber-400'
                           }
                         >
@@ -268,7 +268,7 @@ export default function TrainerClientDetailPage() {
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Target className="w-5 h-5 text-emerald-400" />
+                  <Target className="w-5 h-5 text-sky-400" />
                   Goals
                 </CardTitle>
               </CardHeader>
@@ -321,7 +321,7 @@ export default function TrainerClientDetailPage() {
                         <Badge
                           className={
                             s.status === 'completed'
-                              ? 'bg-emerald-500/20 text-emerald-400'
+                              ? 'bg-sky-500/20 text-sky-400'
                               : 'bg-blue-500/20 text-blue-400'
                           }
                         >
@@ -360,7 +360,7 @@ export default function TrainerClientDetailPage() {
                       </div>
                       <div className="text-right">
                         {ex.best_weight && (
-                          <p className="text-sm text-emerald-400 font-medium">{ex.best_weight}kg</p>
+                          <p className="text-sm text-sky-400 font-medium">{ex.best_weight}kg</p>
                         )}
                         {ex.best_reps && (
                           <p className="text-xs text-gray-500">{ex.best_reps} reps</p>
@@ -406,7 +406,7 @@ export default function TrainerClientDetailPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Badge className={pkg.status === 'active' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-400'}>
+                          <Badge className={pkg.status === 'active' ? 'bg-sky-500/20 text-sky-400' : 'bg-gray-500/20 text-gray-400'}>
                             {pkg.status}
                           </Badge>
                           <Button
@@ -439,7 +439,7 @@ export default function TrainerClientDetailPage() {
                         </div>
                         <div className="p-2 bg-gray-900 rounded-lg">
                           <p className="text-gray-500">Remaining</p>
-                          <p className="text-emerald-400 font-medium">{pkg.remainingSessions} sessions</p>
+                          <p className="text-sky-400 font-medium">{pkg.remainingSessions} sessions</p>
                         </div>
                         <div className="p-2 bg-gray-900 rounded-lg">
                           <p className="text-gray-500">Purchased</p>
@@ -478,7 +478,7 @@ export default function TrainerClientDetailPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           <Badge className={
-                            session.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 
+                            session.status === 'completed' ? 'bg-sky-500/20 text-sky-400' : 
                             session.status === 'no_show' ? 'bg-red-500/20 text-red-400' :
                             'bg-blue-500/20 text-blue-400'
                           }>
@@ -498,7 +498,7 @@ export default function TrainerClientDetailPage() {
                           <Button
                             size="sm"
                             onClick={() => markSessionComplete(session.id)}
-                            className="flex-1 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 h-8"
+                            className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 h-8"
                           >
                             <Check className="w-3 h-3 mr-1" /> Complete
                           </Button>
@@ -522,7 +522,7 @@ export default function TrainerClientDetailPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-white text-lg flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-emerald-400" />
+                <Dumbbell className="w-5 h-5 text-sky-400" />
                 Client Workouts
               </CardTitle>
             </CardHeader>
@@ -629,7 +629,7 @@ export default function TrainerClientDetailPage() {
                     toast.success('Package updated successfully');
                   }
                 }}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-sky-500 hover:bg-sky-600"
               >
                 Save Changes
               </Button>

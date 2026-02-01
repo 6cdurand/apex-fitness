@@ -215,12 +215,34 @@ export const milestoneMedals: MedalDefinition[] = [
   { id: 'streak-30', name: 'Monthly Master', description: 'Work out 30 days in a row', icon: '🔥', tier: 'gold', category: 'consistency', rarity: 'rare', requirement: '30 day streak', target: 30 },
   { id: 'streak-60', name: 'Iron Will', description: 'Work out 60 days in a row', icon: '🔥', tier: 'platinum', category: 'consistency', rarity: 'epic', requirement: '60 day streak', target: 60 },
   { id: 'streak-100', name: 'Unstoppable', description: 'Work out 100 days in a row', icon: '🔥', tier: 'diamond', category: 'consistency', rarity: 'legendary', requirement: '100 day streak', target: 100 },
+  
+  // TRAINER MEDALS - Client Count
+  { id: 'trainer-first-client', name: 'First Client', description: 'Get your first training client', icon: '👤', tier: 'bronze', category: 'trainer', rarity: 'common', requirement: '1 client', target: 1 },
+  { id: 'trainer-5-clients', name: 'Growing Roster', description: 'Train 5 clients', icon: '👥', tier: 'bronze', category: 'trainer', rarity: 'uncommon', requirement: '5 clients', target: 5 },
+  { id: 'trainer-10-clients', name: 'Popular Trainer', description: 'Train 10 clients', icon: '🌟', tier: 'silver', category: 'trainer', rarity: 'rare', requirement: '10 clients', target: 10 },
+  { id: 'trainer-25-clients', name: 'Client Magnet', description: 'Train 25 clients', icon: '💫', tier: 'gold', category: 'trainer', rarity: 'epic', requirement: '25 clients', target: 25 },
+  { id: 'trainer-50-clients', name: 'Training Empire', description: 'Train 50 clients', icon: '👑', tier: 'platinum', category: 'trainer', rarity: 'legendary', requirement: '50 clients', target: 50 },
+  
+  // TRAINER MEDALS - Sessions Conducted
+  { id: 'trainer-first-session', name: 'Session One', description: 'Complete your first training session', icon: '🎯', tier: 'bronze', category: 'trainer', rarity: 'common', requirement: '1 session', target: 1 },
+  { id: 'trainer-25-sessions', name: 'Session Pro', description: 'Complete 25 training sessions', icon: '📋', tier: 'bronze', category: 'trainer', rarity: 'uncommon', requirement: '25 sessions', target: 25 },
+  { id: 'trainer-100-sessions', name: 'Session Master', description: 'Complete 100 training sessions', icon: '🏆', tier: 'silver', category: 'trainer', rarity: 'rare', requirement: '100 sessions', target: 100 },
+  { id: 'trainer-500-sessions', name: 'Session Legend', description: 'Complete 500 training sessions', icon: '⭐', tier: 'gold', category: 'trainer', rarity: 'epic', requirement: '500 sessions', target: 500 },
+  { id: 'trainer-1000-sessions', name: 'Session God', description: 'Complete 1000 training sessions', icon: '💎', tier: 'platinum', category: 'trainer', rarity: 'legendary', requirement: '1000 sessions', target: 1000 },
+  
+  // TRAINER MEDALS - Revenue
+  { id: 'trainer-first-payment', name: 'First Dollar', description: 'Receive your first payment', icon: '💵', tier: 'bronze', category: 'trainer', rarity: 'common', requirement: '$1 earned', target: 1 },
+  { id: 'trainer-500-revenue', name: 'Side Hustle', description: 'Earn $500 from training', icon: '💰', tier: 'bronze', category: 'trainer', rarity: 'uncommon', requirement: '$500 earned', target: 500 },
+  { id: 'trainer-2500-revenue', name: 'Part Timer', description: 'Earn $2,500 from training', icon: '💳', tier: 'silver', category: 'trainer', rarity: 'rare', requirement: '$2,500 earned', target: 2500 },
+  { id: 'trainer-10000-revenue', name: 'Full Timer', description: 'Earn $10,000 from training', icon: '🤑', tier: 'gold', category: 'trainer', rarity: 'epic', requirement: '$10,000 earned', target: 10000 },
+  { id: 'trainer-50000-revenue', name: 'Fitness Mogul', description: 'Earn $50,000 from training', icon: '💎', tier: 'platinum', category: 'trainer', rarity: 'legendary', requirement: '$50,000 earned', target: 50000 },
 ];
 
 // Medal priority order (1 = highest priority)
 export const MEDAL_PRIORITY: Record<string, number> = {
   'milestone': 1,   // Exercise-specific weight achievements (highest)
   'strength': 1,    // Strength milestones (same as milestone)
+  'trainer': 1,     // Trainer milestones (clients, revenue, sessions)
   'consistency': 2, // Streak medals
   'workout': 3,     // Workout count medals
   'special': 3,     // Special achievements

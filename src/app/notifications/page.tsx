@@ -44,7 +44,7 @@ export default function NotificationsPage() {
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
       case 'weekly_report': return <Calendar className="w-5 h-5 text-blue-400" />;
-      case 'workout_assigned': return <Dumbbell className="w-5 h-5 text-emerald-400" />;
+      case 'workout_assigned': return <Dumbbell className="w-5 h-5 text-sky-400" />;
       case 'friend_request': return <Users className="w-5 h-5 text-purple-400" />;
       case 'trainer_request': return <Users className="w-5 h-5 text-rose-400" />;
       case 'achievement': return <Trophy className="w-5 h-5 text-amber-400" />;
@@ -58,7 +58,7 @@ export default function NotificationsPage() {
   const getNotificationBg = (type: Notification['type']) => {
     switch (type) {
       case 'weekly_report': return 'bg-blue-500/20';
-      case 'workout_assigned': return 'bg-emerald-500/20';
+      case 'workout_assigned': return 'bg-sky-500/20';
       case 'friend_request': return 'bg-purple-500/20';
       case 'trainer_request': return 'bg-rose-500/20';
       case 'achievement': return 'bg-amber-500/20';
@@ -81,7 +81,7 @@ export default function NotificationsPage() {
               size="sm" 
               variant="ghost"
               onClick={markAllNotificationsRead}
-              className="text-emerald-400"
+              className="text-sky-400"
             >
               <CheckCheck className="w-4 h-4 mr-2" />
               Mark all read
@@ -111,7 +111,7 @@ export default function NotificationsPage() {
                   key={notification.id}
                   className={cn(
                     "bg-gray-900 border-gray-800 cursor-pointer transition-colors",
-                    !notification.read && "bg-gray-900/80 border-l-2 border-l-emerald-500"
+                    !notification.read && "bg-gray-900/80 border-l-2 border-l-sky-500"
                   )}
                   onClick={() => {
                     markNotificationRead(notification.id);
@@ -143,7 +143,7 @@ export default function NotificationsPage() {
                         </p>
                       </div>
                       {!notification.read && (
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0 mt-2" />
+                        <div className="w-2 h-2 rounded-full bg-sky-500 flex-shrink-0 mt-2" />
                       )}
                     </div>
                   </CardContent>

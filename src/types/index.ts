@@ -19,6 +19,8 @@ export interface User {
   isVerifiedTrainer: boolean;
   trainerSpecializations?: string[];
   preferredUnit: WeightUnit;
+  exerciseUnit?: WeightUnit; // kg or lb for exercise displays
+  isPublicProfile?: boolean; // true = anyone can view, false = private
   createdAt: string;
   followers: string[];
   following: string[];
@@ -273,7 +275,7 @@ export interface StrengthRating {
 
 // Medals & Achievements
 export type MedalTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
-export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special';
+export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special' | 'trainer';
 export type MedalRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface MedalDefinition {
@@ -302,6 +304,8 @@ export interface Medal {
   earnedAt?: string;
   progress: number;
   target: number;
+  // Track how many times the medal condition has been met
+  timesEarned: number;
   // For evolving medals
   isEvolving?: boolean;
   currentEvolutionTier?: MedalTier;

@@ -62,7 +62,7 @@ export default function FeedPage() {
 
   const getPostIcon = (type: FeedPost['type']) => {
     switch (type) {
-      case 'workout_complete': return <Dumbbell className="w-4 h-4 text-emerald-400" />;
+      case 'workout_complete': return <Dumbbell className="w-4 h-4 text-sky-400" />;
       case 'pb_achieved': return <Trophy className="w-4 h-4 text-amber-400" />;
       case 'medal_earned': return <Medal className="w-4 h-4 text-purple-400" />;
       case 'milestone': return <Sparkles className="w-4 h-4 text-blue-400" />;
@@ -73,7 +73,7 @@ export default function FeedPage() {
   const getPostBadge = (type: FeedPost['type']) => {
     switch (type) {
       case 'workout_complete': return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-400 text-xs">
           <Dumbbell className="w-3 h-3" /> Workout
         </span>
       );
@@ -102,7 +102,7 @@ export default function FeedPage() {
         action={
           <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>
             <DialogTrigger asChild>
-              <Button size="sm" className="bg-emerald-500 hover:bg-emerald-600">
+              <Button size="sm" className="bg-sky-500 hover:bg-sky-600">
                 Post
               </Button>
             </DialogTrigger>
@@ -125,7 +125,7 @@ export default function FeedPage() {
                   <Button 
                     onClick={handleCreatePost}
                     disabled={!newPostContent.trim()}
-                    className="bg-emerald-500 hover:bg-emerald-600"
+                    className="bg-sky-500 hover:bg-sky-600"
                   >
                     <Send className="w-4 h-4 mr-2" />
                     Post
@@ -138,19 +138,18 @@ export default function FeedPage() {
       />
 
       <ScrollArea className="flex-1">
-        <div className="px-4 py-6 space-y-4">
+        <div className="px-5 py-6 space-y-4">
           {feedPosts.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-slate-900/90 border-slate-800/50 backdrop-blur-sm">
               <CardContent className="py-16 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-                  <Sparkles className="w-10 h-10 text-gray-600" />
+                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-slate-800 flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-slate-600" />
                 </div>
-                <h3 className="font-semibold text-gray-400 mb-2">Your feed is empty</h3>
-                <p className="text-sm text-gray-500 mb-4">
+                <h3 className="font-semibold text-slate-300 mb-2">Your feed is empty</h3>
+                <p className="text-sm text-slate-500 mb-6">
                   Click below to load sample posts and users
                 </p>
                 <Button 
-                  className="bg-emerald-500 hover:bg-emerald-600"
                   onClick={() => {
                     resetSeedData();
                     window.location.href = '/';
@@ -236,14 +235,14 @@ function PostCard({
   };
 
   return (
-    <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+    <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-lg">
       <CardContent className="p-4">
         {/* Post Header */}
         <div className="flex items-start gap-3 mb-3">
           <button onClick={onAvatarClick} className="group">
-            <Avatar className="w-10 h-10 ring-2 ring-transparent group-hover:ring-emerald-500 transition-all">
+            <Avatar className="w-11 h-11 ring-2 ring-slate-700 group-hover:ring-sky-500 transition-all duration-200">
               <AvatarImage src={post.user?.profilePhoto} />
-              <AvatarFallback className="bg-gray-800 text-white">
+              <AvatarFallback className="bg-slate-800 text-white font-semibold">
                 {post.user?.displayName?.[0] || post.user?.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
@@ -297,7 +296,7 @@ function PostCard({
             <MessageCircle className="w-5 h-5" />
             <span className="text-sm">{post.comments.length || ''}</span>
           </button>
-          <button className="flex items-center gap-2 text-gray-400 hover:text-emerald-400 transition-colors">
+          <button className="flex items-center gap-2 text-gray-400 hover:text-sky-400 transition-colors">
             <Share2 className="w-5 h-5" />
           </button>
         </div>
@@ -329,13 +328,13 @@ function PostCard({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSubmitComment()}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-full px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-emerald-500"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-full px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-sky-500"
               />
               <Button
                 size="icon"
                 onClick={handleSubmitComment}
                 disabled={!commentText.trim()}
-                className="bg-emerald-500 hover:bg-emerald-600 rounded-full"
+                className="bg-sky-500 hover:bg-sky-600 rounded-full"
               >
                 <Send className="w-4 h-4" />
               </Button>

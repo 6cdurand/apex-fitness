@@ -256,7 +256,7 @@ export default function GroupDetailPage() {
             </Card>
             <Card className="bg-gray-900 border-gray-800">
               <CardContent className="p-3 text-center">
-                <p className="text-2xl font-bold text-emerald-400">${groupStats.totalPaid}</p>
+                <p className="text-2xl font-bold text-sky-400">${groupStats.totalPaid}</p>
                 <p className="text-xs text-gray-400">Total Paid</p>
               </CardContent>
             </Card>
@@ -386,7 +386,7 @@ export default function GroupDetailPage() {
                           ${member.outstanding} due
                         </Badge>
                       ) : (
-                        <Badge className="bg-emerald-500/20 text-emerald-400">
+                        <Badge className="bg-sky-500/20 text-sky-400">
                           Paid up
                         </Badge>
                       )}
@@ -398,7 +398,7 @@ export default function GroupDetailPage() {
                       </div>
                       <div className="bg-gray-800 rounded p-2">
                         <p className="text-gray-400 text-xs">Paid</p>
-                        <p className="text-emerald-400 font-bold">{member.sessionsPaid}</p>
+                        <p className="text-sky-400 font-bold">{member.sessionsPaid}</p>
                       </div>
                       <div className="bg-gray-800 rounded p-2">
                         <p className="text-gray-400 text-xs">Total Paid</p>

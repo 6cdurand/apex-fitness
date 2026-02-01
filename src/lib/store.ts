@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthState>()(
         console.log('[Auth] Login attempt for:', email);
         
         // First try localStorage (for quick local login)
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
         console.log('[Auth] Found', storedUsers.length, 'users in localStorage');
         
         const localUser = storedUsers.find((u: User & { password: string }) => 
@@ -118,7 +118,7 @@ export const useAuthStore = create<AuthState>()(
           console.log('[Auth] ✅ Found user in Supabase:', supabaseUser.email);
           // Save to localStorage for future local logins
           storedUsers.push({ ...supabaseUser, password });
-          localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+          localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
           set({ user: supabaseUser, isAuthenticated: true, isLoading: false });
           return true;
         }
@@ -134,7 +134,7 @@ export const useAuthStore = create<AuthState>()(
         
         console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email);
         
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
         
         // Check if user already exists locally (by email or id)
         let existingUser = storedUsers.find((u: User) => 
@@ -155,7 +155,7 @@ export const useAuthStore = create<AuthState>()(
           const updatedUsers = storedUsers.map((u: User) => 
             u.email?.toLowerCase() === supabaseUser.email.toLowerCase() ? existingUser : u
           );
-          localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
+          localStorage.setItem('catalift-users', JSON.stringify(updatedUsers));
           
           set({ user: existingUser, isAuthenticated: true, isLoading: false });
           return true;
@@ -181,7 +181,7 @@ export const useAuthStore = create<AuthState>()(
         
         // Save to localStorage (no password needed for OAuth users)
         storedUsers.push({ ...newUser, password: `oauth_${supabaseUser.id}` });
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
         
         // Sync to Supabase users table
         try {
@@ -196,7 +196,7 @@ export const useAuthStore = create<AuthState>()(
 
       register: async (userData) => {
         set({ isLoading: true });
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
         
         // Check if email exists locally
         if (storedUsers.some((u: User) => u.email === userData.email)) {
@@ -224,7 +224,7 @@ export const useAuthStore = create<AuthState>()(
 
         // Save to localStorage
         storedUsers.push({ ...newUser, password: userData.password });
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
         
         // Sync to Supabase for cross-device login
         try {
@@ -247,13 +247,13 @@ export const useAuthStore = create<AuthState>()(
         if (!currentUser) return;
         
         // Remove from localStorage
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
         const filtered = storedUsers.filter((u: User) => u.id !== currentUser.id);
-        localStorage.setItem('apex-users', JSON.stringify(filtered));
+        localStorage.setItem('catalift-users', JSON.stringify(filtered));
         
         // Clear all user data
         localStorage.removeItem('apex-auth');
-        localStorage.removeItem('apex-workouts');
+        localStorage.removeItem('catalift-workouts');
         localStorage.removeItem('apex-medals');
         localStorage.removeItem('apex-trainer');
         localStorage.removeItem('apex-social');
@@ -269,11 +269,11 @@ export const useAuthStore = create<AuthState>()(
           set({ user: updatedUser });
           
           // Update in localStorage
-          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+          const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
           const index = storedUsers.findIndex((u: User) => u.id === currentUser.id);
           if (index !== -1) {
             storedUsers[index] = { ...storedUsers[index], ...updates };
-            localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+            localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
           }
           
           // Sync to Supabase
@@ -950,7 +950,12 @@ export const useWorkoutStore = create<WorkoutState>()(
       checkAndUpdatePB: (exerciseId, weight, reps, workoutId) => {
         const { personalBests, getActiveUserId } = get();
         const targetUserId = getActiveUserId();
-        const existingPB = personalBests.find(p => p.exerciseId === exerciseId && p.userId === targetUserId);
+        
+        // Normalize exercise ID for consistent matching
+        const { normalizeExerciseId } = require('./exerciseStats');
+        const normalizedId = normalizeExerciseId(exerciseId);
+        
+        const existingPB = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
         
         // calculate1RM returns null if reps > 20 (doesn't count toward strength rating)
         const calculatedRM = calculate1RM(weight, reps);
@@ -964,7 +969,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (!existingPB || calculatedRM > existingPB.oneRepMax) {
           const newPB: PersonalBest = {
             id: existingPB?.id || uuidv4(),
-            exerciseId,
+            exerciseId: normalizedId, // Use normalized ID
             userId: targetUserId,
             oneRepMax: calculatedRM,
             bestWeight: weight,
@@ -1004,8 +1009,8 @@ export const useWorkoutStore = create<WorkoutState>()(
             // Check exercise-specific milestone medals based on ACTUAL weight lifted (not 1RM)
             const actualWeight = weight; // Use the actual weight lifted, not calculated 1RM
             
-            // BENCH PRESS milestones (using actual weight)
-            if (exerciseId === 'bench-press' || exerciseId === 'dumbbell-bench-press') {
+            // BENCH PRESS milestones (using actual weight) - use normalizedId for matching
+            if (normalizedId === 'bench-press' || normalizedId === 'dumbbell-bench-press') {
               if (actualWeight >= 160 && !hasMedal('bench-legendary', targetUserId)) earnMedal('bench-legendary', targetUserId);
               if (actualWeight >= 130 && !hasMedal('bench-epic', targetUserId)) earnMedal('bench-epic', targetUserId);
               if (actualWeight >= 100 && !hasMedal('bench-rare', targetUserId)) earnMedal('bench-rare', targetUserId);
@@ -1014,7 +1019,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // SQUAT milestones
-            if (exerciseId === 'squat' || exerciseId === 'back-squat') {
+            if (normalizedId === 'squat' || normalizedId === 'back-squat') {
               if (actualWeight >= 219 && !hasMedal('squat-legendary', targetUserId)) earnMedal('squat-legendary', targetUserId);
               if (actualWeight >= 173 && !hasMedal('squat-epic', targetUserId)) earnMedal('squat-epic', targetUserId);
               if (actualWeight >= 130 && !hasMedal('squat-rare', targetUserId)) earnMedal('squat-rare', targetUserId);
@@ -1023,7 +1028,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // DEADLIFT/RDL milestones
-            if (exerciseId === 'deadlift' || exerciseId === 'romanian-deadlift' || exerciseId === 'rdl') {
+            if (normalizedId === 'deadlift' || normalizedId === 'romanian-deadlift' || normalizedId === 'rdl') {
               if (actualWeight >= 211 && !hasMedal('deadlift-legendary', targetUserId)) earnMedal('deadlift-legendary', targetUserId);
               if (actualWeight >= 164 && !hasMedal('deadlift-epic', targetUserId)) earnMedal('deadlift-epic', targetUserId);
               if (actualWeight >= 120 && !hasMedal('deadlift-rare', targetUserId)) earnMedal('deadlift-rare', targetUserId);
@@ -1032,7 +1037,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // LAT PULLDOWN milestones
-            if (exerciseId === 'lat-pulldown' || exerciseId === 'rope-pulldown') {
+            if (normalizedId === 'lat-pulldown' || normalizedId === 'rope-pulldown') {
               if (actualWeight >= 141 && !hasMedal('lat-legendary', targetUserId)) earnMedal('lat-legendary', targetUserId);
               if (actualWeight >= 110 && !hasMedal('lat-epic', targetUserId)) earnMedal('lat-epic', targetUserId);
               if (actualWeight >= 82 && !hasMedal('lat-rare', targetUserId)) earnMedal('lat-rare', targetUserId);
@@ -1041,7 +1046,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // ROW milestones
-            if (exerciseId === 'barbell-row' || exerciseId === 'bent-over-row' || exerciseId === 'seated-row' || exerciseId === 'cable-row' || exerciseId === 'seated-cable-row' || exerciseId === 'machine-back-row' || exerciseId === 'row-machine') {
+            if (normalizedId === 'barbell-row' || normalizedId === 'bent-over-row' || normalizedId === 'seated-row' || normalizedId === 'cable-row' || normalizedId === 'seated-cable-row' || normalizedId === 'machine-back-row' || normalizedId === 'row-machine') {
               if (actualWeight >= 147 && !hasMedal('row-legendary', targetUserId)) earnMedal('row-legendary', targetUserId);
               if (actualWeight >= 115 && !hasMedal('row-epic', targetUserId)) earnMedal('row-epic', targetUserId);
               if (actualWeight >= 86 && !hasMedal('row-rare', targetUserId)) earnMedal('row-rare', targetUserId);
@@ -1050,7 +1055,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // OHP/SHOULDER PRESS milestones
-            if (exerciseId === 'overhead-press' || exerciseId === 'military-press' || exerciseId === 'dumbbell-shoulder-press' || exerciseId === 'machine-shoulder-press') {
+            if (normalizedId === 'overhead-press' || normalizedId === 'military-press' || normalizedId === 'dumbbell-shoulder-press' || normalizedId === 'machine-shoulder-press') {
               if (actualWeight >= 112 && !hasMedal('ohp-legendary', targetUserId)) earnMedal('ohp-legendary', targetUserId);
               if (actualWeight >= 87 && !hasMedal('ohp-epic', targetUserId)) earnMedal('ohp-epic', targetUserId);
               if (actualWeight >= 64 && !hasMedal('ohp-rare', targetUserId)) earnMedal('ohp-rare', targetUserId);
@@ -1059,7 +1064,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // LEG PRESS milestones
-            if (exerciseId === 'leg-press' || exerciseId === 'leg-press-machine' || exerciseId === 'leg-press-single-leg') {
+            if (normalizedId === 'leg-press' || normalizedId === 'leg-press-machine' || normalizedId === 'leg-press-single-leg') {
               if (actualWeight >= 432 && !hasMedal('legpress-legendary', targetUserId)) earnMedal('legpress-legendary', targetUserId);
               if (actualWeight >= 324 && !hasMedal('legpress-epic', targetUserId)) earnMedal('legpress-epic', targetUserId);
               if (actualWeight >= 226 && !hasMedal('legpress-rare', targetUserId)) earnMedal('legpress-rare', targetUserId);
@@ -1068,7 +1073,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // LEG EXTENSION milestones
-            if (exerciseId === 'leg-extension') {
+            if (normalizedId === 'leg-extension') {
               if (actualWeight >= 120 && !hasMedal('legext-legendary', targetUserId)) earnMedal('legext-legendary', targetUserId);
               if (actualWeight >= 90 && !hasMedal('legext-epic', targetUserId)) earnMedal('legext-epic', targetUserId);
               if (actualWeight >= 60 && !hasMedal('legext-rare', targetUserId)) earnMedal('legext-rare', targetUserId);
@@ -1077,7 +1082,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // LEG CURL milestones
-            if (exerciseId === 'leg-curl' || exerciseId === 'lying-leg-curl') {
+            if (normalizedId === 'leg-curl' || normalizedId === 'lying-leg-curl') {
               if (actualWeight >= 100 && !hasMedal('legcurl-legendary', targetUserId)) earnMedal('legcurl-legendary', targetUserId);
               if (actualWeight >= 75 && !hasMedal('legcurl-epic', targetUserId)) earnMedal('legcurl-epic', targetUserId);
               if (actualWeight >= 50 && !hasMedal('legcurl-rare', targetUserId)) earnMedal('legcurl-rare', targetUserId);
@@ -1086,7 +1091,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             }
             
             // CHEST PRESS milestones (machine)
-            if (exerciseId === 'machine-chest-press' || exerciseId === 'chest-press') {
+            if (normalizedId === 'machine-chest-press' || normalizedId === 'chest-press') {
               if (actualWeight >= 100 && !hasMedal('chestpress-legendary', targetUserId)) earnMedal('chestpress-legendary', targetUserId);
               if (actualWeight >= 75 && !hasMedal('chestpress-epic', targetUserId)) earnMedal('chestpress-epic', targetUserId);
               if (actualWeight >= 50 && !hasMedal('chestpress-rare', targetUserId)) earnMedal('chestpress-rare', targetUserId);
@@ -1260,32 +1265,40 @@ export const useWorkoutStore = create<WorkoutState>()(
         const workouts = get().workoutHistory.filter(w => w.userId === userId);
         const newPBs: Record<string, PersonalBest> = {};
         
+        // Import normalizeExerciseId for consistent exercise ID matching
+        const { normalizeExerciseId } = require('./exerciseStats');
+        
         // Go through all workouts and find best lifts for each exercise
         workouts.forEach(workout => {
-          workout.exercises.forEach(ex => {
-            if (!ex.exerciseId) return;
+          workout.exercises?.forEach(ex => {
+            // Normalize exercise ID to match tier range keys
+            const rawId = ex.exerciseId || ex.exercise?.name || '';
+            const exerciseId = normalizeExerciseId(rawId);
+            if (!exerciseId) return;
             
-            ex.sets.filter(s => s.completed && s.weight && s.reps).forEach(set => {
+            ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(set => {
               const oneRepMax = calculate1RM(set.weight!, set.reps!);
               if (oneRepMax === null) return; // Skip if reps > 20
               
-              const existing = newPBs[ex.exerciseId];
+              const existing = newPBs[exerciseId];
               if (!existing || oneRepMax > existing.oneRepMax) {
-                newPBs[ex.exerciseId] = {
+                newPBs[exerciseId] = {
                   id: existing?.id || uuidv4(),
-                  exerciseId: ex.exerciseId,
+                  exerciseId: exerciseId, // Use normalized ID
                   userId,
                   bestWeight: set.weight!,
                   bestReps: set.reps!,
                   oneRepMax,
                   bestVolume: existing?.bestVolume || 0,
-                  achievedAt: workout.endTime || workout.startTime,
+                  achievedAt: workout.endTime || workout.startTime || new Date().toISOString(),
                   workoutId: workout.id,
                 };
               }
             });
           });
         });
+        
+        console.log(`[Store] Recalculated ${Object.keys(newPBs).length} PBs for user ${userId}:`, Object.keys(newPBs));
         
         // Update state: remove old PBs for this user, add recalculated ones
         set(state => ({
@@ -1328,7 +1341,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
     }),
     {
-      name: 'apex-workout',
+      name: 'catalift-workout',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         workoutHistory: state.workoutHistory,
@@ -1692,6 +1705,9 @@ interface TrainerState {
   getClientGroup: (groupId: string) => ClientGroup | undefined;
   addMemberToGroup: (groupId: string, clientId: string) => void;
   removeMemberFromGroup: (groupId: string, clientId: string) => void;
+  
+  // Retroactive medal check
+  checkAndAwardTrainerMedals: (trainerId: string) => void;
 }
 
 export const useTrainerStore = create<TrainerState>()(
@@ -1745,6 +1761,37 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           clients: [...state.clients, newClient],
         }));
+        
+        // Check trainer client count medals
+        setTimeout(() => {
+          const trainerClients = get().clients.filter(c => c.trainerId === trainerId);
+          const clientCount = trainerClients.length;
+          const { earnMedal, hasMedal } = useMedalStore.getState();
+          
+          // Cascade medal earning for client count milestones
+          if (clientCount >= 50) {
+            if (!hasMedal('trainer-50-clients', trainerId)) earnMedal('trainer-50-clients', trainerId);
+            if (!hasMedal('trainer-25-clients', trainerId)) earnMedal('trainer-25-clients', trainerId);
+            if (!hasMedal('trainer-10-clients', trainerId)) earnMedal('trainer-10-clients', trainerId);
+            if (!hasMedal('trainer-5-clients', trainerId)) earnMedal('trainer-5-clients', trainerId);
+            if (!hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+          } else if (clientCount >= 25) {
+            if (!hasMedal('trainer-25-clients', trainerId)) earnMedal('trainer-25-clients', trainerId);
+            if (!hasMedal('trainer-10-clients', trainerId)) earnMedal('trainer-10-clients', trainerId);
+            if (!hasMedal('trainer-5-clients', trainerId)) earnMedal('trainer-5-clients', trainerId);
+            if (!hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+          } else if (clientCount >= 10) {
+            if (!hasMedal('trainer-10-clients', trainerId)) earnMedal('trainer-10-clients', trainerId);
+            if (!hasMedal('trainer-5-clients', trainerId)) earnMedal('trainer-5-clients', trainerId);
+            if (!hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+          } else if (clientCount >= 5) {
+            if (!hasMedal('trainer-5-clients', trainerId)) earnMedal('trainer-5-clients', trainerId);
+            if (!hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+          } else if (clientCount >= 1) {
+            if (!hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+          }
+          console.log(`[Trainer Store] Checked client medals: ${clientCount} clients for trainer ${trainerId}`);
+        }, 50);
         
         // Sync to Supabase for cross-device backup (async but we log result)
         syncTrainerClientToSupabase(newClient).then(success => {
@@ -1814,7 +1861,7 @@ export const useTrainerStore = create<TrainerState>()(
         // Clear all users except current trainer from localStorage
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
-          localStorage.setItem('apex-users', JSON.stringify([{ ...currentUser, password: 'trainer123' }]));
+          localStorage.setItem('catalift-users', JSON.stringify([{ ...currentUser, password: 'trainer123' }]));
         }
       },
 
@@ -1823,7 +1870,7 @@ export const useTrainerStore = create<TrainerState>()(
         if (!trainerId) return;
 
         // Get existing users from localStorage
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
         
         const newClients: TrainerClient[] = [];
         const newPayments: ClientPayment[] = [];
@@ -2074,7 +2121,7 @@ export const useTrainerStore = create<TrainerState>()(
         });
         
         // Save users to localStorage
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
         
         // Add all data to trainer store
         set(state => ({
@@ -2209,6 +2256,42 @@ export const useTrainerStore = create<TrainerState>()(
               get().useSessionFromPackage(activePackage.id);
             }
           }
+          
+          // Check trainer session count medals
+          const trainerId = session.trainerId;
+          if (trainerId) {
+            setTimeout(() => {
+              const completedSessions = get().sessions.filter(
+                s => s.trainerId === trainerId && s.status === 'completed'
+              );
+              const sessionCount = completedSessions.length;
+              const { earnMedal, hasMedal } = useMedalStore.getState();
+              
+              // Cascade medal earning for session count milestones
+              if (sessionCount >= 1000) {
+                if (!hasMedal('trainer-1000-sessions', trainerId)) earnMedal('trainer-1000-sessions', trainerId);
+                if (!hasMedal('trainer-500-sessions', trainerId)) earnMedal('trainer-500-sessions', trainerId);
+                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
+                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
+                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              } else if (sessionCount >= 500) {
+                if (!hasMedal('trainer-500-sessions', trainerId)) earnMedal('trainer-500-sessions', trainerId);
+                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
+                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
+                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              } else if (sessionCount >= 100) {
+                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
+                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
+                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              } else if (sessionCount >= 25) {
+                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
+                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              } else if (sessionCount >= 1) {
+                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              }
+              console.log(`[Trainer Store] Checked session medals: ${sessionCount} sessions for trainer ${trainerId}`);
+            }, 50);
+          }
         }
       },
 
@@ -2325,6 +2408,45 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase
         const updated = get().payments.find(p => p.id === paymentId);
         if (updated) syncPaymentToSupabase(updated);
+        
+        // Check trainer revenue medals
+        const payment = get().payments.find(p => p.id === paymentId);
+        if (payment) {
+          const trainerId = payment.trainerId;
+          if (trainerId) {
+            setTimeout(() => {
+              const paidPayments = get().payments.filter(
+                p => p.trainerId === trainerId && p.status === 'paid'
+              );
+              const totalRevenue = paidPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+              const { earnMedal, hasMedal } = useMedalStore.getState();
+              
+              // Cascade medal earning for revenue milestones
+              if (totalRevenue >= 50000) {
+                if (!hasMedal('trainer-50000-revenue', trainerId)) earnMedal('trainer-50000-revenue', trainerId);
+                if (!hasMedal('trainer-10000-revenue', trainerId)) earnMedal('trainer-10000-revenue', trainerId);
+                if (!hasMedal('trainer-2500-revenue', trainerId)) earnMedal('trainer-2500-revenue', trainerId);
+                if (!hasMedal('trainer-500-revenue', trainerId)) earnMedal('trainer-500-revenue', trainerId);
+                if (!hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+              } else if (totalRevenue >= 10000) {
+                if (!hasMedal('trainer-10000-revenue', trainerId)) earnMedal('trainer-10000-revenue', trainerId);
+                if (!hasMedal('trainer-2500-revenue', trainerId)) earnMedal('trainer-2500-revenue', trainerId);
+                if (!hasMedal('trainer-500-revenue', trainerId)) earnMedal('trainer-500-revenue', trainerId);
+                if (!hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+              } else if (totalRevenue >= 2500) {
+                if (!hasMedal('trainer-2500-revenue', trainerId)) earnMedal('trainer-2500-revenue', trainerId);
+                if (!hasMedal('trainer-500-revenue', trainerId)) earnMedal('trainer-500-revenue', trainerId);
+                if (!hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+              } else if (totalRevenue >= 500) {
+                if (!hasMedal('trainer-500-revenue', trainerId)) earnMedal('trainer-500-revenue', trainerId);
+                if (!hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+              } else if (paidPayments.length >= 1) {
+                if (!hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+              }
+              console.log(`[Trainer Store] Checked revenue medals: $${totalRevenue} total for trainer ${trainerId}`);
+            }, 50);
+          }
+        }
       },
 
       // Session packages
@@ -3038,6 +3160,47 @@ export const useTrainerStore = create<TrainerState>()(
           ),
         }));
       },
+
+      checkAndAwardTrainerMedals: (trainerId: string) => {
+        const { earnMedal, hasMedal } = useMedalStore.getState();
+        const state = get();
+        
+        // Count clients
+        const clientCount = state.clients.filter(c => c.trainerId === trainerId).length;
+        
+        // Count completed sessions
+        const sessionCount = state.sessions.filter(s => s.trainerId === trainerId && s.status === 'completed').length;
+        
+        // Calculate total revenue from paid payments
+        const totalRevenue = state.payments
+          .filter(p => p.trainerId === trainerId && p.status === 'paid')
+          .reduce((sum, p) => sum + p.amount, 0);
+        
+        console.log(`[Trainer Store] Checking medals for trainer ${trainerId}: ${clientCount} clients, ${sessionCount} sessions, $${totalRevenue} revenue`);
+        
+        // Award client medals
+        if (clientCount >= 50 && !hasMedal('trainer-50-clients', trainerId)) earnMedal('trainer-50-clients', trainerId);
+        if (clientCount >= 25 && !hasMedal('trainer-25-clients', trainerId)) earnMedal('trainer-25-clients', trainerId);
+        if (clientCount >= 10 && !hasMedal('trainer-10-clients', trainerId)) earnMedal('trainer-10-clients', trainerId);
+        if (clientCount >= 5 && !hasMedal('trainer-5-clients', trainerId)) earnMedal('trainer-5-clients', trainerId);
+        if (clientCount >= 1 && !hasMedal('trainer-first-client', trainerId)) earnMedal('trainer-first-client', trainerId);
+        
+        // Award session medals
+        if (sessionCount >= 1000 && !hasMedal('trainer-1000-sessions', trainerId)) earnMedal('trainer-1000-sessions', trainerId);
+        if (sessionCount >= 500 && !hasMedal('trainer-500-sessions', trainerId)) earnMedal('trainer-500-sessions', trainerId);
+        if (sessionCount >= 100 && !hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
+        if (sessionCount >= 25 && !hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
+        if (sessionCount >= 1 && !hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+        
+        // Award revenue medals
+        if (totalRevenue >= 50000 && !hasMedal('trainer-50000-revenue', trainerId)) earnMedal('trainer-50000-revenue', trainerId);
+        if (totalRevenue >= 10000 && !hasMedal('trainer-10000-revenue', trainerId)) earnMedal('trainer-10000-revenue', trainerId);
+        if (totalRevenue >= 2500 && !hasMedal('trainer-2500-revenue', trainerId)) earnMedal('trainer-2500-revenue', trainerId);
+        if (totalRevenue >= 500 && !hasMedal('trainer-500-revenue', trainerId)) earnMedal('trainer-500-revenue', trainerId);
+        if (totalRevenue >= 1 && !hasMedal('trainer-first-payment', trainerId)) earnMedal('trainer-first-payment', trainerId);
+        
+        console.log(`[Trainer Store] ✅ Trainer medals check complete`);
+      },
     }),
     {
       name: 'apex-trainer',
@@ -3077,7 +3240,21 @@ export const useMedalStore = create<MedalState>()(
       earnMedal: (definitionId, forUserId?: string) => {
         const userId = forUserId || useAuthStore.getState().user?.id || '';
         const existingMedal = get().medals.find(m => m.definitionId === definitionId && m.userId === userId);
-        if (existingMedal?.earned) return;
+        
+        // If already earned, increment timesEarned counter
+        if (existingMedal?.earned) {
+          const updatedMedal = {
+            ...existingMedal,
+            timesEarned: (existingMedal.timesEarned || 1) + 1,
+          };
+          set(state => ({
+            medals: state.medals.map(m => 
+              m.definitionId === definitionId && m.userId === userId ? updatedMedal : m
+            ),
+          }));
+          syncMedalToSupabase(updatedMedal);
+          return;
+        }
 
         // Import medal definitions dynamically to avoid circular deps
         const { milestoneMedals } = require('./medals');
@@ -3098,6 +3275,7 @@ export const useMedalStore = create<MedalState>()(
           earnedAt: new Date().toISOString(),
           progress: definition.target || 1,
           target: definition.target || 1,
+          timesEarned: 1,
         };
 
         set(state => ({
@@ -3183,14 +3361,40 @@ export const useMedalStore = create<MedalState>()(
         const userPBs = personalBests.filter(pb => pb.userId === userId);
         
         if (userPBs.length === 0) {
+          console.log(`[MedalStore] No PBs found for user ${userId}`);
           return null;
         }
 
-        // Default to male for clients (could be enhanced to look up client gender)
-        const isMale = true;
+        // Look up user gender - check current user first, then stored users
+        const currentUser = useAuthStore.getState().user;
+        let isMale = true; // Default
+        
+        if (currentUser?.id === userId) {
+          isMale = currentUser.gender !== 'female';
+        } else {
+          // Check stored users (clients)
+          try {
+            const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+            const targetUser = storedUsers.find((u: any) => u.id === userId);
+            if (targetUser?.gender === 'female') {
+              isMale = false;
+            }
+          } catch (e) {
+            console.error('[MedalStore] Error looking up user gender:', e);
+          }
+        }
+        
+        console.log(`[MedalStore] Calculating strength rating for ${userId} (${isMale ? 'male' : 'female'}), ${userPBs.length} PBs`);
         
         const { calculateFullStrengthRating } = require('./strengthRating');
-        return calculateFullStrengthRating(userPBs, isMale);
+        const rating = calculateFullStrengthRating(userPBs, isMale);
+        
+        // Store in state if this is the current user
+        if (currentUser?.id === userId && rating) {
+          set({ strengthRating: rating });
+        }
+        
+        return rating;
       },
 
       getStrengthRating: () => {

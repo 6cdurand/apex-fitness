@@ -18,6 +18,7 @@ import {
 } from '@/lib/strengthRating';
 import { StrengthSlice, StrengthTier } from '@/types';
 import { ChevronRight, Dumbbell, TrendingUp, Info } from 'lucide-react';
+import { convertWeight } from '@/lib/unitConversion';
 
 export default function StrengthCategoryPage() {
   const router = useRouter();
@@ -52,6 +53,15 @@ export default function StrengthCategoryPage() {
   const userPBs = personalBests.filter(pb => pb.userId === user.id);
   const category = calculateCategory(categoryDef, userPBs, isMale);
   
+  // Debug logging
+  console.log('[Strength Category] Category:', categoryId, 'Slices:', category.slices.map(s => ({
+    name: s.name,
+    oneRM: s.oneRM,
+    tier: s.tier,
+    progressPercent: s.progressPercent,
+    contributingLift: s.contributingLift
+  })));
+  
   const getTierRangeForSlice = (slice: StrengthSlice) => {
     if (!slice.contributingLift) return null;
     const ranges = isMale ? maleTierRanges[slice.contributingLift] : femaleTierRanges[slice.contributingLift];
@@ -63,7 +73,7 @@ export default function StrengthCategoryPage() {
       case 'elite': return 'bg-amber-500';
       case 'advanced': return 'bg-purple-500';
       case 'intermediate': return 'bg-blue-500';
-      case 'novice': return 'bg-emerald-500';
+      case 'novice': return 'bg-sky-500';
       default: return 'bg-gray-500';
     }
   };
@@ -97,12 +107,11 @@ export default function StrengthCategoryPage() {
             
             {/* Overall progress bar */}
             <div className="mt-4">
-              <div className="h-4 bg-gray-700 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full ${getProgressBarColor(category.tier)} transition-all duration-500`}
-                  style={{ width: `${Math.min(category.totalPoints, 100)}%` }}
-                />
-              </div>
+              <Progress 
+                value={Math.min(category.totalPoints, 100)} 
+                tier={category.tier}
+                className="h-4"
+              />
             </div>
           </CardContent>
         </Card>
@@ -110,7 +119,7 @@ export default function StrengthCategoryPage() {
         {/* Slice Breakdown */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-emerald-400" />
+            <TrendingUp className="w-5 h-5 text-sky-400" />
             Breakdown by Area
           </h2>
           
@@ -138,12 +147,11 @@ export default function StrengthCategoryPage() {
 
                   {/* Progress Bar */}
                   <div className="mb-3">
-                    <div className="h-3 bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full ${getProgressBarColor(slice.tier)} transition-all duration-500`}
-                        style={{ width: `${Math.min(slice.progressPercent, 100)}%` }}
-                      />
-                    </div>
+                    <Progress 
+                      value={Math.min(slice.progressPercent, 100)} 
+                      tier={slice.tier}
+                      className="h-3"
+                    />
                   </div>
 
                   {/* Contributing Lift */}
@@ -161,9 +169,11 @@ export default function StrengthCategoryPage() {
                     </div>
                     {slice.oneRM > 0 && (
                       <div className="text-right">
-                        <p className="text-lg font-bold text-amber-400">{slice.oneRM}kg</p>
+                        <p className="text-lg font-bold text-amber-400">
+                          {convertWeight(slice.oneRM, user.exerciseUnit || 'kg')}{user.exerciseUnit || 'kg'}
+                        </p>
                         <p className="text-xs text-gray-500">
-                          1RM {slice.bestWeight && slice.bestReps ? `(${slice.bestWeight}×${slice.bestReps})` : ''}
+                          1RM {slice.bestWeight && slice.bestReps ? `(${convertWeight(slice.bestWeight, user.exerciseUnit || 'kg')}×${slice.bestReps})` : ''}
                         </p>
                       </div>
                     )}
@@ -180,17 +190,26 @@ export default function StrengthCategoryPage() {
                         {(['beginner', 'novice', 'intermediate', 'advanced', 'elite'] as StrengthTier[]).map((tier) => {
                           const [min, max] = ranges[tier];
                           const isCurrentTier = tier === slice.tier;
+                          const tierBgStyles: Record<StrengthTier, string> = {
+                            beginner: 'bg-slate-600',
+                            novice: 'bg-sky-600',
+                            intermediate: 'bg-blue-600',
+                            advanced: 'bg-purple-600',
+                            elite: 'bg-orange-600',
+                          };
                           return (
                             <div 
                               key={tier}
-                              className={`p-2 rounded text-center ${
+                              className={`p-2 rounded text-center ${tierBgStyles[tier]} ${
                                 isCurrentTier 
-                                  ? `${getTierBgColor(tier)} text-white` 
-                                  : 'bg-gray-700 text-gray-400'
+                                  ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900' 
+                                  : 'opacity-60'
                               }`}
                             >
-                              <p className="font-medium capitalize">{tier.slice(0, 3)}</p>
-                              <p className="text-[10px] opacity-80">{Math.round(min)}-{Math.round(max)}</p>
+                              <p className="font-medium capitalize text-white">{tier.slice(0, 3)}</p>
+                              <p className="text-[10px] text-white/80">
+                                {Math.round(convertWeight(min, user.exerciseUnit || 'kg'))}-{Math.round(convertWeight(max, user.exerciseUnit || 'kg'))}
+                              </p>
                             </div>
                           );
                         })}

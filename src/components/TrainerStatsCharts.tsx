@@ -18,17 +18,17 @@ import {
 } from 'recharts';
 import { DollarSign, Users, Calendar, TrendingUp } from 'lucide-react';
 import { format, subWeeks, eachWeekOfInterval, endOfWeek, subMonths, eachMonthOfInterval, endOfMonth } from 'date-fns';
-import { SessionPackage, ClientSession, TrainerClient } from '@/types';
+import { SessionPackage, ClientSession, TrainerClient, ClientPayment } from '@/types';
 
 interface TrainerStatsChartsProps {
   sessionPackages: SessionPackage[];
   sessions: ClientSession[];
   clients: TrainerClient[];
+  payments?: ClientPayment[];
 }
 
-export function TrainerStatsCharts({ sessionPackages, sessions, clients }: TrainerStatsChartsProps) {
-  // Calculate weekly earnings data (last 8 weeks)
-  // Only counts PAID sessions, using each client's price per session
+export function TrainerStatsCharts({ sessionPackages, sessions, clients, payments = [] }: TrainerStatsChartsProps) {
+  // Calculate weekly earnings data (last 8 weeks) from actual payments
   const weeklyEarningsData = useMemo(() => {
     const weeks = eachWeekOfInterval({
       start: subWeeks(new Date(), 7),
@@ -38,21 +38,32 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
     return weeks.map(weekStart => {
       const weekEnd = endOfWeek(weekStart);
       
-      // Filter sessions that are COMPLETED AND PAID within this week
+      // Get paid payments within this week
+      const weekPayments = payments.filter(p => {
+        if (p.status !== 'paid' || !p.paidAt) return false;
+        const paidDate = new Date(p.paidAt);
+        return paidDate >= weekStart && paidDate <= weekEnd;
+      });
+
+      // Calculate earnings from payments
+      const paymentEarnings = weekPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      // Also calculate from completed sessions as fallback
       const paidWeekSessions = sessions.filter(s => {
         const date = new Date(s.date);
         return date >= weekStart && date <= weekEnd && s.status === 'completed' && s.paid === true;
       });
 
-      // Calculate earnings based on each client's package price
-      let earnings = 0;
+      let sessionEarnings = 0;
       paidWeekSessions.forEach(session => {
-        // Find any package for this client (active or not) to get their rate
         const pkg = sessionPackages.find(p => p.clientId === session.clientId);
         if (pkg && pkg.pricePerSession) {
-          earnings += pkg.pricePerSession;
+          sessionEarnings += pkg.pricePerSession;
         }
       });
+
+      // Use payment earnings if available, otherwise session-based
+      const earnings = paymentEarnings > 0 ? paymentEarnings : sessionEarnings;
 
       return {
         week: format(weekStart, 'MMM d'),
@@ -60,10 +71,9 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
         earnings: Math.round(earnings),
       };
     });
-  }, [sessions, sessionPackages]);
+  }, [sessions, sessionPackages, payments]);
 
-  // Calculate monthly earnings data (last 6 months)
-  // Only counts PAID sessions
+  // Calculate monthly earnings data (last 6 months) from actual payments
   const monthlyEarningsData = useMemo(() => {
     const months = eachMonthOfInterval({
       start: subMonths(new Date(), 5),
@@ -73,20 +83,30 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
     return months.map(monthStart => {
       const monthEnd = endOfMonth(monthStart);
       
-      // Filter sessions that are COMPLETED AND PAID within this month
+      // Get paid payments within this month
+      const monthPayments = payments.filter(p => {
+        if (p.status !== 'paid' || !p.paidAt) return false;
+        const paidDate = new Date(p.paidAt);
+        return paidDate >= monthStart && paidDate <= monthEnd;
+      });
+
+      const paymentEarnings = monthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+
+      // Fallback to session-based calculation
       const paidMonthSessions = sessions.filter(s => {
         const date = new Date(s.date);
         return date >= monthStart && date <= monthEnd && s.status === 'completed' && s.paid === true;
       });
 
-      // Calculate earnings based on each client's package price
-      let earnings = 0;
+      let sessionEarnings = 0;
       paidMonthSessions.forEach(session => {
         const pkg = sessionPackages.find(p => p.clientId === session.clientId);
         if (pkg && pkg.pricePerSession) {
-          earnings += pkg.pricePerSession;
+          sessionEarnings += pkg.pricePerSession;
         }
       });
+
+      const earnings = paymentEarnings > 0 ? paymentEarnings : sessionEarnings;
 
       return {
         month: format(monthStart, 'MMM'),
@@ -94,7 +114,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
         earnings: Math.round(earnings),
       };
     });
-  }, [sessions, sessionPackages]);
+  }, [sessions, sessionPackages, payments]);
 
   // Client breakdown by earnings
   const clientEarningsData = useMemo(() => {
@@ -166,7 +186,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="bg-gray-900 border-gray-800">
           <CardContent className="p-4 text-center">
-            <DollarSign className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
+            <DollarSign className="w-6 h-6 text-sky-400 mx-auto mb-2" />
             <p className="text-2xl font-bold text-white">${stats.totalEarnings}</p>
             <p className="text-xs text-gray-400">Total Earned</p>
           </CardContent>
@@ -213,7 +233,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader className="pb-2">
           <CardTitle className="text-white flex items-center gap-2 text-base">
-            <DollarSign className="w-4 h-4 text-emerald-400" />
+            <DollarSign className="w-4 h-4 text-sky-400" />
             Weekly Earnings
           </CardTitle>
         </CardHeader>
@@ -299,7 +319,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader className="pb-2">
           <CardTitle className="text-white flex items-center gap-2 text-base">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <TrendingUp className="w-4 h-4 text-sky-400" />
             Monthly Earnings Trend
           </CardTitle>
         </CardHeader>
@@ -352,7 +372,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
             {monthlyEarningsData.slice(-3).map((month, idx) => (
               <div key={idx} className="text-center p-2 bg-gray-800 rounded-lg">
                 <p className="text-xs text-gray-400">{month.month}</p>
-                <p className="text-sm font-bold text-emerald-400">${month.earnings}</p>
+                <p className="text-sm font-bold text-sky-400">${month.earnings}</p>
                 <p className="text-xs text-gray-500">{month.sessions} sessions</p>
               </div>
             ))}
@@ -380,7 +400,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
                   <div className="flex-1">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-white">{client.name}</span>
-                      <span className="text-sm font-bold text-emerald-400">${client.earnings}</span>
+                      <span className="text-sm font-bold text-sky-400">${client.earnings}</span>
                     </div>
                     <div className="h-1.5 bg-gray-800 rounded-full mt-1 overflow-hidden">
                       <div 
@@ -405,7 +425,7 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients }: Train
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader className="pb-2">
             <CardTitle className="text-white flex items-center gap-2 text-base">
-              <DollarSign className="w-4 h-4 text-emerald-400" />
+              <DollarSign className="w-4 h-4 text-sky-400" />
               Payment Status
             </CardTitle>
           </CardHeader>

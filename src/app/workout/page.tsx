@@ -322,7 +322,7 @@ export default function WorkoutPage() {
       case 'strength': return 'bg-blue-500/20 text-blue-400';
       case 'core': return 'bg-purple-500/20 text-purple-400';
       case 'cardio': return 'bg-orange-500/20 text-orange-400';
-      default: return 'bg-emerald-500/20 text-emerald-400';
+      default: return 'bg-sky-500/20 text-sky-400';
     }
   };
 
@@ -353,13 +353,13 @@ export default function WorkoutPage() {
         {user?.mode === 'trainer' && (
           <section className="mb-6">
             <Card 
-              className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30 cursor-pointer hover:border-emerald-500/50 transition-all"
+              className="bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30 cursor-pointer hover:border-sky-500/50 transition-all"
               onClick={() => router.push('/workout/builder?mode=create')}
             >
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/30 flex items-center justify-center">
-                    <Plus className="w-6 h-6 text-emerald-400" />
+                  <div className="w-12 h-12 rounded-full bg-sky-500/30 flex items-center justify-center">
+                    <Plus className="w-6 h-6 text-sky-400" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-white">Build Workout</h3>
@@ -390,7 +390,7 @@ export default function WorkoutPage() {
                   onClick={() => setSelectedDate(new Date())}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-800 transition-colors"
                 >
-                  <Calendar className="w-4 h-4 text-emerald-400" />
+                  <Calendar className="w-4 h-4 text-sky-400" />
                   <span className="font-semibold text-white">
                     {isToday ? "Today" : format(selectedDate, 'EEE, MMM d')}
                   </span>
@@ -419,7 +419,7 @@ export default function WorkoutPage() {
                 >
                   {isSyncing ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Sync'}
                 </Button>
-                <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
+                <Badge variant="secondary" className="bg-sky-500/20 text-sky-400">
                   {dateSessions.length} session{dateSessions.length !== 1 ? 's' : ''}
                 </Badge>
               </div>
@@ -443,16 +443,16 @@ export default function WorkoutPage() {
                 return (
                   <Card
                     key={session.id}
-                    className={`bg-gray-900 border-gray-800 transition-colors ${sessionCompleted ? 'border-emerald-500/50 bg-emerald-500/5' : 'hover:border-emerald-500/50'}`}
+                    className={`bg-gray-900 border-gray-800 transition-colors ${sessionCompleted ? 'border-sky-500/50 bg-sky-500/5' : 'hover:border-sky-500/50'}`}
                   >
                     <CardContent className="p-4">
                       {/* Workout Complete Banner */}
                       {sessionCompleted && (
-                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-emerald-500/20">
-                          <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-sky-500/20">
+                          <div className="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center">
                             <Check className="w-4 h-4 text-white" />
                           </div>
-                          <span className="text-emerald-400 font-medium text-sm">Workout Complete</span>
+                          <span className="text-sky-400 font-medium text-sm">Workout Complete</span>
                         </div>
                       )}
                       
@@ -464,9 +464,9 @@ export default function WorkoutPage() {
                               setSelectedProfileUser({ displayName: clientInfo?.displayName, profilePhoto: clientInfo?.profilePhoto });
                               setShowProfileCard(true);
                             }}
-                            className="focus:outline-none focus:ring-2 focus:ring-emerald-500 rounded-full"
+                            className="focus:outline-none focus:ring-2 focus:ring-sky-500 rounded-full"
                           >
-                            <Avatar className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all">
+                            <Avatar className="w-10 h-10 cursor-pointer hover:ring-2 hover:ring-sky-500 transition-all">
                               <AvatarImage src={clientInfo?.profilePhoto} />
                               <AvatarFallback className="bg-gray-800 text-white">
                                 {clientInfo?.displayName?.[0] || '?'}
@@ -477,7 +477,7 @@ export default function WorkoutPage() {
                             {/* Clickable Client Name */}
                             <button
                               onClick={() => router.push(`/clients/${session.clientId}`)}
-                              className="font-semibold text-white hover:text-emerald-400 transition-colors text-left"
+                              className="font-semibold text-white hover:text-sky-400 transition-colors text-left"
                             >
                               {clientInfo?.displayName || 'Client'}
                             </button>
@@ -489,14 +489,14 @@ export default function WorkoutPage() {
                           </div>
                         </div>
                         {sessionCompleted ? (
-                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                          <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30">
                             <Check className="w-3 h-3 mr-1" />
                             Done
                           </Badge>
                         ) : (
                           <Button
                             size="sm"
-                            className="bg-emerald-500 hover:bg-emerald-600"
+                            className="bg-sky-500 hover:bg-sky-600"
                             onClick={() => {
                               setStartSessionDialog({
                                 clientId: session.clientId!,
@@ -514,9 +514,9 @@ export default function WorkoutPage() {
                       
                       {/* Show linked workout details */}
                       {linkedSessionWorkout ? (
-                        <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                        <div className="mt-3 p-2 bg-sky-500/10 rounded-lg border border-sky-500/20">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-emerald-400">
+                            <div className="flex items-center gap-2 text-sky-400">
                               <Dumbbell className="w-4 h-4" />
                               <span className="text-sm font-medium">{linkedSessionWorkout.name}</span>
                             </div>
@@ -535,9 +535,9 @@ export default function WorkoutPage() {
                           </p>
                         </div>
                       ) : linkedTemplate ? (
-                        <div className="mt-3 p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                        <div className="mt-3 p-2 bg-sky-500/10 rounded-lg border border-sky-500/20">
                           <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-emerald-400">
+                            <div className="flex items-center gap-2 text-sky-400">
                               <Dumbbell className="w-4 h-4" />
                               <span className="text-sm font-medium">{linkedTemplate.name}</span>
                             </div>
@@ -594,7 +594,7 @@ export default function WorkoutPage() {
                   </p>
                   <Button
                     variant="link"
-                    className="text-emerald-400 mt-2"
+                    className="text-sky-400 mt-2"
                     onClick={() => router.push('/clients')}
                   >
                     Book a session
@@ -666,7 +666,7 @@ export default function WorkoutPage() {
                                 />
                                 <Button
                                   size="sm"
-                                  className="bg-emerald-500 hover:bg-emerald-600"
+                                  className="bg-sky-500 hover:bg-sky-600"
                                   onClick={() => handleReschedule(session.id)}
                                   disabled={!newDate}
                                 >
@@ -695,14 +695,14 @@ export default function WorkoutPage() {
                                   Reschedule
                                 </Button>
                                 {session.clientConfirmed ? (
-                                  <Badge className="bg-emerald-500/20 text-emerald-400">
+                                  <Badge className="bg-sky-500/20 text-sky-400">
                                     Confirmed
                                   </Badge>
                                 ) : (
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="border-emerald-500 text-emerald-400 hover:bg-emerald-500/10"
+                                    className="border-sky-500 text-sky-400 hover:bg-sky-500/10"
                                     onClick={() => confirmSession(session.id)}
                                   >
                                     Confirm
@@ -731,43 +731,43 @@ export default function WorkoutPage() {
             <Dialog open={showEmptyWorkoutOptions} onOpenChange={setShowEmptyWorkoutOptions}>
               <DialogTrigger asChild>
                 <Button
-                  className="h-auto py-6 bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 flex flex-col items-center gap-2 rounded-2xl shadow-lg shadow-emerald-500/20"
+                  className="h-auto py-8 bg-gradient-to-br from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 flex flex-col items-center gap-3 rounded-2xl shadow-xl shadow-sky-500/30 transition-all duration-300 hover:scale-[1.02] hover:shadow-sky-400/40"
                 >
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                    <Plus className="w-6 h-6" />
+                  <div className="w-14 h-14 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                    <Plus className="w-7 h-7" />
                   </div>
-                  <span className="font-semibold">Start Workout</span>
+                  <span className="font-bold text-base">Start Workout</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+              <DialogContent className="bg-slate-900 border-slate-800 max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Start New Workout</DialogTitle>
-                  <DialogDescription>Choose how to start your workout</DialogDescription>
+                  <DialogTitle className="text-white text-xl">Start New Workout</DialogTitle>
+                  <DialogDescription className="text-slate-400">Choose how to begin your session</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 pt-2">
                   {/* Quick Start */}
                   <Button
                     variant="outline"
-                    className="w-full h-auto py-4 border-gray-700 hover:bg-gray-800 justify-start"
+                    className="w-full h-auto py-5 border-slate-700 bg-slate-800/50 hover:bg-slate-800 hover:border-sky-500/50 justify-start rounded-xl transition-all duration-200"
                     onClick={() => {
                       handleStartEmpty();
                       setShowEmptyWorkoutOptions(false);
                     }}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                        <Zap className="w-5 h-5 text-emerald-400" />
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500 to-sky-600 flex items-center justify-center shadow-lg shadow-sky-500/20">
+                        <Zap className="w-6 h-6 text-white" />
                       </div>
                       <div className="text-left">
-                        <p className="font-medium text-white">Quick Start</p>
-                        <p className="text-xs text-gray-500">Empty workout, add exercises as you go</p>
+                        <p className="font-semibold text-white text-base">Quick Start</p>
+                        <p className="text-sm text-slate-400">Empty workout, add exercises as you go</p>
                       </div>
                     </div>
                   </Button>
 
-                  <div className="border-t border-gray-800 pt-4">
-                    <p className="text-sm text-gray-400 mb-3">Or start with a structured block:</p>
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="border-t border-slate-800 pt-4">
+                    <p className="text-sm text-slate-400 mb-4 font-medium">Or start with a structured block:</p>
+                    <div className="grid grid-cols-2 gap-3">
                       <Button
                         variant="outline"
                         className="h-auto py-3 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 flex flex-col items-center gap-1"
@@ -828,7 +828,7 @@ export default function WorkoutPage() {
                         setShowTemplates(true);
                       }}
                     >
-                      <Dumbbell className="w-4 h-4 mr-2 text-emerald-400" />
+                      <Dumbbell className="w-4 h-4 mr-2 text-sky-400" />
                       Choose from Templates
                     </Button>
                   </div>
@@ -843,7 +843,7 @@ export default function WorkoutPage() {
                   className="h-auto py-6 bg-gray-800 border-gray-700 hover:bg-gray-700 flex flex-col items-center gap-2 rounded-2xl"
                 >
                   <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
-                    <Dumbbell className="w-6 h-6 text-emerald-400" />
+                    <Dumbbell className="w-6 h-6 text-sky-400" />
                   </div>
                   <span className="font-semibold text-white">Use Template</span>
                 </Button>
@@ -909,7 +909,7 @@ export default function WorkoutPage() {
               <div className="space-y-3">
                 {selectedTemplate?.exercises.map((ex, idx) => (
                   <div key={ex.id} className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg">
-                    <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-semibold text-sm">
+                    <div className="w-8 h-8 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 font-semibold text-sm">
                       {idx + 1}
                     </div>
                     <div className="flex-1">
@@ -928,7 +928,7 @@ export default function WorkoutPage() {
                   setShowTemplates(false);
                 }
               }}
-              className="w-full bg-emerald-500 hover:bg-emerald-600 mt-4"
+              className="w-full bg-sky-500 hover:bg-sky-600 mt-4"
             >
               <Play className="w-4 h-4 mr-2" />
               Start Workout
@@ -959,7 +959,7 @@ export default function WorkoutPage() {
                       <p className="text-sm text-gray-400 mb-2">Assigned Workout:</p>
                       <Button
                         variant="outline"
-                        className="w-full justify-start h-auto py-3 border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20"
+                        className="w-full justify-start h-auto py-3 border-sky-500/50 bg-sky-500/10 hover:bg-sky-500/20"
                         onClick={() => {
                           handleStartClientSession(
                             startSessionDialog.clientId,
@@ -971,11 +971,11 @@ export default function WorkoutPage() {
                         }}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-emerald-500/30 flex items-center justify-center">
-                            <Dumbbell className="w-4 h-4 text-emerald-400" />
+                          <div className="w-8 h-8 rounded-full bg-sky-500/30 flex items-center justify-center">
+                            <Dumbbell className="w-4 h-4 text-sky-400" />
                           </div>
                           <div className="text-left">
-                            <p className="font-medium text-emerald-400">{linkedWorkout.name}</p>
+                            <p className="font-medium text-sky-400">{linkedWorkout.name}</p>
                             <p className="text-xs text-gray-400">
                               {linkedWorkout.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises • {linkedWorkout.blocks?.length || 0} blocks
                             </p>
@@ -1005,7 +1005,7 @@ export default function WorkoutPage() {
                             }}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 font-semibold text-sm">
+                              <div className="w-8 h-8 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 font-semibold text-sm">
                                 {idx + 1}
                               </div>
                               <div className="text-left">
@@ -1057,11 +1057,11 @@ export default function WorkoutPage() {
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <History className="w-5 h-5 text-emerald-400" />
+              <History className="w-5 h-5 text-sky-400" />
               Recent Workouts
             </h2>
             {workoutHistory.length > 5 && (
-              <Button variant="ghost" size="sm" className="text-emerald-400" onClick={() => router.push('/workout/history')}>
+              <Button variant="ghost" size="sm" className="text-sky-400" onClick={() => router.push('/workout/history')}>
                 See All
               </Button>
             )}
@@ -1094,7 +1094,7 @@ export default function WorkoutPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-emerald-400 font-medium">
+                        <p className="text-sky-400 font-medium">
                           {workout.exercises.length} exercises
                         </p>
                         {workout.duration && (
@@ -1126,7 +1126,7 @@ export default function WorkoutPage() {
             <div className="grid grid-cols-3 gap-3">
               <Card className="bg-gray-900 border-gray-800">
                 <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold text-emerald-400">
+                  <p className="text-2xl font-bold text-sky-400">
                     {workoutHistory.filter(w => {
                       const workoutDate = new Date(w.startTime);
                       const weekAgo = new Date();

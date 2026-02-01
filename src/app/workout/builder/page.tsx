@@ -318,7 +318,7 @@ function BuilderLoading() {
   return (
     <div className="container mx-auto p-4 max-w-4xl flex items-center justify-center min-h-[50vh]">
       <div className="text-center">
-        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-emerald-500" />
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-sky-500" />
         <p className="text-muted-foreground">Loading workout builder...</p>
       </div>
     </div>
@@ -969,7 +969,7 @@ function WorkoutBuilderContent() {
                 <Button
                   key={c.clientId}
                   variant={selectedClientId === c.clientId ? "default" : "outline"}
-                  className={`h-auto py-2 px-3 justify-start ${selectedClientId === c.clientId ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                  className={`h-auto py-2 px-3 justify-start ${selectedClientId === c.clientId ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
                   onClick={() => setSelectedClientId(c.clientId)}
                 >
                   <Users className="h-4 w-4 mr-2" />
@@ -1000,7 +1000,7 @@ function WorkoutBuilderContent() {
             {blocks.length > 0 && (
               <div className="text-right">
                 <Label className="text-muted-foreground">Est. Duration</Label>
-                <div className="mt-2 flex items-center justify-end gap-1.5 text-emerald-400">
+                <div className="mt-2 flex items-center justify-end gap-1.5 text-sky-400">
                   <Clock className="h-4 w-4" />
                   <span className="text-lg font-semibold">{estimatedDuration}</span>
                   <span className="text-sm text-muted-foreground">min</span>
@@ -1040,7 +1040,7 @@ function WorkoutBuilderContent() {
               ))}
             </div>
             {selectedPhaseId !== 'none' && (
-              <p className="text-xs text-emerald-400 mt-2">
+              <p className="text-xs text-sky-400 mt-2">
                 ✓ {selectedPhase?.description}
               </p>
             )}
@@ -1054,7 +1054,7 @@ function WorkoutBuilderContent() {
                 <Button
                   key={option.id}
                   variant={assignmentType === option.id ? "default" : "outline"}
-                  className={`h-auto py-2 px-3 flex-col items-start ${assignmentType === option.id ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                  className={`h-auto py-2 px-3 flex-col items-start ${assignmentType === option.id ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
                   onClick={() => setAssignmentType(option.id as any)}
                 >
                   <span className="font-medium text-sm">{option.name}</span>
@@ -1498,7 +1498,7 @@ function WorkoutBuilderContent() {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="border-emerald-500/50 text-emerald-400"
+                                  className="border-sky-500/50 text-sky-400"
                                   onClick={() => {
                                     setPendingBlockId(block.id);
                                     setCustomExerciseName(exerciseSearch);
@@ -1518,7 +1518,7 @@ function WorkoutBuilderContent() {
                                     onClick={() => addExercise(block.id, ex)}
                                   >
                                     <div className="text-left">
-                                      <p className="font-medium text-sm">{ex.name} {(ex as any).isCustom && <span className="text-xs text-emerald-400">(custom)</span>}</p>
+                                      <p className="font-medium text-sm">{ex.name} {(ex as any).isCustom && <span className="text-xs text-sky-400">(custom)</span>}</p>
                                       <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
                                     </div>
                                   </Button>
@@ -1526,7 +1526,7 @@ function WorkoutBuilderContent() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  className="w-full justify-start text-emerald-400 hover:text-emerald-300"
+                                  className="w-full justify-start text-sky-400 hover:text-sky-300"
                                   onClick={() => {
                                     setPendingBlockId(block.id);
                                     setShowCreateExerciseDialog(true);
@@ -1761,7 +1761,7 @@ function WorkoutBuilderContent() {
                       type="button"
                       className={`h-auto py-2 px-2 flex flex-col items-center justify-center text-center rounded-md border overflow-hidden transition-colors ${
                         editingExercise.exercise.setStyle === style.id 
-                          ? 'bg-emerald-500 border-emerald-500 text-white' 
+                          ? 'bg-sky-500 border-sky-500 text-white' 
                           : 'bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800'
                       }`}
                       onClick={() => {
@@ -1817,7 +1817,7 @@ function WorkoutBuilderContent() {
                     type="button"
                     variant={editingExercise.exercise.repType === 'reps' ? 'default' : 'outline'}
                     size="sm"
-                    className={editingExercise.exercise.repType === 'reps' ? 'bg-emerald-500 hover:bg-emerald-600' : ''}
+                    className={editingExercise.exercise.repType === 'reps' ? 'bg-sky-500 hover:bg-sky-600' : ''}
                     onClick={() => setEditingExercise({
                       ...editingExercise,
                       exercise: { 
@@ -1890,7 +1890,7 @@ function WorkoutBuilderContent() {
                         type="button"
                         variant={editingExercise.exercise.rest === `${preset.value}s` ? 'default' : 'outline'}
                         size="sm"
-                        className={`text-xs h-6 px-2 ${editingExercise.exercise.rest === `${preset.value}s` ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                        className={`text-xs h-6 px-2 ${editingExercise.exercise.rest === `${preset.value}s` ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
                         onClick={() => setEditingExercise({
                           ...editingExercise,
                           exercise: { ...editingExercise.exercise, rest: `${preset.value}s` }
@@ -1912,7 +1912,7 @@ function WorkoutBuilderContent() {
                       type="button"
                       variant={editingExercise.exercise.tempo === preset.tempo.join('') ? 'default' : 'outline'}
                       size="sm"
-                      className={`text-xs h-7 ${editingExercise.exercise.tempo === preset.tempo.join('') ? 'bg-emerald-500 hover:bg-emerald-600' : ''}`}
+                      className={`text-xs h-7 ${editingExercise.exercise.tempo === preset.tempo.join('') ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
                       onClick={() => setEditingExercise({
                         ...editingExercise,
                         exercise: { ...editingExercise.exercise, tempo: preset.tempo.join('') }
@@ -1962,7 +1962,7 @@ function WorkoutBuilderContent() {
                 />
               </div>
 
-              <Button onClick={saveExerciseEdit} className="w-full bg-emerald-500 hover:bg-emerald-600">
+              <Button onClick={saveExerciseEdit} className="w-full bg-sky-500 hover:bg-sky-600">
                 <Save className="h-4 w-4 mr-2" /> Save Changes
               </Button>
             </div>
@@ -1981,10 +1981,10 @@ function WorkoutBuilderContent() {
               </p>
             </div>
             {blocks.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                <Clock className="h-4 w-4 text-emerald-400" />
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-500/10 rounded-lg border border-sky-500/20">
+                <Clock className="h-4 w-4 text-sky-400" />
                 <div className="text-sm">
-                  <span className="font-semibold text-emerald-400">~{estimatedDuration} min</span>
+                  <span className="font-semibold text-sky-400">~{estimatedDuration} min</span>
                   <span className="text-xs text-muted-foreground ml-2">
                     ({Math.round(workoutEstimate.workSeconds / 60)}m work, {Math.round(workoutEstimate.restSeconds / 60)}m rest)
                   </span>
@@ -2026,7 +2026,7 @@ function WorkoutBuilderContent() {
             <div className="flex flex-col gap-2">
               <Button 
                 onClick={() => setShowEditOptionsDialog(false)}
-                className="w-full bg-emerald-500 hover:bg-emerald-600"
+                className="w-full bg-sky-500 hover:bg-sky-600"
               >
                 <Edit2 className="h-4 w-4 mr-2" /> Continue Editing
               </Button>
@@ -2066,7 +2066,7 @@ function WorkoutBuilderContent() {
                 {workoutLibrary.map((workout) => (
                   <Card 
                     key={workout.id} 
-                    className="bg-gray-800 border-gray-700 cursor-pointer hover:border-emerald-500/50 transition-colors"
+                    className="bg-gray-800 border-gray-700 cursor-pointer hover:border-sky-500/50 transition-colors"
                     onClick={() => handleLoadFromLibrary(workout)}
                   >
                     <CardContent className="p-4">
@@ -2137,7 +2137,7 @@ function WorkoutBuilderContent() {
               </Button>
               <Button 
                 onClick={handleSaveToLibrary}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-sky-500 hover:bg-sky-600"
               >
                 <Save className="h-4 w-4 mr-2" /> Save
               </Button>
@@ -2478,7 +2478,7 @@ function WorkoutBuilderContent() {
               </Button>
               <Button 
                 onClick={handleCreateCustomExercise}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-sky-500 hover:bg-sky-600"
               >
                 <Plus className="h-4 w-4 mr-2" /> Create Exercise
               </Button>

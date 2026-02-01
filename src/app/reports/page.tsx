@@ -95,7 +95,7 @@ export default function ReportsPage() {
           <Button 
             size="sm" 
             onClick={handleGenerateReport}
-            className="bg-emerald-500 hover:bg-emerald-600"
+            className="bg-sky-500 hover:bg-sky-600"
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Generate
@@ -107,11 +107,11 @@ export default function ReportsPage() {
         <div className="px-4 py-6 space-y-6">
           {/* Week Summary */}
           <div className="grid grid-cols-2 gap-3">
-            <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border-emerald-500/30">
+            <Card className="bg-gradient-to-br from-sky-500/20 to-sky-600/10 border-sky-500/30">
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                    <Dumbbell className="w-6 h-6 text-emerald-400" />
+                  <div className="w-12 h-12 rounded-full bg-sky-500/20 flex items-center justify-center">
+                    <Dumbbell className="w-6 h-6 text-sky-400" />
                   </div>
                   <div>
                     <p className="text-3xl font-bold text-white">{thisWeekWorkouts.length}</p>
@@ -177,7 +177,7 @@ export default function ReportsPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <Target className="w-5 h-5 text-emerald-400" />
+                <Target className="w-5 h-5 text-sky-400" />
                 Volume by Muscle Group
               </CardTitle>
             </CardHeader>
@@ -236,7 +236,7 @@ export default function ReportsPage() {
                       stroke="currentColor"
                       strokeWidth="8"
                       strokeDasharray={`${Math.min(thisWeekWorkouts.length * 15, 100) * 2.51} 251`}
-                      className="text-emerald-500"
+                      className="text-sky-500"
                       strokeLinecap="round"
                     />
                   </svg>
@@ -248,7 +248,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="flex-1">
                   <p className="text-gray-300 mb-2">
-                    You completed <span className="text-emerald-400 font-semibold">{thisWeekWorkouts.length}</span> workouts this week.
+                    You completed <span className="text-sky-400 font-semibold">{thisWeekWorkouts.length}</span> workouts this week.
                   </p>
                   <p className="text-sm text-gray-500">
                     {thisWeekWorkouts.length >= 5 

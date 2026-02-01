@@ -140,6 +140,25 @@ export default function ClientOnboardingPage() {
   const [linkedExistingAccount, setLinkedExistingAccount] = useState(false);
   
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Auto-skip Step 1 if client already has an account (created from Add Client page)
+  useEffect(() => {
+    // Check if the client already exists (was created from the Add Client modal)
+    const allUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const existingUser = allUsers.find((u: any) => u.id === clientId);
+    
+    if (existingUser) {
+      // Client account already exists - skip step 1
+      setAccountName(existingUser.displayName || existingUser.username || '');
+      setAccountEmail(existingUser.email || '');
+      setAccountUsername(existingUser.username || '');
+      setAccountGender(existingUser.gender || 'other');
+      setAccountCreated(true);
+      setCreatedClientId(clientId);
+      setCurrentStep(2); // Skip to goals
+    }
+  }, [clientId]);
+  
   const [data, setData] = useState<OnboardingData>({
     primaryGoal: '',
     secondaryGoal: '',
@@ -456,7 +475,7 @@ export default function ClientOnboardingPage() {
         <Progress value={progress} className="mt-4" />
         <p className="text-sm text-muted-foreground mt-2">
           Step {currentStep} of {TOTAL_STEPS}
-          {isSkippableStep && <span className="text-emerald-400 ml-2">(Optional)</span>}
+          {isSkippableStep && <span className="text-sky-400 ml-2">(Optional)</span>}
         </p>
       </div>
 
@@ -573,7 +592,7 @@ export default function ClientOnboardingPage() {
                 
                 <Button 
                   onClick={handleCreateAccount} 
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  className="w-full bg-sky-500 hover:bg-sky-600"
                   disabled={isCreatingAccount}
                 >
                   {isCreatingAccount ? (
@@ -585,8 +604,8 @@ export default function ClientOnboardingPage() {
               </>
             ) : (
               <div className="text-center py-6">
-                <CheckCircle2 className="h-16 w-16 text-emerald-500 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-emerald-400 mb-2">
+                <CheckCircle2 className="h-16 w-16 text-sky-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-sky-400 mb-2">
                   {linkedExistingAccount ? 'Account Linked!' : 'Account Created!'}
                 </h3>
                 <div className="p-4 bg-muted rounded-lg text-left space-y-2">
@@ -809,9 +828,9 @@ export default function ClientOnboardingPage() {
             <CardDescription>PT sessions and training schedule</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg space-y-4">
+            <div className="p-4 bg-sky-500/10 border border-sky-500/30 rounded-lg space-y-4">
               <div>
-                <Label className="text-base font-medium text-emerald-400">PT Sessions Per Week *</Label>
+                <Label className="text-base font-medium text-sky-400">PT Sessions Per Week *</Label>
                 <div className="flex gap-2 mt-3">
                   {[1, 2, 3, 4, 5].map(days => (
                     <Button
@@ -1065,8 +1084,8 @@ export default function ClientOnboardingPage() {
                     onClick={() => setData({ ...data, paymentFrequency: freq.value as any })}
                     className={`p-3 rounded-lg border-2 cursor-pointer transition-all text-center ${
                       data.paymentFrequency === freq.value 
-                        ? 'border-emerald-500 bg-emerald-500/10' 
-                        : 'border-border hover:border-emerald-500/50'
+                        ? 'border-sky-500 bg-sky-500/10' 
+                        : 'border-border hover:border-sky-500/50'
                     }`}
                   >
                     <p className="font-medium">{freq.label}</p>

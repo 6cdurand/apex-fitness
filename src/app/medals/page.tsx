@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useMedalStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useMedalStore, useWorkoutStore, useTrainerStore } from '@/lib/store';
 import { evolvingMedals } from '@/lib/medals';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +15,11 @@ export default function MedalsPage() {
   const { user, isAuthenticated } = useAuthStore();
   const { medals, evolvingMedalProgress } = useMedalStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
+  const { clients, sessions, payments } = useTrainerStore();
   const [selectedCategory, setSelectedCategory] = useState('all');
+  
+  // Determine trainer mode from user
+  const isTrainerMode = user?.mode === 'trainer';
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -105,7 +109,15 @@ export default function MedalsPage() {
 
   if (!isAuthenticated || !user) return null;
 
-  const categories = [
+  // Different categories for trainer vs athlete mode
+  const trainerCategories = [
+    { id: 'all', label: 'All', icon: Trophy },
+    { id: 'clients', label: 'Clients', icon: Users },
+    { id: 'sessions', label: 'Sessions', icon: Dumbbell },
+    { id: 'revenue', label: 'Revenue', icon: Star },
+  ];
+
+  const athleteCategories = [
     { id: 'all', label: 'All', icon: Trophy },
     { id: 'workout', label: 'Workout', icon: Dumbbell },
     { id: 'strength', label: 'Strength', icon: Flame },
@@ -114,12 +126,28 @@ export default function MedalsPage() {
     { id: 'milestone', label: 'Volume', icon: Star },
   ];
 
-  // Filter medals to only show current user's medals
-  const userMedals = medals.filter((m: any) => m.userId === user?.id);
+  const categories = isTrainerMode ? trainerCategories : athleteCategories;
+
+  // Filter medals by user AND by mode (trainer medals vs athlete medals)
+  const userMedals = medals.filter((m: any) => {
+    if (m.userId !== user?.id) return false;
+    // In trainer mode, only show trainer category medals
+    if (isTrainerMode) return m.category === 'trainer';
+    // In athlete mode, exclude trainer medals
+    return m.category !== 'trainer';
+  });
   
   const filteredMedals = selectedCategory === 'all' 
     ? userMedals 
-    : userMedals.filter((m: any) => m.category === selectedCategory);
+    : userMedals.filter((m: any) => {
+        // For trainer mode, map category to subcategory
+        if (isTrainerMode) {
+          if (selectedCategory === 'clients') return m.definitionId?.includes('client');
+          if (selectedCategory === 'sessions') return m.definitionId?.includes('session');
+          if (selectedCategory === 'revenue') return m.definitionId?.includes('revenue');
+        }
+        return m.category === selectedCategory;
+      });
 
   const earnedCount = userMedals.filter((m: any) => m.earned).length;
   const totalCount = userMedals.length || 1; // Avoid division by zero
@@ -165,19 +193,19 @@ export default function MedalsPage() {
       
       <div className="px-4 py-6 space-y-6">
         {/* Progress Summary */}
-        <Card className="bg-gradient-to-br from-emerald-600 to-emerald-800 border-0">
+        <Card className="bg-gradient-to-br from-sky-600 to-sky-800 border-0">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-2xl font-bold text-white">{earnedCount} / {totalCount}</h2>
-                <p className="text-emerald-100">Medals Earned</p>
+                <p className="text-sky-100">Medals Earned</p>
               </div>
               <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
                 <Trophy className="w-8 h-8 text-white" />
               </div>
             </div>
-            <Progress value={(earnedCount / totalCount) * 100} className="h-3 bg-emerald-900" />
-            <p className="text-sm text-emerald-200 mt-2">
+            <Progress value={(earnedCount / totalCount) * 100} className="h-3 bg-sky-900" />
+            <p className="text-sm text-sky-200 mt-2">
               {Math.round((earnedCount / totalCount) * 100)}% complete
             </p>
           </CardContent>
@@ -194,7 +222,7 @@ export default function MedalsPage() {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
                   isActive 
-                    ? 'bg-emerald-500 text-white' 
+                    ? 'bg-sky-500 text-white' 
                     : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
                 }`}
               >
@@ -205,7 +233,8 @@ export default function MedalsPage() {
           })}
         </div>
 
-        {/* Evolving Medals - Always visible at top */}
+        {/* Evolving Medals - Only show in athlete mode */}
+        {!isTrainerMode && (
         <div className="grid grid-cols-2 gap-4 mb-6">
           {evolvingMedalData
             .filter(m => selectedCategory === 'all' || m.category === selectedCategory)
@@ -216,7 +245,7 @@ export default function MedalsPage() {
                                   nextTierName === 'silver' ? 'bg-gray-400' : 
                                   nextTierName === 'gold' ? 'bg-yellow-500' : 
                                   nextTierName === 'platinum' ? 'bg-cyan-400' : 
-                                  nextTierName === 'diamond' ? 'bg-purple-500' : 'bg-emerald-500';
+                                  nextTierName === 'diamond' ? 'bg-purple-500' : 'bg-sky-500';
             const tierLabel = getTierLabel(currentTierName);
             const hasEarned = medal.currentTier !== null;
             
@@ -228,7 +257,7 @@ export default function MedalsPage() {
                 <div className={`bg-gradient-to-br ${getTierGradient(currentTierName, hasEarned)} p-4`}>
                   <div className="flex items-start justify-between mb-2">
                     <span className="text-3xl">{medal.icon}</span>
-                    {hasEarned && <BadgeCheck className="w-5 h-5 text-emerald-400" />}
+                    {hasEarned && <BadgeCheck className="w-5 h-5 text-sky-400" />}
                   </div>
                   
                   <h3 className="font-bold text-white text-sm mb-1">{medal.name}</h3>
@@ -264,6 +293,7 @@ export default function MedalsPage() {
             );
           })}
         </div>
+        )}
 
         {/* Regular Medals Grid */}
         <div className="grid grid-cols-2 gap-4">
@@ -285,7 +315,7 @@ export default function MedalsPage() {
                       {medal.icon}
                     </span>
                     {isEarned ? (
-                      <BadgeCheck className="w-5 h-5 text-emerald-400" />
+                      <BadgeCheck className="w-5 h-5 text-sky-400" />
                     ) : (
                       <Lock className="w-5 h-5 text-gray-500" />
                     )}

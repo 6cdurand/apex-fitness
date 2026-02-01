@@ -198,7 +198,7 @@ export function CircuitTimer({
       case 'round_rest':
         return 'bg-purple-500';
       case 'complete':
-        return 'bg-emerald-500';
+        return 'bg-sky-500';
       default:
         return 'bg-gray-500';
     }
@@ -223,10 +223,10 @@ export function CircuitTimer({
 
   if (phase === 'complete') {
     return (
-      <Card className="bg-emerald-500/20 border-emerald-500/50">
+      <Card className="bg-sky-500/20 border-sky-500/50">
         <CardContent className="p-6 text-center">
-          <Zap className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold text-emerald-400 mb-2">Circuit Complete!</h3>
+          <Zap className="w-16 h-16 text-sky-400 mx-auto mb-4" />
+          <h3 className="text-2xl font-bold text-sky-400 mb-2">Circuit Complete!</h3>
           <p className="text-gray-300 mb-4">
             {rounds} rounds of {circuitName}
           </p>
@@ -236,7 +236,7 @@ export function CircuitTimer({
               Restart
             </Button>
             {onClose && (
-              <Button onClick={onClose} className="bg-emerald-500 hover:bg-emerald-600">
+              <Button onClick={onClose} className="bg-sky-500 hover:bg-sky-600">
                 Done
               </Button>
             )}
@@ -310,7 +310,7 @@ export function CircuitTimer({
               'px-8',
               isRunning 
                 ? 'bg-gray-600 hover:bg-gray-700' 
-                : 'bg-emerald-500 hover:bg-emerald-600'
+                : 'bg-sky-500 hover:bg-sky-600'
             )}
           >
             {isRunning ? (

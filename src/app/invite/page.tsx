@@ -57,14 +57,14 @@ function InvitePageContent() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
       {/* Hero Section */}
-      <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 px-6 pt-12 pb-8">
+      <div className="relative bg-gradient-to-br from-sky-600 via-sky-500 to-teal-500 px-6 pt-12 pb-8">
         <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
         <div className="relative z-10 max-w-md mx-auto text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm mb-4">
             <Dumbbell className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">APEX FITNESS</h1>
-          <p className="text-emerald-100">Train Smarter. Get Stronger.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Catalift FITNESS</h1>
+          <p className="text-sky-100">Train Smarter. Get Stronger.</p>
         </div>
       </div>
 
@@ -74,7 +74,7 @@ function InvitePageContent() {
           <CardHeader className="text-center">
             {status === 'loading' && (
               <>
-                <Loader2 className="w-12 h-12 text-emerald-500 animate-spin mx-auto mb-4" />
+                <Loader2 className="w-12 h-12 text-sky-500 animate-spin mx-auto mb-4" />
                 <CardTitle className="text-white">Verifying Invitation</CardTitle>
                 <CardDescription>Please wait while we verify your invitation...</CardDescription>
               </>
@@ -82,12 +82,12 @@ function InvitePageContent() {
 
             {status === 'valid' && (
               <>
-                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-emerald-500" />
+                <div className="w-16 h-16 bg-sky-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-sky-500" />
                 </div>
                 <CardTitle className="text-white">You&apos;re Invited!</CardTitle>
                 <CardDescription>
-                  Your trainer has invited you to join APEX Fitness to track your workouts and progress.
+                  Your trainer has invited you to join Catalift to track your workouts and progress.
                 </CardDescription>
               </>
             )}
@@ -118,10 +118,10 @@ function InvitePageContent() {
 
             {status === 'accepted' && (
               <>
-                <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <CheckCircle className="w-8 h-8 text-emerald-500" />
+                <div className="w-16 h-16 bg-sky-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle className="w-8 h-8 text-sky-500" />
                 </div>
-                <CardTitle className="text-white">Welcome to APEX Fitness!</CardTitle>
+                <CardTitle className="text-white">Welcome to Catalift!</CardTitle>
                 <CardDescription>
                   Your account has been linked. Redirecting you to the app...
                 </CardDescription>
@@ -141,7 +141,7 @@ function InvitePageContent() {
 
                 <Button
                   onClick={handleAcceptInvite}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  className="w-full bg-sky-500 hover:bg-sky-600"
                 >
                   {isAuthenticated ? 'Accept Invitation' : 'Sign Up & Accept'}
                 </Button>
@@ -151,7 +151,7 @@ function InvitePageContent() {
                     Already have an account?{' '}
                     <button
                       onClick={() => router.push(`/auth?invite=${token}&mode=login`)}
-                      className="text-emerald-400 hover:underline"
+                      className="text-sky-400 hover:underline"
                     >
                       Sign in
                     </button>
@@ -180,7 +180,7 @@ export default function InvitePage() {
   return (
     <Suspense fallback={
       <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <Loader2 className="w-12 h-12 text-emerald-500 animate-spin" />
+        <Loader2 className="w-12 h-12 text-sky-500 animate-spin" />
       </div>
     }>
       <InvitePageContent />

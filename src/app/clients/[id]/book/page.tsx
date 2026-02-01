@@ -227,7 +227,7 @@ export default function BookClientPage() {
         {/* Date Selection */}
         <div className="space-y-2">
           <Label className="text-gray-300 flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-emerald-400" />
+            <Calendar className="w-4 h-4 text-sky-400" />
             Select Date
           </Label>
           <Select value={selectedDate} onValueChange={setSelectedDate}>
@@ -247,7 +247,7 @@ export default function BookClientPage() {
         {/* Time Selection */}
         <div className="space-y-2">
           <Label className="text-gray-300 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-emerald-400" />
+            <Clock className="w-4 h-4 text-sky-400" />
             Select Time
           </Label>
           <div className="grid grid-cols-4 gap-2">
@@ -257,7 +257,7 @@ export default function BookClientPage() {
                 size="sm"
                 variant={selectedTime === time ? 'default' : 'outline'}
                 className={selectedTime === time 
-                  ? 'bg-emerald-500 hover:bg-emerald-600' 
+                  ? 'bg-sky-500 hover:bg-sky-600' 
                   : 'border-gray-700 text-gray-300 hover:bg-gray-800'
                 }
                 onClick={() => setSelectedTime(time)}
@@ -306,14 +306,14 @@ export default function BookClientPage() {
         {sessionType === 'pt_session' && (
           <div className="space-y-3">
             <Label className="text-gray-300 flex items-center gap-2">
-              <Dumbbell className="w-4 h-4 text-emerald-400" />
+              <Dumbbell className="w-4 h-4 text-sky-400" />
               Workout Plan
             </Label>
             <div className="grid grid-cols-3 gap-2">
               <Button
                 variant={workoutType === 'program' ? 'default' : 'outline'}
                 className={workoutType === 'program' 
-                  ? 'bg-emerald-500 hover:bg-emerald-600 flex-col h-auto py-3' 
+                  ? 'bg-sky-500 hover:bg-sky-600 flex-col h-auto py-3' 
                   : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-3'
                 }
                 onClick={() => setWorkoutType('program')}
@@ -359,7 +359,7 @@ export default function BookClientPage() {
                           key={day.id}
                           variant={selectedProgramDay === day.id ? 'default' : 'outline'}
                           className={selectedProgramDay === day.id 
-                            ? 'bg-emerald-500 hover:bg-emerald-600 flex-col h-auto py-2' 
+                            ? 'bg-sky-500 hover:bg-sky-600 flex-col h-auto py-2' 
                             : 'border-gray-700 text-gray-300 hover:bg-gray-800 flex-col h-auto py-2'
                           }
                           onClick={() => setSelectedProgramDay(day.id)}
@@ -441,11 +441,11 @@ export default function BookClientPage() {
         {/* Location */}
         <div className="space-y-2">
           <Label className="text-gray-300 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-emerald-400" />
+            <MapPin className="w-4 h-4 text-sky-400" />
             Location (optional)
           </Label>
           <Input
-            placeholder="e.g., APEX Fitness Hamilton"
+            placeholder="e.g., Catalift Hamilton"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             className="bg-gray-800 border-gray-700 text-white"
@@ -482,9 +482,9 @@ export default function BookClientPage() {
         </Card>
 
         {/* Summary */}
-        <Card className="bg-emerald-500/10 border-emerald-500/30">
+        <Card className="bg-sky-500/10 border-sky-500/30">
           <CardContent className="p-4">
-            <h4 className="text-emerald-400 font-medium mb-2">Booking Summary</h4>
+            <h4 className="text-sky-400 font-medium mb-2">Booking Summary</h4>
             <div className="space-y-1 text-sm">
               <p className="text-gray-300">
                 <span className="text-gray-500">Date:</span>{' '}
@@ -511,7 +511,7 @@ export default function BookClientPage() {
       {/* Submit Button */}
       <div className="fixed bottom-20 left-0 right-0 px-4 pb-4 bg-gradient-to-t from-gray-950 via-gray-950">
         <Button
-          className="w-full bg-emerald-500 hover:bg-emerald-600 h-12 text-lg"
+          className="w-full bg-sky-500 hover:bg-sky-600 h-12 text-lg"
           onClick={handleSubmit}
           disabled={isSubmitting}
         >

@@ -167,19 +167,19 @@ export default function MessagesPage() {
                         <div
                           className={`max-w-[75%] rounded-2xl px-4 py-2 ${
                             isOwn
-                              ? 'bg-emerald-500 text-white rounded-br-md'
+                              ? 'bg-sky-500 text-white rounded-br-md'
                               : 'bg-gray-800 text-gray-200 rounded-bl-md'
                           }`}
                         >
                           <p className="text-sm">{msg.content}</p>
                           <div className={`flex items-center gap-1 mt-1 ${isOwn ? 'justify-end' : ''}`}>
-                            <span className={`text-xs ${isOwn ? 'text-emerald-200' : 'text-gray-500'}`}>
+                            <span className={`text-xs ${isOwn ? 'text-sky-200' : 'text-gray-500'}`}>
                               {format(new Date(msg.createdAt), 'HH:mm')}
                             </span>
                             {isOwn && (
                               msg.read 
-                                ? <CheckCheck className="w-3 h-3 text-emerald-200" />
-                                : <Check className="w-3 h-3 text-emerald-200" />
+                                ? <CheckCheck className="w-3 h-3 text-sky-200" />
+                                : <Check className="w-3 h-3 text-sky-200" />
                             )}
                           </div>
                         </div>
@@ -204,7 +204,7 @@ export default function MessagesPage() {
                 <Button 
                   onClick={handleSendMessage}
                   disabled={!messageText.trim()}
-                  className="bg-emerald-500 hover:bg-emerald-600"
+                  className="bg-sky-500 hover:bg-sky-600"
                 >
                   <Send className="w-5 h-5" />
                 </Button>
@@ -249,7 +249,7 @@ export default function MessagesPage() {
                           <p className="text-xs text-gray-500">@{u.username}</p>
                         </div>
                         {u.isTrainer && (
-                          <Badge variant="outline" className="border-emerald-500/50 text-emerald-400">
+                          <Badge variant="outline" className="border-sky-500/50 text-sky-400">
                             Trainer
                           </Badge>
                         )}
@@ -270,7 +270,7 @@ export default function MessagesPage() {
                         onClick={() => startConversation(client)}
                         className="flex flex-col items-center gap-1 min-w-[60px]"
                       >
-                        <Avatar className="w-12 h-12 ring-2 ring-emerald-500/50">
+                        <Avatar className="w-12 h-12 ring-2 ring-sky-500/50">
                           <AvatarImage src={client.profilePhoto} />
                           <AvatarFallback className="bg-gray-800">
                             {client.displayName?.[0] || '?'}
@@ -340,7 +340,7 @@ export default function MessagesPage() {
                                 </span>
                               )}
                               {unreadCount > 0 && (
-                                <Badge className="bg-emerald-500 text-white text-xs px-2">
+                                <Badge className="bg-sky-500 text-white text-xs px-2">
                                   {unreadCount}
                                 </Badge>
                               )}

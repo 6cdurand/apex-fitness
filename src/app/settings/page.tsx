@@ -385,6 +385,8 @@ export default function SettingsPage() {
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [preferredUnit, setPreferredUnit] = useState<WeightUnit>('kg');
+  const [exerciseUnit, setExerciseUnit] = useState<WeightUnit>('kg');
+  const [isPublicProfile, setIsPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
 
   useEffect(() => {
@@ -400,6 +402,8 @@ export default function SettingsPage() {
       setHeight(user.height?.toString() || '');
       setWeight(user.weight?.toString() || '');
       setPreferredUnit(user.preferredUnit || 'kg');
+      setExerciseUnit(user.exerciseUnit || 'kg');
+      setIsPublicProfile(user.isPublicProfile !== false); // Default to true
     }
   }, [user]);
 
@@ -410,6 +414,8 @@ export default function SettingsPage() {
       height: height ? parseFloat(height) : undefined,
       weight: weight ? parseFloat(weight) : undefined,
       preferredUnit,
+      exerciseUnit,
+      isPublicProfile,
     });
     toast.success('Profile updated successfully');
   };
@@ -422,7 +428,7 @@ export default function SettingsPage() {
         title="Settings" 
         showBack
         action={
-          <Button onClick={handleSaveProfile} className="bg-emerald-500 hover:bg-emerald-600">
+          <Button onClick={handleSaveProfile} className="bg-sky-500 hover:bg-sky-600">
             <Save className="w-4 h-4 mr-2" />
             Save
           </Button>
@@ -434,7 +440,7 @@ export default function SettingsPage() {
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader>
             <CardTitle className="text-white flex items-center gap-2">
-              <User className="w-5 h-5 text-emerald-400" />
+              <User className="w-5 h-5 text-sky-400" />
               Profile
             </CardTitle>
           </CardHeader>
@@ -493,8 +499,8 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Weight Unit</p>
-                <p className="text-sm text-gray-500">Choose your preferred unit</p>
+                <p className="font-medium text-white">Body Weight Unit</p>
+                <p className="text-sm text-gray-500">For your body weight display</p>
               </div>
               <Select value={preferredUnit} onValueChange={(v) => setPreferredUnit(v as WeightUnit)}>
                 <SelectTrigger className="w-24 bg-gray-800 border-gray-700 text-white">
@@ -505,6 +511,52 @@ export default function SettingsPage() {
                   <SelectItem value="lb">lb</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+            <Separator className="bg-gray-800" />
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-white">Exercise Weight Unit</p>
+                <p className="text-sm text-gray-500">For workout exercises display</p>
+              </div>
+              <Select value={exerciseUnit} onValueChange={(v) => setExerciseUnit(v as WeightUnit)}>
+                <SelectTrigger className="w-24 bg-gray-800 border-gray-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectItem value="kg">kg</SelectItem>
+                  <SelectItem value="lb">lb</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Privacy Settings */}
+        <Card className="bg-gray-900 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Shield className="w-5 h-5 text-green-400" />
+              Privacy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-white">Public Profile</p>
+                <p className="text-sm text-gray-500">Anyone can view your profile and stats</p>
+              </div>
+              <Switch 
+                checked={isPublicProfile}
+                onCheckedChange={setIsPublicProfile}
+                className="data-[state=checked]:bg-sky-500"
+              />
+            </div>
+            <div className="p-3 bg-gray-800 rounded-lg">
+              <p className="text-xs text-gray-400">
+                {isPublicProfile 
+                  ? "Your profile is visible to everyone. Anyone can see your strength ratings and workout stats."
+                  : "Your profile is private. Only your trainer and friends can see your strength ratings and workout stats."}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -526,7 +578,7 @@ export default function SettingsPage() {
               <Switch 
                 checked={notifications}
                 onCheckedChange={setNotifications}
-                className="data-[state=checked]:bg-emerald-500"
+                className="data-[state=checked]:bg-sky-500"
               />
             </div>
             <Separator className="bg-gray-800" />
@@ -535,7 +587,7 @@ export default function SettingsPage() {
                 <p className="font-medium text-white">Workout Reminders</p>
                 <p className="text-sm text-gray-500">Remind me to workout</p>
               </div>
-              <Switch className="data-[state=checked]:bg-emerald-500" />
+              <Switch className="data-[state=checked]:bg-sky-500" />
             </div>
             <Separator className="bg-gray-800" />
             <div className="flex items-center justify-between">
@@ -543,7 +595,7 @@ export default function SettingsPage() {
                 <p className="font-medium text-white">Social Notifications</p>
                 <p className="text-sm text-gray-500">Likes, comments, and follows</p>
               </div>
-              <Switch defaultChecked className="data-[state=checked]:bg-emerald-500" />
+              <Switch defaultChecked className="data-[state=checked]:bg-sky-500" />
             </div>
           </CardContent>
         </Card>
@@ -583,13 +635,13 @@ export default function SettingsPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
-                <Users className="w-5 h-5 text-emerald-400" />
+                <Users className="w-5 h-5 text-sky-400" />
                 Client Import
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                className="w-full bg-sky-600 hover:bg-sky-700"
                 onClick={handleImportRealClients}
               >
                 <Upload className="w-4 h-4 mr-2" />
@@ -770,7 +822,7 @@ export default function SettingsPage() {
 
         {/* App Info */}
         <div className="text-center text-gray-500 text-sm py-4">
-          <p>APEX Fitness v1.0.0</p>
+          <p>Catalift v1.0.0</p>
           <p className="mt-1">Made with 💪 for fitness enthusiasts</p>
         </div>
       </div>

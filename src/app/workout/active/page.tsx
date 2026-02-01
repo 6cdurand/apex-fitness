@@ -864,7 +864,7 @@ export default function ActiveWorkoutPage() {
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-emerald-500 to-emerald-600 px-4 pt-12 pb-2">
+      <header className="sticky top-0 z-50 bg-gradient-to-r from-sky-500 to-sky-600 px-4 pt-12 pb-2">
         <div className="flex items-center justify-between mb-2">
           <Button
             variant="ghost"
@@ -910,7 +910,7 @@ export default function ActiveWorkoutPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
                 <DropdownMenuItem
-                  className="text-emerald-400 focus:text-emerald-300"
+                  className="text-sky-400 focus:text-sky-300"
                   onClick={() => {
                     setSaveWorkoutName(activeWorkout.name || '');
                     setShowSaveWorkoutDialog(true);
@@ -938,7 +938,7 @@ export default function ActiveWorkoutPage() {
             <Button
               size="sm"
               onClick={() => setShowFinishDialog(true)}
-              className="bg-white text-emerald-600 hover:bg-gray-100"
+              className="bg-white text-sky-600 hover:bg-gray-100"
             >
               <Check className="w-4 h-4 mr-1" />
               Finish
@@ -1516,13 +1516,13 @@ export default function ActiveWorkoutPage() {
                             const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching';
                             const setTimer = activeSetTimers[set.id];
                             return (
-                            <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-emerald-500/10")}>
+                            <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-sky-500/10")}>
                               <div className="grid grid-cols-12 gap-2 items-center text-sm">
                                 {/* Set Number/Type */}
                                 <div className="col-span-1">
                                   <button className={cn(
                                     "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
-                                    set.completed && "bg-emerald-500 text-white",
+                                    set.completed && "bg-sky-500 text-white",
                                     !set.completed && "bg-gray-800 text-gray-400"
                                   )}>
                                     {set.completed ? <Check className="w-4 h-4" /> : idx + 1}
@@ -1628,7 +1628,7 @@ export default function ActiveWorkoutPage() {
                                         : handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')
                                       }
                                       disabled={isTimedSet ? !set.duration : (set.weight === undefined || set.weight === null || !set.reps)}
-                                      className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
+                                      className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
                                     >
                                       <Check className="w-5 h-5" />
                                     </Button>
@@ -1814,7 +1814,7 @@ export default function ActiveWorkoutPage() {
                   className={cn(
                     "bg-gray-900 border-gray-800 overflow-hidden transition-all",
                     supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
-                    isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-emerald-500",
+                    isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-sky-500",
                     isInSuperset && "border-l-4 border-l-purple-500"
                   )}
                   onClick={() => {
@@ -1983,7 +1983,7 @@ export default function ActiveWorkoutPage() {
                   <Button
                     variant="ghost"
                     onClick={() => addSet(workoutExercise.id)}
-                    className="w-full rounded-none border-t border-gray-800 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                    className="w-full rounded-none border-t border-gray-800 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                   >
                     <Plus className="w-4 h-4 mr-1" />
                     Add Set
@@ -2253,7 +2253,7 @@ export default function ActiveWorkoutPage() {
             </Button>
             <Button
               onClick={handleFinishWorkout}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              className="flex-1 bg-sky-500 hover:bg-sky-600"
             >
               Finish Workout
             </Button>
@@ -2294,7 +2294,7 @@ export default function ActiveWorkoutPage() {
         <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
           <div className="text-center py-4">
             {/* Success Icon */}
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center">
               <Check className="w-10 h-10 text-white" />
             </div>
             
@@ -2310,7 +2310,7 @@ export default function ActiveWorkoutPage() {
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="bg-gray-800 rounded-xl p-4">
-                <Clock className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+                <Clock className="w-5 h-5 text-sky-400 mx-auto mb-1" />
                 <p className="text-2xl font-bold text-white">
                   {formatTime(completedWorkoutData?.duration || 0)}
                 </p>
@@ -2364,7 +2364,7 @@ export default function ActiveWorkoutPage() {
                     type="checkbox"
                     checked={sessionPaid}
                     onChange={(e) => setSessionPaid(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-emerald-500 focus:ring-emerald-500"
+                    className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500"
                   />
                   <div className="text-left">
                     <span className="text-white font-medium">Session Paid</span>
@@ -2381,13 +2381,13 @@ export default function ActiveWorkoutPage() {
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
                 placeholder="How did this workout feel? Any notes for next time..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
             
             <Button
               onClick={handleCloseSummary}
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               size="lg"
             >
               Done
@@ -2417,7 +2417,7 @@ export default function ActiveWorkoutPage() {
                 onClick={() => setAutoRestEnabled(!autoRestEnabled)}
                 className={cn(
                   "relative w-12 h-6 rounded-full transition-colors",
-                  autoRestEnabled ? "bg-emerald-500" : "bg-gray-600"
+                  autoRestEnabled ? "bg-sky-500" : "bg-gray-600"
                 )}
               >
                 <div
@@ -2455,7 +2455,7 @@ export default function ActiveWorkoutPage() {
                   variant={defaultRestTime === time ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDefaultRestTime(time)}
-                  className={defaultRestTime === time ? "bg-emerald-500" : "border-gray-700"}
+                  className={defaultRestTime === time ? "bg-sky-500" : "border-gray-700"}
                 >
                   {time}s
                 </Button>
@@ -2465,7 +2465,7 @@ export default function ActiveWorkoutPage() {
 
           <Button
             onClick={() => setShowRestSettings(false)}
-            className="w-full bg-emerald-500 hover:bg-emerald-600"
+            className="w-full bg-sky-500 hover:bg-sky-600"
           >
             Done
           </Button>
@@ -2477,7 +2477,7 @@ export default function ActiveWorkoutPage() {
         <DialogContent className="bg-gray-900 border-gray-800">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <StickyNote className="w-5 h-5 text-emerald-400" />
+              <StickyNote className="w-5 h-5 text-sky-400" />
               Workout Notes
             </DialogTitle>
             <DialogDescription>
@@ -2489,12 +2489,12 @@ export default function ActiveWorkoutPage() {
             value={workoutNotes}
             onChange={(e) => setWorkoutNotes(e.target.value)}
             placeholder="How's the workout going? Track energy levels, form notes, things to remember..."
-            className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           
           <Button
             onClick={() => setShowNotesDialog(false)}
-            className="w-full bg-emerald-500 hover:bg-emerald-600"
+            className="w-full bg-sky-500 hover:bg-sky-600"
           >
             Save Notes
           </Button>
@@ -2616,7 +2616,7 @@ export default function ActiveWorkoutPage() {
         <DialogContent className="bg-gray-900 border-gray-800">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <Copy className="w-5 h-5 text-emerald-400" />
+              <Copy className="w-5 h-5 text-sky-400" />
               Save Workout as Template
             </DialogTitle>
             <DialogDescription className="text-gray-400">
@@ -2640,7 +2640,7 @@ export default function ActiveWorkoutPage() {
                 value={saveWorkoutDescription}
                 onChange={(e) => setSaveWorkoutDescription(e.target.value)}
                 placeholder="Brief description of this workout..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
           </div>
@@ -2656,7 +2656,7 @@ export default function ActiveWorkoutPage() {
             <Button
               onClick={handleSaveWorkout}
               disabled={!saveWorkoutName.trim()}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+              className="flex-1 bg-sky-500 hover:bg-sky-600"
             >
               Save to Library
             </Button>
@@ -2762,13 +2762,13 @@ function SetRow({
     <>
       <div className={cn(
         "grid grid-cols-12 gap-2 px-4 py-3 items-center transition-colors",
-        set.completed && "bg-emerald-500/10"
+        set.completed && "bg-sky-500/10"
       )}>
         <div className="col-span-2">
           <span className={cn(
             "w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium",
             set.completed 
-              ? "bg-emerald-500 text-white" 
+              ? "bg-sky-500 text-white" 
               : "bg-gray-800 text-gray-400"
           )}>
             {set.completed ? <Check className="w-4 h-4" /> : set.setNumber}
@@ -2837,7 +2837,7 @@ function SetRow({
               variant="ghost"
               onClick={handleComplete}
               disabled={weight === '' || !reps}
-              className="h-9 w-9 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-30"
+              className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
             >
               <Check className="w-5 h-5" />
             </Button>

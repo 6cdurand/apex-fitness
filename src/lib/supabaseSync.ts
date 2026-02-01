@@ -506,10 +506,12 @@ function toDbMedal(medal: Medal): any {
     icon: medal.icon,
     tier: medal.tier,
     category: medal.category,
+    rarity: medal.rarity,
     earned: medal.earned,
     earned_at: medal.earnedAt,
     progress: medal.progress || 0,
     target: medal.target || 1,
+    times_earned: medal.timesEarned || 1,
   };
 }
 
@@ -524,11 +526,12 @@ function fromDbMedal(dbMedal: any): Medal {
     icon: dbMedal.icon,
     tier: dbMedal.tier,
     category: dbMedal.category,
-    rarity: dbMedal.tier, // Use tier as rarity fallback
+    rarity: dbMedal.rarity || dbMedal.tier, // Use tier as rarity fallback
     earned: dbMedal.earned,
     earnedAt: dbMedal.earned_at,
     progress: dbMedal.progress,
     target: dbMedal.target,
+    timesEarned: dbMedal.times_earned || 1,
   };
 }
 
@@ -1582,9 +1585,9 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
 // Clear all local storage data for Apex
 export function clearAllLocalData(): void {
   console.log('[Local Cleanup] Clearing localStorage...');
-  localStorage.removeItem('apex-users');
+  localStorage.removeItem('catalift-users');
   localStorage.removeItem('apex-auth-storage');
-  localStorage.removeItem('apex-workout-storage');
+  localStorage.removeItem('catalift-workout-storage');
   localStorage.removeItem('apex-medal-storage');
   console.log('[Local Cleanup] ✅ All local data cleared');
 }
@@ -2253,7 +2256,7 @@ export async function sendClientInvitation(
         clientName,
         trainerName,
         inviteToken,
-        appUrl: typeof window !== 'undefined' ? window.location.origin : 'https://apex-fitness.app',
+        appUrl: typeof window !== 'undefined' ? window.location.origin : 'https://catalift.app',
       },
     });
 

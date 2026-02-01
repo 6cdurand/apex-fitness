@@ -11,10 +11,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "APEX Fitness | Train Smarter, Get Stronger",
+  title: "Catalift | Ignite Your Rise",
   description: "The ultimate fitness tracking and personal training platform. Log workouts, track progress, connect with trainers, and achieve your goals.",
-  keywords: ["fitness", "workout", "gym", "personal trainer", "strength training", "exercise"],
-  authors: [{ name: "APEX Fitness" }],
+  keywords: ["fitness", "workout", "gym", "personal trainer", "strength training", "exercise", "catalift"],
+  authors: [{ name: "Catalift" }],
   manifest: "/manifest.json",
 };
 
@@ -23,7 +23,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#030712",
+  themeColor: "#0c1929",
 };
 
 export default function RootLayout({

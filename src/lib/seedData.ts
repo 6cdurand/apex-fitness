@@ -3,7 +3,7 @@ import { exerciseLibrary, calculate1RM } from './exercises';
 import { medalDefinitions } from './medals';
 
 const trainersData = [
-  { id: 'trainer-christo', email: 'christo@apexfitness.nz', username: 'christo_durand', displayName: 'Christo Durand', bio: 'Head Coach & Founder of APEX Fitness. Specializing in strength training and powerlifting for all levels.', gender: 'male', height: 185, weight: 92, specs: ['Powerlifting', 'Strength & Conditioning'], photo: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&h=200&fit=crop&crop=face', location: 'APEX Fitness Hamilton', rate: 75, availability: 'Mon-Sat 6am-8pm' },
+  { id: 'trainer-christo', email: 'christo@apexfitness.nz', username: 'christo_durand', displayName: 'Christo Durand', bio: 'Head Coach & Founder of Catalift. Specializing in strength training and powerlifting for all levels.', gender: 'male', height: 185, weight: 92, specs: ['Powerlifting', 'Strength & Conditioning'], photo: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&h=200&fit=crop&crop=face', location: 'Catalift Hamilton', rate: 75, availability: 'Mon-Sat 6am-8pm' },
   { id: 'trainer-sarah', email: 'sarah@lesmills.co.nz', username: 'sarah_fitness', displayName: 'Sarah Thompson', bio: 'Les Mills certified instructor with 8+ years experience. HIIT and group fitness specialist.', gender: 'female', height: 168, weight: 62, specs: ['Group Fitness', 'HIIT'], photo: 'https://images.unsplash.com/photo-1594381898411-846e7d193883?w=200&h=200&fit=crop&crop=face', location: 'Les Mills Hamilton', rate: 65, availability: 'Mon-Fri 5am-6pm' },
   { id: 'trainer-mike', email: 'mike@cityfitness.co.nz', username: 'mike_strength', displayName: 'Mike Roberts', bio: 'Former competitive powerlifter. Now helping others achieve their strength goals.', gender: 'male', height: 190, weight: 105, specs: ['Powerlifting', 'Strongman'], photo: 'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=200&h=200&fit=crop&crop=face', location: 'City Fitness Hamilton', rate: 70, availability: 'Tue-Sun 7am-9pm' },
   { id: 'trainer-emma', email: 'emma@snapfitness.co.nz', username: 'emma_wellness', displayName: 'Emma Wilson', bio: 'Holistic approach to fitness. Yoga, mindfulness, and strength training combined.', gender: 'female', height: 165, weight: 58, specs: ['Womens Fitness', 'Yoga'], photo: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=200&h=200&fit=crop&crop=face', location: 'Snap Fitness Cambridge', rate: 60, availability: 'Mon-Sat 6am-4pm' },
@@ -51,13 +51,13 @@ export function initializeSeedData(): void {
   
   // Mark as seeded but don't create any mock data
   localStorage.setItem('apex-seeded', 'true');
-  console.log('APEX Fitness: Fresh start mode - no seed data');
+  console.log('Catalift: Fresh start mode - no seed data');
   return;
   
   // OLD CODE BELOW - DISABLED
   if (localStorage.getItem('apex-seeded') === 'true') return;
   
-  console.log('Initializing APEX Fitness seed data...');
+  console.log('Initializing Catalift seed data...');
   
   const trainers = trainersData.map((t, idx) => ({
     id: t.id, email: t.email, username: t.username, displayName: t.displayName,
@@ -334,7 +334,7 @@ export function initializeSeedData(): void {
   });
   
   // Save to localStorage with proper store format
-  localStorage.setItem('apex-users', JSON.stringify(allUsers));
+  localStorage.setItem('catalift-users', JSON.stringify(allUsers));
   
   // Get Christo's data (christoId already defined above)
   // Trainers start with empty workouts, PBs, and medals - they build their own history
@@ -344,8 +344,8 @@ export function initializeSeedData(): void {
   const christoClients = clients.filter(c => c.trainerId === christoId);
   const christoEvents = events.filter(e => e.trainerId === christoId);
   
-  // Workout store format (key: apex-workout)
-  localStorage.setItem('apex-workout', JSON.stringify({ 
+  // Workout store format (key: catalift-workout)
+  localStorage.setItem('catalift-workout', JSON.stringify({ 
     state: { 
       workoutHistory: christoWorkouts, 
       personalBests: christoPbs, 
@@ -425,7 +425,7 @@ export function resetSeedData(): void {
 export function resetWorkoutDataOnly(): void {
   if (typeof window === 'undefined') return;
   // Clear only workout-related data - keep auth/user intact
-  localStorage.setItem('apex-workout', JSON.stringify({ 
+  localStorage.setItem('catalift-workout', JSON.stringify({ 
     state: { workoutHistory: [], personalBests: [], activeWorkout: null, templates: [], workoutTimer: { isRunning: false, seconds: 0, type: 'workout' }, restTimer: { isRunning: false, seconds: 0, type: 'rest' } }, 
     version: 0 
   }));
@@ -456,7 +456,7 @@ export function addWorkoutForClient(
 ): void {
   if (typeof window === 'undefined') return;
   
-  const workoutStore = JSON.parse(localStorage.getItem('apex-workout') || '{}');
+  const workoutStore = JSON.parse(localStorage.getItem('catalift-workout') || '{}');
   const state = workoutStore.state || { workoutHistory: [], personalBests: [] };
   
   const workoutDate = dateOverride || new Date();
@@ -497,7 +497,7 @@ export function addWorkoutForClient(
   
   state.workoutHistory = [workout, ...(state.workoutHistory || [])];
   
-  localStorage.setItem('apex-workout', JSON.stringify({ state, version: 0 }));
+  localStorage.setItem('catalift-workout', JSON.stringify({ state, version: 0 }));
   console.log(`Added workout "${workoutName}" for client ${clientId}. Volume: ${totalVolume}kg`);
 }
 
@@ -508,7 +508,7 @@ export function addWorkoutForClient(
 export function listClients(trainerId: string = 'trainer-christo'): void {
   if (typeof window === 'undefined') return;
   
-  const users = JSON.parse(localStorage.getItem('apex-users') || '[]');
+  const users = JSON.parse(localStorage.getItem('catalift-users') || '[]');
   const clients = users.filter((u: any) => u.trainerId === trainerId);
   
   console.log(`\nClients for ${trainerId}:`);

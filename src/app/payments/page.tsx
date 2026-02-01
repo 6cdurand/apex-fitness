@@ -395,7 +395,7 @@ export default function PaymentsPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
               <p className="text-xs text-gray-400 mb-1">Outstanding</p>
-              <p className={`text-xl font-bold ${totalOutstanding > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+              <p className={`text-xl font-bold ${totalOutstanding > 0 ? 'text-amber-400' : 'text-sky-400'}`}>
                 ${totalOutstanding}
               </p>
               <p className="text-xs text-gray-500">{clientsWithOutstanding} clients</p>
@@ -420,11 +420,11 @@ export default function PaymentsPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-gray-900 mb-4">
-            <TabsTrigger value="clients" className="data-[state=active]:bg-emerald-500">
+            <TabsTrigger value="clients" className="data-[state=active]:bg-sky-500">
               <Users className="w-4 h-4 mr-2" />
               Clients
             </TabsTrigger>
-            <TabsTrigger value="history" className="data-[state=active]:bg-emerald-500">
+            <TabsTrigger value="history" className="data-[state=active]:bg-sky-500">
               <Clock className="w-4 h-4 mr-2" />
               History
             </TabsTrigger>
@@ -484,7 +484,7 @@ export default function PaymentsPage() {
                         </div>
                         <div className="bg-gray-800 rounded-lg p-2">
                           <p className="text-xs text-gray-400">Paid</p>
-                          <p className="font-bold text-emerald-400">{client.totalPaidSessions}</p>
+                          <p className="font-bold text-sky-400">{client.totalPaidSessions}</p>
                         </div>
                         <div className="bg-gray-800 rounded-lg p-2">
                           <p className="text-xs text-gray-400">Outstanding</p>
@@ -525,7 +525,7 @@ export default function PaymentsPage() {
                           </div>
                           <Button
                             size="sm"
-                            className="bg-emerald-500 hover:bg-emerald-600 h-8"
+                            className="bg-sky-500 hover:bg-sky-600 h-8"
                             onClick={() => {
                               setSelectedClient(client.clientId);
                               setPaymentDate(format(new Date(), 'yyyy-MM-dd'));
@@ -539,9 +539,9 @@ export default function PaymentsPage() {
                       )}
                       
                       {!client.hasOutstanding && client.totalSessionsEver > 0 && (
-                        <div className="flex items-center justify-center gap-2 bg-emerald-500/10 rounded-lg p-3">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span className="text-sm text-emerald-400">All payments up to date</span>
+                        <div className="flex items-center justify-center gap-2 bg-sky-500/10 rounded-lg p-3">
+                          <CheckCircle2 className="w-4 h-4 text-sky-400" />
+                          <span className="text-sm text-sky-400">All payments up to date</span>
                         </div>
                       )}
                     </CardContent>
@@ -586,7 +586,7 @@ export default function PaymentsPage() {
                               </div>
                             </div>
                             <div className="text-right">
-                              <p className="font-bold text-emerald-400">${payment.amount}</p>
+                              <p className="font-bold text-sky-400">${payment.amount}</p>
                               <p className="text-xs text-gray-500 capitalize">{payment.method?.replace('_', ' ')}</p>
                             </div>
                           </div>
@@ -676,7 +676,7 @@ export default function PaymentsPage() {
                   <p className="text-sm text-gray-400">
                     Total per {editingSettings.frequency === 'weekly' ? 'week' : editingSettings.frequency === 'fortnightly' ? 'fortnight' : 'month'}:
                   </p>
-                  <p className="text-xl font-bold text-emerald-400">
+                  <p className="text-xl font-bold text-sky-400">
                     ${editingSettings.pricePerSession * editingSettings.sessionsPerWeek * 
                       (editingSettings.frequency === 'weekly' ? 1 : editingSettings.frequency === 'fortnightly' ? 2 : 4)}
                   </p>
@@ -685,7 +685,7 @@ export default function PaymentsPage() {
               
               <div className="flex flex-col gap-2 pt-2">
                 <Button
-                  className="w-full bg-emerald-500 hover:bg-emerald-600"
+                  className="w-full bg-sky-500 hover:bg-sky-600"
                   onClick={handleLogPaymentFromSettings}
                 >
                   <DollarSign className="w-4 h-4 mr-2" />
@@ -767,7 +767,7 @@ export default function PaymentsPage() {
                       )}
                       
                       <Button
-                        className="w-full bg-emerald-500 hover:bg-emerald-600"
+                        className="w-full bg-sky-500 hover:bg-sky-600"
                         onClick={() => handleConfirmPayment(selectedClient, 1)}
                       >
                         <Check className="w-4 h-4 mr-2" />
@@ -777,7 +777,7 @@ export default function PaymentsPage() {
                       {data.outstandingSessions > 1 && data.outstandingSessions !== data.sessionsPerCycle && (
                         <Button
                           variant="outline"
-                          className="w-full border-emerald-500 text-emerald-400 hover:bg-emerald-500/10"
+                          className="w-full border-sky-500 text-sky-400 hover:bg-sky-500/10"
                           onClick={() => handleConfirmPayment(selectedClient, data.outstandingSessions)}
                         >
                           <CheckCircle2 className="w-4 h-4 mr-2" />

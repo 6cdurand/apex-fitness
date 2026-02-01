@@ -11,7 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Dumbbell, ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail } from 'lucide-react';
+import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -159,34 +160,34 @@ export default function AuthPage() {
     }
     
     if (success) {
-      toast.success('Welcome to APEX Fitness!');
+      toast.success('Welcome to Catalift!');
       router.push('/workout');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col overflow-auto">
+    <div className="min-h-screen bg-slate-950 flex flex-col overflow-auto">
       {/* Hero Section */}
-      <div className="relative bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500 px-6 pt-12 pb-8 flex-shrink-0">
-        <div className="absolute inset-0 bg-[url('/grid.svg')] opacity-10" />
+      <div className="relative bg-gradient-to-br from-sky-600 via-sky-500 to-orange-400 px-6 pt-16 pb-12 flex-shrink-0 overflow-hidden">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:32px_32px]" />
+        <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute -top-12 -left-12 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl" />
         <div className="relative z-10 max-w-md mx-auto text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm mb-4">
-            <Dumbbell className="w-8 h-8 text-white" />
+          <div className="flex justify-center mb-2">
+            <CataliftLogo size="lg" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">APEX FITNESS</h1>
-          <p className="text-emerald-100">Train Smarter. Get Stronger.</p>
         </div>
       </div>
 
       {/* Auth Card */}
-      <div className="flex-1 px-4 py-6">
-        <Card className="max-w-md mx-auto bg-gray-900 border-gray-800 shadow-2xl">
+      <div className="flex-1 px-5 py-8 -mt-6">
+        <Card className="max-w-md mx-auto bg-slate-900/95 border-slate-800/50 shadow-2xl shadow-black/50 backdrop-blur-sm rounded-2xl">
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'login' | 'register'); setStep('credentials'); }}>
-            <TabsList className="grid w-full grid-cols-2 bg-gray-800">
-              <TabsTrigger value="login" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
+            <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 rounded-xl p-1">
+              <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
                 Sign In
               </TabsTrigger>
-              <TabsTrigger value="register" className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white">
+              <TabsTrigger value="register" className="rounded-lg data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
                 Create Account
               </TabsTrigger>
             </TabsList>
@@ -224,7 +225,7 @@ export default function AuthPage() {
                   </div>
                   <Button 
                     type="submit" 
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-white"
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
                     disabled={isLoading}
                   >
                     {isLoading ? 'Signing in...' : 'Sign In'}
@@ -258,7 +259,7 @@ export default function AuthPage() {
                     type="button"
                     variant="outline"
                     onClick={handleDemoLogin}
-                    className="w-full border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 mt-2"
+                    className="w-full border-sky-500/50 text-sky-400 hover:bg-sky-500/10 mt-2"
                   >
                     Continue as Demo User
                   </Button>
@@ -299,7 +300,7 @@ export default function AuthPage() {
                       key={s}
                       className={`h-1 flex-1 rounded-full transition-colors ${
                         ['credentials', 'profile', 'goals'].indexOf(step) >= i
-                          ? 'bg-emerald-500'
+                          ? 'bg-sky-500'
                           : 'bg-gray-700'
                       }`}
                     />
@@ -449,7 +450,7 @@ export default function AuthPage() {
                           <Switch
                             checked={isTrainer}
                             onCheckedChange={setIsTrainer}
-                            className="data-[state=checked]:bg-emerald-500"
+                            className="data-[state=checked]:bg-sky-500"
                           />
                         </div>
                       </div>
@@ -463,23 +464,23 @@ export default function AuthPage() {
                         </div>
                       )}
 
-                      <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                        <h4 className="font-semibold text-emerald-400 mb-2">What you&apos;ll get:</h4>
+                      <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/20">
+                        <h4 className="font-semibold text-sky-400 mb-2">What you&apos;ll get:</h4>
                         <ul className="space-y-2 text-sm text-gray-300">
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                             Advanced workout logging & tracking
                           </li>
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                             Strength ratings & medals system
                           </li>
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                             Social features & community
                           </li>
                           <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                             Weekly progress reports
                           </li>
                         </ul>
@@ -501,7 +502,7 @@ export default function AuthPage() {
                     )}
                     <Button
                       type="submit"
-                      className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
+                      className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
                       disabled={isLoading}
                     >
                       {step === 'goals' ? (isLoading ? 'Creating...' : 'Create Account') : 'Continue'}

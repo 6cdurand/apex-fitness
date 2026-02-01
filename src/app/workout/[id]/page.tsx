@@ -191,8 +191,8 @@ export default function WorkoutDetailPage() {
           <div className="grid grid-cols-2 gap-3">
             <Card className="bg-gray-900 border-gray-800">
               <CardContent className="p-4 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-emerald-400" />
+                <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
+                  <Clock className="w-5 h-5 text-sky-400" />
                 </div>
                 <div>
                   <p className="text-xl font-bold text-white">
@@ -310,7 +310,7 @@ export default function WorkoutDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={handleSaveNotes}
-                    className="text-emerald-400 hover:text-emerald-300"
+                    className="text-sky-400 hover:text-sky-300"
                   >
                     <Save className="w-4 h-4 mr-1" />
                     Save
@@ -337,7 +337,7 @@ export default function WorkoutDetailPage() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-emerald-400" />
+                <Dumbbell className="w-5 h-5 text-sky-400" />
                 Exercises ({workout.exercises.length})
               </h2>
               {!isEditingWorkout ? (
@@ -363,7 +363,7 @@ export default function WorkoutDetailPage() {
                   <Button
                     size="sm"
                     onClick={handleSaveEdit}
-                    className="bg-emerald-500 hover:bg-emerald-600"
+                    className="bg-sky-500 hover:bg-sky-600"
                   >
                     <Save className="w-4 h-4 mr-1" />
                     Save Changes
@@ -468,7 +468,7 @@ export default function WorkoutDetailPage() {
           <div className="grid grid-cols-2 gap-3">
             <Button
               onClick={handleRepeat}
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-sky-500 hover:bg-sky-600"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Repeat Workout

@@ -3,44 +3,66 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ============================================
+   CATALIFT DESIGN SYSTEM - Pass 1
+   "Journey Upward" - Calm foundation, radiant progress
+   ============================================ */
+
 @theme inline {
+  /* === COLORS === */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  
+  /* Progress/Milestone colors - use sparingly for "radiant" moments */
+  --color-progress: var(--progress);
+  --color-progress-glow: var(--progress-glow);
+  --color-milestone: var(--milestone);
+  --color-milestone-glow: var(--milestone-glow);
+  
+  /* Chart colors */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  
+  /* Sidebar */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* === TYPOGRAPHY === */
   --font-sans: var(--font-inter);
   --font-mono: var(--font-inter);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  
+  /* === BORDER RADIUS - Consistent, friendly curves === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
 }
 
 :root {
@@ -79,37 +101,71 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ============================================
+     CATALIFT DARK THEME
+     "Journey Upward" - Calm foundation, radiant progress
+     ============================================ */
+  
+  /* === SURFACE HIERARCHY === */
+  /* Level 0: Page background - deepest, calm */
+  --background: oklch(0.12 0.015 240);
+  /* Level 1: Cards, containers */
+  --card: oklch(0.16 0.015 240);
+  /* Level 2: Elevated elements (modals, popovers) */
+  --popover: oklch(0.18 0.015 240);
+  /* Level 3: Interactive hover states */
+  --elevated: oklch(0.20 0.015 240);
+  
+  /* === TEXT COLORS === */
+  --foreground: oklch(0.95 0 0);
+  --card-foreground: oklch(0.95 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.60 0.01 240);
+  --secondary-foreground: oklch(0.90 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  
+  /* === PRIMARY ACTION - Sky blue (calm, trustworthy) === */
+  --primary: oklch(0.70 0.14 220);
+  --primary-foreground: oklch(0.12 0.015 240);
+  
+  /* === SECONDARY/MUTED - Subtle, non-competing === */
+  --secondary: oklch(0.20 0.015 240);
+  --muted: oklch(0.20 0.015 240);
+  --accent: oklch(0.22 0.02 240);
+  
+  /* === PROGRESS & MILESTONES - "Radiant moments" === */
+  /* Use these ONLY for achievements, level-ups, streaks */
+  --progress: oklch(0.70 0.14 220);
+  --progress-glow: oklch(0.70 0.18 220 / 0.3);
+  --milestone: oklch(0.75 0.16 45);
+  --milestone-glow: oklch(0.75 0.20 45 / 0.4);
+  
+  /* === FUNCTIONAL COLORS === */
+  --destructive: oklch(0.65 0.20 25);
+  --success: oklch(0.70 0.15 145);
+  --warning: oklch(0.75 0.15 80);
+  
+  /* === BORDERS & INPUTS === */
+  --border: oklch(0.28 0.015 240);
+  --input: oklch(0.22 0.015 240);
+  --ring: oklch(0.65 0.14 220);
+  
+  /* === CHART PALETTE === */
+  --chart-1: oklch(0.70 0.14 220);
+  --chart-2: oklch(0.65 0.12 180);
+  --chart-3: oklch(0.75 0.16 45);
+  --chart-4: oklch(0.60 0.14 280);
+  --chart-5: oklch(0.70 0.18 30);
+  
+  /* === SIDEBAR === */
+  --sidebar: oklch(0.14 0.015 240);
+  --sidebar-foreground: oklch(0.95 0 0);
+  --sidebar-primary: oklch(0.70 0.14 220);
+  --sidebar-primary-foreground: oklch(0.95 0 0);
+  --sidebar-accent: oklch(0.22 0.02 240);
+  --sidebar-accent-foreground: oklch(0.95 0 0);
+  --sidebar-border: oklch(0.25 0.015 240);
+  --sidebar-ring: oklch(0.65 0.14 220);
 }
 
 @layer base {
@@ -118,5 +174,101 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* ============================================
+   CATALIFT TYPOGRAPHY SYSTEM
+   Calm, readable, hierarchy-driven
+   ============================================ */
+
+@layer utilities {
+  /* Display - Hero text, big moments */
+  .text-display {
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  
+  /* Title - Page titles, section headers */
+  .text-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  
+  /* Heading - Card titles, subsections */
+  .text-heading {
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  
+  /* Body - Default readable text */
+  .text-body {
+    font-size: 1rem;
+    font-weight: 400;
+    line-height: 1.5;
+  }
+  
+  /* Caption - Secondary info, metadata */
+  .text-caption {
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.4;
+  }
+  
+  /* Small - Labels, badges, fine print */
+  .text-small {
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+  }
+  
+  /* === PROGRESS GLOW EFFECTS === */
+  /* Use sparingly - only for achievements/milestones */
+  .glow-progress {
+    box-shadow: 0 0 20px var(--progress-glow), 0 0 40px var(--progress-glow);
+  }
+  
+  .glow-milestone {
+    box-shadow: 0 0 20px var(--milestone-glow), 0 0 40px var(--milestone-glow);
+  }
+  
+  /* Subtle glow for progress indicators */
+  .glow-subtle {
+    box-shadow: 0 0 10px var(--progress-glow);
+  }
+  
+  /* === SURFACE UTILITIES === */
+  .surface-base {
+    background-color: var(--background);
+  }
+  
+  .surface-card {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  
+  .surface-elevated {
+    background-color: var(--popover);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  
+  .surface-interactive {
+    background-color: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: all 0.15s ease;
+  }
+  
+  .surface-interactive:hover {
+    background-color: var(--elevated);
+    border-color: var(--ring);
   }
 }

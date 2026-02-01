@@ -34,8 +34,8 @@ function getIntensityColor(value: number, maxValue: number): string {
   if (intensity === 0) return 'fill-gray-700';
   if (intensity < 0.25) return 'fill-emerald-900';
   if (intensity < 0.5) return 'fill-emerald-700';
-  if (intensity < 0.75) return 'fill-emerald-500';
-  return 'fill-emerald-400';
+  if (intensity < 0.75) return 'fill-sky-500';
+  return 'fill-sky-400';
 }
 
 export function BodyVisualization({ 
@@ -131,7 +131,7 @@ export function BodyVisualization({
           <span>Low</span>
         </div>
         <div className="flex items-center gap-1 text-xs text-gray-500">
-          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+          <div className="w-2 h-2 rounded-full bg-sky-500" />
           <span>High</span>
         </div>
       </div>
@@ -194,7 +194,7 @@ export function MuscleHeatmap({
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
               <div 
-                className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full transition-all duration-500"
+                className="h-full bg-gradient-to-r from-sky-600 to-sky-400 rounded-full transition-all duration-500"
                 style={{ width: `${percentage}%` }}
               />
             </div>

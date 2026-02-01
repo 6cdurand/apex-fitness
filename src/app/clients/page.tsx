@@ -460,12 +460,12 @@ export default function ClientsPage() {
               {clientMode === null && (
                 <div className="grid grid-cols-2 gap-4 py-4">
                   <Card 
-                    className="cursor-pointer hover:border-emerald-500 transition-colors bg-gray-800 border-gray-700"
+                    className="cursor-pointer hover:border-sky-500 transition-colors bg-gray-800 border-gray-700"
                     onClick={() => setClientMode('create')}
                   >
                     <CardContent className="p-4 text-center space-y-2">
-                      <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto">
-                        <UserPlus className="h-6 w-6 text-emerald-400" />
+                      <div className="w-12 h-12 bg-sky-500/20 rounded-full flex items-center justify-center mx-auto">
+                        <UserPlus className="h-6 w-6 text-sky-400" />
                       </div>
                       <h3 className="font-semibold text-white">Create New</h3>
                       <p className="text-xs text-gray-400">New client, no account yet</p>
@@ -707,7 +707,7 @@ export default function ClientsPage() {
           </Card>
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-emerald-400">{trainerClients.length}</p>
+              <p className="text-2xl font-bold text-sky-400">{trainerClients.length}</p>
               <p className="text-xs text-gray-400">Total</p>
             </CardContent>
           </Card>
@@ -786,7 +786,7 @@ export default function ClientsPage() {
                             )}
                             <Badge 
                               className={client.status === 'active' 
-                                ? 'bg-emerald-500/20 text-emerald-400' 
+                                ? 'bg-sky-500/20 text-sky-400' 
                                 : 'bg-amber-500/20 text-amber-400'
                               }
                             >
@@ -800,7 +800,7 @@ export default function ClientsPage() {
                               {workoutsDone} sessions
                             </span>
                             {activePackage && (
-                              <span className="flex items-center gap-1 text-emerald-400">
+                              <span className="flex items-center gap-1 text-sky-400">
                                 <Target className="w-3 h-3" />
                                 {activePackage.remainingSessions} left
                               </span>
@@ -1199,7 +1199,7 @@ export default function ClientsPage() {
                 setBookingNotes('');
                 toast.success(`Session booked for ${format(startDateTime, 'MMM d')} at ${format(startDateTime, 'h:mm a')}`);
               }}
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               disabled={!bookingDate || !bookingTime}
             >
               <Calendar className="w-4 h-4 mr-2" />

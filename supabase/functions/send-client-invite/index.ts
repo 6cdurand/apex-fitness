@@ -41,9 +41,9 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'APEX Fitness <onboarding@resend.dev>',
+        from: 'Catalift <onboarding@resend.dev>',
         to: [to],
-        subject: `${trainerName} has invited you to APEX Fitness`,
+        subject: `${trainerName} has invited you to Catalift`,
         html: `
           <!DOCTYPE html>
           <html>
@@ -54,9 +54,9 @@ serve(async (req) => {
           <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #0a0a0a; color: #ffffff; padding: 40px 20px; margin: 0;">
             <div style="max-width: 500px; margin: 0 auto; background-color: #111111; border-radius: 16px; overflow: hidden;">
               <!-- Header -->
-              <div style="background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); padding: 32px; text-align: center;">
-                <h1 style="margin: 0; font-size: 28px; font-weight: bold; color: white;">APEX FITNESS</h1>
-                <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Train Smarter. Get Stronger.</p>
+              <div style="background: linear-gradient(135deg, #0ea5e9 0%, #f97316 100%); padding: 32px; text-align: center;">
+                <h1 style="margin: 0; font-size: 28px; font-weight: bold; color: white;">CATALIFT</h1>
+                <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">Ignite Your Rise</p>
               </div>
               
               <!-- Content -->
@@ -66,11 +66,11 @@ serve(async (req) => {
                 </h2>
                 
                 <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: #a1a1aa;">
-                  <strong style="color: #10b981;">${trainerName}</strong> has invited you to join APEX Fitness to track your workouts, monitor your progress, and achieve your fitness goals together.
+                  <strong style="color: #0ea5e9;">${trainerName}</strong> has invited you to join Catalift to track your workouts, monitor your progress, and achieve your fitness goals together.
                 </p>
                 
                 <div style="background-color: #1a1a1a; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #a1a1aa;">With APEX Fitness you can:</p>
+                  <p style="margin: 0 0 8px 0; font-size: 14px; color: #a1a1aa;">With Catalift you can:</p>
                   <ul style="margin: 0; padding-left: 20px; color: #ffffff; font-size: 14px; line-height: 1.8;">
                     <li>View your workout history</li>
                     <li>Track personal bests & progress</li>
@@ -80,7 +80,7 @@ serve(async (req) => {
                 </div>
                 
                 <!-- CTA Button -->
-                <a href="${inviteLink}" style="display: block; width: 100%; padding: 16px 24px; background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%); color: white; text-decoration: none; text-align: center; border-radius: 12px; font-weight: 600; font-size: 16px; box-sizing: border-box;">
+                <a href="${inviteLink}" style="display: block; width: 100%; padding: 16px 24px; background: linear-gradient(135deg, #0ea5e9 0%, #f97316 100%); color: white; text-decoration: none; text-align: center; border-radius: 12px; font-weight: 600; font-size: 16px; box-sizing: border-box;">
                   Accept Invitation & Get Started
                 </a>
                 

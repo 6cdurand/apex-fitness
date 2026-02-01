@@ -194,11 +194,11 @@ export default function MyTrainerPage() {
           {/* Today's Focus / Upcoming Workout */}
           <section>
             <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-              <Target className="w-5 h-5 text-emerald-400" />
+              <Target className="w-5 h-5 text-sky-400" />
               Today&apos;s Focus
             </h2>
             {upcomingWorkouts.length > 0 ? (
-              <Card className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 border-emerald-500/30">
+              <Card className="bg-gradient-to-br from-sky-500/20 to-sky-600/10 border-sky-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -207,13 +207,13 @@ export default function MyTrainerPage() {
                         {upcomingWorkouts[0].exercises.length} exercises
                       </p>
                     </div>
-                    <Button className="bg-emerald-500 hover:bg-emerald-600">
+                    <Button className="bg-sky-500 hover:bg-sky-600">
                       Start Workout
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {upcomingWorkouts[0].exercises.slice(0, 4).map((ex) => (
-                      <Badge key={ex.id} variant="outline" className="border-emerald-500/50 text-emerald-400">
+                      <Badge key={ex.id} variant="outline" className="border-sky-500/50 text-sky-400">
                         {ex.exercise.name}
                       </Badge>
                     ))}

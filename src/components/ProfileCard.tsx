@@ -64,7 +64,7 @@ export function ProfileCard({
       case 'elite': return 'text-amber-400';
       case 'advanced': return 'text-purple-400';
       case 'intermediate': return 'text-blue-400';
-      case 'novice': return 'text-emerald-400';
+      case 'novice': return 'text-sky-400';
       default: return 'text-gray-400';
     }
   };
@@ -85,7 +85,7 @@ export function ProfileCard({
       case 'legendary': return 'text-orange-400 border-orange-400';
       case 'epic': return 'text-purple-400 border-purple-400';
       case 'rare': return 'text-blue-400 border-blue-400';
-      case 'uncommon': return 'text-emerald-400 border-emerald-400';
+      case 'uncommon': return 'text-sky-400 border-sky-400';
       default: return 'text-gray-400 border-gray-400';
     }
   };
@@ -107,7 +107,7 @@ export function ProfileCard({
           strengthRating?.tier === 'elite' ? 'from-amber-500 via-yellow-400 to-amber-500' :
           strengthRating?.tier === 'advanced' ? 'from-purple-500 via-purple-400 to-purple-500' :
           strengthRating?.tier === 'intermediate' ? 'from-blue-500 via-blue-400 to-blue-500' :
-          strengthRating?.tier === 'novice' ? 'from-emerald-500 via-emerald-400 to-emerald-500' :
+          strengthRating?.tier === 'novice' ? 'from-sky-500 via-sky-400 to-sky-500' :
           'from-gray-600 via-gray-500 to-gray-600'
         }`} />
 
@@ -202,21 +202,36 @@ export function ProfileCard({
                 Top Achievements
               </h4>
               <div className="grid grid-cols-3 gap-3">
-                {topMedals.map((medal) => (
-                  <button
-                    key={medal.id}
-                    onClick={(e) => { e.stopPropagation(); setSelectedMedal(medal); }}
-                    className={`p-3 rounded-xl bg-gradient-to-br ${getTierGradient(medal.tier)} relative overflow-hidden hover:scale-105 transition-transform`}
-                  >
-                    <div className="text-center">
-                      <span className="text-3xl block mb-1">{medal.icon}</span>
-                      <p className="text-xs font-medium text-white truncate">{medal.name}</p>
-                      <p className="text-[10px] text-white/60 capitalize">{medal.tier}</p>
-                    </div>
-                    {/* Shine effect */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 pointer-events-none" />
-                  </button>
-                ))}
+                {topMedals.map((medal) => {
+                  const timesEarned = medal.timesEarned || 1;
+                  const progressColor = timesEarned >= 10 ? 'bg-cyan-400' : 
+                                        timesEarned >= 5 ? 'bg-amber-400' : 
+                                        timesEarned >= 3 ? 'bg-gray-300' : 
+                                        'bg-amber-700';
+                  return (
+                    <button
+                      key={medal.id}
+                      onClick={(e) => { e.stopPropagation(); setSelectedMedal(medal); }}
+                      className={`p-3 rounded-xl bg-gradient-to-br ${getTierGradient(medal.tier)} relative overflow-hidden hover:scale-105 transition-transform`}
+                    >
+                      <div className="text-center">
+                        <span className="text-3xl block mb-1">{medal.icon}</span>
+                        <p className="text-xs font-medium text-white truncate">{medal.name}</p>
+                        <p className="text-[10px] text-white/60 capitalize">{medal.tier}</p>
+                      </div>
+                      {/* Times earned badge */}
+                      <div className={`absolute top-1 right-1 w-4 h-4 rounded-full ${progressColor} shadow-lg flex items-center justify-center`}>
+                        <span className="text-[8px] font-bold text-gray-900">{timesEarned > 99 ? '99+' : timesEarned}</span>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
+                        <div className={`h-full ${progressColor}`} style={{ width: `${Math.min((timesEarned / 10) * 100, 100)}%` }} />
+                      </div>
+                      {/* Shine effect */}
+                      <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 pointer-events-none" />
+                    </button>
+                  );
+                })}
                 {topMedals.length === 0 && (
                   <div className="col-span-3 py-6 text-center text-gray-500">
                     <Trophy className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -254,21 +269,42 @@ export function ProfileCard({
             {/* Strength Ratings */}
             {strengthRating && (
               <div>
-                <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-amber-400" />
-                  Strength Ratings
-                </h4>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    Strength Rating
+                  </h4>
+                  <Badge className={`${
+                    strengthRating.tier === 'elite' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' :
+                    strengthRating.tier === 'advanced' ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' :
+                    strengthRating.tier === 'intermediate' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                    strengthRating.tier === 'novice' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
+                    'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                  } border font-semibold px-2 py-0.5`}>
+                    {strengthRating.tier?.charAt(0).toUpperCase() + strengthRating.tier?.slice(1)}
+                  </Badge>
+                </div>
+                
+                {/* Overall Score Hero */}
+                <div className="text-center py-4 mb-3 bg-gradient-to-b from-gray-800/50 to-transparent rounded-xl">
+                  <p className={`text-5xl font-bold ${getTierColor(strengthRating.tier)}`}>
+                    {strengthRating.overall}%
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1 font-medium">Overall Score</p>
+                </div>
+                
+                {/* Category Grid */}
+                <div className="grid grid-cols-2 gap-2">
                   {strengthRating.categories && Object.entries(strengthRating.categories).map(([key, cat]) => (
-                    <div key={key} className="p-3 bg-gray-800 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-400 capitalize">{cat.name}</span>
-                        <span className={`text-lg font-bold ${getTierColor(cat.tier)}`}>
-                          {cat.totalPoints.toFixed(0)}%
+                    <div key={key} className="p-2.5 bg-gray-800 rounded-lg">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs text-gray-400 capitalize">{cat.name}</span>
+                        <span className={`text-sm font-bold ${getTierColor(cat.tier)}`}>
+                          {typeof cat.totalPoints === 'number' ? cat.totalPoints.toFixed(0) : '0'}%
                         </span>
                       </div>
-                      <Progress value={Math.min(cat.totalPoints, 100)} className="h-2" />
-                      <p className={`text-xs mt-1 ${getTierColor(cat.tier)} capitalize`}>{cat.tier}</p>
+                      <Progress value={Math.min(cat.totalPoints || 0, 100)} className="h-1.5" />
+                      <p className={`text-[10px] mt-1 ${getTierColor(cat.tier)} capitalize`}>{cat.tier}</p>
                     </div>
                   ))}
                 </div>
@@ -278,7 +314,7 @@ export function ProfileCard({
             {/* Profile Stats */}
             <div>
               <h4 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                <TrendingUp className="w-4 h-4 text-sky-400" />
                 Stats
               </h4>
               <div className="grid grid-cols-4 gap-2 text-center">
@@ -306,7 +342,7 @@ export function ProfileCard({
               {!isOwnProfile && (
                 <Button
                   onClick={(e) => { e.stopPropagation(); onFollow?.(); }}
-                  className={isFriend ? 'flex-1 bg-gray-700' : 'flex-1 bg-emerald-600 hover:bg-emerald-700'}
+                  className={isFriend ? 'flex-1 bg-gray-700' : 'flex-1 bg-sky-600 hover:bg-sky-700'}
                 >
                   <Users className="w-4 h-4 mr-2" />
                   {isFriend ? 'Following' : 'Follow'}

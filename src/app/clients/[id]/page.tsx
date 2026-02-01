@@ -579,11 +579,11 @@ export default function ClientDetailPage() {
           <TabsContent value="overview" className="mt-4 space-y-4">
             {/* Session Package Summary - Editable or Create New */}
             {activePackage ? (
-              <Card className={`border ${activePackage.isContinuous ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-500/30' : 'bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30'}`}>
+              <Card className={`border ${activePackage.isContinuous ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-500/30' : 'bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30'}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-white flex items-center gap-2">
-                      <Package className={`w-5 h-5 ${activePackage.isContinuous ? 'text-blue-400' : 'text-emerald-400'}`} />
+                      <Package className={`w-5 h-5 ${activePackage.isContinuous ? 'text-blue-400' : 'text-sky-400'}`} />
                       {activePackage.isContinuous ? 'Continuous Training' : 'Session Package'}
                     </h3>
                     <Button
@@ -611,7 +611,7 @@ export default function ClientDetailPage() {
                           <p className="text-xs text-gray-400">Sessions Done</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-emerald-400">{activePackage.paidSessions || 0}</p>
+                          <p className="text-2xl font-bold text-sky-400">{activePackage.paidSessions || 0}</p>
                           <p className="text-xs text-gray-400">Sessions Paid</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
@@ -622,8 +622,8 @@ export default function ClientDetailPage() {
                       
                       {/* Payment status */}
                       <div className="mt-3 grid grid-cols-2 gap-3">
-                        <div className="p-2 bg-emerald-500/10 rounded-lg text-center">
-                          <p className="text-lg font-bold text-emerald-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
+                        <div className="p-2 bg-sky-500/10 rounded-lg text-center">
+                          <p className="text-lg font-bold text-sky-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Total Paid</p>
                         </div>
                         <div className={`p-2 rounded-lg text-center ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'bg-amber-500/10' : 'bg-gray-800'}`}>
@@ -639,7 +639,7 @@ export default function ClientDetailPage() {
                     <>
                       <div className="grid grid-cols-3 gap-3 text-center">
                         <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-emerald-400">{activePackage.usedSessions || 0}/{activePackage.totalSessions}</p>
+                          <p className="text-2xl font-bold text-sky-400">{activePackage.usedSessions || 0}/{activePackage.totalSessions}</p>
                           <p className="text-xs text-gray-400">Sessions Used</p>
                         </div>
                         <div className="bg-gray-900/50 rounded-lg p-2">
@@ -660,7 +660,7 @@ export default function ClientDetailPage() {
                         </div>
                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-gradient-to-r from-emerald-500 to-blue-500"
+                            className="h-full bg-gradient-to-r from-sky-500 to-blue-500"
                             style={{ width: `${Math.min(100, ((activePackage.usedSessions || 0) / activePackage.totalSessions) * 100)}%` }}
                           />
                         </div>
@@ -728,7 +728,7 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       variant={!isContinuousPackage ? "default" : "outline"}
-                      className={!isContinuousPackage ? "flex-1 bg-emerald-500 hover:bg-emerald-600" : "flex-1 border-gray-700 text-gray-400"}
+                      className={!isContinuousPackage ? "flex-1 bg-sky-500 hover:bg-sky-600" : "flex-1 border-gray-700 text-gray-400"}
                       onClick={() => setIsContinuousPackage(false)}
                     >
                       Fixed Sessions
@@ -778,7 +778,7 @@ export default function ClientDetailPage() {
                     <div className="p-3 bg-gray-800 rounded-lg">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Package Total:</span>
-                        <span className="text-emerald-400 font-bold">
+                        <span className="text-sky-400 font-bold">
                           ${(parseInt(newPackageTotal) * parseFloat(newPackagePrice)).toFixed(2)}
                         </span>
                       </div>
@@ -786,7 +786,7 @@ export default function ClientDetailPage() {
                   )}
                   
                   <Button
-                    className={`w-full ${isContinuousPackage ? 'bg-blue-500 hover:bg-blue-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                    className={`w-full ${isContinuousPackage ? 'bg-blue-500 hover:bg-blue-600' : 'bg-sky-500 hover:bg-sky-600'}`}
                     onClick={() => {
                       if (isContinuousPackage && newPackagePrice) {
                         const price = parseFloat(newPackagePrice);
@@ -896,7 +896,7 @@ export default function ClientDetailPage() {
                   <div className="p-3 bg-gray-800 rounded-lg space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Total Earned:</span>
-                      <span className="text-emerald-400 font-bold">
+                      <span className="text-sky-400 font-bold">
                         ${((parseInt(editPackageUsed || '0')) * parseFloat(editPackagePrice || '0')).toFixed(2)}
                       </span>
                     </div>
@@ -925,7 +925,7 @@ export default function ClientDetailPage() {
                   </div>
                   
                   <Button
-                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    className="w-full bg-sky-500 hover:bg-sky-600"
                     onClick={() => {
                       if (activePackage && editPackagePrice) {
                         const newTotal = activePackage.isContinuous ? -1 : parseInt(editPackageTotal || '0');
@@ -957,7 +957,7 @@ export default function ClientDetailPage() {
             {/* Import History Button */}
             <Button
               variant="outline"
-              className="w-full border-dashed border-gray-700 text-gray-400 hover:text-white hover:border-emerald-500"
+              className="w-full border-dashed border-gray-700 text-gray-400 hover:text-white hover:border-sky-500"
               onClick={() => setShowEditStats(true)}
             >
               <Edit className="w-4 h-4 mr-2" />
@@ -969,8 +969,8 @@ export default function ClientDetailPage() {
               <Card className="bg-gray-900 border-gray-800">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/20 rounded-lg">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <div className="p-2 bg-sky-500/20 rounded-lg">
+                      <CheckCircle2 className="w-5 h-5 text-sky-400" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-white">{completedWorkouts}</p>
@@ -1054,7 +1054,7 @@ export default function ClientDetailPage() {
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white flex items-center gap-2">
-                  <User className="w-5 h-5 text-emerald-400" />
+                  <User className="w-5 h-5 text-sky-400" />
                   Client Info
                 </CardTitle>
               </CardHeader>
@@ -1101,7 +1101,7 @@ export default function ClientDetailPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full text-xs border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                    className="w-full text-xs border-sky-500/50 text-sky-400 hover:bg-sky-500/10"
                     onClick={() => handleSendInvitation()}
                     disabled={isSendingInvite}
                   >
@@ -1129,7 +1129,7 @@ export default function ClientDetailPage() {
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white flex items-center gap-2">
-                  <ClipboardList className="w-5 h-5 text-emerald-400" />
+                  <ClipboardList className="w-5 h-5 text-sky-400" />
                   Onboarding & Program
                 </CardTitle>
               </CardHeader>
@@ -1142,7 +1142,7 @@ export default function ClientDetailPage() {
                     </div>
                     <Button 
                       onClick={() => router.push(`/clients/${clientId}/onboarding`)}
-                      className="w-full bg-emerald-500 hover:bg-emerald-600"
+                      className="w-full bg-sky-500 hover:bg-sky-600"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Start Onboarding
@@ -1150,14 +1150,14 @@ export default function ClientDetailPage() {
                   </div>
                 ) : activeProgram ? (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-400">
+                    <div className="flex items-center gap-2 text-sky-400">
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-sm">Active Program</span>
                     </div>
                     <div className="bg-gray-800 rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-white">{activeProgram.templateName}</span>
-                        <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-400">
+                        <Badge variant="secondary" className="bg-sky-500/20 text-sky-400">
                           {activeProgram.phase}
                         </Badge>
                       </div>
@@ -1217,7 +1217,7 @@ export default function ClientDetailPage() {
                             }}
                           >
                             <span className="flex items-center gap-2">
-                              <Dumbbell className="w-4 h-4 text-emerald-400" />
+                              <Dumbbell className="w-4 h-4 text-sky-400" />
                               {day.dayLabel}
                             </span>
                             <span className="text-xs text-gray-500">
@@ -1238,14 +1238,14 @@ export default function ClientDetailPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-emerald-400">
+                    <div className="flex items-center gap-2 text-sky-400">
                       <CheckCircle2 className="w-4 h-4" />
                       <span className="text-sm">Onboarding complete</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Button 
                         onClick={() => router.push(`/clients/${clientId}/program/select`)}
-                        className="bg-emerald-500 hover:bg-emerald-600"
+                        className="bg-sky-500 hover:bg-sky-600"
                       >
                         <ClipboardList className="w-4 h-4 mr-1" />
                         Select
@@ -1268,7 +1268,7 @@ export default function ClientDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-white flex items-center gap-2">
-                    <Target className="w-5 h-5 text-emerald-400" />
+                    <Target className="w-5 h-5 text-sky-400" />
                     Goals
                   </CardTitle>
                   <Button
@@ -1325,7 +1325,7 @@ export default function ClientDetailPage() {
                           setNewGoal('');
                         }
                       }}
-                      className="bg-emerald-500 hover:bg-emerald-600"
+                      className="bg-sky-500 hover:bg-sky-600"
                     >
                       <Plus className="w-4 h-4" />
                     </Button>
@@ -1347,7 +1347,7 @@ export default function ClientDetailPage() {
                     )}
                   </div>
                   <Button
-                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    className="w-full bg-sky-500 hover:bg-sky-600"
                     onClick={() => {
                       updateClient(clientId, { goals: editGoals });
                       setShowEditGoals(false);
@@ -1365,7 +1365,7 @@ export default function ClientDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-white flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-emerald-400" />
+                    <ClipboardList className="w-5 h-5 text-sky-400" />
                     Notes
                   </CardTitle>
                   <Button
@@ -1403,7 +1403,7 @@ export default function ClientDetailPage() {
                     className="bg-gray-800 border-gray-700 text-white min-h-[150px]"
                   />
                   <Button
-                    className="w-full bg-emerald-500 hover:bg-emerald-600"
+                    className="w-full bg-sky-500 hover:bg-sky-600"
                     onClick={() => {
                       updateClient(clientId, { notes: editNotes });
                       setShowEditNotes(false);
@@ -1440,7 +1440,7 @@ export default function ClientDetailPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-white flex items-center gap-2">
-                    <Dumbbell className="w-5 h-5 text-emerald-400" />
+                    <Dumbbell className="w-5 h-5 text-sky-400" />
                     Recent Workouts
                   </CardTitle>
                   <div className="flex items-center gap-2">
@@ -1475,7 +1475,7 @@ export default function ClientDetailPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => setActiveTab('progress')}
-                        className="text-emerald-400 text-xs"
+                        className="text-sky-400 text-xs"
                       >
                         View All
                       </Button>
@@ -1508,7 +1508,7 @@ export default function ClientDetailPage() {
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="text-right">
-                                <p className="text-emerald-400 font-medium text-sm">
+                                <p className="text-sky-400 font-medium text-sm">
                                   {Math.round(workout.totalVolume).toLocaleString()} kg
                                 </p>
                                 <p className="text-xs text-gray-500">
@@ -1551,8 +1551,8 @@ export default function ClientDetailPage() {
               <Card className="bg-gray-900 border-gray-800">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-500/20 rounded-lg">
-                      <Dumbbell className="w-5 h-5 text-emerald-400" />
+                    <div className="p-2 bg-sky-500/20 rounded-lg">
+                      <Dumbbell className="w-5 h-5 text-sky-400" />
                     </div>
                     <div>
                       <p className="text-2xl font-bold text-white">
@@ -1585,7 +1585,7 @@ export default function ClientDetailPage() {
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white flex items-center gap-2">
-                  <Dumbbell className="w-5 h-5 text-emerald-400" />
+                  <Dumbbell className="w-5 h-5 text-sky-400" />
                   All Workouts ({clientWorkoutHistory.length})
                 </CardTitle>
               </CardHeader>
@@ -1614,7 +1614,7 @@ export default function ClientDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
-                              <p className="text-emerald-400 font-medium text-sm">
+                              <p className="text-sky-400 font-medium text-sm">
                                 {Math.round(workout.totalVolume).toLocaleString()} kg
                               </p>
                               <p className="text-xs text-gray-500">
@@ -1668,13 +1668,13 @@ export default function ClientDetailPage() {
                         <div
                           className={`max-w-[80%] rounded-2xl px-4 py-2 ${
                             msg.senderId === user?.id
-                              ? 'bg-emerald-500 text-white'
+                              ? 'bg-sky-500 text-white'
                               : 'bg-gray-800 text-gray-100'
                           }`}
                         >
                           <p className="text-sm">{msg.content}</p>
                           <p className={`text-xs mt-1 ${
-                            msg.senderId === user?.id ? 'text-emerald-100' : 'text-gray-500'
+                            msg.senderId === user?.id ? 'text-sky-100' : 'text-gray-500'
                           }`}>
                             {format(new Date(msg.createdAt), 'HH:mm')}
                           </p>
@@ -1694,7 +1694,7 @@ export default function ClientDetailPage() {
                       onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                       className="bg-gray-800 border-gray-700"
                     />
-                    <Button onClick={handleSendMessage} className="bg-emerald-500 hover:bg-emerald-600">
+                    <Button onClick={handleSendMessage} className="bg-sky-500 hover:bg-sky-600">
                       <Send className="w-4 h-4" />
                     </Button>
                   </div>
@@ -1707,11 +1707,11 @@ export default function ClientDetailPage() {
           <TabsContent value="sessions" className="mt-4 space-y-4">
             {/* Active Package */}
             {activePackage && (
-              <Card className="bg-gradient-to-r from-emerald-500/20 to-blue-500/20 border-emerald-500/30">
+              <Card className="bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-emerald-400 font-medium">{activePackage.name}</p>
+                      <p className="text-sky-400 font-medium">{activePackage.name}</p>
                       <p className="text-white text-2xl font-bold">
                         {activePackage.remainingSessions}/{activePackage.totalSessions} sessions
                       </p>
@@ -1725,7 +1725,7 @@ export default function ClientDetailPage() {
                   </div>
                   <div className="mt-3 bg-gray-900/50 rounded-full h-2">
                     <div 
-                      className="bg-emerald-500 h-2 rounded-full transition-all"
+                      className="bg-sky-500 h-2 rounded-full transition-all"
                       style={{ width: `${(activePackage.usedSessions / activePackage.totalSessions) * 100}%` }}
                     />
                   </div>
@@ -1768,14 +1768,14 @@ export default function ClientDetailPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg ${
-                              session.status === 'completed' ? 'bg-emerald-500/20' :
+                              session.status === 'completed' ? 'bg-sky-500/20' :
                               session.status === 'scheduled' ? 'bg-blue-500/20' :
                               session.status === 'no_show' ? 'bg-amber-500/20' :
                               session.status === 'cancelled' ? 'bg-red-500/20' :
                               'bg-gray-700'
                             }`}>
                               {session.status === 'completed' ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                <CheckCircle2 className="w-5 h-5 text-sky-400" />
                               ) : session.status === 'scheduled' ? (
                                 <Clock className="w-5 h-5 text-blue-400" />
                               ) : session.status === 'no_show' ? (
@@ -1803,7 +1803,7 @@ export default function ClientDetailPage() {
                               variant={session.paid ? 'default' : 'destructive'}
                               className={`text-xs h-7 ${
                                 session.paid 
-                                  ? 'bg-emerald-500 hover:bg-emerald-600' 
+                                  ? 'bg-sky-500 hover:bg-sky-600' 
                                   : 'bg-red-500 hover:bg-red-600'
                               }`}
                               onClick={() => handleTogglePaid(session.id, session.paid)}
@@ -1818,7 +1818,7 @@ export default function ClientDetailPage() {
                                 <Button 
                                   size="sm" 
                                   variant="ghost"
-                                  className="h-7 px-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                                  className="h-7 px-2 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20"
                                   onClick={() => handleMarkSessionComplete(session.id)}
                                   title="Mark Complete"
                                 >
@@ -1898,7 +1898,7 @@ export default function ClientDetailPage() {
                   {/* Legend */}
                   <div className="flex gap-4 text-xs">
                     <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                      <div className="w-3 h-3 rounded-full bg-sky-500" />
                       <span className="text-gray-400">PT Session</span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1944,17 +1944,17 @@ export default function ClientDetailPage() {
                               className={`
                                 relative aspect-square p-1 rounded-lg text-center text-sm
                                 ${!isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}
-                                ${isToday(day) ? 'bg-emerald-500/20 ring-1 ring-emerald-500' : ''}
+                                ${isToday(day) ? 'bg-sky-500/20 ring-1 ring-sky-500' : ''}
                               `}
                             >
-                              <span className={`${isToday(day) ? 'text-emerald-400 font-bold' : ''}`}>
+                              <span className={`${isToday(day) ? 'text-sky-400 font-bold' : ''}`}>
                                 {format(day, 'd')}
                               </span>
                               
                               {/* Session indicators */}
                               <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
                                 {hasPTSession && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                                 )}
                                 {hasSoloWorkout && (
                                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -2009,7 +2009,7 @@ export default function ClientDetailPage() {
                             <p className="text-gray-400 text-sm">No upcoming sessions</p>
                             <Button 
                               size="sm" 
-                              className="mt-3 bg-emerald-500 hover:bg-emerald-600"
+                              className="mt-3 bg-sky-500 hover:bg-sky-600"
                               onClick={() => router.push(`/clients/${clientId}/book`)}
                             >
                               Book First Session
@@ -2028,13 +2028,13 @@ export default function ClientDetailPage() {
                           const time = event.startTime || '';
                           
                           return (
-                            <Card key={i} className={`border ${isPT ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
+                            <Card key={i} className={`border ${isPT ? 'bg-sky-500/10 border-sky-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
                               <CardContent className="p-3">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${isPT ? 'bg-emerald-500/20' : 'bg-blue-500/20'}`}>
+                                    <div className={`p-2 rounded-lg ${isPT ? 'bg-sky-500/20' : 'bg-blue-500/20'}`}>
                                       {isPT ? (
-                                        <User className={`w-4 h-4 text-emerald-400`} />
+                                        <User className={`w-4 h-4 text-sky-400`} />
                                       ) : (
                                         <Dumbbell className={`w-4 h-4 text-blue-400`} />
                                       )}
@@ -2047,7 +2047,7 @@ export default function ClientDetailPage() {
                                     </div>
                                   </div>
                                   {isToday(eventDate) && (
-                                    <Badge className="bg-emerald-500 text-xs">Today</Badge>
+                                    <Badge className="bg-sky-500 text-xs">Today</Badge>
                                   )}
                                 </div>
                               </CardContent>
@@ -2066,10 +2066,10 @@ export default function ClientDetailPage() {
           <TabsContent value="payments" className="mt-4 space-y-4">
             {/* Session Balance Card */}
             {packages.length > 0 && (
-              <Card className="bg-gradient-to-r from-emerald-900/30 to-blue-900/30 border-emerald-500/30">
+              <Card className="bg-gradient-to-r from-sky-900/30 to-blue-900/30 border-sky-500/30">
                 <CardContent className="p-4">
                   <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
-                    <Dumbbell className="w-4 h-4 text-emerald-400" />
+                    <Dumbbell className="w-4 h-4 text-sky-400" />
                     Session Balance
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
@@ -2086,7 +2086,7 @@ export default function ClientDetailPage() {
                       <p className="text-xs text-gray-400">Used</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-emerald-400">
+                      <p className="text-2xl font-bold text-sky-400">
                         {packages.reduce((sum, p) => sum + p.remainingSessions, 0)}
                       </p>
                       <p className="text-xs text-gray-400">Remaining</p>
@@ -2112,7 +2112,7 @@ export default function ClientDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               <Card className="bg-gray-900 border-gray-800">
                 <CardContent className="p-4 text-center">
-                  <p className="text-2xl font-bold text-emerald-400">${totalPaid}</p>
+                  <p className="text-2xl font-bold text-sky-400">${totalPaid}</p>
                   <p className="text-xs text-gray-400">Total Paid</p>
                 </CardContent>
               </Card>
@@ -2152,12 +2152,12 @@ export default function ClientDetailPage() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg ${
-                              payment.status === 'paid' ? 'bg-emerald-500/20' :
+                              payment.status === 'paid' ? 'bg-sky-500/20' :
                               payment.status === 'pending' ? 'bg-amber-500/20' :
                               'bg-red-500/20'
                             }`}>
                               {payment.status === 'paid' ? (
-                                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                                <CheckCircle2 className="w-5 h-5 text-sky-400" />
                               ) : (
                                 <AlertCircle className="w-5 h-5 text-amber-400" />
                               )}
@@ -2177,7 +2177,7 @@ export default function ClientDetailPage() {
                                 <Button 
                                   size="sm" 
                                   variant="ghost" 
-                                  className="text-emerald-400 text-xs h-6 px-2"
+                                  className="text-sky-400 text-xs h-6 px-2"
                                   onClick={() => handleMarkPaymentPaid(payment.id)}
                                 >
                                   Mark Paid
@@ -2207,7 +2207,7 @@ export default function ClientDetailPage() {
       <div className="fixed bottom-20 left-0 right-0 px-4">
         <div className="flex gap-2">
           <Button 
-            className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+            className="flex-1 bg-sky-500 hover:bg-sky-600"
             onClick={() => setActiveTab('messages')}
           >
             <MessageCircle className="w-4 h-4 mr-2" />
@@ -2279,10 +2279,10 @@ export default function ClientDetailPage() {
             
             {/* Per Session Cost Display */}
             {perSessionCost && (
-              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+              <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 text-sm">Per Session Cost</span>
-                  <span className="text-emerald-400 font-bold text-lg">${perSessionCost}</span>
+                  <span className="text-sky-400 font-bold text-lg">${perSessionCost}</span>
                 </div>
               </div>
             )}
@@ -2305,7 +2305,7 @@ export default function ClientDetailPage() {
                   variant={paymentMethod === 'cash' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setPaymentMethod('cash')}
-                  className={paymentMethod === 'cash' ? 'bg-emerald-500' : ''}
+                  className={paymentMethod === 'cash' ? 'bg-sky-500' : ''}
                 >
                   Cash
                 </Button>
@@ -2314,7 +2314,7 @@ export default function ClientDetailPage() {
                   variant={paymentMethod === 'card' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setPaymentMethod('card')}
-                  className={paymentMethod === 'card' ? 'bg-emerald-500' : ''}
+                  className={paymentMethod === 'card' ? 'bg-sky-500' : ''}
                 >
                   Card
                 </Button>
@@ -2323,7 +2323,7 @@ export default function ClientDetailPage() {
                   variant={paymentMethod === 'bank_transfer' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setPaymentMethod('bank_transfer')}
-                  className={paymentMethod === 'bank_transfer' ? 'bg-emerald-500' : ''}
+                  className={paymentMethod === 'bank_transfer' ? 'bg-sky-500' : ''}
                 >
                   Transfer
                 </Button>
@@ -2331,7 +2331,7 @@ export default function ClientDetailPage() {
             </div>
             
             <Button 
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               onClick={handleAddPayment}
             >
               <DollarSign className="w-4 h-4 mr-2" />
@@ -2376,7 +2376,7 @@ export default function ClientDetailPage() {
                   variant={editPaymentMethod === 'cash' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setEditPaymentMethod('cash')}
-                  className={editPaymentMethod === 'cash' ? 'bg-emerald-500' : ''}
+                  className={editPaymentMethod === 'cash' ? 'bg-sky-500' : ''}
                 >
                   Cash
                 </Button>
@@ -2385,7 +2385,7 @@ export default function ClientDetailPage() {
                   variant={editPaymentMethod === 'card' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setEditPaymentMethod('card')}
-                  className={editPaymentMethod === 'card' ? 'bg-emerald-500' : ''}
+                  className={editPaymentMethod === 'card' ? 'bg-sky-500' : ''}
                 >
                   Card
                 </Button>
@@ -2394,7 +2394,7 @@ export default function ClientDetailPage() {
                   variant={editPaymentMethod === 'bank_transfer' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setEditPaymentMethod('bank_transfer')}
-                  className={editPaymentMethod === 'bank_transfer' ? 'bg-emerald-500' : ''}
+                  className={editPaymentMethod === 'bank_transfer' ? 'bg-sky-500' : ''}
                 >
                   Transfer
                 </Button>
@@ -2402,7 +2402,7 @@ export default function ClientDetailPage() {
             </div>
             
             <Button 
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               onClick={handleSavePaymentEdit}
             >
               <Check className="w-4 h-4 mr-2" />
@@ -2457,7 +2457,7 @@ export default function ClientDetailPage() {
             </div>
             
             <Button 
-              className="w-full bg-emerald-500 hover:bg-emerald-600"
+              className="w-full bg-sky-500 hover:bg-sky-600"
               onClick={handleSaveInitialStats}
             >
               <Check className="w-4 h-4 mr-2" />
@@ -2526,7 +2526,7 @@ export default function ClientDetailPage() {
                   Cancel
                 </Button>
                 <Button
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                  className="flex-1 bg-sky-500 hover:bg-sky-600"
                   onClick={handleSaveWorkoutEdit}
                 >
                   Save Changes
@@ -2571,7 +2571,7 @@ export default function ClientDetailPage() {
                 Cancel
               </Button>
               <Button
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-sky-500 hover:bg-sky-600"
                 onClick={handleUpdateEmailAndInvite}
                 disabled={isSendingInvite || !editEmail}
               >

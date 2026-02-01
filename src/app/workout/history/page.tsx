@@ -80,7 +80,7 @@ export default function WorkoutHistoryPage() {
         <div className="grid grid-cols-3 gap-3 mb-6">
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-emerald-400">
+              <p className="text-2xl font-bold text-sky-400">
                 {workoutHistory.filter(w => isThisWeek(new Date(w.startTime))).length}
               </p>
               <p className="text-xs text-gray-400">This Week</p>
@@ -186,7 +186,7 @@ export default function WorkoutHistoryPage() {
               <>
                 <DialogHeader>
                   <DialogTitle className="text-white flex items-center gap-2">
-                    <Dumbbell className="w-5 h-5 text-emerald-400" />
+                    <Dumbbell className="w-5 h-5 text-sky-400" />
                     {selectedWorkout.name}
                   </DialogTitle>
                   <p className="text-sm text-gray-500">
@@ -203,7 +203,7 @@ export default function WorkoutHistoryPage() {
                       <p className="text-xs text-gray-500">Duration</p>
                     </div>
                     <div className="p-3 bg-gray-800 rounded-lg text-center">
-                      <TrendingUp className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                      <TrendingUp className="w-4 h-4 text-sky-400 mx-auto mb-1" />
                       <p className="text-lg font-bold text-white">{Math.round(selectedWorkout.totalVolume).toLocaleString()}</p>
                       <p className="text-xs text-gray-500">Volume (kg)</p>
                     </div>
@@ -238,7 +238,7 @@ export default function WorkoutHistoryPage() {
                               </div>
                               {bestSet && bestSet.weight && (
                                 <div className="text-right">
-                                  <p className="text-sm font-bold text-emerald-400">
+                                  <p className="text-sm font-bold text-sky-400">
                                     {bestSet.weight}kg × {bestSet.reps}
                                   </p>
                                   <p className="text-xs text-gray-500">Best set</p>
@@ -252,7 +252,7 @@ export default function WorkoutHistoryPage() {
                                   key={set.id}
                                   className={`text-xs px-2 py-0.5 rounded ${
                                     set.completed
-                                      ? 'bg-emerald-500/20 text-emerald-400'
+                                      ? 'bg-sky-500/20 text-sky-400'
                                       : 'bg-gray-700 text-gray-500'
                                   }`}
                                 >
@@ -272,7 +272,7 @@ export default function WorkoutHistoryPage() {
                       setSelectedWorkout(null);
                       router.push(`/workout/${selectedWorkout.id}`);
                     }}
-                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
+                    className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium transition-colors"
                   >
                     View Full Details
                   </button>

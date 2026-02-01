@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
-import { sortMedalsByPriority, getMedalDefinition } from '@/lib/medals';
+import { sortMedalsByPriority, getMedalDefinition, milestoneMedals } from '@/lib/medals';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,12 @@ import {
   Award,
   BadgeCheck,
   Trash2,
-  DollarSign
+  DollarSign,
+  Crown,
+  Search
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { ProfileCard } from '@/components/ProfileCard';
+import { ProfileCardV2 } from '@/components/ProfileCardV2';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
 import { TrainerStatsCharts } from '@/components/TrainerStatsCharts';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -49,6 +51,7 @@ export default function ProfilePage() {
   const [showFollowersModal, setShowFollowersModal] = useState(false);
   const [showFollowingModal, setShowFollowingModal] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [showTrainerStatModal, setShowTrainerStatModal] = useState<'clients' | 'sessions' | 'revenue' | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -56,10 +59,28 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated, router]);
 
+  // Recalculate PBs and strength rating when profile loads
   useEffect(() => {
-    calculateStrengthRating();
+    if (user?.id) {
+      // Trigger PB recalculation from all workout history
+      const { recalculatePBsForUser } = useWorkoutStore.getState();
+      recalculatePBsForUser(user.id);
+      console.log('[Profile] Triggered PB recalculation for user:', user.id);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [personalBests]);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (user?.id) {
+      calculateStrengthRating();
+      // Check and award trainer medals retroactively
+      if (user.mode === 'trainer' || user.isTrainer) {
+        const { checkAndAwardTrainerMedals } = useTrainerStore.getState();
+        checkAndAwardTrainerMedals(user.id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalBests, user?.id, user?.mode]);
 
   useEffect(() => {
     const loadAllUsers = async () => {
@@ -82,10 +103,18 @@ export default function ProfilePage() {
     loadAllUsers();
   }, []);
 
-  const handleLogout = () => {
-    router.replace('/auth');
-    // Delay logout to allow redirect to complete first
-    setTimeout(() => logout(), 100);
+  const handleLogout = async () => {
+    try {
+      // Clear state first to prevent re-render issues
+      logout();
+      // Small delay before redirect to allow state to clear
+      await new Promise(resolve => setTimeout(resolve, 50));
+      router.replace('/auth');
+    } catch (error) {
+      console.error('[Profile] Logout error:', error);
+      // Force redirect even on error
+      window.location.href = '/auth';
+    }
   };
 
   const handleSwitchMode = () => {
@@ -104,8 +133,10 @@ export default function ProfilePage() {
   }, [user?.trainerId]);
 
   // Sort medals by priority (milestone/strength first, then streak, then others)
+  // In trainer mode, only show trainer-related medals (clients, revenue, sessions)
   const sortedMedals = useMemo(() => {
     if (!user?.id) return [];
+    const isTrainer = user.mode === 'trainer';
     const earnedMedals = medals.filter((m: any) => m.earned && m.userId === user.id);
     // Get definitions for sorting
     const medalsWithDefs = earnedMedals.map((m: any) => {
@@ -113,8 +144,13 @@ export default function ProfilePage() {
       return { ...m, ...def };
     }).filter((m: any) => m.category); // Only include medals with valid definitions
     
-    return sortMedalsByPriority(medalsWithDefs);
-  }, [medals, user?.id]);
+    // Filter by category based on mode
+    const filteredMedals = isTrainer 
+      ? medalsWithDefs.filter((m: any) => m.category === 'trainer')
+      : medalsWithDefs.filter((m: any) => m.category !== 'trainer');
+    
+    return sortMedalsByPriority(filteredMedals);
+  }, [medals, user?.id, user?.mode]);
 
   // Calculate actual followers/following based on real data only
   // For trainers: followers = ONLY their own clients (filter by trainerId)
@@ -161,7 +197,20 @@ export default function ProfilePage() {
   const userPBs = personalBests.filter(pb => pb.userId === user.id);
   
   // Filter medals for current user only - must be earned AND belong to user
-  const userMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
+  // Also filter by mode: trainer sees trainer medals, user sees workout/strength medals
+  const userMedals = useMemo(() => {
+    const allUserMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
+    // Get definitions to check category
+    return allUserMedals.map((m: any) => {
+      const def = getMedalDefinition(m.definitionId || m.id);
+      return { ...m, category: def?.category };
+    }).filter((m: any) => {
+      if (isTrainerMode) {
+        return m.category === 'trainer';
+      }
+      return m.category !== 'trainer';
+    });
+  }, [medals, user.id, isTrainerMode]);
   
   // Trainer stats calculation - uses payments array and sessionPackages for accurate data
   const trainerStats = useMemo(() => {
@@ -247,7 +296,7 @@ export default function ProfilePage() {
       case 'elite': return 'text-amber-400';
       case 'advanced': return 'text-purple-400';
       case 'intermediate': return 'text-blue-400';
-      case 'novice': return 'text-emerald-400';
+      case 'novice': return 'text-sky-400';
       default: return 'text-gray-400';
     }
   };
@@ -257,7 +306,7 @@ export default function ProfilePage() {
       case 'elite': return 'bg-amber-500/20';
       case 'advanced': return 'bg-purple-500/20';
       case 'intermediate': return 'bg-blue-500/20';
-      case 'novice': return 'bg-emerald-500/20';
+      case 'novice': return 'bg-sky-500/20';
       default: return 'bg-gray-500/20';
     }
   };
@@ -275,74 +324,87 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      <div className="bg-gradient-to-b from-emerald-500 to-gray-950 pt-12 pb-20 px-4">
+      <div className="bg-gradient-to-b from-sky-500 via-sky-600 to-orange-500 pt-14 pb-24 px-5 relative overflow-hidden">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:32px_32px] pointer-events-none" />
+        
         {/* Profile Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div className="flex items-center gap-4">
+        <div className="relative flex items-start justify-between mb-8">
+          <div className="flex items-center gap-5">
             <button onClick={() => setShowProfileCard(true)} className="relative group">
-              <Avatar className="w-20 h-20 border-4 border-white/20 group-hover:border-emerald-400 transition-colors">
+              <Avatar className="w-24 h-24 border-4 border-white/20 group-hover:border-white/40 transition-all duration-300 shadow-xl shadow-black/30">
                 <AvatarImage src={user.profilePhoto} />
-                <AvatarFallback className="text-2xl bg-gray-800 text-white">
+                <AvatarFallback className="text-2xl bg-slate-800 text-white font-bold">
                   {user.displayName?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <span className="text-white text-xs font-medium">View Card</span>
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-sm">
+                <span className="text-white text-xs font-semibold">View Card</span>
               </div>
             </button>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white">{user.displayName || user.username}</h1>
+              <div className="flex items-center gap-2 mb-1">
+                <h1 className="text-2xl font-bold text-white tracking-tight">{user.displayName || user.username}</h1>
                 {user.isVerifiedTrainer && (
-                  <BadgeCheck className="w-5 h-5 text-blue-400" />
+                  <BadgeCheck className="w-5 h-5 text-sky-300" />
                 )}
               </div>
-              <div className="flex items-center gap-2">
-                <p className="text-white/70">@{user.username}</p>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-white/70 text-sm">@{user.username}</p>
                 {user.gender && user.gender !== 'other' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-white/60 capitalize">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/15 text-white/70 capitalize font-medium">
                     {user.gender}
                   </span>
                 )}
               </div>
               {user.bio && (
-                <p className="text-white/60 text-sm mt-1">{user.bio}</p>
+                <p className="text-white/60 text-sm max-w-[200px] line-clamp-2">{user.bio}</p>
               )}
             </div>
           </div>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => router.push('/settings')}
-            className="text-white hover:bg-white/10"
-          >
-            <Settings className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => router.push('/membership')}
+              className="text-white/80 hover:text-white hover:bg-white/15 rounded-xl"
+            >
+              <Crown className="w-5 h-5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => router.push('/settings')}
+              className="text-white/80 hover:text-white hover:bg-white/15 rounded-xl"
+            >
+              <Settings className="w-5 h-5" />
+            </Button>
+          </div>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        {/* Stats Row - Glass card style */}
+        <div className="relative grid grid-cols-4 gap-2 mb-6 p-4 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/10">
           <div className="text-center">
             <p className="text-2xl font-bold text-white">{totalWorkouts}</p>
-            <p className="text-xs text-white/60">Workouts</p>
+            <p className="text-[11px] text-white/60 font-medium">Workouts</p>
           </div>
           <div 
-            className="text-center cursor-pointer hover:bg-white/10 rounded-lg p-2 -m-2 transition-colors"
+            className="text-center cursor-pointer hover:bg-white/10 rounded-xl p-2 -m-2 transition-all duration-200"
             onClick={() => setShowFollowersModal(true)}
           >
             <p className="text-2xl font-bold text-white">{actualFollowers.length}</p>
-            <p className="text-xs text-white/60">Followers</p>
+            <p className="text-[11px] text-white/60 font-medium">Followers</p>
           </div>
           <div 
-            className="text-center cursor-pointer hover:bg-white/10 rounded-lg p-2 -m-2 transition-colors"
+            className="text-center cursor-pointer hover:bg-white/10 rounded-xl p-2 -m-2 transition-all duration-200"
             onClick={() => setShowFollowingModal(true)}
           >
             <p className="text-2xl font-bold text-white">{actualFollowing.length}</p>
-            <p className="text-xs text-white/60">Following</p>
+            <p className="text-[11px] text-white/60 font-medium">Following</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-white">{userMedals.length}</p>
-            <p className="text-xs text-white/60">Medals</p>
+            <p className="text-[11px] text-white/60 font-medium">Medals</p>
           </div>
         </div>
 
@@ -405,7 +467,7 @@ export default function ProfilePage() {
                   <p className="text-xs text-white/60">This Month</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-emerald-400">${Math.round(trainerStats.totalEarnings)}</p>
+                  <p className="text-2xl font-bold text-sky-400">${Math.round(trainerStats.totalEarnings)}</p>
                   <p className="text-xs text-white/60">Total Paid</p>
                 </div>
               </div>
@@ -422,24 +484,33 @@ export default function ProfilePage() {
                 </div>
               )}
               
-              {/* Stats Grid */}
+              {/* Stats Grid - Clickable for medal progress */}
               <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/10">
-                <div className="text-center">
+                <button 
+                  onClick={() => setShowTrainerStatModal('sessions')}
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                >
                   <p className="text-lg font-semibold text-white">{trainerStats.totalSessions}</p>
                   <p className="text-[10px] text-white/50">Sessions</p>
-                </div>
-                <div className="text-center">
+                </button>
+                <button 
+                  onClick={() => setShowTrainerStatModal('clients')}
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                >
                   <p className="text-lg font-semibold text-white">{trainerStats.activeClients}</p>
                   <p className="text-[10px] text-white/50">Clients</p>
-                </div>
+                </button>
                 <div className="text-center">
                   <p className="text-lg font-semibold text-white">{trainerStats.avgSessionsPerWeek}</p>
                   <p className="text-[10px] text-white/50">Avg/wk</p>
                 </div>
-                <div className="text-center">
+                <button 
+                  onClick={() => setShowTrainerStatModal('revenue')}
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                >
                   <p className="text-lg font-semibold text-white">${trainerStats.avgPerSession}</p>
                   <p className="text-[10px] text-white/50">Avg/session</p>
-                </div>
+                </button>
               </div>
               
               {/* Payment History Link */}
@@ -456,17 +527,20 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div className="px-4 -mt-16 pb-6 space-y-4">
-        {/* Strength Rating Card */}
-        <Card className="bg-gray-900 border-gray-800 overflow-hidden">
-          <CardHeader className="pb-2">
+      <div className="px-5 -mt-16 pb-6 space-y-5">
+        {/* Strength Rating Card - Progress Hero (hidden in trainer mode) */}
+        {!isTrainerMode && (
+        <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-xl">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2">
-                <Zap className="w-5 h-5 text-amber-400" />
+              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
                 Strength Rating
               </CardTitle>
               {strengthRating && (
-                <Badge className={`${getTierBg(strengthRating.tier)} ${getTierColor(strengthRating.tier)}`}>
+                <Badge className={`${getTierBg(strengthRating.tier)} ${getTierColor(strengthRating.tier)} font-semibold px-3`}>
                   {strengthRating.tier.charAt(0).toUpperCase() + strengthRating.tier.slice(1)}
                 </Badge>
               )}
@@ -474,16 +548,17 @@ export default function ProfilePage() {
           </CardHeader>
           <CardContent>
             {strengthRating ? (
-              <div className="space-y-4">
-                {/* Overall Score */}
-                <div className="text-center py-4">
-                  <p className={`text-5xl font-bold ${getTierColor(strengthRating.tier)}`}>
+              <div className="space-y-5">
+                {/* Overall Score - Hero moment */}
+                <div className="text-center py-6 relative">
+                  <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 to-transparent rounded-2xl" />
+                  <p className={`text-6xl font-bold ${getTierColor(strengthRating.tier)} relative`}>
                     {strengthRating.overall}%
                   </p>
-                  <p className="text-gray-500 text-sm mt-1">Overall Score</p>
+                  <p className="text-slate-500 text-sm mt-2 font-medium">Overall Score</p>
                 </div>
 
-                {/* Category Cards - Clickable for Enhanced View */}
+                {/* Category Cards - All Active */}
                 <div className="grid grid-cols-2 gap-3">
                   {[
                     { id: 'chest', name: 'Chest', icon: '💪', score: strengthRating.categories?.chest?.totalPoints || strengthRating.push, tier: strengthRating.categories?.chest?.tier || strengthRating.tier },
@@ -494,49 +569,65 @@ export default function ProfilePage() {
                     <button
                       key={cat.id}
                       onClick={() => router.push(`/profile/strength/${cat.id}`)}
-                      className="p-3 bg-gray-800 rounded-xl text-left hover:bg-gray-750 transition-all group"
+                      className="p-4 bg-slate-800/70 rounded-2xl text-left hover:bg-slate-800 transition-all duration-200 group border border-slate-700/50 hover:border-slate-600"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xl">{cat.icon}</span>
-                        <ChevronRight className="w-4 h-4 text-gray-500 group-hover:text-emerald-400 transition-colors" />
+                        <span className="text-2xl">{cat.icon}</span>
+                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all" />
                       </div>
-                      <p className="text-sm text-gray-400">{cat.name}</p>
-                      <div className="flex items-baseline gap-2">
+                      <p className="text-sm text-slate-400 font-medium">{cat.name}</p>
+                      <div className="flex items-baseline gap-2 mt-1">
                         <span className={`text-xl font-bold ${getTierColor(cat.tier)}`}>
                           {typeof cat.score === 'number' ? cat.score.toFixed(1) : '0'}%
                         </span>
-                        <span className={`text-xs ${getTierColor(cat.tier)}`}>
+                        <span className={`text-xs font-medium ${getTierColor(cat.tier)}`}>
                           {cat.tier?.charAt(0).toUpperCase() + cat.tier?.slice(1)}
                         </span>
                       </div>
-                      <Progress value={Math.min(cat.score || 0, 100)} className="h-1.5 mt-2" />
+                      <Progress value={Math.min(cat.score || 0, 100)} tier={cat.tier} className="h-1.5 mt-3" />
                     </button>
                   ))}
                 </div>
 
-                <p className="text-xs text-gray-500 text-center">
-                  Tap a category for enhanced view • Updated: {format(new Date(strengthRating.lastUpdated), 'MMM d')}
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Updated {format(new Date(strengthRating.lastUpdated), 'MMM d')}
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-slate-400 hover:text-sky-400 -mr-2"
+                    onClick={() => router.push('/exercises')}
+                  >
+                    <Search className="w-4 h-4 mr-1" />
+                    All Exercises
+                  </Button>
+                </div>
               </div>
             ) : (
-              <div className="text-center py-8">
-                <Target className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">No strength data yet</p>
-                <p className="text-sm text-gray-500">Complete workouts with key lifts to build your rating</p>
+              <div className="text-center py-10">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-8 h-8 text-slate-600" />
+                </div>
+                <p className="text-slate-300 font-medium mb-1">No strength data yet</p>
+                <p className="text-sm text-slate-500">Complete workouts with key lifts to build your rating</p>
               </div>
             )}
           </CardContent>
         </Card>
+        )}
 
         {/* Medals Card */}
-        <Card className="bg-gray-900 border-gray-800">
-          <CardHeader className="pb-2">
+        <Card className="bg-slate-900/90 border-slate-800/50 backdrop-blur-sm shadow-xl">
+          <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2">
-                <Medal className="w-5 h-5 text-amber-400" />
-                Medals & Achievements
+              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
+                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${isTrainerMode ? 'from-emerald-500 to-teal-600 shadow-emerald-500/20' : 'from-purple-500 to-pink-600 shadow-purple-500/20'} flex items-center justify-center shadow-lg`}>
+                  {isTrainerMode ? <Crown className="w-4 h-4 text-white" /> : <Medal className="w-4 h-4 text-white" />}
+                </div>
+                {isTrainerMode ? 'Trainer Achievements' : 'Achievements'}
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => router.push('/medals')}>
+              <Button variant="ghost" size="sm" className="text-slate-400 hover:text-sky-400" onClick={() => router.push('/medals')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -547,6 +638,16 @@ export default function ProfilePage() {
               <div className="grid grid-cols-4 gap-3">
                 {(sortedMedals.length > 0 ? sortedMedals : userMedals).slice(0, 8).map((medal: any) => {
                   const tierGradient = getMedalTierGradient(medal.tier);
+                  const timesEarned = medal.timesEarned || 1;
+                  // Color evolution based on times earned
+                  const progressColor = timesEarned >= 10 ? 'bg-cyan-400' : 
+                                        timesEarned >= 5 ? 'bg-amber-400' : 
+                                        timesEarned >= 3 ? 'bg-gray-300' : 
+                                        'bg-amber-700';
+                  const progressGlow = timesEarned >= 10 ? 'shadow-cyan-400/50' : 
+                                       timesEarned >= 5 ? 'shadow-amber-400/50' : 
+                                       timesEarned >= 3 ? 'shadow-gray-300/50' : 
+                                       'shadow-amber-700/50';
                   return (
                     <div
                       key={medal.id}
@@ -558,8 +659,16 @@ export default function ProfilePage() {
                       <p className="text-xs text-center line-clamp-1 text-white">
                         {medal.name}
                       </p>
-                      <div className="absolute top-1 right-1">
-                        <BadgeCheck className="w-3 h-3 text-white/80" />
+                      {/* Times earned badge */}
+                      <div className={`absolute top-1 right-1 w-4 h-4 rounded-full ${progressColor} ${progressGlow} shadow-lg flex items-center justify-center`}>
+                        <span className="text-[8px] font-bold text-gray-900">{timesEarned > 99 ? '99+' : timesEarned}</span>
+                      </div>
+                      {/* Progress bar at bottom */}
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
+                        <div 
+                          className={`h-full ${progressColor} transition-all`}
+                          style={{ width: `${Math.min((timesEarned / 10) * 100, 100)}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -568,14 +677,19 @@ export default function ProfilePage() {
             ) : (
               <div className="text-center py-8">
                 <Award className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">No medals yet</p>
-                <p className="text-sm text-gray-500">Complete workouts to earn medals</p>
+                <p className="text-gray-400 mb-1">No {isTrainerMode ? 'trainer' : ''} medals yet</p>
+                <p className="text-sm text-gray-500">
+                  {isTrainerMode 
+                    ? 'Grow your client base, conduct sessions, and earn revenue to unlock trainer medals'
+                    : 'Complete workouts to earn medals'}
+                </p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Personal Bests */}
+        {/* Personal Bests - hidden in trainer mode */}
+        {!isTrainerMode && (
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -621,57 +735,101 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
+        )}
 
-        {/* Recent Workouts */}
+        {/* Recent Workouts - Personal workouts in user mode, Client sessions in trainer mode */}
         <Card className="bg-gray-900 border-gray-800">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-white flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-emerald-400" />
-                Recent Workouts
+                <Dumbbell className="w-5 h-5 text-sky-400" />
+                {isTrainerMode ? 'Recent Client Sessions' : 'Recent Workouts'}
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => router.push('/workout')}>
+              <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {userWorkouts.length > 0 ? (
-              <div className="space-y-2">
-                {userWorkouts
-                  .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-                  .slice(0, 5)
-                  .map((workout) => (
-                    <div
-                      key={workout.id}
-                      className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
-                      onClick={() => router.push(`/workout/${workout.id}`)}
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-white text-sm truncate">{workout.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
-                          {workout.notes && ' • Has notes'}
-                        </p>
-                      </div>
-                      <div className="text-right ml-3">
-                        <p className="text-emerald-400 font-medium text-sm">
-                          {Math.round(workout.totalVolume).toLocaleString()} kg
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-              </div>
+            {isTrainerMode ? (
+              // Trainer mode: show recent completed sessions with clients
+              sessions.filter(s => s.trainerId === user.id && s.status === 'completed').length > 0 ? (
+                <div className="space-y-2">
+                  {sessions
+                    .filter(s => s.trainerId === user.id && s.status === 'completed')
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .slice(0, 5)
+                    .map((session) => {
+                      const clientData = clients.find(c => c.clientId === session.clientId);
+                      const clientName = clientData?.client?.displayName || clientData?.client?.username || 'Client';
+                      return (
+                        <div
+                          key={session.id}
+                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
+                          onClick={() => router.push(`/clients/${session.clientId}`)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-white text-sm truncate">{(session as any).title || 'PT Session'}</p>
+                            <p className="text-xs text-gray-500">
+                              {format(new Date(session.date), 'MMM d')} • {clientName}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className="text-emerald-400 font-medium text-sm">Completed</p>
+                            <p className="text-xs text-gray-500">
+                              {session.duration ? `${session.duration}m` : '--'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Dumbbell className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 mb-1">No client sessions yet</p>
+                  <p className="text-sm text-gray-500">Complete sessions with clients to see them here</p>
+                </div>
+              )
             ) : (
-              <div className="text-center py-8">
-                <Dumbbell className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">No workouts yet</p>
-                <p className="text-sm text-gray-500">Start your first workout to see it here</p>
-              </div>
+              // User mode: show personal workouts
+              userWorkouts.length > 0 ? (
+                <div className="space-y-2">
+                  {userWorkouts
+                    .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+                    .slice(0, 5)
+                    .map((workout) => (
+                      <div
+                        key={workout.id}
+                        className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
+                        onClick={() => router.push(`/workout/${workout.id}`)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
+                            {workout.notes && ' • Has notes'}
+                          </p>
+                        </div>
+                        <div className="text-right ml-3">
+                          <p className="text-sky-400 font-medium text-sm">
+                            {Math.round(workout.totalVolume).toLocaleString()} kg
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Dumbbell className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+                  <p className="text-gray-400 mb-1">No workouts yet</p>
+                  <p className="text-sm text-gray-500">Start your first workout to see it here</p>
+                </div>
+              )
             )}
           </CardContent>
         </Card>
@@ -682,6 +840,7 @@ export default function ProfilePage() {
             sessionPackages={sessionPackages.filter(p => p.trainerId === user.id)}
             sessions={sessions.filter(s => s.trainerId === user.id)}
             clients={clients.filter(c => c.trainerId === user.id)}
+            payments={payments.filter(p => p.trainerId === user.id)}
           />
         )}
 
@@ -748,11 +907,10 @@ export default function ProfilePage() {
       {/* Profile Card Popup */}
       <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
         <DialogContent className="bg-transparent border-none shadow-none max-w-md p-0">
-          <ProfileCard
+          <ProfileCardV2
             user={user}
             medals={userMedals}
             strengthRating={strengthRating}
-            personalBests={userPBs}
             stats={{
               totalWorkouts,
               totalVolume,
@@ -761,6 +919,7 @@ export default function ProfilePage() {
             }}
             isOwnProfile={true}
             isFriend={false}
+            onClose={() => setShowProfileCard(false)}
             onShare={() => {
               navigator.clipboard?.writeText(window.location.href);
             }}
@@ -785,7 +944,7 @@ export default function ProfilePage() {
                       <div key={followerId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800">
                         <Avatar className="w-10 h-10">
                           <AvatarImage src={followerUser?.profilePhoto} />
-                          <AvatarFallback className="bg-emerald-500 text-white">
+                          <AvatarFallback className="bg-sky-500 text-white">
                             {followerUser?.displayName?.[0] || '?'}
                           </AvatarFallback>
                         </Avatar>
@@ -800,7 +959,7 @@ export default function ProfilePage() {
                             <Button 
                               size="sm" 
                               variant="outline"
-                              className="border-emerald-500 text-emerald-400"
+                              className="border-sky-500 text-sky-400"
                               onClick={() => {
                                 setShowFollowersModal(false);
                                 router.push(`/clients/${followerId}`);
@@ -865,6 +1024,145 @@ export default function ProfilePage() {
                 </div>
               </ScrollArea>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trainer Stats Medal Progress Modal */}
+      <Dialog open={showTrainerStatModal !== null} onOpenChange={(open) => !open && setShowTrainerStatModal(null)}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <div className="space-y-4">
+            {showTrainerStatModal === 'clients' && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Client Milestones</h2>
+                    <p className="text-sm text-gray-400">{trainerStats?.activeClients || 0} total clients</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { id: 'trainer-first-client', target: 1, name: 'First Client', icon: '👤' },
+                    { id: 'trainer-5-clients', target: 5, name: 'Growing Roster', icon: '👥' },
+                    { id: 'trainer-10-clients', target: 10, name: 'Popular Trainer', icon: '🌟' },
+                    { id: 'trainer-25-clients', target: 25, name: 'Client Magnet', icon: '💫' },
+                    { id: 'trainer-50-clients', target: 50, name: 'Training Empire', icon: '👑' },
+                  ].map((milestone) => {
+                    const current = trainerStats?.activeClients || 0;
+                    const earned = current >= milestone.target;
+                    const progress = Math.min((current / milestone.target) * 100, 100);
+                    return (
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-gray-800'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{milestone.icon}</span>
+                            <span className={`font-medium ${earned ? 'text-emerald-400' : 'text-white'}`}>{milestone.name}</span>
+                          </div>
+                          <span className={`text-sm ${earned ? 'text-emerald-400' : 'text-gray-400'}`}>
+                            {current}/{milestone.target}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {showTrainerStatModal === 'sessions' && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
+                    <Calendar className="w-5 h-5 text-sky-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Session Milestones</h2>
+                    <p className="text-sm text-gray-400">{trainerStats?.totalSessions || 0} total sessions</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { id: 'trainer-first-session', target: 1, name: 'Session One', icon: '🎯' },
+                    { id: 'trainer-25-sessions', target: 25, name: 'Session Pro', icon: '📋' },
+                    { id: 'trainer-100-sessions', target: 100, name: 'Session Master', icon: '🏆' },
+                    { id: 'trainer-500-sessions', target: 500, name: 'Session Legend', icon: '⭐' },
+                    { id: 'trainer-1000-sessions', target: 1000, name: 'Session God', icon: '💎' },
+                  ].map((milestone) => {
+                    const current = trainerStats?.totalSessions || 0;
+                    const earned = current >= milestone.target;
+                    const progress = Math.min((current / milestone.target) * 100, 100);
+                    return (
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-sky-500/20 border border-sky-500/30' : 'bg-gray-800'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{milestone.icon}</span>
+                            <span className={`font-medium ${earned ? 'text-sky-400' : 'text-white'}`}>{milestone.name}</span>
+                          </div>
+                          <span className={`text-sm ${earned ? 'text-sky-400' : 'text-gray-400'}`}>
+                            {current}/{milestone.target}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            {showTrainerStatModal === 'revenue' && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Revenue Milestones</h2>
+                    <p className="text-sm text-gray-400">${Math.round(trainerStats?.totalEarnings || 0)} total earned</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {[
+                    { id: 'trainer-first-payment', target: 1, name: 'First Dollar', icon: '💵' },
+                    { id: 'trainer-500-revenue', target: 500, name: 'Side Hustle', icon: '💰' },
+                    { id: 'trainer-2500-revenue', target: 2500, name: 'Part Timer', icon: '💳' },
+                    { id: 'trainer-10000-revenue', target: 10000, name: 'Full Timer', icon: '🤑' },
+                    { id: 'trainer-50000-revenue', target: 50000, name: 'Fitness Mogul', icon: '💎' },
+                  ].map((milestone) => {
+                    const current = trainerStats?.totalEarnings || 0;
+                    const earned = current >= milestone.target;
+                    const progress = Math.min((current / milestone.target) * 100, 100);
+                    return (
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-gray-800'}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{milestone.icon}</span>
+                            <span className={`font-medium ${earned ? 'text-amber-400' : 'text-white'}`}>{milestone.name}</span>
+                          </div>
+                          <span className={`text-sm ${earned ? 'text-amber-400' : 'text-gray-400'}`}>
+                            ${Math.round(current)}/${milestone.target}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+            <Button 
+              variant="outline" 
+              className="w-full border-gray-700 text-white hover:bg-gray-800"
+              onClick={() => {
+                setShowTrainerStatModal(null);
+                router.push('/medals');
+              }}
+            >
+              <Medal className="w-4 h-4 mr-2" />
+              View All Medals
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

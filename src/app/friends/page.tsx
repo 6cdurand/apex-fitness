@@ -166,16 +166,16 @@ export default function FriendsPage() {
         ) : (
           <Tabs defaultValue="following" className="w-full">
             <TabsList className="grid w-full grid-cols-4 bg-gray-800 mb-4">
-              <TabsTrigger value="following" className="data-[state=active]:bg-emerald-500 text-xs">
+              <TabsTrigger value="following" className="data-[state=active]:bg-sky-500 text-xs">
                 Following
               </TabsTrigger>
-              <TabsTrigger value="followers" className="data-[state=active]:bg-emerald-500 text-xs">
+              <TabsTrigger value="followers" className="data-[state=active]:bg-sky-500 text-xs">
                 Followers
               </TabsTrigger>
               <TabsTrigger value="trainers" className="data-[state=active]:bg-rose-500 text-xs">
                 Trainers
               </TabsTrigger>
-              <TabsTrigger value="discover" className="data-[state=active]:bg-emerald-500 text-xs">
+              <TabsTrigger value="discover" className="data-[state=active]:bg-sky-500 text-xs">
                 Discover
               </TabsTrigger>
             </TabsList>
@@ -458,7 +458,7 @@ function TrainerCard({
               onClick={isFollowing ? onUnfollow : onFollow}
               className={isFollowing 
                 ? "border-gray-700 text-gray-300" 
-                : "bg-emerald-500 hover:bg-emerald-600"
+                : "bg-sky-500 hover:bg-sky-600"
               }
             >
               {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
@@ -488,7 +488,7 @@ function UserCard({
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <button onClick={onAvatarClick} className="group relative">
-            <Avatar className="w-12 h-12 ring-2 ring-transparent group-hover:ring-emerald-500 transition-all">
+            <Avatar className="w-12 h-12 ring-2 ring-transparent group-hover:ring-sky-500 transition-all">
               <AvatarImage src={userData.profilePhoto} />
               <AvatarFallback className="bg-gray-800 text-white">
                 {userData.displayName?.[0] || userData.username?.[0] || '?'}
@@ -517,7 +517,7 @@ function UserCard({
             onClick={isFollowing ? onUnfollow : onFollow}
             className={isFollowing 
               ? "border-gray-700 text-gray-300" 
-              : "bg-emerald-500 hover:bg-emerald-600"
+              : "bg-sky-500 hover:bg-sky-600"
             }
           >
             {isFollowing ? (

@@ -45,8 +45,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400">Loading APEX Fitness...</p>
+        <div className="w-16 h-16 border-4 border-sky-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-400">Loading Catalift...</p>
       </div>
     </div>
   );

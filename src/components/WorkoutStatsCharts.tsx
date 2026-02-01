@@ -2,9 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   LineChart, 
   Line, 
@@ -17,11 +15,16 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
-  Legend,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts';
-import { TrendingUp, Dumbbell, Calendar, Trophy, ChevronDown } from 'lucide-react';
-import { format, subDays, startOfWeek, endOfWeek, eachWeekOfInterval, subWeeks } from 'date-fns';
+import { TrendingUp, Dumbbell, Calendar, Activity, ChevronRight, Target } from 'lucide-react';
+import { format, subDays, eachWeekOfInterval, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
 import { Workout, PersonalBest } from '@/types';
+import { useRouter } from 'next/navigation';
 
 interface WorkoutStatsChartsProps {
   workoutHistory: Workout[];
@@ -29,26 +32,29 @@ interface WorkoutStatsChartsProps {
   compact?: boolean;
 }
 
-type MuscleGroup = 'all' | 'chest' | 'back' | 'legs' | 'shoulders';
+type MuscleGroup = 'chest' | 'back' | 'legs' | 'shoulders' | 'arms' | 'core';
 
 const muscleGroupExercises: Record<MuscleGroup, string[]> = {
-  all: [],
-  chest: ['bench-press', 'incline-bench', 'dumbbell-press', 'incline-dumbbell', 'cable-fly', 'chest-press', 'push-up', 'chest-fly', 'pec-deck', 'dips'],
-  back: ['lat-pulldown', 'pulldown', 'barbell-row', 'cable-row', 'deadlift', 'pull-up', 't-bar-row', 'seated-row', 'face-pull', 'row'],
-  legs: ['squat', 'leg-press', 'romanian-deadlift', 'rdl', 'lunges', 'lunge', 'leg-curl', 'leg-extension', 'hip-thrust', 'calf-raise', 'split-squat', 'goblet'],
-  shoulders: ['overhead-press', 'shoulder-press', 'db-shoulder', 'lateral-raise', 'lateral-raises', 'front-raise', 'rear-delt', 'arnold-press', 'upright-row', 'ohp', 'military-press'],
+  chest: ['bench-press', 'incline-bench', 'dumbbell-press', 'incline-dumbbell', 'cable-fly', 'chest-press', 'push-up', 'chest-fly', 'pec-deck', 'dips', 'machine-chest'],
+  back: ['lat-pulldown', 'pulldown', 'barbell-row', 'cable-row', 'deadlift', 'pull-up', 't-bar-row', 'seated-row', 'face-pull', 'row', 'machine-back'],
+  legs: ['squat', 'leg-press', 'romanian-deadlift', 'rdl', 'lunges', 'lunge', 'leg-curl', 'leg-extension', 'hip-thrust', 'calf-raise', 'split-squat', 'goblet', 'hack-squat'],
+  shoulders: ['overhead-press', 'shoulder-press', 'db-shoulder', 'lateral-raise', 'lateral-raises', 'front-raise', 'rear-delt', 'arnold-press', 'upright-row', 'ohp', 'military-press', 'machine-shoulder'],
+  arms: ['bicep-curl', 'curl', 'tricep', 'pushdown', 'hammer-curl', 'preacher', 'skull-crusher', 'dip', 'concentration'],
+  core: ['plank', 'crunch', 'sit-up', 'leg-raise', 'ab-wheel', 'cable-crunch', 'woodchop'],
 };
 
 const muscleGroupColors: Record<MuscleGroup, string> = {
-  all: '#10b981',
   chest: '#ef4444',
   back: '#3b82f6',
   legs: '#8b5cf6',
   shoulders: '#f59e0b',
+  arms: '#10b981',
+  core: '#ec4899',
 };
 
 export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = false }: WorkoutStatsChartsProps) {
-  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<MuscleGroup>('all');
+  const router = useRouter();
+  const [showAllExercises, setShowAllExercises] = useState(false);
 
   // Calculate weekly volume data (last 8 weeks) with muscle group filtering
   const weeklyVolumeData = useMemo(() => {
@@ -68,10 +74,18 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
       let chestVol = 0, backVol = 0, legsVol = 0, shouldersVol = 0, totalVol = 0;
 
       weekWorkouts.forEach(w => {
+        // Use totalVolume from workout if available, otherwise calculate from exercises
+        if (w.totalVolume) {
+          totalVol += w.totalVolume;
+        }
+        
+        // Also try to calculate from exercises for muscle group breakdown
         w.exercises?.forEach(ex => {
-          const exId = ex.exerciseId?.toLowerCase() || '';
-          const exVol = ex.sets?.reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
-          totalVol += exVol;
+          const exId = (ex.exerciseId || (ex as any).name || '').toLowerCase().replace(/\s+/g, '-');
+          const exVol = ex.sets?.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
+          
+          // Only add to totalVol if we didn't get it from w.totalVolume
+          if (!w.totalVolume) totalVol += exVol;
 
           if (muscleGroupExercises.chest.some(e => exId.includes(e))) chestVol += exVol;
           else if (muscleGroupExercises.back.some(e => exId.includes(e))) backVol += exVol;
@@ -109,43 +123,81 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
     return last30Days;
   }, [workoutHistory]);
 
-  // Multi-exercise comparison data grouped by muscle
-  const exerciseComparisonData = useMemo(() => {
-    const result: Record<MuscleGroup, { exerciseId: string; name: string; current1RM: number; color: string }[]> = {
-      all: [],
-      chest: [],
-      back: [],
-      legs: [],
-      shoulders: [],
+  // Calculate 1RM trends for most used exercises
+  const oneRMTrendData = useMemo(() => {
+    // Count exercise occurrences and get their 1RM history
+    const exerciseData: Record<string, { count: number; history: { date: string; oneRM: number }[] }> = {};
+    
+    workoutHistory
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      .forEach(workout => {
+        workout.exercises?.forEach(ex => {
+          const exId = ex.exerciseId || '';
+          if (!exId) return;
+          
+          if (!exerciseData[exId]) {
+            exerciseData[exId] = { count: 0, history: [] };
+          }
+          exerciseData[exId].count++;
+          
+          // Find best set in this workout for 1RM calculation
+          let best1RM = 0;
+          ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(set => {
+            const oneRM = set.weight! * (1 + set.reps! / 30);
+            if (oneRM > best1RM) best1RM = oneRM;
+          });
+          
+          if (best1RM > 0) {
+            exerciseData[exId].history.push({
+              date: format(new Date(workout.startTime), 'MMM d'),
+              oneRM: Math.round(best1RM),
+            });
+          }
+        });
+      });
+    
+    // Get top 4 most used exercises with history
+    return Object.entries(exerciseData)
+      .filter(([_, data]) => data.history.length >= 2)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 4)
+      .map(([exId, data]) => ({
+        exerciseId: exId,
+        name: exId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        history: data.history.slice(-8), // Last 8 data points
+        current1RM: data.history[data.history.length - 1]?.oneRM || 0,
+        previous1RM: data.history[data.history.length - 2]?.oneRM || 0,
+      }));
+  }, [workoutHistory]);
+
+  // Muscle group balance for radar chart
+  const muscleBalanceData = useMemo(() => {
+    const totals: Record<MuscleGroup, number> = {
+      chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
     };
-
-    personalBests.forEach(pb => {
-      const exId = pb.exerciseId.toLowerCase();
-      const name = pb.exerciseId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      const entry = { exerciseId: pb.exerciseId, name, current1RM: Math.round(pb.oneRepMax), color: '' };
-
-      if (muscleGroupExercises.chest.some(e => exId.includes(e))) {
-        entry.color = muscleGroupColors.chest;
-        result.chest.push(entry);
-      } else if (muscleGroupExercises.back.some(e => exId.includes(e))) {
-        entry.color = muscleGroupColors.back;
-        result.back.push(entry);
-      } else if (muscleGroupExercises.legs.some(e => exId.includes(e))) {
-        entry.color = muscleGroupColors.legs;
-        result.legs.push(entry);
-      } else if (muscleGroupExercises.shoulders.some(e => exId.includes(e))) {
-        entry.color = muscleGroupColors.shoulders;
-        result.shoulders.push(entry);
-      }
+    
+    workoutHistory.forEach(w => {
+      w.exercises?.forEach(ex => {
+        const exId = (ex.exerciseId || '').toLowerCase();
+        const volume = ex.sets?.reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
+        
+        if (muscleGroupExercises.chest.some(e => exId.includes(e))) totals.chest += volume;
+        else if (muscleGroupExercises.back.some(e => exId.includes(e))) totals.back += volume;
+        else if (muscleGroupExercises.legs.some(e => exId.includes(e))) totals.legs += volume;
+        else if (muscleGroupExercises.shoulders.some(e => exId.includes(e))) totals.shoulders += volume;
+        else if (muscleGroupExercises.arms.some(e => exId.includes(e))) totals.arms += volume;
+        else if (muscleGroupExercises.core.some(e => exId.includes(e))) totals.core += volume;
+      });
     });
-
-    // Sort by 1RM descending
-    Object.keys(result).forEach(key => {
-      result[key as MuscleGroup].sort((a, b) => b.current1RM - a.current1RM);
-    });
-
-    return result;
-  }, [personalBests]);
+    
+    const maxVolume = Math.max(...Object.values(totals), 1);
+    
+    return Object.entries(totals).map(([group, volume]) => ({
+      muscle: group.charAt(0).toUpperCase() + group.slice(1),
+      value: Math.round((volume / maxVolume) * 100),
+      fullMark: 100,
+    }));
+  }, [workoutHistory]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -174,7 +226,7 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader className="pb-2">
           <CardTitle className="text-white flex items-center gap-2 text-base">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
+            <TrendingUp className="w-4 h-4 text-sky-400" />
             Progress Overview
           </CardTitle>
         </CardHeader>
@@ -185,7 +237,7 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
               <p className="text-xs text-gray-400">Total</p>
             </div>
             <div className="text-center p-2 bg-gray-800 rounded-lg">
-              <p className="text-lg font-bold text-emerald-400">{stats.thisWeekWorkouts}</p>
+              <p className="text-lg font-bold text-sky-400">{stats.thisWeekWorkouts}</p>
               <p className="text-xs text-gray-400">This Week</p>
             </div>
             <div className="text-center p-2 bg-gray-800 rounded-lg">
@@ -221,197 +273,221 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
 
   return (
     <div className="space-y-4">
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-4 text-center">
-            <Dumbbell className="w-6 h-6 text-emerald-400 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-white">{stats.totalWorkouts}</p>
-            <p className="text-xs text-gray-400">Total Workouts</p>
+      {/* Summary Stats Row */}
+      <div className="grid grid-cols-4 gap-2">
+        <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+          <Dumbbell className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+          <p className="text-xl font-bold text-white">{stats.totalWorkouts}</p>
+          <p className="text-[10px] text-gray-500">Workouts</p>
+        </div>
+        <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+          <TrendingUp className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+          <p className="text-xl font-bold text-white">{stats.totalVolume}k</p>
+          <p className="text-[10px] text-gray-500">Volume (kg)</p>
+        </div>
+        <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+          <Calendar className="w-5 h-5 text-purple-400 mx-auto mb-1" />
+          <p className="text-xl font-bold text-white">{stats.thisWeekWorkouts}</p>
+          <p className="text-[10px] text-gray-500">This Week</p>
+        </div>
+        <div className="bg-gray-800/50 rounded-xl p-3 text-center">
+          <Target className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+          <p className="text-xl font-bold text-white">{personalBests.length}</p>
+          <p className="text-[10px] text-gray-500">PRs</p>
+        </div>
+      </div>
+
+      {/* 1RM Trends - Top Exercises */}
+      <Card className="bg-gray-900/90 border-gray-800/50">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-white flex items-center gap-2 text-base">
+              <TrendingUp className="w-4 h-4 text-sky-400" />
+              1RM Progress
+            </CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-gray-400 hover:text-white"
+              onClick={() => router.push('/exercises')}
+            >
+              View All <ChevronRight className="w-3 h-3 ml-1" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {oneRMTrendData.length > 0 ? (
+            <div className="space-y-4">
+              {oneRMTrendData.slice(0, showAllExercises ? 4 : 2).map((exercise, idx) => {
+                const trend = exercise.current1RM - exercise.previous1RM;
+                const trendPercent = exercise.previous1RM > 0 
+                  ? Math.round((trend / exercise.previous1RM) * 100) 
+                  : 0;
+                const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+                const color = colors[idx % colors.length];
+                
+                return (
+                  <div key={exercise.exerciseId} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={() => router.push(`/exercises/${exercise.exerciseId}`)}
+                        className="text-sm font-medium text-white hover:text-sky-400 transition-colors text-left"
+                      >
+                        {exercise.name}
+                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-white">{exercise.current1RM}kg</span>
+                        {trend !== 0 && (
+                          <span className={`text-xs font-medium ${trend > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {trend > 0 ? '+' : ''}{trendPercent}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-16">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={exercise.history}>
+                          <XAxis dataKey="date" hide />
+                          <YAxis hide domain={['dataMin - 5', 'dataMax + 5']} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                            labelStyle={{ color: '#fff' }}
+                            formatter={(value: number) => [`${value}kg`, '1RM']}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="oneRM" 
+                            stroke={color}
+                            strokeWidth={2}
+                            dot={{ fill: color, strokeWidth: 0, r: 3 }}
+                            activeDot={{ r: 5, fill: color }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })}
+              {oneRMTrendData.length > 2 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full text-gray-400 hover:text-white"
+                  onClick={() => setShowAllExercises(!showAllExercises)}
+                >
+                  {showAllExercises ? 'Show Less' : `Show ${oneRMTrendData.length - 2} More`}
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-6">
+              <Activity className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+              <p className="text-gray-400 text-sm">No exercise data yet</p>
+              <p className="text-gray-500 text-xs">Complete workouts to track 1RM trends</p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Volume Trend */}
+      <Card className="bg-gray-900/90 border-gray-800/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-white flex items-center gap-2 text-base">
+            <Dumbbell className="w-4 h-4 text-emerald-400" />
+            Weekly Volume Trend
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-40">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={weeklyVolumeData}>
+                <defs>
+                  <linearGradient id="volumeGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                <XAxis dataKey="week" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}k`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#fff' }}
+                  formatter={(value: number) => [`${value}k kg`, 'Volume']}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="#10b981" 
+                  fill="url(#volumeGradient)" 
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Two Column: Frequency + Muscle Balance */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Workout Frequency */}
+        <Card className="bg-gray-900/90 border-gray-800/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white flex items-center gap-2 text-sm">
+              <Calendar className="w-4 h-4 text-purple-400" />
+              Frequency
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={dailyFrequencyData.slice(-14)}>
+                  <XAxis dataKey="shortDate" hide />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                    labelStyle={{ color: '#fff', fontSize: 10 }}
+                    labelFormatter={(label) => dailyFrequencyData.find(d => d.shortDate === label)?.date}
+                    formatter={(value: number) => [`${value}`, 'Workouts']}
+                  />
+                  <Bar dataKey="workouts" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p className="text-[10px] text-gray-500 text-center mt-1">Last 14 days</p>
           </CardContent>
         </Card>
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-4 text-center">
-            <TrendingUp className="w-6 h-6 text-blue-400 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-white">{stats.totalVolume}k</p>
-            <p className="text-xs text-gray-400">Total Volume (kg)</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-4 text-center">
-            <Calendar className="w-6 h-6 text-purple-400 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-white">{stats.thisWeekWorkouts}</p>
-            <p className="text-xs text-gray-400">This Week</p>
-          </CardContent>
-        </Card>
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-4 text-center">
-            <Trophy className="w-6 h-6 text-amber-400 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-white">{personalBests.length}</p>
-            <p className="text-xs text-gray-400">Personal Bests</p>
+
+        {/* Muscle Balance Radar */}
+        <Card className="bg-gray-900/90 border-gray-800/50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-white flex items-center gap-2 text-sm">
+              <Target className="w-4 h-4 text-amber-400" />
+              Balance
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-3">
+            <div className="h-28">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart data={muscleBalanceData} cx="50%" cy="50%" outerRadius="70%">
+                  <PolarGrid stroke="#374151" />
+                  <PolarAngleAxis 
+                    dataKey="muscle" 
+                    tick={{ fill: '#9ca3af', fontSize: 8 }}
+                  />
+                  <PolarRadiusAxis hide />
+                  <Radar
+                    name="Volume"
+                    dataKey="value"
+                    stroke="#f59e0b"
+                    fill="#f59e0b"
+                    fillOpacity={0.3}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
       </div>
-
-      {/* Charts Tabs */}
-      <Tabs defaultValue="volume" className="w-full">
-        <TabsList className="grid grid-cols-3 bg-gray-900">
-          <TabsTrigger value="volume">Volume</TabsTrigger>
-          <TabsTrigger value="frequency">Frequency</TabsTrigger>
-          <TabsTrigger value="exercises">Exercises</TabsTrigger>
-        </TabsList>
-
-        {/* Weekly Volume Chart */}
-        <TabsContent value="volume">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-base">Weekly Training Volume</CardTitle>
-                <div className="flex gap-1">
-                  {(['all', 'chest', 'back', 'legs', 'shoulders'] as MuscleGroup[]).map(group => (
-                    <Button
-                      key={group}
-                      size="sm"
-                      variant={selectedMuscleGroup === group ? 'default' : 'ghost'}
-                      className={`text-xs px-2 py-1 h-7 ${
-                        selectedMuscleGroup === group 
-                          ? 'bg-emerald-500' 
-                          : 'text-gray-400 hover:text-white'
-                      }`}
-                      onClick={() => setSelectedMuscleGroup(group)}
-                    >
-                      {group.charAt(0).toUpperCase() + group.slice(1)}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  {selectedMuscleGroup === 'all' ? (
-                    <BarChart data={weeklyVolumeData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="week" tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={{ stroke: '#374151' }} />
-                      <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={{ stroke: '#374151' }} tickFormatter={(v) => `${v}k`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                        labelStyle={{ color: '#fff' }}
-                      />
-                      <Legend />
-                      <Bar dataKey="chest" stackId="a" fill={muscleGroupColors.chest} name="Chest" />
-                      <Bar dataKey="back" stackId="a" fill={muscleGroupColors.back} name="Back" />
-                      <Bar dataKey="legs" stackId="a" fill={muscleGroupColors.legs} name="Legs" />
-                      <Bar dataKey="shoulders" stackId="a" fill={muscleGroupColors.shoulders} name="Shoulders" />
-                    </BarChart>
-                  ) : (
-                    <AreaChart data={weeklyVolumeData}>
-                      <defs>
-                        <linearGradient id={`gradient-${selectedMuscleGroup}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor={muscleGroupColors[selectedMuscleGroup]} stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor={muscleGroupColors[selectedMuscleGroup]} stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                      <XAxis dataKey="week" tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={{ stroke: '#374151' }} />
-                      <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={{ stroke: '#374151' }} tickFormatter={(v) => `${v}k`} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                        labelStyle={{ color: '#fff' }}
-                        formatter={(value: number) => [`${value}k kg`, selectedMuscleGroup.charAt(0).toUpperCase() + selectedMuscleGroup.slice(1)]}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey={selectedMuscleGroup} 
-                        stroke={muscleGroupColors[selectedMuscleGroup]} 
-                        fill={`url(#gradient-${selectedMuscleGroup})`}
-                        strokeWidth={2}
-                      />
-                    </AreaChart>
-                  )}
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Workout Frequency Chart */}
-        <TabsContent value="frequency">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-base">Daily Activity (Last 30 Days)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyFrequencyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="shortDate" tick={{ fill: '#9ca3af', fontSize: 10 }} axisLine={{ stroke: '#374151' }} interval={4} />
-                    <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} axisLine={{ stroke: '#374151' }} allowDecimals={false} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                      labelStyle={{ color: '#fff' }}
-                      labelFormatter={(label) => dailyFrequencyData.find(d => d.shortDate === label)?.date}
-                      formatter={(value: number) => [`${value} workout${value !== 1 ? 's' : ''}`, 'Sessions']}
-                    />
-                    <Bar dataKey="workouts" fill="#3b82f6" radius={[2, 2, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Exercise Comparison by Muscle Group */}
-        <TabsContent value="exercises">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-base">Exercise Comparison (1RM)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {(['chest', 'back', 'legs', 'shoulders'] as MuscleGroup[]).map(group => {
-                  const exercises = exerciseComparisonData[group];
-                  if (exercises.length === 0) return null;
-                  
-                  return (
-                    <div key={group} className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: muscleGroupColors[group] }} />
-                        <span className="text-sm font-medium text-white capitalize">{group}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {exercises.slice(0, 4).map(ex => (
-                          <div key={ex.exerciseId} className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-32 truncate">{ex.name}</span>
-                            <div className="flex-1 h-4 bg-gray-800 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full rounded-full transition-all"
-                                style={{ 
-                                  width: `${Math.min((ex.current1RM / 200) * 100, 100)}%`,
-                                  backgroundColor: muscleGroupColors[group],
-                                }}
-                              />
-                            </div>
-                            <span className="text-xs font-medium text-white w-12 text-right">{ex.current1RM}kg</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {Object.values(exerciseComparisonData).every(arr => arr.length === 0) && (
-                  <div className="text-center py-8">
-                    <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                    <p className="text-gray-400">No personal bests recorded yet</p>
-                    <p className="text-sm text-gray-500">Complete workouts to track your 1RM progress</p>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   );
 }

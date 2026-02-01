@@ -15,6 +15,14 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [101, 136],
     elite: [136, 174],
   },
+  // Alias for barbell-bench-press (same as bench-press)
+  'barbell-bench-press': {
+    beginner: [0, 47],
+    novice: [47, 73],
+    intermediate: [73, 101],
+    advanced: [101, 136],
+    elite: [136, 174],
+  },
   // Incline Barbell Bench (compound)
   'incline-bench-press': {
     beginner: [0, 44],
@@ -62,28 +70,28 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [35, 55],
     elite: [55, 80],
   },
-  // Machine Chest Press (+7% heavier)
+  // Machine Chest Press
   'machine-chest-press': {
-    beginner: [0, 34],
-    novice: [34, 50],
-    intermediate: [50, 68],
-    advanced: [68, 89],
-    elite: [89, 113],
+    beginner: [0, 32],
+    novice: [32, 57],
+    intermediate: [57, 90],
+    advanced: [90, 131],
+    elite: [131, 177],
   },
-  // Machine/Cable Chest Fly (+7%)
+  // Machine/Cable Chest Fly
   'chest-fly': {
-    beginner: [0, 21],
-    novice: [21, 31],
-    intermediate: [31, 43],
-    advanced: [43, 56],
-    elite: [56, 71],
+    beginner: [0, 34],
+    novice: [34, 57],
+    intermediate: [57, 87],
+    advanced: [87, 124],
+    elite: [124, 166],
   },
   'machine-chest-fly': {
-    beginner: [0, 21],
-    novice: [21, 31],
-    intermediate: [31, 43],
-    advanced: [43, 56],
-    elite: [56, 71],
+    beginner: [0, 34],
+    novice: [34, 57],
+    intermediate: [57, 87],
+    advanced: [87, 124],
+    elite: [124, 166],
   },
 
   // ========== BACK ==========
@@ -233,13 +241,13 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [28, 38],
     elite: [38, 48],
   },
-  // Machine Shoulder Press (+7%)
+  // Machine Shoulder Press
   'machine-shoulder-press': {
-    beginner: [0, 27],
-    novice: [27, 39],
-    intermediate: [39, 53],
-    advanced: [53, 70],
-    elite: [70, 88],
+    beginner: [0, 24],
+    novice: [24, 46],
+    intermediate: [46, 77],
+    advanced: [77, 115],
+    elite: [115, 159],
   },
   // Lateral Raise (dumbbell - isolation, lighter weights)
   'lateral-raise': {
@@ -256,36 +264,36 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [15, 22],
     elite: [22, 30],
   },
-  // Cable Lateral Raise (+7%)
+  // Cable Lateral Raise
   'cable-lateral-raise': {
-    beginner: [0, 4],
-    novice: [4, 9],
-    intermediate: [9, 16],
-    advanced: [16, 24],
-    elite: [24, 32],
+    beginner: [0, 1],
+    novice: [1, 7],
+    intermediate: [7, 18],
+    advanced: [18, 36],
+    elite: [36, 58],
   },
-  // Face Pull (+7% cable) - rear delts
+  // Face Pull - rear delts
   'face-pull': {
-    beginner: [0, 11],
-    novice: [11, 16],
-    intermediate: [16, 22],
-    advanced: [22, 29],
-    elite: [29, 37],
+    beginner: [0, 12],
+    novice: [12, 26],
+    intermediate: [26, 46],
+    advanced: [46, 71],
+    elite: [71, 101],
   },
-  // Rear Delt Fly (dumbbell)
+  // Rear Delt Fly / Machine Reverse Fly
   'rear-delt-fly': {
-    beginner: [0, 4],
-    novice: [4, 7],
-    intermediate: [7, 12],
-    advanced: [12, 18],
-    elite: [18, 25],
+    beginner: [0, 23],
+    novice: [23, 40],
+    intermediate: [40, 64],
+    advanced: [64, 93],
+    elite: [93, 126],
   },
   'reverse-fly': {
-    beginner: [0, 4],
-    novice: [4, 7],
-    intermediate: [7, 12],
-    advanced: [12, 18],
-    elite: [18, 25],
+    beginner: [0, 23],
+    novice: [23, 40],
+    intermediate: [40, 64],
+    advanced: [64, 93],
+    elite: [93, 126],
   },
 
   // ========== LEGS ==========
@@ -314,34 +322,34 @@ export const maleTierRanges: Record<string, TierRange> = {
   },
   // Goblet Squat (dumbbell)
   'goblet-squat': {
-    beginner: [0, 14],
-    novice: [14, 22],
-    intermediate: [22, 30],
-    advanced: [30, 41],
-    elite: [41, 52],
+    beginner: [0, 13],
+    novice: [13, 26],
+    intermediate: [26, 42],
+    advanced: [42, 63],
+    elite: [63, 87],
   },
   // Hip Thrust (compound - glutes)
   'hip-thrust': {
     beginner: [0, 38],
-    novice: [38, 59],
-    intermediate: [59, 82],
-    advanced: [82, 110],
-    elite: [110, 141],
+    novice: [38, 76],
+    intermediate: [76, 129],
+    advanced: [129, 196],
+    elite: [196, 273],
   },
-  // Leg Press (+7% machine)
+  // Leg Press (sled)
   'leg-press': {
-    beginner: [0, 93],
-    novice: [93, 135],
-    intermediate: [135, 187],
-    advanced: [187, 244],
-    elite: [244, 309],
+    beginner: [0, 86],
+    novice: [86, 147],
+    intermediate: [147, 226],
+    advanced: [226, 324],
+    elite: [324, 432],
   },
   'leg-press-machine': {
-    beginner: [0, 93],
-    novice: [93, 135],
-    intermediate: [135, 187],
-    advanced: [187, 244],
-    elite: [244, 309],
+    beginner: [0, 86],
+    novice: [86, 147],
+    intermediate: [147, 226],
+    advanced: [226, 324],
+    elite: [324, 432],
   },
   'leg-press-machine-single-leg': {
     beginner: [0, 47],
@@ -358,35 +366,35 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [129, 168],
     elite: [168, 213],
   },
-  // Leg Extension (+7% machine)
+  // Leg Extension
   'leg-extension': {
-    beginner: [0, 37],
-    novice: [37, 54],
-    intermediate: [54, 75],
-    advanced: [75, 97],
-    elite: [97, 123],
+    beginner: [0, 35],
+    novice: [35, 61],
+    intermediate: [61, 96],
+    advanced: [96, 139],
+    elite: [139, 186],
   },
-  // Leg Curl (+7% machine)
+  // Leg Curl
   'lying-leg-curl': {
-    beginner: [0, 25],
-    novice: [25, 36],
-    intermediate: [36, 49],
-    advanced: [49, 64],
-    elite: [64, 81],
+    beginner: [0, 29],
+    novice: [29, 50],
+    intermediate: [50, 79],
+    advanced: [79, 114],
+    elite: [114, 154],
   },
   'leg-curl': {
-    beginner: [0, 25],
-    novice: [25, 36],
-    intermediate: [36, 49],
-    advanced: [49, 64],
-    elite: [64, 81],
+    beginner: [0, 29],
+    novice: [29, 50],
+    intermediate: [50, 79],
+    advanced: [79, 114],
+    elite: [114, 154],
   },
   'seated-leg-curl': {
-    beginner: [0, 27],
-    novice: [27, 39],
-    intermediate: [39, 54],
-    advanced: [54, 70],
-    elite: [70, 89],
+    beginner: [0, 29],
+    novice: [29, 50],
+    intermediate: [50, 79],
+    advanced: [79, 114],
+    elite: [114, 154],
   },
   // Calf Raise (+7% machine)
   'calf-raise': {
@@ -427,11 +435,11 @@ export const maleTierRanges: Record<string, TierRange> = {
     elite: [29, 37],
   },
   'bulgarian-split-squat': {
-    beginner: [0, 12],
-    novice: [12, 19],
-    intermediate: [19, 26],
-    advanced: [26, 35],
-    elite: [35, 44],
+    beginner: [0, 10],
+    novice: [10, 18],
+    intermediate: [18, 30],
+    advanced: [30, 44],
+    elite: [44, 60],
   },
 };
 
@@ -475,6 +483,9 @@ export interface CategoryDefinition {
   slices: SliceDefinition[];
 }
 
+// ============ CATEGORY DEFINITIONS ============
+// All exercises enabled for testing
+
 export const categoryDefinitions: Record<string, CategoryDefinition> = {
   chest: {
     id: 'chest',
@@ -485,7 +496,7 @@ export const categoryDefinitions: Record<string, CategoryDefinition> = {
         id: 'middle-chest', 
         name: 'Middle Chest', 
         weight: 40, 
-        exercises: ['bench-press', 'dumbbell-bench-press', 'dumbbell-press', 'machine-chest-press'] 
+        exercises: ['bench-press', 'barbell-bench-press', 'dumbbell-bench-press', 'dumbbell-press', 'machine-chest-press'] 
       },
       { 
         id: 'upper-chest', 
@@ -617,7 +628,10 @@ export function getTierFor1RM(oneRM: number, exerciseId: string, isMale: boolean
  */
 export function getProgressInTier(oneRM: number, exerciseId: string, isMale: boolean = true): { tier: StrengthTier; progress: number } {
   const ranges = isMale ? maleTierRanges[exerciseId] : femaleTierRanges[exerciseId];
-  if (!ranges) return { tier: 'beginner', progress: 0 };
+  if (!ranges) {
+    console.log('[getProgressInTier] No ranges found for:', exerciseId);
+    return { tier: 'beginner', progress: 0 };
+  }
   
   const tiers: StrengthTier[] = ['beginner', 'novice', 'intermediate', 'advanced', 'elite'];
   
@@ -629,6 +643,7 @@ export function getProgressInTier(oneRM: number, exerciseId: string, isMale: boo
       // Within this tier
       const range = max - min;
       const progress = range > 0 ? Math.min(100, ((oneRM - min) / range) * 100) : 100;
+      console.log(`[getProgressInTier] ${exerciseId}: oneRM=${oneRM}, tier=${tier}, min=${min}, max=${max}, progress=${progress.toFixed(1)}%`);
       return { tier, progress };
     }
   }
@@ -651,7 +666,7 @@ export function getTierColor(tier: StrengthTier): string {
     case 'elite': return 'text-amber-400';
     case 'advanced': return 'text-purple-400';
     case 'intermediate': return 'text-blue-400';
-    case 'novice': return 'text-emerald-400';
+    case 'novice': return 'text-sky-400';
     default: return 'text-gray-400';
   }
 }
@@ -664,7 +679,7 @@ export function getTierBgColor(tier: StrengthTier): string {
     case 'elite': return 'bg-amber-500';
     case 'advanced': return 'bg-purple-500';
     case 'intermediate': return 'bg-blue-500';
-    case 'novice': return 'bg-emerald-500';
+    case 'novice': return 'bg-sky-500';
     default: return 'bg-gray-500';
   }
 }
@@ -734,16 +749,17 @@ export function calculateCategory(
   }
   
   // Apply the tier lock rule: if any slice is below category tier, adjust points
-  // If a slice's tier is ABOVE category tier, it counts as 100%
+  // If a slice's tier is ABOVE category tier, it counts as 100% for POINTS but we keep actual progress for display
   const adjustedSlices = slices.map(slice => {
     const sliceTierIndex = tierOrder.indexOf(slice.tier);
     const categoryTierIndex = tierOrder.indexOf(lowestTier);
     
     if (sliceTierIndex > categoryTierIndex) {
-      // Slice is above category tier - counts as 100%
+      // Slice is above category tier - counts as 100% for points, but keep actual progress for UI
       return {
         ...slice,
-        progressPercent: 100,
+        // Keep the actual progressPercent for UI display (shows where within tier)
+        // Only points contribution is maxed out
         points: slice.weight,
       };
     }
