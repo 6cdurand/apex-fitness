@@ -39,6 +39,7 @@ interface ClientPaymentSettings {
   sessionsPerWeek: number;
   pricePerSession: number;
   totalAmount?: number;
+  totalSessions?: number; // For upfront payments
 }
 
 export default function PaymentsPage() {
@@ -343,7 +344,7 @@ export default function PaymentsPage() {
   // Open settings dialog for a client
   const openSettingsDialog = (clientId: string) => {
     const existing = paymentSettings[clientId];
-    const pkg = sessionPackages.find(p => p.clientId === clientId);
+    const pkg = sessionPackages.find(p => p.clientId === clientId && p.status === 'active');
     
     setEditingSettings({
       clientId,
@@ -352,6 +353,7 @@ export default function PaymentsPage() {
       sessionsPerWeek: existing?.sessionsPerWeek || 1,
       pricePerSession: existing?.pricePerSession || pkg?.pricePerSession || 80,
       totalAmount: existing?.totalAmount,
+      totalSessions: existing?.totalSessions || pkg?.totalSessions || 10,
     });
     setShowSettingsDialog(true);
   };
@@ -663,17 +665,30 @@ export default function PaymentsPage() {
                 </Select>
               </div>
               
-              <div>
-                <Label className="text-gray-300">Sessions Per Week</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={7}
-                  value={editingSettings.sessionsPerWeek}
-                  onChange={(e) => setEditingSettings({...editingSettings, sessionsPerWeek: parseInt(e.target.value) || 1})}
-                  className="bg-gray-800 border-gray-700 text-white mt-1"
-                />
-              </div>
+              {editingSettings.frequency === 'upfront' ? (
+                <div>
+                  <Label className="text-gray-300">Total Sessions in Package</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editingSettings.totalSessions || 10}
+                    onChange={(e) => setEditingSettings({...editingSettings, totalSessions: parseInt(e.target.value) || 1})}
+                    className="bg-gray-800 border-gray-700 text-white mt-1"
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Label className="text-gray-300">Sessions Per Week</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={7}
+                    value={editingSettings.sessionsPerWeek}
+                    onChange={(e) => setEditingSettings({...editingSettings, sessionsPerWeek: parseInt(e.target.value) || 1})}
+                    className="bg-gray-800 border-gray-700 text-white mt-1"
+                  />
+                </div>
+              )}
               
               <div>
                 <Label className="text-gray-300">Price Per Session ($)</Label>
@@ -689,11 +704,17 @@ export default function PaymentsPage() {
               {editingSettings.frequency !== 'per_session' && (
                 <div className="bg-gray-800 rounded-lg p-3">
                   <p className="text-sm text-gray-400">
-                    Total per {editingSettings.frequency === 'weekly' ? 'week' : editingSettings.frequency === 'fortnightly' ? 'fortnight' : 'month'}:
+                    {editingSettings.frequency === 'upfront' 
+                      ? 'Total package price:'
+                      : `Total per ${editingSettings.frequency === 'weekly' ? 'week' : editingSettings.frequency === 'fortnightly' ? 'fortnight' : 'month'}:`
+                    }
                   </p>
                   <p className="text-xl font-bold text-sky-400">
-                    ${editingSettings.pricePerSession * editingSettings.sessionsPerWeek * 
-                      (editingSettings.frequency === 'weekly' ? 1 : editingSettings.frequency === 'fortnightly' ? 2 : 4)}
+                    ${editingSettings.frequency === 'upfront'
+                      ? editingSettings.pricePerSession * (editingSettings.totalSessions || 10)
+                      : editingSettings.pricePerSession * editingSettings.sessionsPerWeek * 
+                        (editingSettings.frequency === 'weekly' ? 1 : editingSettings.frequency === 'fortnightly' ? 2 : 4)
+                    }
                   </p>
                 </div>
               )}
@@ -704,7 +725,10 @@ export default function PaymentsPage() {
                   onClick={handleLogPaymentFromSettings}
                 >
                   <DollarSign className="w-4 h-4 mr-2" />
-                  Log Payment (${editingSettings.pricePerSession * (editingSettings.sessionsPerWeek || 1)} for {editingSettings.sessionsPerWeek || 1} session{(editingSettings.sessionsPerWeek || 1) > 1 ? 's' : ''})
+                  {editingSettings.frequency === 'upfront' 
+                    ? `Log Payment ($${editingSettings.pricePerSession * (editingSettings.totalSessions || 10)} for ${editingSettings.totalSessions || 10} sessions)`
+                    : `Log Payment ($${editingSettings.pricePerSession * (editingSettings.sessionsPerWeek || 1)} for ${editingSettings.sessionsPerWeek || 1} session${(editingSettings.sessionsPerWeek || 1) > 1 ? 's' : ''})`
+                  }
                 </Button>
                 <div className="flex gap-2">
                   <Button

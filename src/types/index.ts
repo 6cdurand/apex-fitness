@@ -154,6 +154,8 @@ export interface BlockPerformance {
   // Circuit stats
   completionTime?: number; // seconds for timed circuits
   roundsCompleted?: number;
+  roundTimes?: number[]; // Per-round completion times in seconds
+  difficultyRating?: 'easy' | 'moderate' | 'hard' | null; // Client's perceived difficulty, null = N/A
   // Strength stats
   totalVolume?: number;
   exerciseStats?: {

@@ -14,6 +14,9 @@ import {
   Flame,
   Heart,
   Zap,
+  Undo2,
+  ChevronRight,
+  Clock,
 } from 'lucide-react';
 import type {
   CardioBlock,
@@ -25,13 +28,32 @@ import { cn } from '@/lib/utils';
 interface CardioBlockTimerProps {
   block: CardioBlock;
   onUpdate: (updates: Partial<CardioBlock>) => void;
-  onComplete: () => void;
+  onComplete: (data?: { roundTimes?: number[]; difficultyRating?: 'easy' | 'moderate' | 'hard' | null }) => void;
+  previousBestTime?: number; // Previous best total time for this circuit + client
+  clientId?: string;
 }
 
-export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTimerProps) {
+export function CardioBlockTimer({ block, onUpdate, onComplete, previousBestTime, clientId }: CardioBlockTimerProps) {
   const [timerState, setTimerState] = useState<CardioTimerState>(block.timerState);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Per-round time tracking
+  const [roundTimes, setRoundTimes] = useState<number[]>([]);
+  const [roundStartTime, setRoundStartTime] = useState<number>(0);
+  const [lastRound, setLastRound] = useState<number>(0);
+  
+  // Round transition animation
+  const [showRoundTransition, setShowRoundTransition] = useState(false);
+  const [transitionRound, setTransitionRound] = useState(1);
+  
+  // Undo state - can undo within 5 seconds of round change
+  const [canUndo, setCanUndo] = useState(false);
+  const [undoTimeoutId, setUndoTimeoutId] = useState<NodeJS.Timeout | null>(null);
+  const [savedStateForUndo, setSavedStateForUndo] = useState<{ round: number; elapsed: number; roundTimes: number[] } | null>(null);
+  
+  // Difficulty rating (shown after completion)
+  const [difficultyRating, setDifficultyRating] = useState<'easy' | 'moderate' | 'hard' | null>(null);
 
   // Format seconds to MM:SS
   const formatTime = (seconds: number): string => {
@@ -150,6 +172,36 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
     const currentRound = Math.floor(elapsed / roundDuration) + 1;
     const positionInRound = elapsed % roundDuration;
     
+    // Track round changes for per-round timing
+    if (currentRound !== lastRound && currentRound > 1 && lastRound > 0) {
+      // Record time for completed round
+      const roundTime = elapsed - roundStartTime;
+      setRoundTimes(prev => [...prev, roundTime]);
+      setRoundStartTime(elapsed);
+      
+      // Save state for potential undo
+      setSavedStateForUndo({
+        round: lastRound,
+        elapsed: timerState.elapsedSeconds,
+        roundTimes: [...roundTimes],
+      });
+      setCanUndo(true);
+      
+      // Clear undo after 5 seconds
+      if (undoTimeoutId) clearTimeout(undoTimeoutId);
+      const timeoutId = setTimeout(() => {
+        setCanUndo(false);
+        setSavedStateForUndo(null);
+      }, 5000);
+      setUndoTimeoutId(timeoutId);
+      
+      // Show round transition animation
+      setTransitionRound(currentRound);
+      setShowRoundTransition(true);
+      setTimeout(() => setShowRoundTransition(false), 1500);
+    }
+    setLastRound(currentRound);
+    
     // Find current station
     let cumulativeTime = 0;
     let currentStation = 0;
@@ -164,7 +216,11 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
     
     // Check if complete
     if (currentRound > rounds) {
-      handleComplete();
+      // Record final round time
+      const finalRoundTime = elapsed - roundStartTime;
+      const allRoundTimes = [...roundTimes, finalRoundTime];
+      setRoundTimes(allRoundTimes);
+      handleCompleteWithData(allRoundTimes);
       return;
     }
     
@@ -179,7 +235,23 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
       currentRound,
       currentStation,
     }));
-  }, [block.circuitConfig, timerState.elapsedSeconds, playBeep]);
+  }, [block.circuitConfig, timerState.elapsedSeconds, playBeep, lastRound, roundStartTime, roundTimes, undoTimeoutId]);
+  
+  // Undo last round transition
+  const handleUndo = useCallback(() => {
+    if (!savedStateForUndo || !canUndo) return;
+    
+    setTimerState(prev => ({
+      ...prev,
+      elapsedSeconds: savedStateForUndo.elapsed,
+      currentRound: savedStateForUndo.round,
+    }));
+    setRoundTimes(savedStateForUndo.roundTimes);
+    setLastRound(savedStateForUndo.round);
+    setCanUndo(false);
+    setSavedStateForUndo(null);
+    if (undoTimeoutId) clearTimeout(undoTimeoutId);
+  }, [savedStateForUndo, canUndo, undoTimeoutId]);
 
   // Main timer tick
   const tick = useCallback(() => {
@@ -203,10 +275,6 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
     }
   }, [timerState.elapsedSeconds, getTotalDuration, block.mode, handleIntervalTick, handleCircuitTick]);
 
-  // Start timer
-  const handleStart = () => {
-    setTimerState(prev => ({ ...prev, status: 'running' }));
-  };
 
   // Pause timer
   const handlePause = () => {
@@ -222,9 +290,41 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
       currentStation: undefined,
       workPhase: undefined,
     });
+    setRoundTimes([]);
+    setRoundStartTime(0);
+    setLastRound(0);
+    setCanUndo(false);
+    setSavedStateForUndo(null);
+    setDifficultyRating(null);
+  };
+  
+  // Initialize round start time when starting
+  const handleStart = () => {
+    if (timerState.elapsedSeconds === 0) {
+      setRoundStartTime(0);
+      setLastRound(1);
+    }
+    setTimerState(prev => ({ ...prev, status: 'running' }));
   };
 
-  // Complete block
+  // Complete block with round times data
+  const handleCompleteWithData = useCallback((finalRoundTimes: number[]) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    setTimerState(prev => ({ ...prev, status: 'completed' }));
+    onUpdate({
+      timerState: { ...timerState, status: 'completed' },
+      completedAt: new Date().toISOString(),
+      actualDuration: timerState.elapsedSeconds,
+      completedRounds: timerState.currentRound,
+    });
+    playBeep();
+    playBeep();
+    // Don't call onComplete yet - wait for difficulty rating
+  }, [timerState, onUpdate, playBeep]);
+  
+  // Complete block (manual end or non-circuit)
   const handleComplete = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -238,8 +338,19 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
     });
     playBeep();
     playBeep();
-    onComplete();
-  }, [timerState, onUpdate, onComplete, playBeep]);
+    // For non-circuit modes, complete immediately
+    if (block.mode !== 'circuit') {
+      onComplete();
+    }
+  }, [timerState, onUpdate, onComplete, playBeep, block.mode]);
+  
+  // Finish and submit with difficulty rating
+  const handleFinishWithRating = useCallback(() => {
+    onComplete({
+      roundTimes: roundTimes.length > 0 ? roundTimes : undefined,
+      difficultyRating,
+    });
+  }, [onComplete, roundTimes, difficultyRating]);
 
   // Timer interval effect
   useEffect(() => {
@@ -342,9 +453,36 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Previous best time indicator */}
+        {previousBestTime && previousBestTime > 0 && block.mode === 'circuit' && timerState.status !== 'completed' && (
+          <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg py-2">
+            <Clock className="h-4 w-4" />
+            <span>Previous best: <span className="font-bold text-sky-400">{formatTime(previousBestTime)}</span></span>
+          </div>
+        )}
+        
+        {/* Round transition animation overlay */}
+        {showRoundTransition && (
+          <div className="absolute inset-0 flex items-center justify-center bg-purple-500/90 rounded-lg z-10 animate-pulse">
+            <div className="text-center text-white">
+              <p className="text-2xl font-bold">Round {transitionRound}</p>
+              <p className="text-sm opacity-80">Starting...</p>
+            </div>
+          </div>
+        )}
+        
         {/* Main display */}
-        <div className="text-center py-6">
-          <p className={cn('text-sm font-medium mb-1', displayInfo.color)}>
+        <div className="text-center py-6 relative">
+          {/* Round indicator for circuits */}
+          {block.mode === 'circuit' && timerState.currentRound && timerState.status === 'running' && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2">
+              <Badge className="bg-purple-600 text-white text-lg px-4 py-1 animate-pulse">
+                Round {timerState.currentRound} of {block.circuitConfig?.rounds}
+              </Badge>
+            </div>
+          )}
+          
+          <p className={cn('text-sm font-medium mb-1 mt-4', displayInfo.color)}>
             {displayInfo.title}
           </p>
           <p className="text-6xl font-mono font-bold">
@@ -388,12 +526,92 @@ export function CardioBlockTimer({ block, onUpdate, onComplete }: CardioBlockTim
             </Button>
           )}
           
-          {timerState.status === 'completed' && (
+          {timerState.status === 'completed' && block.mode !== 'circuit' && (
             <Badge variant="default" className="text-lg py-2 px-4 bg-green-600">
               ✓ Completed
             </Badge>
           )}
+          
+          {/* Undo button for circuits */}
+          {canUndo && block.mode === 'circuit' && timerState.status === 'running' && (
+            <Button onClick={handleUndo} size="lg" variant="outline" className="gap-2 border-yellow-500 text-yellow-500 hover:bg-yellow-500/10">
+              <Undo2 className="h-5 w-5" />
+              Undo Round
+            </Button>
+          )}
         </div>
+        
+        {/* Circuit completion with difficulty rating */}
+        {timerState.status === 'completed' && block.mode === 'circuit' && (
+          <div className="space-y-4 p-4 bg-green-500/10 rounded-lg border border-green-500/30">
+            <div className="text-center">
+              <Badge variant="default" className="text-lg py-2 px-4 bg-green-600 mb-2">
+                ✓ Circuit Completed!
+              </Badge>
+              <p className="text-2xl font-bold text-green-400">{formatTime(timerState.elapsedSeconds)}</p>
+              {previousBestTime && timerState.elapsedSeconds < previousBestTime && (
+                <p className="text-sm text-green-400 mt-1">🎉 New personal best!</p>
+              )}
+            </div>
+            
+            {/* Per-round times summary */}
+            {roundTimes.length > 0 && (
+              <div className="text-sm">
+                <p className="text-muted-foreground mb-1">Round times:</p>
+                <div className="flex flex-wrap gap-2">
+                  {roundTimes.map((time, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      R{idx + 1}: {formatTime(time)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Difficulty rating */}
+            <div>
+              <p className="text-sm text-muted-foreground mb-2">How did that feel? (optional)</p>
+              <div className="flex gap-2 justify-center">
+                <Button
+                  size="sm"
+                  variant={difficultyRating === 'easy' ? 'default' : 'outline'}
+                  className={cn(
+                    difficultyRating === 'easy' ? 'bg-green-600 hover:bg-green-700' : 'border-green-500 text-green-500 hover:bg-green-500/10'
+                  )}
+                  onClick={() => setDifficultyRating('easy')}
+                >
+                  😊 Easy
+                </Button>
+                <Button
+                  size="sm"
+                  variant={difficultyRating === 'moderate' ? 'default' : 'outline'}
+                  className={cn(
+                    difficultyRating === 'moderate' ? 'bg-yellow-600 hover:bg-yellow-700' : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500/10'
+                  )}
+                  onClick={() => setDifficultyRating('moderate')}
+                >
+                  😅 Moderate
+                </Button>
+                <Button
+                  size="sm"
+                  variant={difficultyRating === 'hard' ? 'default' : 'outline'}
+                  className={cn(
+                    difficultyRating === 'hard' ? 'bg-red-600 hover:bg-red-700' : 'border-red-500 text-red-500 hover:bg-red-500/10'
+                  )}
+                  onClick={() => setDifficultyRating('hard')}
+                >
+                  🥵 Hard
+                </Button>
+              </div>
+            </div>
+            
+            {/* Finish button */}
+            <Button onClick={handleFinishWithRating} className="w-full bg-sky-500 hover:bg-sky-600 gap-2">
+              <ChevronRight className="h-5 w-5" />
+              Continue
+            </Button>
+          </div>
+        )}
 
         {/* Circuit exercise list */}
         {block.mode === 'circuit' && block.circuitConfig && (

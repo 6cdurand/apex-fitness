@@ -72,6 +72,7 @@ export default function ClientDetailPage() {
     setInitialClientStats,
     updateSessionPackage,
     updateClient,
+    blockPerformances,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -1640,6 +1641,82 @@ export default function ClientDetailPage() {
                 )}
               </CardContent>
             </Card>
+            
+            {/* Circuit Performance History */}
+            {(() => {
+              const clientCircuitPerformances = blockPerformances
+                .filter(p => p.clientId === clientId)
+                .sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime());
+              
+              if (clientCircuitPerformances.length === 0) return null;
+              
+              const formatTime = (seconds: number) => {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+              };
+              
+              const getDifficultyBadge = (rating: string | null | undefined) => {
+                switch (rating) {
+                  case 'easy': return <Badge className="bg-green-600 text-xs">😊 Easy</Badge>;
+                  case 'moderate': return <Badge className="bg-yellow-600 text-xs">😅 Moderate</Badge>;
+                  case 'hard': return <Badge className="bg-red-600 text-xs">🥵 Hard</Badge>;
+                  default: return <Badge variant="outline" className="text-xs text-gray-500">N/A</Badge>;
+                }
+              };
+              
+              return (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-purple-400" />
+                      Circuit History ({clientCircuitPerformances.length})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                      {clientCircuitPerformances.map(perf => (
+                        <div key={perf.id} className="p-3 bg-gray-800 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <p className="font-medium text-white text-sm">{perf.blockName}</p>
+                              <p className="text-xs text-gray-500">
+                                {format(new Date(perf.performedAt), 'MMM d, yyyy')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {getDifficultyBadge(perf.difficultyRating)}
+                              <span className="text-lg font-bold text-purple-400">
+                                {perf.completionTime ? formatTime(perf.completionTime) : '--'}
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {/* Per-round breakdown */}
+                          {perf.roundTimes && perf.roundTimes.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {perf.roundTimes.map((time, idx) => (
+                                <Badge key={idx} variant="outline" className="text-xs bg-gray-700/50">
+                                  R{idx + 1}: {formatTime(time)}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Rounds completed */}
+                          {perf.roundsCompleted && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {perf.roundsCompleted} rounds completed
+                              {perf.totalVolume && ` • ${Math.round(perf.totalVolume).toLocaleString()} kg total`}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
             
             <WorkoutStatsCharts 
               workoutHistory={clientWorkoutHistory} 
