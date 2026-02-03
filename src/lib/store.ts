@@ -2906,6 +2906,10 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           savedBlocks: [...state.savedBlocks, newBlock],
         }));
+        // Sync to Supabase for cross-device access
+        import('./supabaseSync').then(({ syncSavedBlockToSupabase }) => {
+          syncSavedBlockToSupabase(newBlock);
+        });
         return newBlock;
       },
 
@@ -2915,12 +2919,23 @@ export const useTrainerStore = create<TrainerState>()(
             b.id === blockId ? { ...b, ...updates, updatedAt: new Date().toISOString() } : b
           ),
         }));
+        // Sync updated block to Supabase
+        const updated = get().savedBlocks.find(b => b.id === blockId);
+        if (updated) {
+          import('./supabaseSync').then(({ syncSavedBlockToSupabase }) => {
+            syncSavedBlockToSupabase(updated);
+          });
+        }
       },
 
       deleteBlock: (blockId) => {
         set(state => ({
           savedBlocks: state.savedBlocks.filter(b => b.id !== blockId),
         }));
+        // Delete from Supabase
+        import('./supabaseSync').then(({ deleteSavedBlockFromSupabase }) => {
+          deleteSavedBlockFromSupabase(blockId);
+        });
       },
 
       getBlock: (blockId) => {

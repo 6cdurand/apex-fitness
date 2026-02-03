@@ -33,7 +33,7 @@ import {
   Crown,
   Search
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ProfileCardV2 } from '@/components/ProfileCardV2';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
 import { TrainerStatsCharts } from '@/components/TrainerStatsCharts';
@@ -217,8 +217,12 @@ export default function ProfilePage() {
     if (!user?.id || user.mode !== 'trainer') return null;
     
     const now = new Date();
-    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Use actual calendar week boundaries (Monday to Sunday)
+    const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Start on Monday
+    const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+    // Use actual calendar month boundaries
+    const monthStart = startOfMonth(now);
+    const monthEnd = endOfMonth(now);
     
     // Get all trainer packages - this is the source of truth for session/payment counts
     const trainerPackages = sessionPackages.filter(p => p.trainerId === user.id);
@@ -235,21 +239,32 @@ export default function ProfilePage() {
       const used = pkg.usedSessions || 0;
       const paid = pkg.paidSessions || 0;
       totalUsedSessions += used;
-      totalPaidSessionsFromPackages += paid;
       
-      // Outstanding = sessions done but not paid
-      const unpaid = Math.max(0, used - paid);
-      outstandingAmount += unpaid * (pkg.pricePerSession || 0);
+      // Check if this is an upfront payment (all sessions paid at purchase)
+      const isUpfrontPayment = pkg.paymentFrequency === 'upfront' ||
+        (paid >= pkg.totalSessions && pkg.totalSessions > 0);
+      
+      if (isUpfrontPayment) {
+        totalPaidSessionsFromPackages += pkg.totalSessions;
+        // Only outstanding if exceeded package
+        const exceededSessions = Math.max(0, used - pkg.totalSessions);
+        outstandingAmount += exceededSessions * (pkg.pricePerSession || 0);
+      } else {
+        totalPaidSessionsFromPackages += paid;
+        // Outstanding = sessions done but not paid
+        const unpaid = Math.max(0, used - paid);
+        outstandingAmount += unpaid * (pkg.pricePerSession || 0);
+      }
     });
     
-    // Calculate earnings from actual payment records
+    // Calculate earnings from actual payment records using calendar week/month boundaries
     const weekPayments = trainerPayments.filter(p => {
       const paidDate = p.paidAt ? new Date(p.paidAt) : null;
-      return paidDate && paidDate >= oneWeekAgo;
+      return paidDate && paidDate >= weekStart && paidDate <= weekEnd;
     });
     const monthPayments = trainerPayments.filter(p => {
       const paidDate = p.paidAt ? new Date(p.paidAt) : null;
-      return paidDate && paidDate >= oneMonthAgo;
+      return paidDate && paidDate >= monthStart && paidDate <= monthEnd;
     });
     
     const weekEarnings = weekPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
@@ -265,8 +280,8 @@ export default function ProfilePage() {
     // Calculate averages
     const activeClients = clients.filter(c => c.trainerId === user.id && c.status === 'active').length;
     
-    // Sessions per week: total sessions / weeks since first session (or 4 if no data)
-    const weeksActive = Math.max(1, Math.ceil((now.getTime() - oneMonthAgo.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+    // Sessions per week: total sessions / weeks since start of month (or 4 if no data)
+    const weeksActive = Math.max(1, Math.ceil((now.getTime() - monthStart.getTime()) / (7 * 24 * 60 * 60 * 1000)));
     const avgSessionsPerWeek = totalUsedSessions > 0 ? totalUsedSessions / weeksActive : 0;
     
     // Avg per session: from actual payments or package prices

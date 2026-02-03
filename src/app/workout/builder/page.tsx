@@ -360,6 +360,7 @@ function WorkoutBuilderContent() {
     saveCircuitTemplate,
     savedBlocks,
     saveBlock,
+    deleteBlock,
     getBlocksByType,
   } = useTrainerStore();
   
@@ -2322,7 +2323,7 @@ function WorkoutBuilderContent() {
                       >
                         <CardContent className="p-4">
                           <div className="flex justify-between items-start">
-                            <div>
+                            <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
                                 <h4 className="font-semibold text-white">{block.name}</h4>
@@ -2333,9 +2334,25 @@ function WorkoutBuilderContent() {
                                 {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
                               </p>
                             </div>
-                            <Badge variant="outline" className={blockStyle.badge}>
-                              {block.type}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={blockStyle.badge}>
+                                {block.type}
+                              </Badge>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`Delete "${block.name}" from your library?`)) {
+                                    deleteBlock(block.id);
+                                    toast.success('Block deleted from library');
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>

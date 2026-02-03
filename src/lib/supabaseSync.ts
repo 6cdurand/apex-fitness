@@ -2371,3 +2371,113 @@ export async function getPendingInvitations(trainerId: string): Promise<Array<{
     return [];
   }
 }
+
+// ============================================
+// SAVED BLOCKS (BLOCK LIBRARY) SYNC
+// ============================================
+
+interface SavedBlockData {
+  id: string;
+  name: string;
+  type: string;
+  trainerId: string;
+  exercises: any[];
+  circuitStyle?: string;
+  circuitRounds?: number;
+  circuitDuration?: number;
+  circuitRestBetween?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Sync a saved block to Supabase
+export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    const { error } = await supabase
+      .from('saved_blocks')
+      .upsert({
+        id: block.id,
+        trainer_id: block.trainerId,
+        name: block.name,
+        block_type: block.type,
+        exercises: block.exercises,
+        circuit_style: block.circuitStyle,
+        circuit_rounds: block.circuitRounds,
+        circuit_duration: block.circuitDuration,
+        circuit_rest_between: block.circuitRestBetween,
+        created_at: block.createdAt,
+        updated_at: block.updatedAt,
+      }, { onConflict: 'id' });
+
+    if (error) {
+      console.error('[Supabase] Error syncing saved block:', error);
+      return false;
+    }
+
+    console.log('[Supabase] Saved block synced:', block.id);
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Error syncing saved block:', e);
+    return false;
+  }
+}
+
+// Fetch all saved blocks for a trainer from Supabase
+export async function fetchSavedBlocksFromSupabase(trainerId: string): Promise<SavedBlockData[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('saved_blocks')
+      .select('*')
+      .eq('trainer_id', trainerId)
+      .order('created_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('[Supabase] Error fetching saved blocks:', error);
+      return [];
+    }
+
+    return data.map(block => ({
+      id: block.id,
+      name: block.name,
+      type: block.block_type,
+      trainerId: block.trainer_id,
+      exercises: block.exercises || [],
+      circuitStyle: block.circuit_style,
+      circuitRounds: block.circuit_rounds,
+      circuitDuration: block.circuit_duration,
+      circuitRestBetween: block.circuit_rest_between,
+      createdAt: block.created_at,
+      updatedAt: block.updated_at,
+    }));
+  } catch (e) {
+    console.error('[Supabase] Error fetching saved blocks:', e);
+    return [];
+  }
+}
+
+// Delete a saved block from Supabase
+export async function deleteSavedBlockFromSupabase(blockId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+
+  try {
+    const { error } = await supabase
+      .from('saved_blocks')
+      .delete()
+      .eq('id', blockId);
+
+    if (error) {
+      console.error('[Supabase] Error deleting saved block:', error);
+      return false;
+    }
+
+    console.log('[Supabase] Saved block deleted:', blockId);
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Error deleting saved block:', e);
+    return false;
+  }
+}

@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, parseISO, subMonths } from 'date-fns';
 
-type PaymentFrequency = 'per_session' | 'weekly' | 'fortnightly' | 'monthly';
+type PaymentFrequency = 'per_session' | 'weekly' | 'fortnightly' | 'monthly' | 'upfront';
 type PaymentMethod = 'cash' | 'bank_transfer' | 'card' | 'other';
 
 interface ClientPaymentSettings {
@@ -155,10 +155,21 @@ export default function PaymentsPage() {
     let totalSessionsEver: number;
     let totalPaidSessions: number;
     
+    // Check if this is an upfront payment (all sessions paid for at purchase)
+    const isUpfrontPayment = activePackage && (
+      activePackage.paymentFrequency === 'upfront' ||
+      (activePackage.paidSessions >= activePackage.totalSessions && activePackage.totalSessions > 0)
+    );
+    
     if (activePackage) {
       // Use package tracking - usedSessions is total done, paidSessions is total paid
       totalSessionsEver = activePackage.usedSessions || 0;
-      totalPaidSessions = activePackage.paidSessions || 0;
+      // For upfront payments, all sessions up to totalSessions are considered paid
+      if (isUpfrontPayment) {
+        totalPaidSessions = activePackage.totalSessions; // All sessions are pre-paid
+      } else {
+        totalPaidSessions = activePackage.paidSessions || 0;
+      }
     } else {
       // Fallback to counting session/payment records
       const allCompletedSessions = sessions.filter(s => 
@@ -174,7 +185,10 @@ export default function PaymentsPage() {
       totalPaidSessions = allPayments.length;
     }
     
-    const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
+    // For upfront payments, outstanding is 0 as long as within package limit
+    const outstandingSessions = isUpfrontPayment 
+      ? Math.max(0, totalSessionsEver - activePackage!.totalSessions) // Only outstanding if exceeded package
+      : Math.max(0, totalSessionsEver - totalPaidSessions);
     const outstandingAmount = outstandingSessions * pricePerSession;
     
     // Payment plan tracking
@@ -644,6 +658,7 @@ export default function PaymentsPage() {
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="fortnightly">Fortnightly</SelectItem>
                     <SelectItem value="monthly">Monthly</SelectItem>
+                    <SelectItem value="upfront">Upfront (Full Package)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
