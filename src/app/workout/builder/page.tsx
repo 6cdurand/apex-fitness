@@ -918,8 +918,8 @@ function WorkoutBuilderContent() {
     };
     
     setBlocks(sortBlocks([...blocks, newBlock]));
-    setShowBlockLibraryDialog(false);
-    toast.success(`Loaded "${savedBlock.name}" block`);
+    // Keep dialog open so user can add multiple blocks
+    toast.success(`Added "${savedBlock.name}" block`);
   };
 
   return (

@@ -37,6 +37,7 @@ import {
   fetchBookingRequestsFromSupabase,
   deleteTrainerClientFromSupabase,
   deleteClientFromSupabase,
+  fetchSavedBlocksFromSupabase,
 } from './supabaseSync';
 import {
   User,
@@ -3009,6 +3010,7 @@ export const useTrainerStore = create<TrainerState>()(
           supabaseSessionWorkouts,
           supabaseWorkoutLibrary,
           supabaseCircuitLibrary,
+          supabaseSavedBlocks,
         ] = await Promise.all([
           fetchTrainerClientsFromSupabase(trainerId),
           fetchTrainerSessionsFromSupabase(trainerId),
@@ -3020,6 +3022,7 @@ export const useTrainerStore = create<TrainerState>()(
           fetchSessionWorkoutsFromSupabase(trainerId),
           fetchWorkoutLibraryFromSupabase(trainerId),
           fetchCircuitLibraryFromSupabase(trainerId),
+          fetchSavedBlocksFromSupabase(trainerId),
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
@@ -3064,6 +3067,33 @@ export const useTrainerStore = create<TrainerState>()(
         );
         localOnlyWorkouts.forEach(workout => syncSessionWorkoutToSupabase(workout));
         
+        // Map saved blocks from Supabase to local format
+        const savedBlocks: SavedBlock[] = (supabaseSavedBlocks || []).map((sb: any) => ({
+          id: sb.id,
+          trainerId: sb.trainerId,
+          name: sb.name,
+          type: sb.blockType as BlockType,
+          exercises: sb.exercises || [],
+          circuitStyle: sb.circuitStyle,
+          circuitRounds: sb.circuitRounds,
+          circuitDuration: sb.circuitDuration,
+          circuitRestBetween: sb.circuitRestBetween,
+          createdAt: sb.createdAt,
+          updatedAt: sb.updatedAt,
+        }));
+        
+        // Merge with local blocks not yet synced
+        const currentSavedBlocks = get().savedBlocks;
+        const localOnlyBlocks = currentSavedBlocks.filter(
+          localBlock => !savedBlocks.find(sbBlock => sbBlock.id === localBlock.id)
+        );
+        // Sync local-only blocks to Supabase
+        localOnlyBlocks.forEach(block => {
+          import('./supabaseSync').then(({ syncSavedBlockToSupabase }) => {
+            syncSavedBlockToSupabase(block);
+          });
+        });
+        
         // REPLACE localStorage with merged Supabase data
         set({
           clients,
@@ -3076,6 +3106,7 @@ export const useTrainerStore = create<TrainerState>()(
           sessionWorkouts: [...supabaseSessionWorkouts, ...localOnlyWorkouts],
           workoutLibrary: supabaseWorkoutLibrary,
           circuitLibrary: supabaseCircuitLibrary,
+          savedBlocks: [...savedBlocks, ...localOnlyBlocks],
         });
         
         console.log(`[Trainer Store] ✅ REPLACED localStorage with Supabase data:`, {
@@ -3089,6 +3120,7 @@ export const useTrainerStore = create<TrainerState>()(
           sessionWorkouts: supabaseSessionWorkouts.length,
           workoutLibrary: supabaseWorkoutLibrary.length,
           circuitLibrary: supabaseCircuitLibrary.length,
+          savedBlocks: savedBlocks.length + localOnlyBlocks.length,
         });
         
         // Also load workout history for all clients
