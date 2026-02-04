@@ -1724,6 +1724,23 @@ export async function syncPaymentToSupabase(payment: any): Promise<boolean> {
   }
 }
 
+export async function deletePaymentFromSupabase(paymentId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const { error } = await supabase.from('client_payments').delete().eq('id', paymentId);
+    if (error) {
+      console.error('[Payment Delete] Error:', error.message);
+      return false;
+    }
+    console.log('[Payment Delete] ✅ Payment deleted from Supabase:', paymentId);
+    return true;
+  } catch (e) {
+    console.error('[Payment Delete] Exception:', e);
+    return false;
+  }
+}
+
 export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[]> {
   if (!isSupabaseConfigured()) return [];
   

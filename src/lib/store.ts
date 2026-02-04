@@ -31,6 +31,7 @@ import {
   deleteCircuitLibraryFromSupabase,
   syncPaymentToSupabase,
   fetchPaymentsFromSupabase,
+  deletePaymentFromSupabase,
   syncClientProgramToSupabase,
   fetchClientProgramsFromSupabase,
   syncBookingRequestToSupabase,
@@ -2416,7 +2417,8 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           payments: state.payments.filter(p => p.id !== paymentId),
         }));
-        // TODO: Add Supabase delete sync if needed
+        // Sync delete to Supabase
+        deletePaymentFromSupabase(paymentId);
       },
 
       getPaymentsForClient: (clientId) => {
