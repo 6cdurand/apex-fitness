@@ -153,7 +153,7 @@ export default function ActiveWorkoutPage() {
   // Block system state
   const [workoutBlocks, setWorkoutBlocks] = useState<{
     id: string;
-    type: 'warmup' | 'strength' | 'circuit';
+    type: 'warmup' | 'strength' | 'circuit' | 'cardio';
     name: string;
     circuitStyle?: 'amrap' | 'forTime' | 'rounds' | 'emom';
     circuitDuration?: number; // in seconds
@@ -165,6 +165,18 @@ export default function ActiveWorkoutPage() {
     // Round tracking for circuits
     roundsCompleted?: { roundNumber: number; completedAt: number; duration: number }[];
     currentRoundStart?: number;
+    // Cardio-specific fields
+    cardioType?: 'run' | 'swim' | 'bike' | 'row' | 'other';
+    cardioMode?: 'steady' | 'intervals' | 'distance';
+    targetDistance?: number; // in meters
+    targetPace?: string; // e.g., "5:00/km"
+    intervalWork?: number; // work seconds
+    intervalRest?: number; // rest seconds
+    intervalRounds?: number;
+    currentIntervalPhase?: 'work' | 'rest';
+    currentIntervalRound?: number;
+    distanceCompleted?: number;
+    splits?: { distance: number; time: number }[];
   }[]>([]);
   
   // Circuit exercise reps (exerciseId -> reps)
@@ -174,6 +186,18 @@ export default function ActiveWorkoutPage() {
     style: 'amrap' as 'amrap' | 'forTime' | 'rounds' | 'emom',
     duration: 600, // 10 min default
     rounds: 3,
+  });
+  
+  // Cardio block config
+  const [showCardioDialog, setShowCardioDialog] = useState(false);
+  const [cardioConfig, setCardioConfig] = useState({
+    type: 'run' as 'run' | 'swim' | 'bike' | 'row' | 'other',
+    mode: 'steady' as 'steady' | 'intervals' | 'distance',
+    duration: 1200, // 20 min default
+    distance: 5000, // 5km default
+    intervalWork: 60,
+    intervalRest: 30,
+    intervalRounds: 8,
   });
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [showExerciseModal, setShowExerciseModal] = useState(false);
@@ -349,16 +373,27 @@ export default function ActiveWorkoutPage() {
     toast.success(`Added ${circuitExerciseSelection.length} exercises to ${block.name}`);
   };
   
-  const addBlock = (type: 'warmup' | 'strength' | 'circuit') => {
+  const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
     if (type === 'warmup' && hasWarmup) return;
     if (type === 'strength' && hasStrength) return;
     
     const circuitCount = workoutBlocks.filter(b => b.type === 'circuit').length;
+    const cardioCount = workoutBlocks.filter(b => b.type === 'cardio').length;
+    
+    const cardioNames: Record<string, string> = {
+      run: 'Run',
+      swim: 'Swim',
+      bike: 'Bike',
+      row: 'Row',
+      other: 'Cardio',
+    };
+    
     const newBlock = {
       id: `block-${Date.now()}`,
       type,
       name: type === 'warmup' ? 'Warm-Up' : 
             type === 'strength' ? 'Strength' : 
+            type === 'cardio' ? `${cardioNames[cardioConfig.type]} ${cardioCount + 1}` :
             `Circuit ${circuitCount + 1}`,
       ...(type === 'circuit' && {
         circuitStyle: circuitConfig.style,
@@ -366,6 +401,19 @@ export default function ActiveWorkoutPage() {
         circuitRounds: circuitConfig.rounds,
         timerSeconds: circuitConfig.style === 'forTime' ? 0 : circuitConfig.duration,
         timerRunning: false,
+      }),
+      ...(type === 'cardio' && {
+        cardioType: cardioConfig.type,
+        cardioMode: cardioConfig.mode,
+        targetDistance: cardioConfig.mode === 'distance' ? cardioConfig.distance : undefined,
+        intervalWork: cardioConfig.mode === 'intervals' ? cardioConfig.intervalWork : undefined,
+        intervalRest: cardioConfig.mode === 'intervals' ? cardioConfig.intervalRest : undefined,
+        intervalRounds: cardioConfig.mode === 'intervals' ? cardioConfig.intervalRounds : undefined,
+        timerSeconds: cardioConfig.mode === 'steady' ? cardioConfig.duration : 0,
+        timerRunning: false,
+        currentIntervalPhase: 'work' as const,
+        currentIntervalRound: 1,
+        splits: [],
       }),
     };
     
@@ -375,8 +423,14 @@ export default function ActiveWorkoutPage() {
     if (type === 'circuit') {
       setShowCircuitDialog(false);
     }
+    if (type === 'cardio') {
+      setShowCardioDialog(false);
+    }
     
-    setShowExerciseModal(true);
+    // Don't show exercise modal for cardio blocks
+    if (type !== 'cardio') {
+      setShowExerciseModal(true);
+    }
     toast.success(`${newBlock.name} block added`);
   };
   
@@ -1072,6 +1126,17 @@ export default function ActiveWorkoutPage() {
             <Plus className="w-3 h-3" />
           </Button>
           
+          {/* Cardio Button */}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setShowCardioDialog(true)}
+            className="h-8 px-3 gap-1.5 hover:bg-green-500/10 text-green-400/70 hover:text-green-400"
+          >
+            🏃 <span className="hidden sm:inline">Cardio</span>
+            <Plus className="w-3 h-3" />
+          </Button>
+          
           {/* Quick Add */}
           <Button
             size="sm"
@@ -1171,6 +1236,7 @@ export default function ActiveWorkoutPage() {
               warmup: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/50', text: 'text-yellow-400', accent: 'yellow' },
               strength: { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-400', accent: 'blue' },
               circuit: { bg: 'bg-orange-500/10', border: 'border-orange-500/50', text: 'text-orange-400', accent: 'orange' },
+              cardio: { bg: 'bg-green-500/10', border: 'border-green-500/50', text: 'text-green-400', accent: 'green' },
             };
             // Default to strength style if block type is unrecognized
             const defaultStyle = { bg: 'bg-blue-500/10', border: 'border-blue-500/50', text: 'text-blue-400', accent: 'blue' };
@@ -1182,13 +1248,23 @@ export default function ActiveWorkoutPage() {
                 <div className={cn("flex items-center justify-between p-3 border-b", style.border)}>
                   <div className="flex items-center gap-2">
                     <span className="text-lg">
-                      {block.type === 'warmup' ? '🔥' : block.type === 'circuit' ? '⚡' : '💪'}
+                      {block.type === 'warmup' ? '🔥' : block.type === 'circuit' ? '⚡' : block.type === 'cardio' ? '🏃' : '💪'}
                     </span>
                     <div>
                       <h3 className={cn("font-semibold", style.text)}>{block.name}</h3>
                       <p className="text-xs text-gray-500">
-                        {blockExercises.length} exercise{blockExercises.length !== 1 ? 's' : ''}
-                        {block.type === 'circuit' && ` • ${block.circuitStyle?.toUpperCase()}`}
+                        {block.type === 'cardio' ? (
+                          <>
+                            {block.cardioMode === 'steady' && `${Math.floor((block.timerSeconds || 0) / 60)}:${((block.timerSeconds || 0) % 60).toString().padStart(2, '0')} elapsed`}
+                            {block.cardioMode === 'intervals' && `Round ${block.currentIntervalRound || 1}/${block.intervalRounds || 1} • ${block.currentIntervalPhase?.toUpperCase()}`}
+                            {block.cardioMode === 'distance' && `${((block.distanceCompleted || 0) / 1000).toFixed(2)}km / ${((block.targetDistance || 0) / 1000).toFixed(1)}km`}
+                          </>
+                        ) : (
+                          <>
+                            {blockExercises.length} exercise{blockExercises.length !== 1 ? 's' : ''}
+                            {block.type === 'circuit' && ` • ${block.circuitStyle?.toUpperCase()}`}
+                          </>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -1384,6 +1460,136 @@ export default function ActiveWorkoutPage() {
                             </Button>
                           </div>
                         )}
+                      </div>
+                    )}
+                  </div>
+                ) : block.type === 'cardio' ? (
+                  // CARDIO LAYOUT - Timer with activity-specific controls
+                  <div className="p-4 space-y-4">
+                    {/* Large Timer Display */}
+                    <div className="text-center">
+                      <div className={cn(
+                        "text-5xl font-mono font-bold mb-2",
+                        block.timerRunning ? "text-green-400" : "text-white"
+                      )}>
+                        {formatTime(block.timerSeconds || 0)}
+                      </div>
+                      
+                      {/* Mode-specific info */}
+                      {block.cardioMode === 'intervals' && (
+                        <div className="flex items-center justify-center gap-4 mb-4">
+                          <Badge className={block.currentIntervalPhase === 'work' ? 'bg-green-500' : 'bg-yellow-500'}>
+                            {block.currentIntervalPhase === 'work' ? '💪 WORK' : '😮‍💨 REST'}
+                          </Badge>
+                          <span className="text-gray-400">
+                            Round {block.currentIntervalRound || 1} of {block.intervalRounds || 1}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {block.cardioMode === 'distance' && (
+                        <div className="mb-4">
+                          <div className="flex items-center justify-center gap-2 mb-2">
+                            <span className="text-2xl font-bold text-green-400">
+                              {((block.distanceCompleted || 0) / 1000).toFixed(2)} km
+                            </span>
+                            <span className="text-gray-400">/ {((block.targetDistance || 0) / 1000).toFixed(1)} km</span>
+                          </div>
+                          <div className="w-full bg-gray-700 rounded-full h-2">
+                            <div 
+                              className="bg-green-500 h-2 rounded-full transition-all"
+                              style={{ width: `${Math.min(100, ((block.distanceCompleted || 0) / (block.targetDistance || 1)) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Control Buttons */}
+                    <div className="flex items-center justify-center gap-3">
+                      <Button
+                        size="lg"
+                        variant="outline"
+                        onClick={() => resetCircuitTimer(block.id)}
+                        className="border-gray-600"
+                      >
+                        <RotateCcw className="w-5 h-5" />
+                      </Button>
+                      
+                      <Button
+                        size="lg"
+                        onClick={() => toggleCircuitTimer(block.id)}
+                        className={block.timerRunning ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'}
+                      >
+                        {block.timerRunning ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+                      </Button>
+                      
+                      {block.cardioMode === 'distance' && (
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          onClick={() => {
+                            // Add a split/lap
+                            setWorkoutBlocks(blocks => blocks.map(b => {
+                              if (b.id !== block.id) return b;
+                              const splits = b.splits || [];
+                              const lastSplit = splits[splits.length - 1];
+                              const distancePerSplit = (b.targetDistance || 5000) / 10; // 10 splits
+                              return {
+                                ...b,
+                                distanceCompleted: (b.distanceCompleted || 0) + distancePerSplit,
+                                splits: [...splits, { 
+                                  distance: (b.distanceCompleted || 0) + distancePerSplit, 
+                                  time: b.timerSeconds || 0 
+                                }],
+                              };
+                            }));
+                            toast.success('Split recorded!');
+                          }}
+                          className="border-green-500 text-green-400"
+                        >
+                          📍 Split
+                        </Button>
+                      )}
+                      
+                      <Button
+                        size="lg"
+                        onClick={() => {
+                          setWorkoutBlocks(blocks => blocks.map(b => 
+                            b.id === block.id ? { ...b, completed: true, timerRunning: false } : b
+                          ));
+                          toast.success(`${block.name} completed!`);
+                        }}
+                        className="bg-blue-500 hover:bg-blue-600"
+                      >
+                        <Check className="w-5 h-5 mr-1" /> Done
+                      </Button>
+                    </div>
+                    
+                    {/* Splits Display for Distance Mode */}
+                    {block.cardioMode === 'distance' && block.splits && block.splits.length > 0 && (
+                      <div className="mt-4 space-y-1">
+                        <p className="text-xs text-gray-500 mb-2">Splits:</p>
+                        <div className="grid grid-cols-5 gap-1">
+                          {block.splits.map((split, idx) => (
+                            <div key={idx} className="bg-gray-800 rounded p-1 text-center">
+                              <p className="text-xs text-gray-400">{((split.distance) / 1000).toFixed(1)}km</p>
+                              <p className="text-sm font-mono text-green-400">{formatTime(split.time)}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Completed State */}
+                    {block.completed && (
+                      <div className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-center">
+                        <p className="text-green-400 font-medium">
+                          {block.name} Complete! 🎉
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          Total time: {formatTime(block.timerSeconds || 0)}
+                        </p>
                       </div>
                     )}
                   </div>
@@ -2211,6 +2417,163 @@ export default function ActiveWorkoutPage() {
             >
               <Plus className="w-4 h-4 mr-2" />
               Create Circuit
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cardio Config Dialog */}
+      <Dialog open={showCardioDialog} onOpenChange={setShowCardioDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <span>🏃</span> Add Cardio Block
+            </DialogTitle>
+            <DialogDescription>Track your run, swim, bike, or row</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">Activity Type</label>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { id: 'run', label: 'Run', icon: '🏃' },
+                  { id: 'swim', label: 'Swim', icon: '🏊' },
+                  { id: 'bike', label: 'Bike', icon: '🚴' },
+                  { id: 'row', label: 'Row', icon: '🚣' },
+                  { id: 'other', label: 'Other', icon: '💪' },
+                ].map((type) => (
+                  <Button
+                    key={type.id}
+                    type="button"
+                    variant={cardioConfig.type === type.id ? 'default' : 'outline'}
+                    className={cn(
+                      "h-auto py-2 flex-col items-center",
+                      cardioConfig.type === type.id 
+                        ? 'bg-green-500 hover:bg-green-600 text-white border-green-500' 
+                        : 'border-gray-700 hover:bg-green-500/10 hover:border-green-500/50'
+                    )}
+                    onClick={() => setCardioConfig({ ...cardioConfig, type: type.id as any })}
+                  >
+                    <span className="text-lg">{type.icon}</span>
+                    <span className="text-xs mt-1">{type.label}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm text-gray-400 mb-2 block">Mode</label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'steady', label: 'Steady', desc: 'Timed cardio', icon: '⏱️' },
+                  { id: 'intervals', label: 'Intervals', desc: 'Work/Rest cycles', icon: '🔄' },
+                  { id: 'distance', label: 'Distance', desc: 'Target distance', icon: '📏' },
+                ].map((mode) => (
+                  <Button
+                    key={mode.id}
+                    type="button"
+                    variant={cardioConfig.mode === mode.id ? 'default' : 'outline'}
+                    className={cn(
+                      "h-auto py-3 flex-col items-start",
+                      cardioConfig.mode === mode.id 
+                        ? 'bg-green-500 hover:bg-green-600 text-white border-green-500' 
+                        : 'border-gray-700 hover:bg-green-500/10 hover:border-green-500/50'
+                    )}
+                    onClick={() => setCardioConfig({ ...cardioConfig, mode: mode.id as any })}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <span>{mode.icon}</span>
+                      <span className="font-semibold">{mode.label}</span>
+                    </div>
+                    <p className="text-xs opacity-70 mt-1">{mode.desc}</p>
+                  </Button>
+                ))}
+              </div>
+            </div>
+            
+            <div className="space-y-3">
+              {cardioConfig.mode === 'steady' && (
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">Duration (minutes)</label>
+                  <Input
+                    type="number"
+                    value={Math.floor(cardioConfig.duration / 60)}
+                    onChange={(e) => setCardioConfig({ ...cardioConfig, duration: (parseInt(e.target.value) || 1) * 60 })}
+                    className="bg-gray-800 border-gray-700"
+                    min={1}
+                  />
+                </div>
+              )}
+              
+              {cardioConfig.mode === 'distance' && (
+                <div>
+                  <label className="text-sm text-gray-400 mb-1 block">
+                    Target Distance ({cardioConfig.type === 'swim' ? 'meters' : 'km'})
+                  </label>
+                  <Input
+                    type="number"
+                    value={cardioConfig.type === 'swim' ? cardioConfig.distance : cardioConfig.distance / 1000}
+                    onChange={(e) => setCardioConfig({ 
+                      ...cardioConfig, 
+                      distance: cardioConfig.type === 'swim' 
+                        ? parseInt(e.target.value) || 100 
+                        : (parseFloat(e.target.value) || 1) * 1000 
+                    })}
+                    className="bg-gray-800 border-gray-700"
+                    min={cardioConfig.type === 'swim' ? 25 : 0.1}
+                    step={cardioConfig.type === 'swim' ? 25 : 0.5}
+                  />
+                </div>
+              )}
+              
+              {cardioConfig.mode === 'intervals' && (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-sm text-gray-400 mb-1 block">Work (sec)</label>
+                      <Input
+                        type="number"
+                        value={cardioConfig.intervalWork}
+                        onChange={(e) => setCardioConfig({ ...cardioConfig, intervalWork: parseInt(e.target.value) || 30 })}
+                        className="bg-gray-800 border-gray-700"
+                        min={10}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 mb-1 block">Rest (sec)</label>
+                      <Input
+                        type="number"
+                        value={cardioConfig.intervalRest}
+                        onChange={(e) => setCardioConfig({ ...cardioConfig, intervalRest: parseInt(e.target.value) || 15 })}
+                        className="bg-gray-800 border-gray-700"
+                        min={5}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-400 mb-1 block">Rounds</label>
+                      <Input
+                        type="number"
+                        value={cardioConfig.intervalRounds}
+                        onChange={(e) => setCardioConfig({ ...cardioConfig, intervalRounds: parseInt(e.target.value) || 1 })}
+                        className="bg-gray-800 border-gray-700"
+                        min={1}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Total: {Math.floor((cardioConfig.intervalWork + cardioConfig.intervalRest) * cardioConfig.intervalRounds / 60)}:{((cardioConfig.intervalWork + cardioConfig.intervalRest) * cardioConfig.intervalRounds % 60).toString().padStart(2, '0')} min
+                  </p>
+                </>
+              )}
+            </div>
+            
+            <Button 
+              onClick={() => addBlock('cardio')}
+              className="w-full bg-green-500 hover:bg-green-600"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Start {cardioConfig.type.charAt(0).toUpperCase() + cardioConfig.type.slice(1)}
             </Button>
           </div>
         </DialogContent>
