@@ -1629,6 +1629,7 @@ interface TrainerState {
   // Payments
   addPayment: (payment: Omit<ClientPayment, 'id' | 'createdAt'>) => void;
   updatePayment: (paymentId: string, updates: Partial<ClientPayment>) => void;
+  deletePayment: (paymentId: string) => void;
   getPaymentsForClient: (clientId: string) => ClientPayment[];
   markPaymentPaid: (paymentId: string, method?: string) => void;
   
@@ -2409,6 +2410,13 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase
         const updated = get().payments.find(p => p.id === paymentId);
         if (updated) syncPaymentToSupabase(updated);
+      },
+
+      deletePayment: (paymentId) => {
+        set(state => ({
+          payments: state.payments.filter(p => p.id !== paymentId),
+        }));
+        // TODO: Add Supabase delete sync if needed
       },
 
       getPaymentsForClient: (clientId) => {

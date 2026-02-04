@@ -1095,7 +1095,34 @@ function WorkoutBuilderContent() {
         </CardContent>
       </Card>
 
-      {/* Template Selection */}
+      {/* Add Block Bar - Always visible */}
+      <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-gray-400 mr-1">Add Block:</span>
+          {BLOCK_TYPES.map((blockType) => (
+            <Button
+              key={blockType.value}
+              variant="outline"
+              size="sm"
+              onClick={() => addBlock(blockType.value)}
+              className="gap-1"
+            >
+              {blockType.icon}
+              {blockType.label}
+            </Button>
+          ))}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowBlockLibraryDialog(true)}
+            className="gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+          >
+            📚 Block Library {savedBlocks.length > 0 && `(${savedBlocks.length})`}
+          </Button>
+        </div>
+      </div>
+
+      {/* Template Selection - Only when no blocks */}
       {blocks.length === 0 && (
         <Card className="mb-4">
           <CardHeader>
@@ -1140,31 +1167,6 @@ function WorkoutBuilderContent() {
                 ))}
               </div>
             </ScrollArea>
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-2">Or start from scratch:</p>
-              <div className="flex gap-2 flex-wrap">
-                {BLOCK_TYPES.map((blockType) => (
-                  <Button
-                    key={blockType.value}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addBlock(blockType.value)}
-                    className="gap-1"
-                  >
-                    {blockType.icon}
-                    {blockType.label}
-                  </Button>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowBlockLibraryDialog(true)}
-                  className="gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
-                >
-                  📚 Block Library {savedBlocks.length > 0 && `(${savedBlocks.length})`}
-                </Button>
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}

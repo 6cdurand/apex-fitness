@@ -45,7 +45,7 @@ interface ClientPaymentSettings {
 export default function PaymentsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { sessions, payments, clients, sessionPackages, addPayment, updateSessionPackage, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
+  const { sessions, payments, clients, sessionPackages, addPayment, deletePayment, updateSessionPackage, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('clients');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
@@ -601,9 +601,23 @@ export default function PaymentsPage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className="font-bold text-sky-400">${payment.amount}</p>
-                              <p className="text-xs text-gray-500 capitalize">{payment.method?.replace('_', ' ')}</p>
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <p className="font-bold text-sky-400">${payment.amount}</p>
+                                <p className="text-xs text-gray-500 capitalize">{payment.method?.replace('_', ' ')}</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                                onClick={() => {
+                                  if (confirm('Are you sure you want to delete this payment?')) {
+                                    deletePayment(payment.id);
+                                  }
+                                }}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
