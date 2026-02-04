@@ -279,9 +279,19 @@ export default function PaymentsPage() {
     };
     savePaymentSettings(newSettings);
     
-    // Calculate total based on sessions per week
-    const sessionsCount = editingSettings.sessionsPerWeek || 1;
+    // Calculate total based on sessions per week AND frequency
+    const frequencyMultiplier = editingSettings.frequency === 'weekly' ? 1 
+      : editingSettings.frequency === 'fortnightly' ? 2 
+      : editingSettings.frequency === 'monthly' ? 4 
+      : 1;
+    const sessionsCount = (editingSettings.sessionsPerWeek || 1) * frequencyMultiplier;
     const totalAmount = editingSettings.pricePerSession * sessionsCount;
+    
+    // Get period label for description
+    const periodLabel = editingSettings.frequency === 'weekly' ? 'weekly' 
+      : editingSettings.frequency === 'fortnightly' ? 'fortnightly' 
+      : editingSettings.frequency === 'monthly' ? 'monthly' 
+      : '';
     
     // Create payment record
     addPayment({
@@ -290,10 +300,11 @@ export default function PaymentsPage() {
       amount: totalAmount,
       currency: 'NZD',
       type: sessionsCount > 1 ? 'session_pack' : 'single_session',
-      description: `${sessionsCount} session${sessionsCount > 1 ? 's' : ''} payment (${editingSettings.method.replace('_', ' ')})`,
+      description: `${sessionsCount} session${sessionsCount > 1 ? 's' : ''} ${periodLabel} payment (${editingSettings.method.replace('_', ' ')})`,
       status: 'paid',
       paidAt: new Date().toISOString(),
       method: editingSettings.method,
+      sessionsIncluded: sessionsCount,
     });
     
     // Update session package paid count
@@ -604,20 +615,23 @@ export default function PaymentsPage() {
                             <div className="flex items-center gap-3">
                               <div className="text-right">
                                 <p className="font-bold text-sky-400">${payment.amount}</p>
-                                <p className="text-xs text-gray-500 capitalize">{payment.method?.replace('_', ' ')}</p>
+                                <p className="text-xs text-gray-500">
+                                  {payment.sessionsIncluded ? `${payment.sessionsIncluded} sessions` : payment.method?.replace('_', ' ')}
+                                </p>
                               </div>
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
                                 onClick={() => {
-                                  if (confirm('Are you sure you want to delete this payment?')) {
-                                    // Also decrement the session package paidSessions count
+                                  const sessionsToRemove = payment.sessionsIncluded || 1;
+                                  if (confirm(`Delete this payment? (${sessionsToRemove} session${sessionsToRemove > 1 ? 's' : ''} will be removed from paid count)`)) {
+                                    // Decrement session package paidSessions by the correct amount
                                     const clientPackages = sessionPackages.filter(p => p.clientId === payment.clientId && p.trainerId === user?.id);
                                     const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
                                     if (activePackage && (activePackage.paidSessions || 0) > 0) {
                                       updateSessionPackage(activePackage.id, {
-                                        paidSessions: Math.max(0, (activePackage.paidSessions || 0) - 1),
+                                        paidSessions: Math.max(0, (activePackage.paidSessions || 0) - sessionsToRemove),
                                       });
                                     }
                                     deletePayment(payment.id);
@@ -749,7 +763,7 @@ export default function PaymentsPage() {
                   <DollarSign className="w-4 h-4 mr-2" />
                   {editingSettings.frequency === 'upfront' 
                     ? `Log Payment ($${editingSettings.pricePerSession * (editingSettings.totalSessions || 10)} for ${editingSettings.totalSessions || 10} sessions)`
-                    : `Log Payment ($${editingSettings.pricePerSession * (editingSettings.sessionsPerWeek || 1)} for ${editingSettings.sessionsPerWeek || 1} session${(editingSettings.sessionsPerWeek || 1) > 1 ? 's' : ''})`
+                    : `Log Payment ($${editingSettings.pricePerSession * (editingSettings.sessionsPerWeek || 1) * (editingSettings.frequency === 'weekly' ? 1 : editingSettings.frequency === 'fortnightly' ? 2 : 4)} for ${(editingSettings.sessionsPerWeek || 1) * (editingSettings.frequency === 'weekly' ? 1 : editingSettings.frequency === 'fortnightly' ? 2 : 4)} sessions)`
                   }
                 </Button>
                 <div className="flex gap-2">
