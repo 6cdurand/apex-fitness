@@ -1835,6 +1835,23 @@ export const useTrainerStore = create<TrainerState>()(
             c.clientId === clientId ? { ...c, ...updates } : c
           ),
         }));
+        
+        // Sync to Supabase
+        const updatedClient = get().clients.find(c => c.clientId === clientId);
+        if (updatedClient) {
+          import('./supabaseSync').then(({ syncTrainerClientToSupabase }) => {
+            syncTrainerClientToSupabase({
+              id: updatedClient.id,
+              trainerId: updatedClient.trainerId,
+              clientId: updatedClient.clientId,
+              status: updatedClient.status,
+              startDate: updatedClient.startDate,
+              onboardingComplete: updatedClient.onboardingComplete,
+              notes: updatedClient.notes,
+              goals: updatedClient.goals,
+            });
+          });
+        }
       },
 
       getClientById: (clientId) => {
