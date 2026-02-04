@@ -612,6 +612,14 @@ export default function PaymentsPage() {
                                 className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
                                 onClick={() => {
                                   if (confirm('Are you sure you want to delete this payment?')) {
+                                    // Also decrement the session package paidSessions count
+                                    const clientPackages = sessionPackages.filter(p => p.clientId === payment.clientId && p.trainerId === user?.id);
+                                    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+                                    if (activePackage && (activePackage.paidSessions || 0) > 0) {
+                                      updateSessionPackage(activePackage.id, {
+                                        paidSessions: Math.max(0, (activePackage.paidSessions || 0) - 1),
+                                      });
+                                    }
                                     deletePayment(payment.id);
                                   }
                                 }}
