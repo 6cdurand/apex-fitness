@@ -103,18 +103,18 @@
 .dark {
   /* ============================================
      CATALIFT LIGHT BLUE THEME
-     Very light, almost white with subtle blue tint
+     Noticeable light blue background
      ============================================ */
   
   /* === SURFACE HIERARCHY === */
-  /* Level 0: Page background - very light blue, almost white */
-  --background: oklch(0.96 0.015 230);
-  /* Level 1: Cards, containers - white */
-  --card: oklch(0.99 0.005 230);
+  /* Level 0: Page background - LIGHT BLUE (visible blue tint) */
+  --background: oklch(0.85 0.08 230);
+  /* Level 1: Cards, containers - slightly lighter blue */
+  --card: oklch(0.90 0.06 230);
   /* Level 2: Elevated elements (modals, popovers) */
-  --popover: oklch(0.99 0.005 230);
+  --popover: oklch(0.92 0.05 230);
   /* Level 3: Interactive hover states */
-  --elevated: oklch(0.94 0.02 230);
+  --elevated: oklch(0.88 0.07 230);
   
   /* === TEXT COLORS === */
   --foreground: oklch(0.20 0.02 240);
@@ -129,9 +129,9 @@
   --primary-foreground: oklch(0.98 0 0);
   
   /* === SECONDARY/MUTED - Subtle, non-competing === */
-  --secondary: oklch(0.92 0.02 230);
-  --muted: oklch(0.92 0.02 230);
-  --accent: oklch(0.90 0.025 230);
+  --secondary: oklch(0.82 0.06 230);
+  --muted: oklch(0.82 0.06 230);
+  --accent: oklch(0.80 0.07 230);
   
   /* === PROGRESS & MILESTONES - "Radiant moments" === */
   /* Use these ONLY for achievements, level-ups, streaks */
@@ -146,8 +146,8 @@
   --warning: oklch(0.70 0.15 80);
   
   /* === BORDERS & INPUTS === */
-  --border: oklch(0.85 0.02 230);
-  --input: oklch(0.92 0.015 230);
+  --border: oklch(0.75 0.06 230);
+  --input: oklch(0.88 0.05 230);
   --ring: oklch(0.60 0.16 230);
   
   /* === CHART PALETTE === */
@@ -158,13 +158,13 @@
   --chart-5: oklch(0.65 0.18 30);
   
   /* === SIDEBAR === */
-  --sidebar: oklch(0.94 0.02 230);
+  --sidebar: oklch(0.82 0.07 230);
   --sidebar-foreground: oklch(0.20 0.02 240);
   --sidebar-primary: oklch(0.60 0.16 230);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.90 0.025 230);
+  --sidebar-accent: oklch(0.78 0.08 230);
   --sidebar-accent-foreground: oklch(0.20 0.02 240);
-  --sidebar-border: oklch(0.85 0.02 230);
+  --sidebar-border: oklch(0.75 0.06 230);
   --sidebar-ring: oklch(0.60 0.16 230);
 }
 
