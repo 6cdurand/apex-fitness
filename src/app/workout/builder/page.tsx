@@ -619,28 +619,28 @@ function WorkoutBuilderContent() {
     
     // Then filter by block type if we're adding to a specific block
     if (currentBlockType) {
-      const pattern = ex.pattern?.toLowerCase() || '';
+      // Check both pattern (for COMMON_EXERCISES) and category (for exerciseLibrary)
+      const pattern = (ex.pattern || '').toLowerCase();
+      const category = ((ex as any).category || '').toLowerCase();
+      
       switch (currentBlockType) {
         case 'warmup':
-          // Warmup blocks: stretches, activation, light cardio, bodyweight
-          return pattern === 'warmup' || pattern === 'stretch' || pattern === 'activation' || 
-                 pattern === 'cardio' || ex.name.toLowerCase().includes('stretch') ||
-                 ex.name.toLowerCase().includes('circle') || ex.name.toLowerCase().includes('swing') ||
-                 ex.name.toLowerCase().includes('lunge') || ex.name.toLowerCase().includes('bridge');
+          // Warmup blocks: warmup, stretching, activation exercises only
+          return pattern === 'warmup' || category === 'warmup' || 
+                 category === 'stretching' || category === 'activation';
         case 'cooldown':
-          // Cooldown blocks: stretches only
-          return pattern === 'stretch' || pattern === 'warmup' ||
-                 ex.name.toLowerCase().includes('stretch') || ex.name.toLowerCase().includes('pose');
+          // Cooldown blocks: stretching exercises only
+          return pattern === 'warmup' || category === 'stretching';
         case 'cardio':
-          // Cardio blocks: running, cycling, rowing, etc.
-          return pattern === 'cardio' || ex.name.toLowerCase().includes('run') ||
-                 ex.name.toLowerCase().includes('bike') || ex.name.toLowerCase().includes('row') ||
-                 ex.name.toLowerCase().includes('swim') || ex.name.toLowerCase().includes('sprint');
+          // Cardio blocks: ONLY cardio exercises (strict filtering)
+          return pattern === 'cardio' || category === 'cardio';
         case 'work':
         case 'circuit':
         default:
-          // Work blocks: all strength exercises (default behavior)
-          return true;
+          // Work/circuit blocks: strength exercises (not warmup/cardio)
+          return pattern !== 'warmup' && pattern !== 'cardio' && 
+                 category !== 'warmup' && category !== 'cardio' && 
+                 category !== 'stretching' && category !== 'activation';
       }
     }
     
@@ -1820,6 +1820,177 @@ function WorkoutBuilderContent() {
                 </div>
               )}
 
+              {/* Check if this is a cardio exercise - use pattern check */}
+              {(editingExercise.exercise.movementPattern as string) === 'cardio' || (editingExercise.exercise as any).isCardio ? (
+                /* CARDIO-SPECIFIC UI */
+                <div className="space-y-4">
+                  <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg">
+                    <p className="text-sm text-orange-400 font-medium">🏃 Cardio Exercise</p>
+                    <p className="text-xs text-muted-foreground mt-1">Configure distance, time, or intervals for this cardio activity</p>
+                  </div>
+                  
+                  {/* Cardio Type Selection */}
+                  <div>
+                    <Label className="mb-2 block">Cardio Mode</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        type="button"
+                        variant={(editingExercise.exercise as any).cardioType === 'distance' ? 'default' : 'outline'}
+                        className={(editingExercise.exercise as any).cardioType === 'distance' ? 'bg-orange-500 hover:bg-orange-600' : ''}
+                        onClick={() => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, cardioType: 'distance', isCardio: true } as any
+                        })}
+                      >
+                        📏 Distance
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={(editingExercise.exercise as any).cardioType === 'time' ? 'default' : 'outline'}
+                        className={(editingExercise.exercise as any).cardioType === 'time' ? 'bg-blue-500 hover:bg-blue-600' : ''}
+                        onClick={() => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, cardioType: 'time', isCardio: true } as any
+                        })}
+                      >
+                        ⏱️ Time Only
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={(editingExercise.exercise as any).cardioType === 'intervals' ? 'default' : 'outline'}
+                        className={(editingExercise.exercise as any).cardioType === 'intervals' ? 'bg-purple-500 hover:bg-purple-600' : ''}
+                        onClick={() => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, cardioType: 'intervals', isCardio: true } as any
+                        })}
+                      >
+                        🔄 Intervals
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  {/* Distance Mode */}
+                  {(editingExercise.exercise as any).cardioType === 'distance' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Distance</Label>
+                        <Input
+                          value={(editingExercise.exercise as any).distance || ''}
+                          onChange={(e) => setEditingExercise({
+                            ...editingExercise,
+                            exercise: { ...editingExercise.exercise, distance: e.target.value } as any
+                          })}
+                          placeholder="e.g., 5"
+                        />
+                      </div>
+                      <div>
+                        <Label>Unit</Label>
+                        <div className="flex gap-1 mt-1">
+                          {(['km', 'mi', 'm'] as const).map(unit => (
+                            <Button
+                              key={unit}
+                              type="button"
+                              size="sm"
+                              variant={(editingExercise.exercise as any).distanceUnit === unit ? 'default' : 'outline'}
+                              className={(editingExercise.exercise as any).distanceUnit === unit ? 'bg-orange-500 hover:bg-orange-600' : ''}
+                              onClick={() => setEditingExercise({
+                                ...editingExercise,
+                                exercise: { ...editingExercise.exercise, distanceUnit: unit } as any
+                              })}
+                            >
+                              {unit}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Target Time (optional)</Label>
+                        <Input
+                          value={(editingExercise.exercise as any).targetTime || ''}
+                          onChange={(e) => setEditingExercise({
+                            ...editingExercise,
+                            exercise: { ...editingExercise.exercise, targetTime: e.target.value } as any
+                          })}
+                          placeholder="e.g., 25:00 or leave blank to just time"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Time Only Mode */}
+                  {(editingExercise.exercise as any).cardioType === 'time' && (
+                    <div>
+                      <Label>Duration</Label>
+                      <Input
+                        value={(editingExercise.exercise as any).targetTime || ''}
+                        onChange={(e) => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, targetTime: e.target.value } as any
+                        })}
+                        placeholder="e.g., 30:00, 1:00:00, or leave blank to free run"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Leave blank to start a timer and stop when done
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Intervals Mode */}
+                  {(editingExercise.exercise as any).cardioType === 'intervals' && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label>Intervals</Label>
+                        <Input
+                          type="number"
+                          value={(editingExercise.exercise as any).intervals || ''}
+                          onChange={(e) => setEditingExercise({
+                            ...editingExercise,
+                            exercise: { ...editingExercise.exercise, intervals: parseInt(e.target.value) || 0 } as any
+                          })}
+                          placeholder="e.g., 8"
+                        />
+                      </div>
+                      <div>
+                        <Label>Work (distance or time)</Label>
+                        <Input
+                          value={(editingExercise.exercise as any).intervalWork || ''}
+                          onChange={(e) => setEditingExercise({
+                            ...editingExercise,
+                            exercise: { ...editingExercise.exercise, intervalWork: e.target.value } as any
+                          })}
+                          placeholder="e.g., 400m or 1min"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Rest Between Intervals</Label>
+                        <Input
+                          value={(editingExercise.exercise as any).intervalRest || ''}
+                          onChange={(e) => setEditingExercise({
+                            ...editingExercise,
+                            exercise: { ...editingExercise.exercise, intervalRest: e.target.value } as any
+                          })}
+                          placeholder="e.g., 90s or 2min"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Notes for cardio */}
+                  <div>
+                    <Label>Notes (optional)</Label>
+                    <Input
+                      value={editingExercise.exercise.notes || ''}
+                      onChange={(e) => setEditingExercise({
+                        ...editingExercise,
+                        exercise: { ...editingExercise.exercise, notes: e.target.value }
+                      })}
+                      placeholder="e.g., incline 5%, zone 2 pace..."
+                    />
+                  </div>
+                </div>
+              ) : (
+              /* STRENGTH EXERCISE UI */
+              <>
               {/* Set Style Selection */}
               <div>
                 <Label className="mb-2 block">Set Style</Label>
@@ -2030,6 +2201,8 @@ function WorkoutBuilderContent() {
                   placeholder="Any coaching cues for this exercise..."
                 />
               </div>
+              </>
+              )}
 
               <Button onClick={saveExerciseEdit} className="w-full bg-sky-500 hover:bg-sky-600">
                 <Save className="h-4 w-4 mr-2" /> Save Changes

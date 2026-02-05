@@ -102,70 +102,70 @@
 
 .dark {
   /* ============================================
-     CATALIFT DARK THEME
-     "Journey Upward" - Calm foundation with light blue tones
+     CATALIFT LIGHT BLUE THEME
+     Very light, almost white with subtle blue tint
      ============================================ */
   
   /* === SURFACE HIERARCHY === */
-  /* Level 0: Page background - light blue-gray */
-  --background: oklch(0.22 0.025 240);
-  /* Level 1: Cards, containers */
-  --card: oklch(0.26 0.025 240);
+  /* Level 0: Page background - very light blue, almost white */
+  --background: oklch(0.96 0.015 230);
+  /* Level 1: Cards, containers - white */
+  --card: oklch(0.99 0.005 230);
   /* Level 2: Elevated elements (modals, popovers) */
-  --popover: oklch(0.28 0.025 240);
+  --popover: oklch(0.99 0.005 230);
   /* Level 3: Interactive hover states */
-  --elevated: oklch(0.30 0.025 240);
+  --elevated: oklch(0.94 0.02 230);
   
   /* === TEXT COLORS === */
-  --foreground: oklch(0.95 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-  --muted-foreground: oklch(0.60 0.01 240);
-  --secondary-foreground: oklch(0.90 0 0);
-  --accent-foreground: oklch(0.95 0 0);
+  --foreground: oklch(0.20 0.02 240);
+  --card-foreground: oklch(0.20 0.02 240);
+  --popover-foreground: oklch(0.20 0.02 240);
+  --muted-foreground: oklch(0.45 0.02 240);
+  --secondary-foreground: oklch(0.25 0.02 240);
+  --accent-foreground: oklch(0.20 0.02 240);
   
   /* === PRIMARY ACTION - Sky blue (calm, trustworthy) === */
-  --primary: oklch(0.70 0.14 220);
-  --primary-foreground: oklch(0.12 0.015 240);
+  --primary: oklch(0.60 0.16 230);
+  --primary-foreground: oklch(0.98 0 0);
   
   /* === SECONDARY/MUTED - Subtle, non-competing === */
-  --secondary: oklch(0.30 0.02 240);
-  --muted: oklch(0.30 0.02 240);
-  --accent: oklch(0.32 0.025 240);
+  --secondary: oklch(0.92 0.02 230);
+  --muted: oklch(0.92 0.02 230);
+  --accent: oklch(0.90 0.025 230);
   
   /* === PROGRESS & MILESTONES - "Radiant moments" === */
   /* Use these ONLY for achievements, level-ups, streaks */
-  --progress: oklch(0.70 0.14 220);
-  --progress-glow: oklch(0.70 0.18 220 / 0.3);
-  --milestone: oklch(0.75 0.16 45);
-  --milestone-glow: oklch(0.75 0.20 45 / 0.4);
+  --progress: oklch(0.60 0.16 230);
+  --progress-glow: oklch(0.60 0.18 230 / 0.3);
+  --milestone: oklch(0.70 0.16 45);
+  --milestone-glow: oklch(0.70 0.20 45 / 0.4);
   
   /* === FUNCTIONAL COLORS === */
-  --destructive: oklch(0.65 0.20 25);
-  --success: oklch(0.70 0.15 145);
-  --warning: oklch(0.75 0.15 80);
+  --destructive: oklch(0.55 0.22 25);
+  --success: oklch(0.55 0.18 145);
+  --warning: oklch(0.70 0.15 80);
   
   /* === BORDERS & INPUTS === */
-  --border: oklch(0.38 0.02 240);
-  --input: oklch(0.32 0.02 240);
-  --ring: oklch(0.65 0.14 220);
+  --border: oklch(0.85 0.02 230);
+  --input: oklch(0.92 0.015 230);
+  --ring: oklch(0.60 0.16 230);
   
   /* === CHART PALETTE === */
-  --chart-1: oklch(0.70 0.14 220);
-  --chart-2: oklch(0.65 0.12 180);
-  --chart-3: oklch(0.75 0.16 45);
-  --chart-4: oklch(0.60 0.14 280);
-  --chart-5: oklch(0.70 0.18 30);
+  --chart-1: oklch(0.60 0.16 230);
+  --chart-2: oklch(0.55 0.14 180);
+  --chart-3: oklch(0.70 0.16 45);
+  --chart-4: oklch(0.55 0.14 280);
+  --chart-5: oklch(0.65 0.18 30);
   
   /* === SIDEBAR === */
-  --sidebar: oklch(0.24 0.025 240);
-  --sidebar-foreground: oklch(0.95 0 0);
-  --sidebar-primary: oklch(0.70 0.14 220);
-  --sidebar-primary-foreground: oklch(0.95 0 0);
-  --sidebar-accent: oklch(0.32 0.025 240);
-  --sidebar-accent-foreground: oklch(0.95 0 0);
-  --sidebar-border: oklch(0.35 0.02 240);
-  --sidebar-ring: oklch(0.65 0.14 220);
+  --sidebar: oklch(0.94 0.02 230);
+  --sidebar-foreground: oklch(0.20 0.02 240);
+  --sidebar-primary: oklch(0.60 0.16 230);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.90 0.025 230);
+  --sidebar-accent-foreground: oklch(0.20 0.02 240);
+  --sidebar-border: oklch(0.85 0.02 230);
+  --sidebar-ring: oklch(0.60 0.16 230);
 }
 
 @layer base {

@@ -114,6 +114,18 @@ export interface WorkoutBlock {
     tempo?: string;
     notes?: string;
     setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+    repType?: 'reps' | 'time';
+    movementPattern?: string;
+    // Cardio-specific fields
+    isCardio?: boolean;
+    cardioType?: 'distance' | 'time' | 'intervals';
+    distance?: string; // e.g., "5km", "2mi"
+    distanceUnit?: 'km' | 'mi' | 'm';
+    targetTime?: string; // e.g., "30:00", "1:00:00"
+    targetPace?: string; // e.g., "5:30/km"
+    intervals?: number; // number of intervals
+    intervalWork?: string; // e.g., "400m" or "1min"
+    intervalRest?: string; // e.g., "90s"
   }[];
 }
 
