@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -396,6 +397,8 @@ function WorkoutBuilderContent() {
   const [blockLibraryName, setBlockLibraryName] = useState('');
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
+  const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
+  const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
   
   // Custom exercise state
   const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
@@ -897,7 +900,7 @@ function WorkoutBuilderContent() {
   };
 
   // Block Library handlers
-  const handleSaveBlock = () => {
+  const handleSaveBlock = (forceReplace = false) => {
     if (!blockLibraryName.trim() || !activeBlockId) {
       toast.error('Please enter a block name');
       return;
@@ -905,6 +908,23 @@ function WorkoutBuilderContent() {
     
     const block = blocks.find(b => b.id === activeBlockId);
     if (!block) return;
+    
+    // Check for existing block with same name (case-insensitive)
+    const existingBlock = savedBlocks.find(
+      b => b.name.toLowerCase() === blockLibraryName.trim().toLowerCase()
+    );
+    
+    if (existingBlock && !forceReplace) {
+      // Show replace confirmation dialog
+      setExistingBlockToReplace(existingBlock.id);
+      setShowReplaceBlockDialog(true);
+      return;
+    }
+    
+    // If replacing, delete the old block first
+    if (existingBlock && forceReplace) {
+      deleteBlock(existingBlock.id);
+    }
     
     saveBlock({
       name: blockLibraryName,
@@ -927,10 +947,21 @@ function WorkoutBuilderContent() {
       circuitRestBetween: block.restBetweenRounds ? parseInt(block.restBetweenRounds) : undefined,
     });
     
-    toast.success(`"${blockLibraryName}" saved to block library!`);
+    toast.success(forceReplace ? `"${blockLibraryName}" replaced in block library!` : `"${blockLibraryName}" saved to block library!`);
     setShowSaveBlockDialog(false);
+    setShowReplaceBlockDialog(false);
     setBlockLibraryName('');
     setActiveBlockId(null);
+    setExistingBlockToReplace(null);
+  };
+  
+  const handleReplaceBlock = () => {
+    handleSaveBlock(true);
+  };
+  
+  const handleCancelReplace = () => {
+    setShowReplaceBlockDialog(false);
+    setExistingBlockToReplace(null);
   };
 
   const handleLoadBlock = (savedBlock: typeof savedBlocks[0]) => {
@@ -2300,12 +2331,39 @@ function WorkoutBuilderContent() {
                 Cancel
               </Button>
               <Button 
-                onClick={handleSaveBlock}
+                onClick={() => handleSaveBlock()}
                 className="flex-1 bg-purple-500 hover:bg-purple-600"
               >
                 <Save className="h-4 w-4 mr-2" /> Save Block
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Replace Block Confirmation Dialog */}
+      <Dialog open={showReplaceBlockDialog} onOpenChange={setShowReplaceBlockDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>⚠️ Block Already Exists</DialogTitle>
+            <DialogDescription>
+              A block named "{blockLibraryName}" already exists in your library. Would you like to replace it with this new version?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mt-4">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelReplace}
+              className="flex-1"
+            >
+              Keep Both (Cancel)
+            </Button>
+            <Button 
+              onClick={handleReplaceBlock}
+              className="flex-1 bg-orange-500 hover:bg-orange-600"
+            >
+              Replace Existing
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
