@@ -33,7 +33,7 @@ export type MuscleGroup =
   | 'forearms' | 'abs' | 'obliques' | 'quads' | 'hamstrings' 
   | 'glutes' | 'calves' | 'traps' | 'lats' | 'lower_back';
 
-export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching' | 'warmup';
+export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching' | 'warmup' | 'activation';
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bands' | 'other';
 
 export interface Exercise {
@@ -47,6 +47,7 @@ export interface Exercise {
   videoUrl?: string;
   isCustom?: boolean;
   createdBy?: string;
+  blockTypes?: BlockType[];
 }
 
 // Set Types
@@ -148,6 +149,7 @@ export interface BlockPerformance {
   id: string;
   blockId: string; // Reference to SavedBlock
   blockName: string;
+  blockType: BlockType; // warmup, work, circuit, cardio, cooldown
   clientId: string;
   trainerId: string;
   workoutId: string;
@@ -155,7 +157,14 @@ export interface BlockPerformance {
   completionTime?: number; // seconds for timed circuits
   roundsCompleted?: number;
   roundTimes?: number[]; // Per-round completion times in seconds
-  difficultyRating?: 'easy' | 'moderate' | 'hard' | null; // Client's perceived difficulty, null = N/A
+  intervalTimes?: number[]; // Per-interval times for interval training
+  difficultyRating?: 'easy' | 'moderate' | 'hard' | null; // Client's perceived difficulty
+  // Cardio stats
+  cardioMode?: 'steady' | 'intervals' | 'distance' | 'emom' | 'amrap' | 'forTime';
+  cardioActivity?: 'run' | 'swim' | 'bike' | 'row' | 'ski' | 'other';
+  distance?: number; // meters
+  avgPace?: number; // seconds per km/mile
+  caloriesBurned?: number;
   // Strength stats
   totalVolume?: number;
   exerciseStats?: {
@@ -166,6 +175,7 @@ export interface BlockPerformance {
     oneRepMax?: number;
   }[];
   performedAt: string;
+  notes?: string;
 }
 
 // Workout Template

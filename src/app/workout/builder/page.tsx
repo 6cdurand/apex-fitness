@@ -603,11 +603,45 @@ function WorkoutBuilderContent() {
     })),
   ];
   
+  // Get the current block type being edited for exercise filtering
+  const currentBlockType = showAddExercise ? blocks.find(b => b.id === showAddExercise)?.type : null;
+  
   const filteredExercises = allExercises.filter(ex => {
     const search = exerciseSearch.toLowerCase();
-    // Search by name or any alias
-    return ex.name.toLowerCase().includes(search) ||
+    // First filter by search term
+    const matchesSearch = ex.name.toLowerCase().includes(search) ||
       (ex.aliases?.some(alias => alias.toLowerCase().includes(search)) ?? false);
+    
+    if (!matchesSearch) return false;
+    
+    // Then filter by block type if we're adding to a specific block
+    if (currentBlockType) {
+      const pattern = ex.pattern?.toLowerCase() || '';
+      switch (currentBlockType) {
+        case 'warmup':
+          // Warmup blocks: stretches, activation, light cardio, bodyweight
+          return pattern === 'warmup' || pattern === 'stretch' || pattern === 'activation' || 
+                 pattern === 'cardio' || ex.name.toLowerCase().includes('stretch') ||
+                 ex.name.toLowerCase().includes('circle') || ex.name.toLowerCase().includes('swing') ||
+                 ex.name.toLowerCase().includes('lunge') || ex.name.toLowerCase().includes('bridge');
+        case 'cooldown':
+          // Cooldown blocks: stretches only
+          return pattern === 'stretch' || pattern === 'warmup' ||
+                 ex.name.toLowerCase().includes('stretch') || ex.name.toLowerCase().includes('pose');
+        case 'cardio':
+          // Cardio blocks: running, cycling, rowing, etc.
+          return pattern === 'cardio' || ex.name.toLowerCase().includes('run') ||
+                 ex.name.toLowerCase().includes('bike') || ex.name.toLowerCase().includes('row') ||
+                 ex.name.toLowerCase().includes('swim') || ex.name.toLowerCase().includes('sprint');
+        case 'work':
+        case 'circuit':
+        default:
+          // Work blocks: all strength exercises (default behavior)
+          return true;
+      }
+    }
+    
+    return true;
   });
   
   // Handler to save custom exercise

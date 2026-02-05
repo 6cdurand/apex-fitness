@@ -443,16 +443,16 @@ export default function WorkoutPage() {
                 return (
                   <Card
                     key={session.id}
-                    className={`bg-gray-900 border-gray-800 transition-colors ${sessionCompleted ? 'border-sky-500/50 bg-sky-500/5' : 'hover:border-sky-500/50'}`}
+                    className={`bg-gray-900 border-gray-800 transition-colors ${sessionCompleted ? 'border-green-500/50 bg-green-500/5 ring-1 ring-green-500/30' : 'hover:border-sky-500/50'}`}
                   >
                     <CardContent className="p-4">
                       {/* Workout Complete Banner */}
                       {sessionCompleted && (
-                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-sky-500/20">
-                          <div className="w-6 h-6 rounded-full bg-sky-500 flex items-center justify-center">
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-green-500/20">
+                          <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
                             <Check className="w-4 h-4 text-white" />
                           </div>
-                          <span className="text-sky-400 font-medium text-sm">Workout Complete</span>
+                          <span className="text-green-400 font-medium text-sm">Workout Complete</span>
                         </div>
                       )}
                       
@@ -489,7 +489,7 @@ export default function WorkoutPage() {
                           </div>
                         </div>
                         {sessionCompleted ? (
-                          <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30">
+                          <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
                             <Check className="w-3 h-3 mr-1" />
                             Done
                           </Badge>

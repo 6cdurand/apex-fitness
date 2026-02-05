@@ -1856,3 +1856,98 @@ export function createCustomExercise(
     createdBy,
   };
 }
+
+// ============ BLOCK TYPE EXERCISE FILTERING ============
+
+// Get exercises suitable for a specific block type
+export function getExercisesForBlockType(blockType: string): Exercise[] {
+  // Use allExercises which includes warmup, cardio, and strength exercises
+  const all = [...exerciseLibrary, ...warmupExercises, ...cardioExercises];
+  
+  switch (blockType) {
+    case 'warmup':
+      return all.filter(ex => 
+        ex.category === 'warmup' || 
+        ex.category === 'stretching' || 
+        ex.category === 'activation' ||
+        // Include some light cardio for warmup
+        (ex.category === 'cardio' && ['jumping-jacks', 'high-knees', 'butt-kicks', 'jump-rope'].includes(ex.id))
+      );
+    case 'cooldown':
+      return all.filter(ex => 
+        ex.category === 'stretching'
+      );
+    case 'cardio':
+      return all.filter(ex => 
+        ex.category === 'cardio'
+      );
+    case 'work':
+    case 'circuit':
+    default:
+      // Work blocks can use all strength exercises
+      return all.filter(ex => 
+        ex.category === 'compound' || 
+        ex.category === 'isolation'
+      );
+  }
+}
+
+// Warmup, activation, and cardio exercises
+export const warmupExercises: Exercise[] = [
+  // Dynamic Stretches
+  { id: 'arm-circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'leg-swings', name: 'Leg Swings', primaryMuscles: ['hamstrings', 'quads'], secondaryMuscles: ['glutes'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'hip-circles', name: 'Hip Circles', primaryMuscles: ['glutes'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'torso-twists', name: 'Torso Twists', primaryMuscles: ['obliques'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'neck-rolls', name: 'Neck Rolls', primaryMuscles: ['traps'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'walking-lunges', name: 'Walking Lunges', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'high-knees', name: 'High Knees', primaryMuscles: ['quads'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'butt-kicks', name: 'Butt Kicks', primaryMuscles: ['hamstrings'], secondaryMuscles: ['quads'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'jumping-jacks', name: 'Jumping Jacks', primaryMuscles: ['shoulders'], secondaryMuscles: ['calves'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'inchworms', name: 'Inchworms', primaryMuscles: ['hamstrings', 'shoulders'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' },
+  
+  // Activation Exercises
+  { id: 'glute-bridges', name: 'Glute Bridges', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'activation', equipment: 'bodyweight' },
+  { id: 'bird-dogs', name: 'Bird Dogs', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: ['glutes'], category: 'activation', equipment: 'bodyweight' },
+  { id: 'dead-bugs', name: 'Dead Bugs', primaryMuscles: ['abs'], secondaryMuscles: ['lower_back'], category: 'activation', equipment: 'bodyweight' },
+  { id: 'clamshells', name: 'Clamshells', primaryMuscles: ['glutes'], secondaryMuscles: [], category: 'activation', equipment: 'bands' },
+  { id: 'band-pull-aparts', name: 'Band Pull Aparts', primaryMuscles: ['shoulders', 'back'], secondaryMuscles: ['traps'], category: 'activation', equipment: 'bands' },
+  { id: 'cat-cow', name: 'Cat-Cow Stretch', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: [], category: 'activation', equipment: 'bodyweight' },
+  { id: 'scapular-push-ups', name: 'Scapular Push-Ups', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bodyweight' },
+  { id: 'shoulder-dislocates', name: 'Shoulder Dislocates', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bands' },
+  
+  // Static Stretches (for cooldown)
+  { id: 'hamstring-stretch', name: 'Hamstring Stretch', primaryMuscles: ['hamstrings'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'quad-stretch', name: 'Quad Stretch', primaryMuscles: ['quads'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', primaryMuscles: ['quads'], secondaryMuscles: ['glutes'], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'chest-stretch', name: 'Chest Stretch', primaryMuscles: ['chest'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'tricep-stretch', name: 'Tricep Stretch', primaryMuscles: ['triceps'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'lat-stretch', name: 'Lat Stretch', primaryMuscles: ['lats'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'pigeon-pose', name: 'Pigeon Pose', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'childs-pose', name: "Child's Pose", primaryMuscles: ['lower_back', 'lats'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' },
+];
+
+export const cardioExercises: Exercise[] = [
+  { id: 'running', name: 'Running', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['calves', 'glutes'], category: 'cardio', equipment: 'bodyweight' },
+  { id: 'cycling', name: 'Cycling', primaryMuscles: ['quads'], secondaryMuscles: ['hamstrings', 'calves'], category: 'cardio', equipment: 'machine' },
+  { id: 'rowing', name: 'Rowing', primaryMuscles: ['back', 'lats'], secondaryMuscles: ['biceps', 'shoulders'], category: 'cardio', equipment: 'machine' },
+  { id: 'swimming', name: 'Swimming', primaryMuscles: ['lats', 'shoulders'], secondaryMuscles: ['chest', 'triceps'], category: 'cardio', equipment: 'bodyweight' },
+  { id: 'elliptical', name: 'Elliptical', primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'hamstrings'], category: 'cardio', equipment: 'machine' },
+  { id: 'stair-climber', name: 'Stair Climber', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'machine' },
+  { id: 'jump-rope', name: 'Jump Rope', primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'other' },
+  { id: 'burpees', name: 'Burpees', primaryMuscles: ['chest', 'quads'], secondaryMuscles: ['shoulders', 'abs'], category: 'cardio', equipment: 'bodyweight' },
+  { id: 'mountain-climbers', name: 'Mountain Climbers', primaryMuscles: ['abs'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'bodyweight' },
+  { id: 'box-jumps', name: 'Box Jumps', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'other' },
+  { id: 'battle-ropes', name: 'Battle Ropes', primaryMuscles: ['shoulders'], secondaryMuscles: ['abs', 'back'], category: 'cardio', equipment: 'other' },
+  { id: 'sled-push', name: 'Sled Push', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['shoulders', 'calves'], category: 'cardio', equipment: 'other' },
+  { id: 'assault-bike', name: 'Assault Bike', primaryMuscles: ['quads'], secondaryMuscles: ['shoulders', 'hamstrings'], category: 'cardio', equipment: 'machine' },
+  { id: 'ski-erg', name: 'Ski Erg', primaryMuscles: ['lats', 'triceps'], secondaryMuscles: ['abs', 'shoulders'], category: 'cardio', equipment: 'machine' },
+  { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight' },
+];
+
+// Combined exercise library with all categories
+export const allExercises: Exercise[] = [
+  ...exerciseLibrary,
+  ...warmupExercises,
+  ...cardioExercises,
+];
