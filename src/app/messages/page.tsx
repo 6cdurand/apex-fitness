@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { useMessageStore, Conversation } from '@/lib/messageStore';
+import Link from 'next/link';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -123,17 +124,19 @@ export default function MessagesPage() {
                 const otherUser = getOtherUser(selectedConversation);
                 return (
                   <div className="flex items-center gap-3 flex-1">
-                    <Avatar className="w-10 h-10">
-                      <AvatarImage src={otherUser?.profilePhoto} />
-                      <AvatarFallback className="bg-gray-800">
-                        {otherUser?.displayName?.[0] || '?'}
-                      </AvatarFallback>
-                    </Avatar>
+                    <Link href={otherUser?.id ? `/profile/${otherUser.id}` : '#'}>
+                      <Avatar className="w-10 h-10 hover:ring-2 hover:ring-sky-500/50 transition-all cursor-pointer">
+                        <AvatarImage src={otherUser?.profilePhoto} />
+                        <AvatarFallback className="bg-gray-800">
+                          {otherUser?.displayName?.[0] || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Link>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-white">
+                        <Link href={otherUser?.id ? `/profile/${otherUser.id}` : '#'} className="font-semibold text-white hover:text-sky-400 hover:underline transition-colors">
                           {otherUser?.displayName || otherUser?.username}
-                        </p>
+                        </Link>
                         {otherUser?.isVerifiedTrainer && (
                           <BadgeCheck className="w-4 h-4 text-blue-400" />
                         )}

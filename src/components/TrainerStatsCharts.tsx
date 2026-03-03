@@ -169,6 +169,13 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients, payment
       return sum + (unpaid * (p.pricePerSession || 0));
     }, 0);
     const activeClients = clients.filter(c => c.status === 'active').length;
+    const collectionRate = totalSessions > 0 ? Math.round((totalPaidSessions / totalSessions) * 100) : 100;
+    const revenuePerClient = activeClients > 0 ? Math.round(totalEarnings / activeClients) : 0;
+
+    // Avg sessions per week from weekly data
+    const weeksWithSessions = weeklyEarningsData.filter(w => w.sessions > 0).length;
+    const totalWeeklySessions = weeklyEarningsData.reduce((sum, w) => sum + w.sessions, 0);
+    const avgSessionsPerWeek = weeksWithSessions > 0 ? (totalWeeklySessions / weeksWithSessions).toFixed(1) : '0';
 
     return {
       totalSessions,
@@ -177,8 +184,11 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients, payment
       totalOutstanding: Math.round(totalOutstanding),
       activeClients,
       avgPerSession: totalPaidSessions > 0 ? Math.round(totalEarnings / totalPaidSessions) : 0,
+      collectionRate,
+      revenuePerClient,
+      avgSessionsPerWeek,
     };
-  }, [sessionPackages, clients]);
+  }, [sessionPackages, clients, weeklyEarningsData]);
 
   return (
     <div className="space-y-4">
@@ -210,6 +220,28 @@ export function TrainerStatsCharts({ sessionPackages, sessions, clients, payment
             <TrendingUp className="w-6 h-6 text-amber-400 mx-auto mb-2" />
             <p className="text-2xl font-bold text-white">${stats.avgPerSession}</p>
             <p className="text-xs text-gray-400">Avg/Session</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Extended Stats Row */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-white">{stats.collectionRate}%</p>
+            <p className="text-[10px] text-gray-400">Collection Rate</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-white">{stats.avgSessionsPerWeek}</p>
+            <p className="text-[10px] text-gray-400">Avg Sessions/Wk</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-gray-900 border-gray-800">
+          <CardContent className="p-3 text-center">
+            <p className="text-xl font-bold text-white">${stats.revenuePerClient}</p>
+            <p className="text-[10px] text-gray-400">Rev/Client</p>
           </CardContent>
         </Card>
       </div>

@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   ArrowLeft,
@@ -179,20 +180,17 @@ export default function GroupDetailPage() {
     toast.success('Member added to group');
   };
 
+  const [memberToRemove, setMemberToRemove] = useState<string | null>(null);
+  const [showDeleteGroupConfirm, setShowDeleteGroupConfirm] = useState(false);
+
+  const memberToRemoveUser = memberToRemove ? getClientUser(memberToRemove) : null;
+
   const handleRemoveMember = (clientId: string) => {
-    const clientUser = getClientUser(clientId);
-    if (confirm(`Remove ${clientUser?.displayName || 'this member'} from the group?`)) {
-      removeMemberFromGroup(groupId, clientId);
-      toast.success('Member removed from group');
-    }
+    setMemberToRemove(clientId);
   };
 
   const handleDeleteGroup = () => {
-    if (confirm(`Delete group "${group?.name}"? This cannot be undone.`)) {
-      deleteClientGroup(groupId);
-      toast.success('Group deleted');
-      router.push('/clients');
-    }
+    setShowDeleteGroupConfirm(true);
   };
 
   if (!group) {
@@ -563,6 +561,38 @@ export default function GroupDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!memberToRemove}
+        onOpenChange={(open) => { if (!open) setMemberToRemove(null); }}
+        title="Remove Member"
+        description={`Remove ${memberToRemoveUser?.displayName || 'this member'} from the group?`}
+        confirmLabel="Remove"
+        variant="destructive"
+        onConfirm={() => {
+          if (memberToRemove) {
+            removeMemberFromGroup(groupId, memberToRemove);
+            toast.success('Member removed from group');
+            setMemberToRemove(null);
+          }
+        }}
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
+
+      <ConfirmDialog
+        open={showDeleteGroupConfirm}
+        onOpenChange={setShowDeleteGroupConfirm}
+        title="Delete Group"
+        description={`Delete group "${group?.name}"? This cannot be undone.`}
+        confirmLabel="Delete Group"
+        variant="destructive"
+        onConfirm={() => {
+          deleteClientGroup(groupId);
+          toast.success('Group deleted');
+          router.push('/clients');
+        }}
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
     </MainLayout>
   );
 }

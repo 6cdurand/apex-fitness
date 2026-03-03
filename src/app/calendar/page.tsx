@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,6 +25,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { defaultTemplates } from '@/lib/templates';
+import { getClientDisplayInfo, getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -48,11 +49,12 @@ import {
   getHours
 } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { syncEventToGoogleCalendar } from '@/lib/calendarSync';
 
 export default function CalendarPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, addCalendarEvent, sessionWorkouts } = useTrainerStore();
+  const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, deleteCalendarEvent, addCalendarEvent, sessionWorkouts } = useTrainerStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week');
@@ -71,6 +73,9 @@ export default function CalendarPage() {
   const [newEventRecurrence, setNewEventRecurrence] = useState<'none' | 'weekly' | 'biweekly' | 'monthly'>('none');
   const [newEventType, setNewEventType] = useState<'session' | 'consultation' | 'assessment'>('session');
   
+  // Delete confirmation state
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  
   // Workout customization state
   const [showWorkoutPicker, setShowWorkoutPicker] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -79,10 +84,8 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/auth');
-    } else if (user?.mode !== 'trainer') {
-      router.replace('/workout');
     }
-  }, [isAuthenticated, user?.mode, router]);
+  }, [isAuthenticated, router]);
 
   // Auto-sync on mount
   useEffect(() => {
@@ -93,7 +96,9 @@ export default function CalendarPage() {
     }
   }, [user?.id]);
 
-  if (!isAuthenticated || user?.mode !== 'trainer') return null;
+  const isTrainer = user?.mode === 'trainer';
+
+  if (!isAuthenticated || !user) return null;
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -101,43 +106,33 @@ export default function CalendarPage() {
   const calendarEnd = endOfWeek(monthEnd);
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  const allUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-  
-  // Only show explicitly booked sessions (not auto-generated from programs)
+  // Show events for the day — trainers see their bookings, users see their own events
   const getEventsForDay = (date: Date) => {
-    // Filter to only show trainer's own calendar events (not client programs)
-    return calendarEvents.filter(event => 
-      event.trainerId === user?.id &&
-      event.status !== 'cancelled' &&
-      isSameDay(new Date(event.date), date)
-    );
+    return calendarEvents.filter(event => {
+      if (event.status === 'cancelled') return false;
+      if (!isSameDay(new Date(event.date), date)) return false;
+      if (isTrainer) return event.trainerId === user?.id;
+      return event.clientId === user?.id || event.trainerId === user?.id;
+    });
   };
 
   const selectedDateEvents = getEventsForDay(selectedDate);
 
   const getEventColor = (type: string) => {
     switch (type) {
-      case 'workout': return 'bg-sky-500';
-      case 'consultation': return 'bg-blue-500';
+      case 'session': return 'bg-rose-500';
+      case 'workout': return 'bg-orange-500';
+      case 'consultation': return 'bg-emerald-500';
       case 'assessment': return 'bg-purple-500';
       case 'rest': return 'bg-gray-500';
       default: return 'bg-gray-500';
     }
   };
 
+  // Centralized client name resolution
   const getClientName = (clientId?: string) => {
     if (!clientId) return 'Unknown';
-    // First check trainer clients (synced from Supabase)
-    const trainerClient = clients.find(c => c.clientId === clientId);
-    if (trainerClient) {
-      const clientData = trainerClient.client;
-      if (clientData?.displayName) return clientData.displayName;
-      const storedName = (trainerClient as any).displayName;
-      if (storedName) return storedName;
-    }
-    // Fallback to localStorage users
-    const localUser = allUsers.find((u: any) => u.id === clientId);
-    return localUser?.displayName || localUser?.username || 'Unknown';
+    return getClientNameUtil(clientId);
   };
 
   const handleEditEvent = (event: any) => {
@@ -159,20 +154,37 @@ export default function CalendarPage() {
     setEditingEvent(null);
   };
 
-  const handleDeleteEvent = () => {
+  const handleDeleteEvent = (mode: 'single' | 'future' | 'all') => {
     if (!editingEvent) return;
-    updateCalendarEvent(editingEvent.id, { status: 'cancelled' });
+    if (mode === 'all' && editingEvent.recurrenceGroup) {
+      // Delete all events in this recurrence group
+      const group = editingEvent.recurrenceGroup;
+      const toDelete = calendarEvents.filter(e => e.recurrenceGroup === group);
+      toDelete.forEach(e => deleteCalendarEvent(e.id));
+    } else if (mode === 'future' && editingEvent.recurrenceGroup) {
+      // Delete this event and all future events in this recurrence group
+      const group = editingEvent.recurrenceGroup;
+      const eventDate = editingEvent.date;
+      const toDelete = calendarEvents.filter(e => e.recurrenceGroup === group && e.date >= eventDate);
+      toDelete.forEach(e => deleteCalendarEvent(e.id));
+    } else {
+      deleteCalendarEvent(editingEvent.id);
+    }
     setEditingEvent(null);
+    setConfirmDelete(false);
   };
 
   const handleAddEvent = () => {
     // Consultations don't require a client
     if (!newEventDate || (!newEventClient && newEventType !== 'consultation')) return;
     
-    const clientUser = newEventClient ? allUsers.find((u: any) => u.id === newEventClient) : null;
-    const title = newEventTitle || (clientUser 
-      ? `${newEventType === 'consultation' ? 'Consultation' : 'Session'} with ${clientUser?.displayName || 'Client'}`
-      : 'Consultation');
+    const clientName = newEventClient ? getClientNameUtil(newEventClient) : null;
+    const contactName = (!newEventClient && newEventType === 'consultation') ? newEventTitle : undefined;
+    const title = newEventTitle || (clientName 
+      ? `${newEventType === 'consultation' ? 'Consultation' : 'Session'} with ${clientName}`
+      : contactName ? `Consultation — ${contactName}` : 'Consultation');
+    
+    const recurrenceGroup = newEventRecurrence !== 'none' ? `rg-${Date.now()}` : undefined;
     
     // Create the base event
     const createEvent = (date: string) => {
@@ -186,7 +198,9 @@ export default function CalendarPage() {
         trainerId: user?.id,
         status: 'scheduled',
         notes: newEventRecurrence !== 'none' ? `Recurring: ${newEventRecurrence}` : '',
-      });
+        recurrenceGroup,
+        contactName: contactName || undefined,
+      } as any);
     };
     
     // Create events based on recurrence
@@ -212,6 +226,22 @@ export default function CalendarPage() {
       }
     }
     
+    // Sync to Google Calendar if connected
+    if (user?.healthConnections?.calendar?.connected && user.id) {
+      syncEventToGoogleCalendar(user.id, {
+        title,
+        date: newEventDate,
+        startTime: newEventStartTime,
+        endTime: newEventEndTime,
+        notes: newEventRecurrence !== 'none' ? `Recurring: ${newEventRecurrence}` : '',
+        recurrence: newEventRecurrence,
+      }).then(result => {
+        if (result.success) {
+          console.log('[Calendar] Synced to Google Calendar:', result.googleEventId);
+        }
+      });
+    }
+
     // Reset form
     setShowAddEvent(false);
     setNewEventTitle('');
@@ -250,10 +280,12 @@ export default function CalendarPage() {
               <Loader2 className={`w-4 h-4 mr-1 ${isSyncing ? 'animate-spin' : ''}`} />
               {isSyncing ? 'Syncing...' : 'Sync'}
             </Button>
-            <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={openAddEvent}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Event
-            </Button>
+            {isTrainer && (
+              <Button size="sm" className="bg-rose-500 hover:bg-rose-600" onClick={openAddEvent}>
+                <Plus className="w-4 h-4 mr-2" />
+                Add Event
+              </Button>
+            )}
           </div>
         }
       />
@@ -593,10 +625,13 @@ export default function CalendarPage() {
                           </div>
                           <div className="flex items-center gap-4 text-sm text-gray-500">
                             {event.clientId && (
-                              <span className="flex items-center gap-1">
+                              <button 
+                                className="flex items-center gap-1 hover:text-sky-400 transition-colors"
+                                onClick={(e) => { e.stopPropagation(); router.push(`/clients/${event.clientId}`); }}
+                              >
                                 <Users className="w-3 h-3" />
                                 {getClientName(event.clientId)}
-                              </span>
+                              </button>
                             )}
                             {event.startTime && (
                               <span className="flex items-center gap-1">
@@ -671,7 +706,7 @@ export default function CalendarPage() {
               </p>
               {editingEvent?.clientId && (
                 <p className="text-sm text-gray-500">
-                  Client: {getClientName(editingEvent.clientId)}
+                  Client: <button className="text-sky-400 hover:underline" onClick={() => { setEditingEvent(null); router.push(`/clients/${editingEvent.clientId}`); }}>{getClientName(editingEvent.clientId)}</button>
                 </p>
               )}
             </div>
@@ -781,11 +816,57 @@ export default function CalendarPage() {
               <Button
                 variant="outline"
                 className="border-red-500 text-red-400 hover:bg-red-500/10"
-                onClick={handleDeleteEvent}
+                onClick={() => setConfirmDelete(true)}
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
+
+            {/* Delete Confirmation */}
+            {confirmDelete && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 space-y-3">
+                <p className="text-sm text-red-400 font-medium">Delete this event?</p>
+                <p className="text-xs text-gray-400">This cannot be undone.</p>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    size="sm"
+                    className="w-full bg-red-600 hover:bg-red-700 text-white"
+                    onClick={() => handleDeleteEvent('single')}
+                  >
+                    <Trash2 className="w-3 h-3 mr-2" />
+                    Delete This Event Only
+                  </Button>
+                  {editingEvent?.recurrenceGroup && (
+                    <>
+                      <Button
+                        size="sm"
+                        className="w-full bg-red-700 hover:bg-red-800 text-white"
+                        onClick={() => handleDeleteEvent('future')}
+                      >
+                        <Trash2 className="w-3 h-3 mr-2" />
+                        Delete This &amp; All Future ({calendarEvents.filter(e => e.recurrenceGroup === editingEvent.recurrenceGroup && e.date >= editingEvent.date).length})
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="w-full bg-red-800 hover:bg-red-900 text-white"
+                        onClick={() => handleDeleteEvent('all')}
+                      >
+                        <Trash2 className="w-3 h-3 mr-2" />
+                        Delete Entire Series ({calendarEvents.filter(e => e.recurrenceGroup === editingEvent.recurrenceGroup).length} events)
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full border-gray-600"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

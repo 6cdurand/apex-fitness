@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +29,7 @@ import {
   Plus
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, parseISO, subMonths } from 'date-fns';
+import { getClientDisplayInfo } from '@/lib/clientUtils';
 
 type PaymentFrequency = 'per_session' | 'weekly' | 'fortnightly' | 'monthly' | 'upfront';
 type PaymentMethod = 'cash' | 'bank_transfer' | 'card' | 'other';
@@ -56,6 +58,7 @@ export default function PaymentsPage() {
   // Payment settings state
   const [paymentSettings, setPaymentSettings] = useState<Record<string, ClientPaymentSettings>>({});
   const [editingSettings, setEditingSettings] = useState<ClientPaymentSettings | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -82,33 +85,10 @@ export default function PaymentsPage() {
     localStorage.setItem('apex-payment-settings', JSON.stringify(settings));
   };
 
-  // Get client info helper - check TrainerClient.client first, then allUsers
+  // Centralized client info helper
   const getClientInfo = (clientId: string) => {
-    // First check if we have client info embedded in the clients array
-    const trainerClient = clients.find(c => c.clientId === clientId && c.trainerId === user?.id);
-    if (trainerClient) {
-      // Check nested client object first
-      if (trainerClient.client?.displayName) {
-        return {
-          name: trainerClient.client.displayName,
-          photo: trainerClient.client.profilePhoto,
-        };
-      }
-      // Check for displayName stored directly (from onboarding)
-      const storedName = (trainerClient as any).displayName;
-      if (storedName) {
-        return {
-          name: storedName,
-          photo: (trainerClient as any).profilePhoto,
-        };
-      }
-    }
-    // Fallback to allUsers lookup
-    const clientUser = allUsers.find(u => u.id === clientId);
-    return {
-      name: clientUser?.displayName || clientUser?.username || 'Unknown Client',
-      photo: clientUser?.profilePhoto,
-    };
+    const info = getClientDisplayInfo(clientId);
+    return { name: info.displayName, photo: info.profilePhoto };
   };
 
   // Calculate sessions in date range
@@ -279,19 +259,26 @@ export default function PaymentsPage() {
     };
     savePaymentSettings(newSettings);
     
-    // Calculate total based on sessions per week AND frequency
-    const frequencyMultiplier = editingSettings.frequency === 'weekly' ? 1 
-      : editingSettings.frequency === 'fortnightly' ? 2 
-      : editingSettings.frequency === 'monthly' ? 4 
-      : 1;
-    const sessionsCount = (editingSettings.sessionsPerWeek || 1) * frequencyMultiplier;
-    const totalAmount = editingSettings.pricePerSession * sessionsCount;
+    // Calculate total based on frequency
+    let sessionsCount: number;
+    let periodLabel: string;
     
-    // Get period label for description
-    const periodLabel = editingSettings.frequency === 'weekly' ? 'weekly' 
-      : editingSettings.frequency === 'fortnightly' ? 'fortnightly' 
-      : editingSettings.frequency === 'monthly' ? 'monthly' 
-      : '';
+    if (editingSettings.frequency === 'upfront') {
+      // Upfront: pay for ALL sessions in the package at once
+      sessionsCount = editingSettings.totalSessions || 10;
+      periodLabel = 'upfront';
+    } else {
+      const frequencyMultiplier = editingSettings.frequency === 'weekly' ? 1 
+        : editingSettings.frequency === 'fortnightly' ? 2 
+        : editingSettings.frequency === 'monthly' ? 4 
+        : 1;
+      sessionsCount = (editingSettings.sessionsPerWeek || 1) * frequencyMultiplier;
+      periodLabel = editingSettings.frequency === 'weekly' ? 'weekly' 
+        : editingSettings.frequency === 'fortnightly' ? 'fortnightly' 
+        : editingSettings.frequency === 'monthly' ? 'monthly' 
+        : '';
+    }
+    const totalAmount = editingSettings.pricePerSession * sessionsCount;
     
     // Create payment record
     addPayment({
@@ -482,7 +469,7 @@ export default function PaymentsPage() {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium text-white">{client.info.name}</p>
+                            <button className="font-medium text-white hover:text-sky-400 transition-colors text-left" onClick={(e) => { e.stopPropagation(); router.push(`/clients/${client.clientId}`); }}>{client.info.name}</button>
                             <p className="text-xs text-gray-400">
                               ${client.pricePerSession}/session • {client.settings?.frequency?.replace('_', ' ') || 'per session'}
                               {client.packageInfo && !client.packageInfo.isContinuous && (
@@ -606,13 +593,13 @@ export default function PaymentsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="font-medium text-white text-sm">{clientInfo.name}</p>
+                                <button className="font-medium text-white text-sm hover:text-sky-400 transition-colors text-left" onClick={() => router.push(`/clients/${payment.clientId}`)}>{clientInfo.name}</button>
                                 <p className="text-xs text-gray-400">
                                   {payment.paidAt ? format(parseISO(payment.paidAt), 'MMM d, yyyy') : 'No date'}
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2">
                               <div className="text-right">
                                 <p className="font-bold text-sky-400">${payment.amount}</p>
                                 <p className="text-xs text-gray-500">
@@ -622,21 +609,17 @@ export default function PaymentsPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-gray-400 hover:text-sky-400 hover:bg-sky-500/10"
+                                onClick={() => openSettingsDialog(payment.clientId)}
+                                title="Edit package settings"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
-                                onClick={() => {
-                                  const sessionsToRemove = payment.sessionsIncluded || 1;
-                                  if (confirm(`Delete this payment? (${sessionsToRemove} session${sessionsToRemove > 1 ? 's' : ''} will be removed from paid count)`)) {
-                                    // Decrement session package paidSessions by the correct amount
-                                    const clientPackages = sessionPackages.filter(p => p.clientId === payment.clientId && p.trainerId === user?.id);
-                                    const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
-                                    if (activePackage && (activePackage.paidSessions || 0) > 0) {
-                                      updateSessionPackage(activePackage.id, {
-                                        paidSessions: Math.max(0, (activePackage.paidSessions || 0) - sessionsToRemove),
-                                      });
-                                    }
-                                    deletePayment(payment.id);
-                                  }
-                                }}
+                                onClick={() => setPaymentToDelete(payment)}
                               >
                                 <X className="w-4 h-4" />
                               </Button>
@@ -875,6 +858,30 @@ export default function PaymentsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!paymentToDelete}
+        onOpenChange={(open) => { if (!open) setPaymentToDelete(null); }}
+        title="Delete Payment"
+        description={`Delete this payment? (${paymentToDelete?.sessionsIncluded || 1} session${(paymentToDelete?.sessionsIncluded || 1) > 1 ? 's' : ''} will be removed from paid count)`}
+        confirmLabel="Delete Payment"
+        variant="destructive"
+        onConfirm={() => {
+          if (paymentToDelete) {
+            const sessionsToRemove = paymentToDelete.sessionsIncluded || 1;
+            const clientPackages = sessionPackages.filter(p => p.clientId === paymentToDelete.clientId && p.trainerId === user?.id);
+            const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+            if (activePackage && (activePackage.paidSessions || 0) > 0) {
+              updateSessionPackage(activePackage.id, {
+                paidSessions: Math.max(0, (activePackage.paidSessions || 0) - sessionsToRemove),
+              });
+            }
+            deletePayment(paymentToDelete.id);
+            setPaymentToDelete(null);
+          }
+        }}
+        icon={<X className="w-5 h-5 text-red-400" />}
+      />
     </MainLayout>
   );
 }

@@ -39,6 +39,12 @@ import {
   deleteTrainerClientFromSupabase,
   deleteClientFromSupabase,
   fetchSavedBlocksFromSupabase,
+  fetchBlockPerformancesFromSupabase,
+  syncClientProfileToSupabase,
+  fetchClientProfilesFromSupabase,
+  syncWorkoutTemplateToSupabase,
+  deleteWorkoutTemplateFromSupabase,
+  fetchWorkoutTemplatesFromSupabase,
 } from './supabaseSync';
 import {
   User,
@@ -69,7 +75,18 @@ import {
   BlockPerformance,
   BlockType,
 } from '@/types';
-import { calculate1RM, exerciseLibrary } from './exercises';
+import { calculate1RM, exerciseLibrary, exerciseLibraryMap } from './exercises';
+import { deriveAll, computeVolumeRollup, VolumeRollup } from './deriveAll';
+
+// Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
+function hashPassword(password: string): string {
+  let hash = 0;
+  for (let i = 0; i < password.length; i++) {
+    const char = password.charCodeAt(i);
+    hash = ((hash << 5) - hash + char) | 0;
+  }
+  return 'h_' + Math.abs(hash).toString(36);
+}
 
 // ============ AUTH STORE ============
 interface AuthState {
@@ -98,12 +115,20 @@ export const useAuthStore = create<AuthState>()(
         console.log('[Auth] Login attempt for:', email);
         
         // First try localStorage (for quick local login)
-        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         console.log('[Auth] Found', storedUsers.length, 'users in localStorage');
         
-        const localUser = storedUsers.find((u: User & { password: string }) => 
-          u.email?.toLowerCase() === email.toLowerCase() && u.password === password
-        );
+        const hashed = hashPassword(password);
+        const localUser = storedUsers.find((u: User & { password: string }) => {
+          if (u.email?.toLowerCase() !== email.toLowerCase()) return false;
+          // Match hashed or legacy plaintext passwords
+          return u.password === hashed || u.password === password;
+        });
+        // Migrate legacy plaintext password to hash
+        if (localUser && localUser.password === password) {
+          localUser.password = hashed;
+          localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        }
         
         if (localUser) {
           console.log('[Auth] ✅ Found user in localStorage');
@@ -119,8 +144,8 @@ export const useAuthStore = create<AuthState>()(
         if (supabaseUser) {
           console.log('[Auth] ✅ Found user in Supabase:', supabaseUser.email);
           // Save to localStorage for future local logins
-          storedUsers.push({ ...supabaseUser, password });
-          localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
+          storedUsers.push({ ...supabaseUser, password: hashPassword(password) });
+          localStorage.setItem('apex-users', JSON.stringify(storedUsers));
           set({ user: supabaseUser, isAuthenticated: true, isLoading: false });
           return true;
         }
@@ -136,7 +161,7 @@ export const useAuthStore = create<AuthState>()(
         
         console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email);
         
-        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         
         // Check if user already exists locally (by email or id)
         let existingUser = storedUsers.find((u: User) => 
@@ -151,13 +176,14 @@ export const useAuthStore = create<AuthState>()(
             id: supabaseUser.id, // Use Supabase ID
             profilePhoto: supabaseUser.profilePhoto || existingUser.profilePhoto,
             displayName: supabaseUser.displayName || existingUser.displayName,
+            membershipTier: existingUser.membershipTier || 'pro', // Ensure existing users get Pro
           };
           
           // Update in localStorage
           const updatedUsers = storedUsers.map((u: User) => 
             u.email?.toLowerCase() === supabaseUser.email.toLowerCase() ? existingUser : u
           );
-          localStorage.setItem('catalift-users', JSON.stringify(updatedUsers));
+          localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
           
           set({ user: existingUser, isAuthenticated: true, isLoading: false });
           return true;
@@ -176,14 +202,15 @@ export const useAuthStore = create<AuthState>()(
           isTrainer: false,
           isVerifiedTrainer: false,
           preferredUnit: 'kg',
+          membershipTier: 'pro',
           createdAt: new Date().toISOString(),
           followers: [],
           following: [],
         };
         
         // Save to localStorage (no password needed for OAuth users)
-        storedUsers.push({ ...newUser, password: `oauth_${supabaseUser.id}` });
-        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
+        storedUsers.push({ ...newUser, password: hashPassword(`oauth_${supabaseUser.id}`) });
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
         
         // Sync to Supabase users table
         try {
@@ -198,7 +225,7 @@ export const useAuthStore = create<AuthState>()(
 
       register: async (userData) => {
         set({ isLoading: true });
-        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         
         // Check if email exists locally
         if (storedUsers.some((u: User) => u.email === userData.email)) {
@@ -219,14 +246,15 @@ export const useAuthStore = create<AuthState>()(
           isTrainer: userData.isTrainer || false,
           isVerifiedTrainer: false,
           preferredUnit: userData.preferredUnit || 'kg',
+          membershipTier: 'pro',
           createdAt: new Date().toISOString(),
           followers: [],
           following: [],
         };
 
-        // Save to localStorage
-        storedUsers.push({ ...newUser, password: userData.password });
-        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
+        // Save to localStorage (hashed password)
+        storedUsers.push({ ...newUser, password: hashPassword(userData.password) });
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
         
         // Sync to Supabase for cross-device login
         try {
@@ -249,13 +277,13 @@ export const useAuthStore = create<AuthState>()(
         if (!currentUser) return;
         
         // Remove from localStorage
-        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         const filtered = storedUsers.filter((u: User) => u.id !== currentUser.id);
-        localStorage.setItem('catalift-users', JSON.stringify(filtered));
+        localStorage.setItem('apex-users', JSON.stringify(filtered));
         
         // Clear all user data
         localStorage.removeItem('apex-auth');
-        localStorage.removeItem('catalift-workouts');
+        localStorage.removeItem('apex-workout');
         localStorage.removeItem('apex-medals');
         localStorage.removeItem('apex-trainer');
         localStorage.removeItem('apex-social');
@@ -271,11 +299,11 @@ export const useAuthStore = create<AuthState>()(
           set({ user: updatedUser });
           
           // Update in localStorage
-          const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
           const index = storedUsers.findIndex((u: User) => u.id === currentUser.id);
           if (index !== -1) {
             storedUsers[index] = { ...storedUsers[index], ...updates };
-            localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
+            localStorage.setItem('apex-users', JSON.stringify(storedUsers));
           }
           
           // Sync to Supabase
@@ -286,7 +314,19 @@ export const useAuthStore = create<AuthState>()(
       switchMode: (mode) => {
         const currentUser = get().user;
         if (currentUser) {
-          set({ user: { ...currentUser, mode } });
+          const updatedUser = { ...currentUser, mode };
+          set({ user: updatedUser });
+          
+          // Persist mode to localStorage users array
+          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+          const index = storedUsers.findIndex((u: User) => u.id === currentUser.id);
+          if (index !== -1) {
+            storedUsers[index] = { ...storedUsers[index], mode };
+            localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+          }
+          
+          // Sync to Supabase
+          updateUserInSupabase(currentUser.id, { mode });
         }
       },
     }),
@@ -367,8 +407,17 @@ interface WorkoutState {
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
   
+  // deriveAll pipeline — run after workout save/edit/delete
+  runDeriveAll: (userId: string, completedWorkout?: Workout | null) => void;
+  
+  // Last derive result (for post-workout summary)
+  lastDeriveResult: { medalsAwarded: string[]; volumeRollup: VolumeRollup | null } | null;
+  
+  // Volume rollups
+  volumeRollups: Record<string, VolumeRollup>;
+  
   // Exercise notes (persistent across workouts)
-  exerciseNotes: Record<string, string>;  // exerciseId -> notes
+  exerciseNotes: Record<string, string>;  // "userId:exerciseId" -> notes
   getExerciseNotes: (exerciseId: string) => string;
   setExerciseNotes: (exerciseId: string, notes: string) => void;
   
@@ -384,6 +433,8 @@ export const useWorkoutStore = create<WorkoutState>()(
       templates: [],
       personalBests: [],
       exerciseNotes: {},
+      volumeRollups: {},
+      lastDeriveResult: null,
       workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
       restTimer: { isRunning: false, seconds: 0, type: 'rest' },
       currentClientId: null,
@@ -525,59 +576,10 @@ export const useWorkoutStore = create<WorkoutState>()(
         // Sync workout to Supabase for cross-device access
         syncWorkoutToSupabase(completedWorkout);
 
-        // Trigger medal checks and strength rating update after workout
-        // Use the completed workout's userId for proper attribution
+        // deriveAll pipeline: recompute PBs, medals, ratings, volume rollups
         const workoutUserId = completedWorkout.userId;
-        
         setTimeout(() => {
-          const { earnMedal, hasMedal, calculateStrengthRating, calculateStrengthRatingForUser } = useMedalStore.getState();
-          
-          // Filter workouts by the user who did this workout
-          const userWorkouts = get().workoutHistory.filter(w => w.userId === workoutUserId);
-          const workoutCount = userWorkouts.length;
-          
-          // Check workout count medals for this specific user (cascade - earn all lower tiers)
-          if (workoutCount >= 100) {
-            if (!hasMedal('centurion', workoutUserId)) earnMedal('centurion', workoutUserId);
-            if (!hasMedal('committed', workoutUserId)) earnMedal('committed', workoutUserId);
-            if (!hasMedal('dedicated', workoutUserId)) earnMedal('dedicated', workoutUserId);
-            if (!hasMedal('getting-started', workoutUserId)) earnMedal('getting-started', workoutUserId);
-            if (!hasMedal('first-blood', workoutUserId)) earnMedal('first-blood', workoutUserId);
-          } else if (workoutCount >= 50) {
-            if (!hasMedal('committed', workoutUserId)) earnMedal('committed', workoutUserId);
-            if (!hasMedal('dedicated', workoutUserId)) earnMedal('dedicated', workoutUserId);
-            if (!hasMedal('getting-started', workoutUserId)) earnMedal('getting-started', workoutUserId);
-            if (!hasMedal('first-blood', workoutUserId)) earnMedal('first-blood', workoutUserId);
-          } else if (workoutCount >= 25) {
-            if (!hasMedal('dedicated', workoutUserId)) earnMedal('dedicated', workoutUserId);
-            if (!hasMedal('getting-started', workoutUserId)) earnMedal('getting-started', workoutUserId);
-            if (!hasMedal('first-blood', workoutUserId)) earnMedal('first-blood', workoutUserId);
-          } else if (workoutCount >= 5) {
-            if (!hasMedal('getting-started', workoutUserId)) earnMedal('getting-started', workoutUserId);
-            if (!hasMedal('first-blood', workoutUserId)) earnMedal('first-blood', workoutUserId);
-          } else if (workoutCount >= 1) {
-            if (!hasMedal('first-blood', workoutUserId)) earnMedal('first-blood', workoutUserId);
-          }
-          
-          // Check volume medals for this specific user (cascade)
-          const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
-          if (totalVolume >= 100000) {
-            if (!hasMedal('volume-100k', workoutUserId)) earnMedal('volume-100k', workoutUserId);
-            if (!hasMedal('volume-50k', workoutUserId)) earnMedal('volume-50k', workoutUserId);
-            if (!hasMedal('volume-10k', workoutUserId)) earnMedal('volume-10k', workoutUserId);
-          } else if (totalVolume >= 50000) {
-            if (!hasMedal('volume-50k', workoutUserId)) earnMedal('volume-50k', workoutUserId);
-            if (!hasMedal('volume-10k', workoutUserId)) earnMedal('volume-10k', workoutUserId);
-          } else if (totalVolume >= 10000) {
-            if (!hasMedal('volume-10k', workoutUserId)) earnMedal('volume-10k', workoutUserId);
-          }
-          
-          // Recalculate strength rating for the workout's user
-          if (calculateStrengthRatingForUser) {
-            calculateStrengthRatingForUser(workoutUserId);
-          } else {
-            calculateStrengthRating();
-          }
+          get().runDeriveAll(workoutUserId, completedWorkout);
         }, 100);
 
         return completedWorkout;
@@ -941,12 +943,14 @@ export const useWorkoutStore = create<WorkoutState>()(
         set(state => ({
           templates: [...state.templates, template],
         }));
+        syncWorkoutTemplateToSupabase(template);
       },
 
       deleteTemplate: (templateId) => {
         set(state => ({
           templates: state.templates.filter(t => t.id !== templateId),
         }));
+        deleteWorkoutTemplateFromSupabase(templateId);
       },
 
       checkAndUpdatePB: (exerciseId, weight, reps, workoutId) => {
@@ -1101,6 +1105,55 @@ export const useWorkoutStore = create<WorkoutState>()(
               if (actualWeight >= 20 && !hasMedal('chestpress-common', targetUserId)) earnMedal('chestpress-common', targetUserId);
             }
             
+            // PULL-UP milestones (weighted)
+            if (normalizedId === 'pull-up' || normalizedId === 'pull-ups' || normalizedId === 'weighted-pull-up') {
+              if (actualWeight >= 40 && !hasMedal('pullup-40', targetUserId)) earnMedal('pullup-40', targetUserId);
+              if (actualWeight >= 25 && !hasMedal('pullup-25', targetUserId)) earnMedal('pullup-25', targetUserId);
+              if (actualWeight >= 10 && !hasMedal('pullup-10', targetUserId)) earnMedal('pullup-10', targetUserId);
+              if (!hasMedal('pullup-bw', targetUserId)) earnMedal('pullup-bw', targetUserId);
+            }
+            
+            // T-BAR ROW milestones
+            if (normalizedId === 't-bar-row' || normalizedId === 'tbar-row' || normalizedId === 'landmine-row') {
+              if (actualWeight >= 130 && !hasMedal('tbar-130', targetUserId)) earnMedal('tbar-130', targetUserId);
+              if (actualWeight >= 102 && !hasMedal('tbar-102', targetUserId)) earnMedal('tbar-102', targetUserId);
+              if (actualWeight >= 75 && !hasMedal('tbar-75', targetUserId)) earnMedal('tbar-75', targetUserId);
+              if (actualWeight >= 54 && !hasMedal('tbar-54', targetUserId)) earnMedal('tbar-54', targetUserId);
+              if (actualWeight >= 35 && !hasMedal('tbar-35', targetUserId)) earnMedal('tbar-35', targetUserId);
+            }
+            
+            // DUMBBELL BENCH PRESS milestones (per dumbbell weight)
+            if (normalizedId === 'dumbbell-bench-press' || normalizedId === 'db-bench-press' || normalizedId === 'dumbbell-flat-bench') {
+              if (actualWeight >= 44 && !hasMedal('dbbench-44', targetUserId)) earnMedal('dbbench-44', targetUserId);
+              if (actualWeight >= 32 && !hasMedal('dbbench-32', targetUserId)) earnMedal('dbbench-32', targetUserId);
+              if (actualWeight >= 23 && !hasMedal('dbbench-23', targetUserId)) earnMedal('dbbench-23', targetUserId);
+              if (actualWeight >= 15 && !hasMedal('dbbench-15', targetUserId)) earnMedal('dbbench-15', targetUserId);
+            }
+            
+            // DUMBBELL SHOULDER PRESS milestones (per dumbbell weight)
+            if (normalizedId === 'dumbbell-shoulder-press' || normalizedId === 'db-shoulder-press' || normalizedId === 'seated-dumbbell-press') {
+              if (actualWeight >= 38 && !hasMedal('dbohp-38', targetUserId)) earnMedal('dbohp-38', targetUserId);
+              if (actualWeight >= 28 && !hasMedal('dbohp-28', targetUserId)) earnMedal('dbohp-28', targetUserId);
+              if (actualWeight >= 20 && !hasMedal('dbohp-20', targetUserId)) earnMedal('dbohp-20', targetUserId);
+              if (actualWeight >= 13 && !hasMedal('dbohp-13', targetUserId)) earnMedal('dbohp-13', targetUserId);
+            }
+            
+            // HIP THRUST milestones
+            if (normalizedId === 'hip-thrust' || normalizedId === 'barbell-hip-thrust' || normalizedId === 'hip-thruster') {
+              if (actualWeight >= 196 && !hasMedal('hipthrust-196', targetUserId)) earnMedal('hipthrust-196', targetUserId);
+              if (actualWeight >= 129 && !hasMedal('hipthrust-129', targetUserId)) earnMedal('hipthrust-129', targetUserId);
+              if (actualWeight >= 76 && !hasMedal('hipthrust-76', targetUserId)) earnMedal('hipthrust-76', targetUserId);
+              if (actualWeight >= 38 && !hasMedal('hipthrust-38', targetUserId)) earnMedal('hipthrust-38', targetUserId);
+            }
+            
+            // BULGARIAN SPLIT SQUAT milestones (per dumbbell weight)
+            if (normalizedId === 'bulgarian-split-squat' || normalizedId === 'split-squat' || normalizedId === 'rear-foot-elevated-split-squat') {
+              if (actualWeight >= 44 && !hasMedal('bss-44', targetUserId)) earnMedal('bss-44', targetUserId);
+              if (actualWeight >= 30 && !hasMedal('bss-30', targetUserId)) earnMedal('bss-30', targetUserId);
+              if (actualWeight >= 18 && !hasMedal('bss-18', targetUserId)) earnMedal('bss-18', targetUserId);
+              if (actualWeight >= 10 && !hasMedal('bss-10', targetUserId)) earnMedal('bss-10', targetUserId);
+            }
+            
             // Recalculate strength rating for the specific user
             calculateStrengthRatingForUser(targetUserId);
           }, 50);
@@ -1144,13 +1197,27 @@ export const useWorkoutStore = create<WorkoutState>()(
         const workoutToDelete = workoutHistory.find(w => w.id === workoutId);
         const userId = workoutToDelete?.userId;
         
+        // Soft delete: mark with deletedAt timestamp instead of removing
         set(state => ({
-          workoutHistory: state.workoutHistory.filter(w => w.id !== workoutId),
+          workoutHistory: state.workoutHistory.map(w => 
+            w.id === workoutId 
+              ? { ...w, deletedAt: new Date().toISOString() } 
+              : w
+          ),
         }));
         
-        // Recalculate PBs for the user after workout deletion
+        // Silently remove associated feed post
+        const { posts } = useSocialStore.getState();
+        const linkedPost = posts.find(p => p.workoutId === workoutId);
+        if (linkedPost) {
+          useSocialStore.setState({
+            posts: posts.filter(p => p.workoutId !== workoutId),
+          });
+        }
+        
+        // deriveAll: recompute PBs, medals, ratings, volume after deletion
         if (userId) {
-          get().recalculatePBsForUser(userId);
+          get().runDeriveAll(userId);
         }
       },
 
@@ -1193,8 +1260,8 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (updatedWorkout) {
           syncWorkoutToSupabase(updatedWorkout);
           
-          // Recalculate PBs for the user after workout edit
-          get().recalculatePBsForUser(updatedWorkout.userId);
+          // deriveAll: recompute PBs, medals, ratings, volume after edit
+          get().runDeriveAll(updatedWorkout.userId);
         }
       },
 
@@ -1214,7 +1281,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
           syncWorkoutToSupabase(updatedWorkout);
-          get().recalculatePBsForUser(workout.userId);
+          get().runDeriveAll(workout.userId);
         }
       },
 
@@ -1244,20 +1311,25 @@ export const useWorkoutStore = create<WorkoutState>()(
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
           syncWorkoutToSupabase(updatedWorkout);
-          get().recalculatePBsForUser(workout.userId);
+          get().runDeriveAll(workout.userId);
         }
       },
 
-      // Exercise notes - persist across workouts
+      // Exercise notes - persist across workouts, keyed by userId:exerciseId
       getExerciseNotes: (exerciseId: string) => {
-        return get().exerciseNotes[exerciseId] || '';
+        const userId = get().currentClientId || useAuthStore.getState().user?.id || '';
+        const key = `${userId}:${exerciseId}`;
+        // Check new keyed format first, fall back to legacy key
+        return get().exerciseNotes[key] || get().exerciseNotes[exerciseId] || '';
       },
 
       setExerciseNotes: (exerciseId: string, notes: string) => {
+        const userId = get().currentClientId || useAuthStore.getState().user?.id || '';
+        const key = `${userId}:${exerciseId}`;
         set(state => ({
           exerciseNotes: {
             ...state.exerciseNotes,
-            [exerciseId]: notes,
+            [key]: notes,
           },
         }));
         // TODO: Sync to Supabase when exercise_notes table is ready
@@ -1314,6 +1386,36 @@ export const useWorkoutStore = create<WorkoutState>()(
         useMedalStore.getState().calculateStrengthRatingForUser(userId);
       },
 
+      runDeriveAll: (userId: string, completedWorkout: Workout | null = null) => {
+        const { normalizeExerciseId } = require('./exerciseStats');
+        const { earnMedal, hasMedal, revokeMedalsForUser, calculateStrengthRatingForUser } = useMedalStore.getState();
+
+        const result = deriveAll({
+          workouts: get().workoutHistory,
+          userId,
+          completedWorkout,
+          normalizeExerciseId,
+          medalDeps: { hasMedal, earnMedal, revokeMedalsForUser, normalizeExerciseId },
+          calculateStrengthRatingForUser,
+        });
+
+        // Update PBs, volume, and store last result for summary screen
+        set(state => ({
+          personalBests: [
+            ...state.personalBests.filter(pb => pb.userId !== userId),
+            ...result.personalBests,
+          ],
+          volumeRollups: {
+            ...state.volumeRollups,
+            [userId]: result.volumeRollup,
+          },
+          lastDeriveResult: {
+            medalsAwarded: result.medalsAwarded,
+            volumeRollup: result.volumeRollup,
+          },
+        }));
+      },
+
       loadWorkoutHistoryFromSupabase: async (userId: string, isTrainer: boolean = false) => {
         console.log('[WorkoutStore] Loading workout history from Supabase for:', userId, isTrainer ? '(trainer)' : '');
         
@@ -1343,12 +1445,14 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
     }),
     {
-      name: 'catalift-workout',
+      name: 'apex-workout',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         workoutHistory: state.workoutHistory,
         templates: state.templates,
         personalBests: state.personalBests,
+        exerciseNotes: state.exerciseNotes,
+        volumeRollups: state.volumeRollups,
       }),
     }
   )
@@ -1371,6 +1475,7 @@ interface SocialState {
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
+  clearAllNotifications: () => void;
   getUnreadCount: () => number;
 }
 
@@ -1510,6 +1615,14 @@ export const useSocialStore = create<SocialState>()(
       markAllNotificationsRead: () => {
         set(state => ({
           notifications: state.notifications.map(n => ({ ...n, read: true })),
+        }));
+      },
+
+      clearAllNotifications: () => {
+        const userId = useAuthStore.getState().user?.id;
+        if (!userId) return;
+        set(state => ({
+          notifications: state.notifications.filter(n => n.userId !== userId),
         }));
       },
 
@@ -1881,7 +1994,7 @@ export const useTrainerStore = create<TrainerState>()(
         // Clear all users except current trainer from localStorage
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
-          localStorage.setItem('catalift-users', JSON.stringify([{ ...currentUser, password: 'trainer123' }]));
+          localStorage.setItem('apex-users', JSON.stringify([{ ...currentUser, password: hashPassword(currentUser.id) }]));
         }
       },
 
@@ -1890,7 +2003,7 @@ export const useTrainerStore = create<TrainerState>()(
         if (!trainerId) return;
 
         // Get existing users from localStorage
-        const storedUsers = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         
         const newClients: TrainerClient[] = [];
         const newPayments: ClientPayment[] = [];
@@ -1916,7 +2029,7 @@ export const useTrainerStore = create<TrainerState>()(
             followers: [],
             following: [],
             trainerId,
-            password: 'client123',
+            password: hashPassword('client123'),
           };
           
           storedUsers.push(newUser);
@@ -2141,7 +2254,7 @@ export const useTrainerStore = create<TrainerState>()(
         });
         
         // Save users to localStorage
-        localStorage.setItem('catalift-users', JSON.stringify(storedUsers));
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
         
         // Add all data to trainer store
         set(state => ({
@@ -2266,11 +2379,9 @@ export const useTrainerStore = create<TrainerState>()(
           syncTrainerSessionToSupabase(session);
           // Update package session count (only for PT sessions)
           if (session.type === 'pt_session') {
-            // Find active package - handle both continuous (-1) and regular packages
+            // Find active package - packages stay active and keep counting
             const activePackage = get().sessionPackages.find(
-              p => p.clientId === session.clientId && 
-                   p.status === 'active' && 
-                   (p.remainingSessions === -1 || p.remainingSessions > 0)
+              p => p.clientId === session.clientId && p.status === 'active'
             );
             if (activePackage) {
               get().useSessionFromPackage(activePackage.id);
@@ -2281,33 +2392,28 @@ export const useTrainerStore = create<TrainerState>()(
           const trainerId = session.trainerId;
           if (trainerId) {
             setTimeout(() => {
-              const completedSessions = get().sessions.filter(
+              const sessionCount = get().sessions.filter(
                 s => s.trainerId === trainerId && s.status === 'completed'
+              ).length;
+              const { earnMedal, medals } = useMedalStore.getState();
+              
+              // Build Set of earned medal IDs for O(1) lookup instead of repeated array scans
+              const earned = new Set(
+                medals.filter(m => m.earned && m.userId === trainerId).map(m => m.definitionId)
               );
-              const sessionCount = completedSessions.length;
-              const { earnMedal, hasMedal } = useMedalStore.getState();
               
               // Cascade medal earning for session count milestones
-              if (sessionCount >= 1000) {
-                if (!hasMedal('trainer-1000-sessions', trainerId)) earnMedal('trainer-1000-sessions', trainerId);
-                if (!hasMedal('trainer-500-sessions', trainerId)) earnMedal('trainer-500-sessions', trainerId);
-                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
-                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
-                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
-              } else if (sessionCount >= 500) {
-                if (!hasMedal('trainer-500-sessions', trainerId)) earnMedal('trainer-500-sessions', trainerId);
-                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
-                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
-                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
-              } else if (sessionCount >= 100) {
-                if (!hasMedal('trainer-100-sessions', trainerId)) earnMedal('trainer-100-sessions', trainerId);
-                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
-                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
-              } else if (sessionCount >= 25) {
-                if (!hasMedal('trainer-25-sessions', trainerId)) earnMedal('trainer-25-sessions', trainerId);
-                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
-              } else if (sessionCount >= 1) {
-                if (!hasMedal('trainer-first-session', trainerId)) earnMedal('trainer-first-session', trainerId);
+              const milestones: [number, string][] = [
+                [1, 'trainer-first-session'],
+                [25, 'trainer-25-sessions'],
+                [100, 'trainer-100-sessions'],
+                [500, 'trainer-500-sessions'],
+                [1000, 'trainer-1000-sessions'],
+              ];
+              for (const [threshold, medalId] of milestones) {
+                if (sessionCount >= threshold && !earned.has(medalId)) {
+                  earnMedal(medalId, trainerId);
+                }
               }
               console.log(`[Trainer Store] Checked session medals: ${sessionCount} sessions for trainer ${trainerId}`);
             }, 50);
@@ -2339,11 +2445,9 @@ export const useTrainerStore = create<TrainerState>()(
         if (session) {
           syncTrainerSessionToSupabase(session);
           if (session.type === 'pt_session') {
-            // Handle both continuous (-1) and regular packages
+            // Find active package - packages stay active and keep counting
             const activePackage = get().sessionPackages.find(
-              p => p.clientId === session.clientId && 
-                   p.status === 'active' && 
-                   (p.remainingSessions === -1 || p.remainingSessions > 0)
+              p => p.clientId === session.clientId && p.status === 'active'
             );
             if (activePackage) {
               get().useSessionFromPackage(activePackage.id);
@@ -2505,16 +2609,16 @@ export const useTrainerStore = create<TrainerState>()(
                 ...p, 
                 usedSessions: (p.usedSessions || 0) + 1,
               };
-            } else if (p.remainingSessions > 0) {
-              // Regular package with sessions remaining
+            } else {
+              // Regular package: keep counting past 0 remaining (continuous tracking)
+              // Don't mark as 'completed' — let sessions keep accumulating
+              const newRemaining = Math.max(0, p.remainingSessions - 1);
               return { 
                 ...p, 
                 usedSessions: (p.usedSessions || 0) + 1, 
-                remainingSessions: p.remainingSessions - 1,
-                status: p.remainingSessions - 1 === 0 ? 'completed' as const : p.status,
+                remainingSessions: newRemaining,
               };
             }
-            return p;
           }),
         }));
         // Sync updated package to Supabase
@@ -2590,14 +2694,19 @@ export const useTrainerStore = create<TrainerState>()(
         const updatedRequest = get().bookingRequests.find(r => r.id === requestId);
         if (updatedRequest) syncBookingRequestToSupabase(updatedRequest);
 
-        // Create session record
+        // Create session record — calculate actual duration from start/end times
+        const calcDuration = (() => {
+          const [sh, sm] = request.startTime.split(':').map(Number);
+          const [eh, em] = request.endTime.split(':').map(Number);
+          return (eh * 60 + em) - (sh * 60 + sm);
+        })();
         get().addSession({
           trainerId: request.trainerId,
           clientId: request.clientId,
           date: request.date,
           startTime: request.startTime,
           endTime: request.endTime,
-          duration: 60,
+          duration: calcDuration > 0 ? calcDuration : 60,
           type: request.type,
           status: 'scheduled',
           paid: false,
@@ -2707,6 +2816,7 @@ export const useTrainerStore = create<TrainerState>()(
             profile,
           ],
         }));
+        syncClientProfileToSupabase(profile);
       },
 
       getClientProfile: (clientId) => {
@@ -2935,9 +3045,23 @@ export const useTrainerStore = create<TrainerState>()(
           savedBlocks: [...state.savedBlocks, newBlock],
         }));
         // Sync to Supabase for cross-device access
-        import('./supabaseSync').then(({ syncSavedBlockToSupabase }) => {
-          syncSavedBlockToSupabase(newBlock);
-        });
+        import('./supabaseSync').then(async ({ syncSavedBlockToSupabase }) => {
+          console.log('[Store] Syncing new block to Supabase:', newBlock.id, newBlock.name);
+          const success = await syncSavedBlockToSupabase({
+            id: newBlock.id,
+            name: newBlock.name,
+            type: newBlock.type,
+            trainerId: newBlock.trainerId,
+            exercises: newBlock.exercises,
+            circuitStyle: newBlock.circuitStyle,
+            circuitRounds: newBlock.circuitRounds,
+            circuitDuration: newBlock.circuitDuration,
+            circuitRestBetween: newBlock.circuitRestBetween,
+            createdAt: newBlock.createdAt,
+            updatedAt: newBlock.updatedAt,
+          });
+          console.log('[Store] Block sync result:', success);
+        }).catch(err => console.error('[Store] Error importing supabaseSync:', err));
         return newBlock;
       },
 
@@ -2950,9 +3074,23 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync updated block to Supabase
         const updated = get().savedBlocks.find(b => b.id === blockId);
         if (updated) {
-          import('./supabaseSync').then(({ syncSavedBlockToSupabase }) => {
-            syncSavedBlockToSupabase(updated);
-          });
+          import('./supabaseSync').then(async ({ syncSavedBlockToSupabase }) => {
+            console.log('[Store] Syncing updated block to Supabase:', updated.id, updated.name);
+            const success = await syncSavedBlockToSupabase({
+              id: updated.id,
+              name: updated.name,
+              type: updated.type,
+              trainerId: updated.trainerId,
+              exercises: updated.exercises,
+              circuitStyle: updated.circuitStyle,
+              circuitRounds: updated.circuitRounds,
+              circuitDuration: updated.circuitDuration,
+              circuitRestBetween: updated.circuitRestBetween,
+              createdAt: updated.createdAt,
+              updatedAt: updated.updatedAt,
+            });
+            console.log('[Store] Block update sync result:', success);
+          }).catch(err => console.error('[Store] Error syncing updated block:', err));
         }
       },
 
@@ -2985,6 +3123,26 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           blockPerformances: [...state.blockPerformances, newPerformance],
         }));
+        // Sync to Supabase
+        import('./supabaseSync').then(async ({ syncBlockPerformanceToSupabase }) => {
+          console.log('[Store] Syncing block performance to Supabase:', newPerformance.id, newPerformance.blockName);
+          await syncBlockPerformanceToSupabase({
+            id: newPerformance.id,
+            blockId: newPerformance.blockId,
+            blockName: newPerformance.blockName,
+            blockType: newPerformance.blockType,
+            clientId: newPerformance.clientId,
+            trainerId: newPerformance.trainerId,
+            workoutId: newPerformance.workoutId,
+            completionTime: newPerformance.completionTime,
+            roundsCompleted: newPerformance.roundsCompleted,
+            roundTimes: newPerformance.roundTimes,
+            totalVolume: newPerformance.totalVolume,
+            exerciseStats: newPerformance.exerciseStats,
+            performedAt: newPerformance.performedAt,
+            notes: newPerformance.notes,
+          });
+        }).catch(err => console.error('[Store] Error syncing block performance:', err));
         return newPerformance;
       },
 
@@ -3038,6 +3196,8 @@ export const useTrainerStore = create<TrainerState>()(
           supabaseWorkoutLibrary,
           supabaseCircuitLibrary,
           supabaseSavedBlocks,
+          supabaseBlockPerformances,
+          supabaseClientProfiles,
         ] = await Promise.all([
           fetchTrainerClientsFromSupabase(trainerId),
           fetchTrainerSessionsFromSupabase(trainerId),
@@ -3050,6 +3210,8 @@ export const useTrainerStore = create<TrainerState>()(
           fetchWorkoutLibraryFromSupabase(trainerId),
           fetchCircuitLibraryFromSupabase(trainerId),
           fetchSavedBlocksFromSupabase(trainerId),
+          fetchBlockPerformancesFromSupabase(trainerId),
+          fetchClientProfilesFromSupabase(trainerId),
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
@@ -3064,6 +3226,16 @@ export const useTrainerStore = create<TrainerState>()(
           notes: sb.notes,
           goals: sb.goals,
         }));
+        
+        // Preserve local-only clients not yet synced to Supabase (prevents disappearing after add)
+        const currentClients = get().clients;
+        const localOnlyClients = currentClients.filter(
+          localClient => !clients.find(sbClient => sbClient.clientId === localClient.clientId)
+        );
+        // Re-sync local-only clients to Supabase
+        localOnlyClients.forEach(client => {
+          syncTrainerClientToSupabase(client);
+        });
         
         // Merge calendar events: preserve workoutId from local if Supabase doesn't have it
         // This prevents losing workout links during sync race conditions
@@ -3095,11 +3267,12 @@ export const useTrainerStore = create<TrainerState>()(
         localOnlyWorkouts.forEach(workout => syncSessionWorkoutToSupabase(workout));
         
         // Map saved blocks from Supabase to local format
+        // Note: fetchSavedBlocksFromSupabase returns 'type' not 'blockType'
         const savedBlocks: SavedBlock[] = (supabaseSavedBlocks || []).map((sb: any) => ({
           id: sb.id,
           trainerId: sb.trainerId,
           name: sb.name,
-          type: sb.blockType as BlockType,
+          type: (sb.type || sb.blockType || 'work') as BlockType,
           exercises: sb.exercises || [],
           circuitStyle: sb.circuitStyle,
           circuitRounds: sb.circuitRounds,
@@ -3121,9 +3294,32 @@ export const useTrainerStore = create<TrainerState>()(
           });
         });
         
+        // Map block performances from Supabase
+        const blockPerformances: BlockPerformance[] = (supabaseBlockPerformances || []).map((bp: any) => ({
+          id: bp.id,
+          blockId: bp.blockId,
+          blockName: bp.blockName,
+          blockType: bp.blockType || 'circuit',
+          clientId: bp.clientId,
+          trainerId: bp.trainerId,
+          workoutId: bp.workoutId,
+          completionTime: bp.completionTime,
+          totalVolume: bp.totalVolume,
+          exerciseStats: bp.exerciseStats,
+          performedAt: bp.performedAt,
+          notes: bp.notes,
+        }));
+        
+        // Merge client profiles: preserve local-only
+        const currentProfiles = get().clientProfiles;
+        const localOnlyProfiles = currentProfiles.filter(
+          lp => !supabaseClientProfiles.find((sp: any) => sp.clientId === lp.clientId)
+        );
+        localOnlyProfiles.forEach(p => syncClientProfileToSupabase(p));
+        
         // REPLACE localStorage with merged Supabase data
         set({
-          clients,
+          clients: [...clients, ...localOnlyClients],
           sessions: supabaseSessions,
           sessionPackages: supabasePackages,
           calendarEvents: [...mergedCalendarEvents, ...localOnlyEvents],
@@ -3134,6 +3330,8 @@ export const useTrainerStore = create<TrainerState>()(
           workoutLibrary: supabaseWorkoutLibrary,
           circuitLibrary: supabaseCircuitLibrary,
           savedBlocks: [...savedBlocks, ...localOnlyBlocks],
+          blockPerformances,
+          clientProfiles: [...supabaseClientProfiles, ...localOnlyProfiles],
         });
         
         console.log(`[Trainer Store] ✅ REPLACED localStorage with Supabase data:`, {
@@ -3148,10 +3346,23 @@ export const useTrainerStore = create<TrainerState>()(
           workoutLibrary: supabaseWorkoutLibrary.length,
           circuitLibrary: supabaseCircuitLibrary.length,
           savedBlocks: savedBlocks.length + localOnlyBlocks.length,
+          clientProfiles: supabaseClientProfiles.length + localOnlyProfiles.length,
         });
         
         // Also load workout history for all clients
         await useWorkoutStore.getState().loadWorkoutHistoryFromSupabase(trainerId, true);
+        
+        // Load user-created workout templates from Supabase
+        const supabaseTemplates = await fetchWorkoutTemplatesFromSupabase(trainerId);
+        if (supabaseTemplates.length > 0) {
+          const currentTemplates = useWorkoutStore.getState().templates;
+          const localOnlyTemplates = currentTemplates.filter(
+            lt => !supabaseTemplates.find((st: any) => st.id === lt.id)
+          );
+          localOnlyTemplates.forEach(t => syncWorkoutTemplateToSupabase(t));
+          useWorkoutStore.setState({ templates: [...supabaseTemplates, ...localOnlyTemplates] });
+          console.log(`[Trainer Store] ✅ Templates loaded: ${supabaseTemplates.length} from Supabase, ${localOnlyTemplates.length} local-only`);
+        }
       },
 
       // Update session package (for editing total, price, etc.)
@@ -3295,6 +3506,7 @@ interface MedalState {
   getMedalsByCategory: (category: Medal['category']) => Medal[];
   getMedalsForUser: (userId: string) => Medal[];
   hasMedal: (definitionId: string, userId?: string) => boolean;
+  revokeMedalsForUser: (userId: string) => void;
   clearMedalsForUser: (userId: string) => void;
   clearAllMedals: () => void;
   
@@ -3315,11 +3527,16 @@ export const useMedalStore = create<MedalState>()(
         const userId = forUserId || useAuthStore.getState().user?.id || '';
         const existingMedal = get().medals.find(m => m.definitionId === definitionId && m.userId === userId);
         
-        // If already earned, increment timesEarned counter
+        // If already earned, increment timesEarned counter and update evolution
         if (existingMedal?.earned) {
+          const { getEvolutionGlowTier, getEvolutionLabel } = require('./medals');
+          const newTimesEarned = (existingMedal.timesEarned || 1) + 1;
+          const oldEvolutionTier = existingMedal.evolutionTier || 'base';
+          const newEvolutionTier = getEvolutionGlowTier(newTimesEarned, definitionId);
           const updatedMedal = {
             ...existingMedal,
-            timesEarned: (existingMedal.timesEarned || 1) + 1,
+            timesEarned: newTimesEarned,
+            evolutionTier: newEvolutionTier,
           };
           set(state => ({
             medals: state.medals.map(m => 
@@ -3327,6 +3544,16 @@ export const useMedalStore = create<MedalState>()(
             ),
           }));
           syncMedalToSupabase(updatedMedal);
+          // Notify on evolution tier change
+          if (newEvolutionTier !== oldEvolutionTier && newEvolutionTier !== 'base') {
+            const tierLabel = getEvolutionLabel(newEvolutionTier);
+            useSocialStore.getState().addNotification({
+              userId,
+              type: 'achievement',
+              title: 'Medal Evolved!',
+              message: `Your "${existingMedal.name}" medal evolved to ${tierLabel}!`,
+            });
+          }
           return;
         }
 
@@ -3350,6 +3577,7 @@ export const useMedalStore = create<MedalState>()(
           progress: definition.target || 1,
           target: definition.target || 1,
           timesEarned: 1,
+          evolutionTier: 'base',
         };
 
         set(state => ({
@@ -3390,6 +3618,13 @@ export const useMedalStore = create<MedalState>()(
       hasMedal: (definitionId, userId?: string) => {
         const targetUserId = userId || useAuthStore.getState().user?.id;
         return get().medals.some(m => m.definitionId === definitionId && m.earned && m.userId === targetUserId);
+      },
+
+      revokeMedalsForUser: (userId: string) => {
+        // Silently clear all medals for user (used by deriveAll revoke-and-re-earn cycle)
+        set(state => ({
+          medals: state.medals.filter(m => m.userId !== userId),
+        }));
       },
 
       clearMedalsForUser: (userId: string) => {
@@ -3482,6 +3717,149 @@ export const useMedalStore = create<MedalState>()(
   )
 );
 
+// ============ RETROACTIVE MEDAL CHECK ============
+// Runs on app load to award medals for existing stats (industry standard: Strava, Apple Fitness, Garmin all do this)
+export function checkAllMedalsRetroactive(userId: string) {
+  const { earnMedal, hasMedal } = useMedalStore.getState();
+  const { workoutHistory, personalBests } = useWorkoutStore.getState();
+  const userWorkouts = workoutHistory.filter(w => w.userId === userId && w.status === 'completed');
+  const userPBs = personalBests.filter(pb => pb.userId === userId);
+  let awarded = 0;
+
+  // --- WORKOUT COUNT ---
+  const workoutCount = userWorkouts.length;
+  const wcMedals: [string, number][] = [
+    ['first-blood', 1], ['getting-started', 5], ['dedicated', 25], ['committed', 50], ['centurion', 100],
+  ];
+  for (const [id, threshold] of wcMedals) {
+    if (workoutCount >= threshold && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; }
+  }
+
+  // --- VOLUME ---
+  const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+  const volMedals: [string, number][] = [
+    ['volume-10k', 10000], ['volume-50k', 50000], ['volume-100k', 100000],
+  ];
+  for (const [id, threshold] of volMedals) {
+    if (totalVolume >= threshold && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; }
+  }
+
+  // --- PR COUNT ---
+  const pbCount = userPBs.length;
+  const prMedals: [string, number][] = [
+    ['first-pr', 1], ['pr-hunter', 10], ['pr-collector', 25],
+  ];
+  for (const [id, threshold] of prMedals) {
+    if (pbCount >= threshold && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; }
+  }
+
+  // --- STRENGTH MEDALS (from existing PBs) ---
+  const { normalizeExerciseId } = require('./exerciseStats');
+  
+  // Map of exercise ID patterns → medal checks
+  const strengthChecks: { match: string[]; medals: [string, number][] }[] = [
+    { match: ['bench-press', 'dumbbell-bench-press'], medals: [['bench-common', 50], ['bench-uncommon', 70], ['bench-rare', 100], ['bench-epic', 130], ['bench-legendary', 160]] },
+    { match: ['squat', 'back-squat'], medals: [['squat-common', 64], ['squat-uncommon', 93], ['squat-rare', 130], ['squat-epic', 173], ['squat-legendary', 219]] },
+    { match: ['deadlift', 'romanian-deadlift', 'rdl'], medals: [['deadlift-common', 55], ['deadlift-uncommon', 84], ['deadlift-rare', 120], ['deadlift-epic', 164], ['deadlift-legendary', 211]] },
+    { match: ['lat-pulldown', 'rope-pulldown'], medals: [['lat-common', 38], ['lat-uncommon', 58], ['lat-rare', 82], ['lat-epic', 110], ['lat-legendary', 141]] },
+    { match: ['barbell-row', 'bent-over-row', 'seated-row', 'cable-row', 'seated-cable-row'], medals: [['row-common', 41], ['row-uncommon', 61], ['row-rare', 86], ['row-epic', 115], ['row-legendary', 147]] },
+    { match: ['overhead-press', 'military-press', 'dumbbell-shoulder-press', 'machine-shoulder-press'], medals: [['ohp-common', 30], ['ohp-uncommon', 45], ['ohp-rare', 64], ['ohp-epic', 87], ['ohp-legendary', 112]] },
+    { match: ['leg-press', 'leg-press-machine'], medals: [['legpress-common', 86], ['legpress-uncommon', 147], ['legpress-rare', 226], ['legpress-epic', 324], ['legpress-legendary', 432]] },
+    { match: ['leg-extension'], medals: [['legext-common', 20], ['legext-uncommon', 40], ['legext-rare', 60], ['legext-epic', 90], ['legext-legendary', 120]] },
+    { match: ['leg-curl', 'lying-leg-curl'], medals: [['legcurl-common', 20], ['legcurl-uncommon', 35], ['legcurl-rare', 50], ['legcurl-epic', 75], ['legcurl-legendary', 100]] },
+    { match: ['machine-chest-press', 'chest-press'], medals: [['chestpress-common', 20], ['chestpress-uncommon', 35], ['chestpress-rare', 50], ['chestpress-epic', 75], ['chestpress-legendary', 100]] },
+    { match: ['pull-up', 'pull-ups', 'weighted-pull-up'], medals: [['pullup-bw', 0], ['pullup-10', 10], ['pullup-25', 25], ['pullup-40', 40]] },
+    { match: ['t-bar-row', 'tbar-row', 'landmine-row'], medals: [['tbar-35', 35], ['tbar-54', 54], ['tbar-75', 75], ['tbar-102', 102], ['tbar-130', 130]] },
+    { match: ['dumbbell-bench-press', 'db-bench-press'], medals: [['dbbench-15', 15], ['dbbench-23', 23], ['dbbench-32', 32], ['dbbench-44', 44]] },
+    { match: ['dumbbell-shoulder-press', 'db-shoulder-press'], medals: [['dbohp-13', 13], ['dbohp-20', 20], ['dbohp-28', 28], ['dbohp-38', 38]] },
+    { match: ['hip-thrust', 'barbell-hip-thrust'], medals: [['hipthrust-38', 38], ['hipthrust-76', 76], ['hipthrust-129', 129], ['hipthrust-196', 196]] },
+    { match: ['bulgarian-split-squat', 'split-squat'], medals: [['bss-10', 10], ['bss-18', 18], ['bss-30', 30], ['bss-44', 44]] },
+  ];
+
+  for (const pb of userPBs) {
+    const normId = normalizeExerciseId(pb.exerciseId);
+    for (const check of strengthChecks) {
+      if (check.match.includes(normId)) {
+        for (const [medalId, threshold] of check.medals) {
+          if (pb.bestWeight >= threshold && !hasMedal(medalId, userId)) { earnMedal(medalId, userId); awarded++; }
+        }
+      }
+    }
+  }
+
+  // --- POWERLIFTING TOTAL ---
+  const benchPB = userPBs.find(p => ['bench-press', 'barbell-bench-press'].includes(normalizeExerciseId(p.exerciseId)));
+  const squatPB = userPBs.find(p => ['squat', 'back-squat'].includes(normalizeExerciseId(p.exerciseId)));
+  const deadliftPB = userPBs.find(p => ['deadlift'].includes(normalizeExerciseId(p.exerciseId)));
+  if (benchPB && squatPB && deadliftPB) {
+    const sbdTotal = (benchPB.oneRepMax || 0) + (squatPB.oneRepMax || 0) + (deadliftPB.oneRepMax || 0);
+    const plMedals: [string, number][] = [
+      ['300-club', 300], ['400-club', 400], ['1000lb-club', 454], ['500-club', 500], ['600-club', 600],
+    ];
+    for (const [id, threshold] of plMedals) {
+      if (sbdTotal >= threshold && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; }
+    }
+  }
+
+  // --- CARDIO / STRETCH / CIRCUIT BLOCK COUNTS ---
+  let totalCardioBlocks = 0;
+  let totalStretchBlocks = 0;
+  let totalCircuitBlocks = 0;
+  let totalAmraps = 0;
+  let totalEmoms = 0;
+
+  userWorkouts.forEach(w => {
+    const blocks = (w as any).blocks || [];
+    const exTypes = (w.exercises || []).map((ex: any) => ex.blockType).filter(Boolean);
+    if (blocks.some((b: any) => b.type === 'cardio') || exTypes.includes('cardio')) totalCardioBlocks++;
+    if (blocks.some((b: any) => b.type === 'cooldown') || exTypes.includes('cooldown') ||
+        (w.exercises || []).some((ex: any) => ex.exercise?.category === 'stretching')) totalStretchBlocks++;
+    blocks.forEach((b: any) => {
+      if (b.type === 'circuit') {
+        totalCircuitBlocks++;
+        if (b.circuitStyle === 'amrap') totalAmraps++;
+        if (b.circuitStyle === 'emom') totalEmoms++;
+      }
+    });
+    if (exTypes.includes('circuit') && !blocks.some((b: any) => b.type === 'circuit')) totalCircuitBlocks++;
+  });
+
+  // Cardio medals
+  const cardioMedals: [string, number][] = [['cardio-first', 1], ['cardio-10', 10], ['cardio-50', 50], ['cardio-100', 100]];
+  for (const [id, t] of cardioMedals) { if (totalCardioBlocks >= t && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; } }
+  // Stretch medals
+  const stretchMedals: [string, number][] = [['stretch-first', 1], ['stretch-10', 10], ['stretch-50', 50]];
+  for (const [id, t] of stretchMedals) { if (totalStretchBlocks >= t && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; } }
+  // Circuit medals
+  const circuitMedals: [string, number][] = [['circuit-first', 1], ['circuit-10', 10], ['circuit-50', 50]];
+  for (const [id, t] of circuitMedals) { if (totalCircuitBlocks >= t && !hasMedal(id, userId)) { earnMedal(id, userId); awarded++; } }
+  if (totalAmraps >= 1 && !hasMedal('amrap-first', userId)) { earnMedal('amrap-first', userId); awarded++; }
+  if (totalAmraps >= 10 && !hasMedal('amrap-10', userId)) { earnMedal('amrap-10', userId); awarded++; }
+  if (totalEmoms >= 1 && !hasMedal('emom-first', userId)) { earnMedal('emom-first', userId); awarded++; }
+  if (totalEmoms >= 10 && !hasMedal('emom-10', userId)) { earnMedal('emom-10', userId); awarded++; }
+
+  // --- SPECIAL MEDALS ---
+  // Variety king (20 different exercises used)
+  const uniqueExercises = new Set<string>();
+  userWorkouts.forEach(w => (w.exercises || []).forEach((ex: any) => uniqueExercises.add(ex.exerciseId)));
+  if (uniqueExercises.size >= 20 && !hasMedal('variety-king', userId)) { earnMedal('variety-king', userId); awarded++; }
+
+  // Early bird / Night owl (check workout start times)
+  userWorkouts.forEach(w => {
+    const hour = new Date(w.startTime).getHours();
+    if (hour < 6 && !hasMedal('early-bird', userId)) { earnMedal('early-bird', userId); awarded++; }
+    if (hour >= 22 && !hasMedal('night-owl', userId)) { earnMedal('night-owl', userId); awarded++; }
+  });
+
+  // Marathon session (2+ hours)
+  if (userWorkouts.some(w => (w.duration || 0) >= 7200) && !hasMedal('marathon-session', userId)) {
+    earnMedal('marathon-session', userId); awarded++;
+  }
+
+  console.log(`[RetroactiveMedals] Scanned ${userWorkouts.length} workouts, ${userPBs.length} PBs → awarded ${awarded} medals`);
+  return awarded;
+}
+
 // ============ WEEKLY REPORT STORE ============
 interface ReportState {
   weeklyReports: WeeklyReport[];
@@ -3524,7 +3902,7 @@ export const useReportStore = create<ReportState>()(
 
         thisWeekWorkouts.forEach(workout => {
           workout.exercises.forEach(ex => {
-            const exercise = exerciseLibrary.find(e => e.id === ex.exerciseId);
+            const exercise = exerciseLibraryMap.get(ex.exerciseId);
             if (exercise) {
               let exerciseVolume = 0;
               ex.sets.forEach(s => {

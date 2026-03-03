@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { 
   ArrowLeft,
   MessageCircle, 
@@ -43,6 +45,7 @@ import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, en
 import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
+import { calculateCompliance, getAdherenceColor, getAdherenceBgColor, getAdherenceLabel } from '@/lib/compliance';
 import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase, sendClientInvitation } from '@/lib/supabaseSync';
 import { Workout, PersonalBest } from '@/types';
 
@@ -73,6 +76,7 @@ export default function ClientDetailPage() {
     updateSessionPackage,
     updateClient,
     blockPerformances,
+    getClientProfile,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -139,11 +143,11 @@ export default function ClientDetailPage() {
   
   // Get client-specific workout data - merge local and remote
   const clientWorkoutHistory = useMemo(() => {
-    const localWorkouts = workoutHistory.filter(w => w.userId === clientId);
+    const localWorkouts = workoutHistory.filter(w => w.userId === clientId && !w.deletedAt);
     // Merge with fetched client workouts, deduplicating by ID
     const allWorkouts = [...localWorkouts];
     clientWorkouts.forEach(w => {
-      if (!allWorkouts.find(existing => existing.id === w.id)) {
+      if (!w.deletedAt && !allWorkouts.find(existing => existing.id === w.id)) {
         allWorkouts.push(w);
       }
     });
@@ -255,7 +259,8 @@ export default function ClientDetailPage() {
   const scheduledPTSessions = ptSessions.filter(s => s.status === 'scheduled').length;
   const unpaidSessions = ptSessions.filter(s => s.status === 'completed' && !s.paid).length;
   const noShowSessions = ptSessions.filter(s => s.status === 'no_show').length;
-  const activePackage = packages.find(p => p.status === 'active');
+  const activePackage = packages.find(p => p.status === 'active') || packages.find(p => p.status === 'completed');
+  const isPackageCompleted = activePackage?.status === 'completed';
   const pendingPayments = payments.filter(p => p.status === 'pending');
   const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0);
   
@@ -265,6 +270,12 @@ export default function ClientDetailPage() {
   const upcomingSessions = scheduledPTSessions + calendarEvents.filter(e => 
     new Date(e.date) >= new Date() && e.type === 'session'
   ).length;
+
+  // Program compliance
+  const compliance = useMemo(() => 
+    calculateCompliance(clientId, clientWorkoutHistory, calendarEvents),
+    [clientId, clientWorkoutHistory, calendarEvents]
+  );
 
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversation || !user) return;
@@ -293,14 +304,14 @@ export default function ClientDetailPage() {
     toast.success('Payment marked as paid');
   };
 
-  const handleDeleteClient = async () => {
-    if (confirm(`Are you sure you want to remove ${clientUser?.displayName || 'this client'} from your client list? Their account will NOT be deleted - they can still log in.`)) {
-      // Only remove from trainer's client list - do NOT delete from Supabase
-      // Supabase account deletion should only happen from the user's own Settings page
-      removeClient(clientId);
-      toast.success('Client removed from your list');
-      router.push('/clients');
-    }
+  const [showRemoveClientConfirm, setShowRemoveClientConfirm] = useState(false);
+
+  const handleDeleteClient = () => {
+    // Only remove from trainer's client list - do NOT delete from Supabase
+    // Supabase account deletion should only happen from the user's own Settings page
+    removeClient(clientId);
+    toast.success('Client removed from your list');
+    router.push('/clients');
   };
 
   const handleSyncToSupabase = async () => {
@@ -354,7 +365,8 @@ export default function ClientDetailPage() {
         clientId,
         targetEmail,
         user?.displayName || 'Your Trainer',
-        clientUser?.displayName || 'Client'
+        getClientNameUtil(clientId),
+        (clientUser as any)?.password || 'client123'
       );
       
       if (result.success) {
@@ -556,7 +568,7 @@ export default function ClientDetailPage() {
           <Button 
             variant="ghost" 
             size="icon"
-            onClick={handleDeleteClient}
+            onClick={() => setShowRemoveClientConfirm(true)}
             className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
           >
             <Trash2 className="w-5 h-5" />
@@ -580,12 +592,50 @@ export default function ClientDetailPage() {
           <TabsContent value="overview" className="mt-4 space-y-4">
             {/* Session Package Summary - Editable or Create New */}
             {activePackage ? (
-              <Card className={`border ${activePackage.isContinuous ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-500/30' : 'bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30'}`}>
+              <Card className={`border ${isPackageCompleted ? 'bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-green-500/30' : activePackage.isContinuous ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border-blue-500/30' : 'bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30'}`}>
                 <CardContent className="p-4">
+                  {/* Package Completed Banner */}
+                  {isPackageCompleted && (
+                    <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        <span className="font-semibold text-green-400">Package Complete!</span>
+                      </div>
+                      <p className="text-xs text-green-300/70 mb-3">
+                        All {activePackage.totalSessions} sessions have been used. Your session and payment history is preserved below.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
+                          onClick={() => {
+                            // Reset: reactivate with same settings, reset counters
+                            updateSessionPackage(activePackage.id, {
+                              usedSessions: 0,
+                              remainingSessions: activePackage.totalSessions,
+                              paidSessions: 0,
+                              status: 'active',
+                            });
+                            toast.success('Package reset — counters back to 0');
+                          }}
+                        >
+                          Reset Package
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 border-green-500/30 text-green-400 hover:bg-green-500/10"
+                          onClick={() => setShowCreatePackage(true)}
+                        >
+                          New Package
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-semibold text-white flex items-center gap-2">
-                      <Package className={`w-5 h-5 ${activePackage.isContinuous ? 'text-blue-400' : 'text-sky-400'}`} />
-                      {activePackage.isContinuous ? 'Continuous Training' : 'Session Package'}
+                      <Package className={`w-5 h-5 ${isPackageCompleted ? 'text-green-400' : activePackage.isContinuous ? 'text-blue-400' : 'text-sky-400'}`} />
+                      {isPackageCompleted ? 'Completed Package' : activePackage.isContinuous ? 'Continuous Training' : 'Session Package'}
                     </h3>
                     <Button
                       variant="ghost"
@@ -657,12 +707,16 @@ export default function ClientDetailPage() {
                       <div className="mt-3">
                         <div className="flex justify-between text-xs text-gray-400 mb-1">
                           <span>{activePackage.usedSessions || 0} completed</span>
-                          <span>{activePackage.remainingSessions || 0} remaining</span>
+                          {(activePackage.usedSessions || 0) > activePackage.totalSessions ? (
+                            <span className="text-emerald-400">+{(activePackage.usedSessions || 0) - activePackage.totalSessions} extra sessions</span>
+                          ) : (
+                            <span>{activePackage.remainingSessions || 0} remaining</span>
+                          )}
                         </div>
                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-gradient-to-r from-sky-500 to-blue-500"
-                            style={{ width: `${Math.min(100, ((activePackage.usedSessions || 0) / activePackage.totalSessions) * 100)}%` }}
+                            className={`h-full ${(activePackage.usedSessions || 0) > activePackage.totalSessions ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-sky-500 to-blue-500'}`}
+                            style={{ width: `${Math.min(100, ((activePackage.usedSessions || 0) / Math.max(activePackage.totalSessions, activePackage.usedSessions || 1)) * 100)}%` }}
                           />
                         </div>
                       </div>
@@ -1028,6 +1082,61 @@ export default function ClientDetailPage() {
               </Card>
             </div>
 
+            {/* Program Compliance */}
+            {compliance.totalAssigned > 0 && (
+              <Card className="bg-gray-900 border-gray-800">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <Target className="w-4 h-4 text-sky-400" />
+                      Program Adherence
+                    </h3>
+                    <Badge className={`${getAdherenceBgColor(compliance.adherencePercent)}/20 ${getAdherenceColor(compliance.adherencePercent)}`}>
+                      {getAdherenceLabel(compliance.adherencePercent)}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="relative w-16 h-16">
+                      <svg className="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+                        <path
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          className="text-gray-800"
+                        />
+                        <path
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeDasharray={`${compliance.adherencePercent}, 100`}
+                          className={getAdherenceColor(compliance.adherencePercent)}
+                        />
+                      </svg>
+                      <span className={`absolute inset-0 flex items-center justify-center text-sm font-bold ${getAdherenceColor(compliance.adherencePercent)}`}>
+                        {compliance.adherencePercent}%
+                      </span>
+                    </div>
+                    <div className="flex-1 space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Assigned</span>
+                        <span className="text-white">{compliance.totalAssigned}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Completed</span>
+                        <span className="text-green-400">{compliance.completedAssigned}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Personal</span>
+                        <span className="text-sky-400">{compliance.personalWorkouts}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Unpaid Sessions Alert */}
             {unpaidSessions > 0 && (
               <Card className="bg-red-950/30 border-red-500/50">
@@ -1361,6 +1470,100 @@ export default function ClientDetailPage() {
               </DialogContent>
             </Dialog>
 
+            {/* Client Profile — onboarding answers */}
+            {(() => {
+              const profile = getClientProfile(clientId);
+              if (!profile) return null;
+              const expLabels: Record<string, string> = { new: 'Brand New', some: 'Some Experience', confident: 'Confident', advanced: 'Advanced' };
+              const prefLabels: Record<string, string> = { '1:1': '1:1 PT', group: 'Group', solo: 'Solo', mixed: 'Mixed' };
+              const aloneLabels: Record<string, string> = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
+              const injuryLabels: Record<string, string> = { shoulder: 'Shoulder', knee: 'Knee', back: 'Lower Back', hip: 'Hip', ankle: 'Ankle', wrist: 'Wrist', neck: 'Neck', none: 'None' };
+              return (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <User className="w-5 h-5 text-sky-400" />
+                      Client Profile
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Experience</p>
+                        <p className="text-sm text-white">{expLabels[profile.experienceLevel] || profile.experienceLevel}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Training Pref</p>
+                        <p className="text-sm text-white">{prefLabels[profile.trainingPreference] || profile.trainingPreference}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Sessions/Week</p>
+                        <p className="text-sm text-white">{profile.daysPerWeek}× • {profile.sessionLength} min</p>
+                      </div>
+                    </div>
+
+                    {/* Available Days */}
+                    {profile.availableDays && profile.availableDays.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Available Days</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {profile.availableDays.map((day, i) => (
+                            <Badge key={i} className="bg-emerald-500/20 text-emerald-400 border-0 text-xs">
+                              {day.slice(0, 3)}
+                            </Badge>
+                          ))}
+                        </div>
+                        {profile.scheduleNotes && (
+                          <p className="text-xs text-gray-400 mt-1.5 italic">{profile.scheduleNotes}</p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider">Trains Alone</p>
+                        <p className="text-sm text-white">{aloneLabels[profile.trainAloneOutsidePT] || profile.trainAloneOutsidePT}</p>
+                      </div>
+                    </div>
+
+                    {/* Injuries */}
+                    {profile.injuryFlags && profile.injuryFlags.length > 0 && !profile.injuryFlags.every(f => f === 'none') && (
+                      <div>
+                        <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1">Injuries / Flags</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {profile.injuryFlags.filter(f => f !== 'none').map((flag, i) => (
+                            <Badge key={i} className="bg-amber-500/20 text-amber-400 border-0 text-xs">
+                              {injuryLabels[flag] || flag}
+                            </Badge>
+                          ))}
+                        </div>
+                        {profile.injuryNotes && <p className="text-xs text-gray-400 mt-1">{profile.injuryNotes}</p>}
+                      </div>
+                    )}
+
+                    {/* Movement Confidence */}
+                    <div>
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1.5">Movement Confidence</p>
+                      <div className="grid grid-cols-5 gap-1.5">
+                        {Object.entries(profile.movementConfidence).map(([movement, score]) => (
+                          <div key={movement} className="text-center p-1.5 bg-gray-800 rounded-lg">
+                            <p className="text-xs text-gray-400 capitalize">{movement}</p>
+                            <p className={`text-sm font-bold ${(score as number) >= 4 ? 'text-emerald-400' : (score as number) >= 3 ? 'text-sky-400' : 'text-amber-400'}`}>{score as number}/5</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Phase */}
+                    <div className="flex items-center justify-between">
+                      <p className="text-[11px] text-gray-500 uppercase tracking-wider">Current Phase</p>
+                      <Badge variant="outline" className="border-sky-500/30 text-sky-400 capitalize text-xs">{profile.currentPhase}</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             {/* Notes - Always show with edit option */}
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
@@ -1492,7 +1695,10 @@ export default function ClientDetailPage() {
                     {clientWorkoutHistory
                       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
                       .slice(0, 3)
-                      .map(workout => (
+                      .map(workout => {
+                        // Get block performances for this workout
+                        const workoutBlockPerfs = blockPerformances.filter(bp => bp.workoutId === workout.id);
+                        return (
                         <div
                           key={workout.id}
                           className="p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
@@ -1530,6 +1736,103 @@ export default function ClientDetailPage() {
                               </Button>
                             </div>
                           </div>
+                          {/* Show blocks performed with type-specific templates */}
+                          {(workout.blocks && workout.blocks.length > 0) || workoutBlockPerfs.length > 0 ? (
+                            <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+                              {workoutBlockPerfs.length > 0 ? (
+                                workoutBlockPerfs.map((bp) => {
+                                  const blockTypeStyles: Record<string, string> = {
+                                    circuit: 'bg-green-500/20 text-green-300 border-green-500/30',
+                                    warmup: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+                                    cooldown: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+                                    cardio: 'bg-red-500/20 text-red-300 border-red-500/30',
+                                    work: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+                                  };
+                                  const style = blockTypeStyles[bp.blockType] || 'bg-gray-700 text-gray-300';
+                                  return (
+                                    <div 
+                                      key={bp.id}
+                                      className={`px-2 py-1 rounded text-xs border ${style}`}
+                                    >
+                                      <div className="flex items-center justify-between">
+                                        <span className="font-medium">{bp.blockName}</span>
+                                        <div className="flex items-center gap-2">
+                                          {bp.blockType === 'circuit' && bp.completionTime && (
+                                            <span className="text-green-400 font-medium">
+                                              ⏱ {Math.floor(bp.completionTime / 60)}:{String(bp.completionTime % 60).padStart(2, '0')}
+                                            </span>
+                                          )}
+                                          {bp.totalVolume && bp.totalVolume > 0 && (
+                                            <span className="text-sky-400 font-medium">
+                                              💪 {Math.round(bp.totalVolume).toLocaleString()} kg
+                                            </span>
+                                          )}
+                                          {bp.roundsCompleted && (
+                                            <span className="text-yellow-400">
+                                              🔄 {bp.roundsCompleted} rounds
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                workout.blocks?.map((block: any) => {
+                                  const blockTypeStyles: Record<string, string> = {
+                                    circuit: 'bg-green-500/20 text-green-300 border-green-500/30',
+                                    warmup: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+                                    cooldown: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+                                    cardio: 'bg-red-500/20 text-red-300 border-red-500/30',
+                                    work: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+                                  };
+                                  const style = blockTypeStyles[block.type] || 'bg-gray-700 text-gray-300';
+                                  return (
+                                    <div 
+                                      key={block.id}
+                                      className={`px-2 py-1 rounded text-xs border ${style}`}
+                                    >
+                                      <span className="font-medium">{block.name}</span>
+                                      <span className="ml-2 opacity-70">{block.exercises?.length || 0} exercises</span>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          ) : null}
+                          {/* Show top exercises with weights */}
+                          {workout.exercises.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-gray-700">
+                              <div className="text-xs text-gray-400 space-y-0.5">
+                                {workout.exercises.slice(0, 3).map((ex) => {
+                                  const bestSet = ex.sets?.reduce((best, set) => 
+                                    (set.weight || 0) > (best?.weight || 0) ? set : best, ex.sets[0]);
+                                  return (
+                                    <div key={ex.id} className="flex justify-between">
+                                      <span className="truncate flex-1">{ex.exercise?.name || 'Exercise'}</span>
+                                      {bestSet && (bestSet.weight || bestSet.reps) && (
+                                        <span className="text-sky-400 ml-2">
+                                          {bestSet.weight ? `${bestSet.weight}kg` : ''}{bestSet.weight && bestSet.reps ? ' × ' : ''}{bestSet.reps ? `${bestSet.reps}` : ''}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {workout.exercises.length > 3 && (
+                                  <span className="text-gray-500">+{workout.exercises.length - 3} more</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* Trainer's private notes — only visible in client file (trainer view) */}
+                          {workout.trainerNotes && (
+                            <div className="mt-2 pt-2 border-t border-amber-500/20">
+                              <p className="text-xs text-amber-400 line-clamp-2">
+                                🔒 {workout.trainerNotes}
+                              </p>
+                            </div>
+                          )}
+                          {/* Client's own notes (from personal workouts) */}
                           {workout.notes && (
                             <div className="mt-2 pt-2 border-t border-gray-700">
                               <p className="text-xs text-gray-400 line-clamp-2">
@@ -1538,7 +1841,7 @@ export default function ClientDetailPage() {
                             </div>
                           )}
                         </div>
-                      ))}
+                      )})}
                   </div>
                 )}
               </CardContent>
@@ -1635,6 +1938,14 @@ export default function ClientDetailPage() {
                               <Edit className="w-4 h-4" />
                             </Button>
                           </div>
+                          {/* Trainer's private notes in progress tab */}
+                          {workout.trainerNotes && (
+                            <div className="col-span-2 mt-1">
+                              <p className="text-xs text-amber-400 line-clamp-1">
+                                🔒 {workout.trainerNotes}
+                              </p>
+                            </div>
+                          )}
                         </div>
                       ))}
                   </div>
@@ -2296,7 +2607,7 @@ export default function ClientDetailPage() {
               // Start a blank workout for this client
               const { startWorkout } = useWorkoutStore.getState();
               // Parameters: name, templateId (undefined for blank), clientId
-              startWorkout(`Session - ${clientUser?.displayName || 'Client'}`, undefined, clientId);
+              startWorkout(`Session - ${getClientNameUtil(clientId)}`, undefined, clientId);
               router.push('/workout/active');
             }}
           >
@@ -2663,6 +2974,17 @@ export default function ClientDetailPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={showRemoveClientConfirm}
+        onOpenChange={setShowRemoveClientConfirm}
+        title="Remove Client"
+        description={`Are you sure you want to remove ${clientUser?.displayName || 'this client'} from your client list? Their account will NOT be deleted — they can still log in.`}
+        confirmLabel="Remove Client"
+        variant="destructive"
+        onConfirm={handleDeleteClient}
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
     </MainLayout>
   );
 }

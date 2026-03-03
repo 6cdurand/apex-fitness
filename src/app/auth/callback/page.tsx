@@ -67,7 +67,7 @@ export default function AuthCallbackPage() {
             }
             
             setStatus('Welcome! Redirecting...');
-            router.push('/workout');
+            router.push('/today');
           } else {
             setStatus('Account setup failed. Redirecting...');
             setTimeout(() => router.push('/auth'), 2000);

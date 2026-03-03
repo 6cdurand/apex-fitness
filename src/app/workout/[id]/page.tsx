@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Workout } from '@/types';
 import { getMuscleDisplayName, calculate1RM } from '@/lib/exercises';
 import { cn } from '@/lib/utils';
@@ -44,14 +45,17 @@ function formatDuration(seconds: number): string {
 export default function WorkoutDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const { workoutHistory, deleteWorkout, startFromTemplate, personalBests, updateWorkoutNotes, updateCompletedWorkout } = useWorkoutStore();
   const { medals } = useMedalStore();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [notes, setNotes] = useState('');
+  const [trainerNotesText, setTrainerNotesText] = useState('');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingTrainerNotes, setIsEditingTrainerNotes] = useState(false);
   const [isEditingWorkout, setIsEditingWorkout] = useState(false);
   const [editedExercises, setEditedExercises] = useState<Workout['exercises'] | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -63,10 +67,14 @@ export default function WorkoutDetailPage() {
     if (found) {
       setWorkout(found);
       setNotes(found.notes || '');
+      setTrainerNotesText(found.trainerNotes || '');
     } else {
       router.replace('/workout');
     }
   }, [isAuthenticated, params.id, workoutHistory, router]);
+
+  // Is the current user the trainer who conducted this PT session?
+  const isSessionTrainer = workout?.assignedBy && workout.assignedBy === user?.id;
 
   const handleSaveNotes = () => {
     if (workout) {
@@ -76,10 +84,19 @@ export default function WorkoutDetailPage() {
     }
   };
 
+  const handleSaveTrainerNotes = () => {
+    if (workout) {
+      updateCompletedWorkout(workout.id, { trainerNotes: trainerNotesText });
+      setIsEditingTrainerNotes(false);
+      toast.success('Trainer notes saved');
+    }
+  };
+
   const handleDelete = () => {
     if (workout) {
       deleteWorkout(workout.id);
       toast.success('Workout deleted');
+      setShowDeleteConfirm(false);
       router.push('/workout');
     }
   };
@@ -287,7 +304,55 @@ export default function WorkoutDetailPage() {
             </Card>
           )}
 
-          {/* Notes Section */}
+          {/* Trainer Notes — only visible to the trainer who conducted the PT session */}
+          {isSessionTrainer && (
+            <Card className="bg-gray-900 border-amber-500/30">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
+                    🔒 Trainer Notes
+                    <span className="text-xs text-amber-400/60 font-normal">(private)</span>
+                  </h3>
+                  {!isEditingTrainerNotes ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingTrainerNotes(true)}
+                      className="text-amber-400 hover:text-amber-300"
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      {trainerNotesText ? 'Edit' : 'Add Notes'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSaveTrainerNotes}
+                      className="text-amber-400 hover:text-amber-300"
+                    >
+                      <Save className="w-4 h-4 mr-1" />
+                      Save
+                    </Button>
+                  )}
+                </div>
+                
+                {isEditingTrainerNotes ? (
+                  <Textarea
+                    value={trainerNotesText}
+                    onChange={(e) => setTrainerNotesText(e.target.value)}
+                    placeholder="Session observations, form cues, programming adjustments..."
+                    className="bg-gray-800 border-amber-500/30 text-white placeholder-gray-500 min-h-[100px]"
+                  />
+                ) : (
+                  <p className={trainerNotesText ? "text-gray-300 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
+                    {trainerNotesText || 'No trainer notes for this session'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Notes Section — visible to the workout owner */}
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
@@ -475,7 +540,7 @@ export default function WorkoutDetailPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               className="border-red-500/50 text-red-400 hover:bg-red-500/10"
             >
               <Trash2 className="w-4 h-4 mr-2" />
@@ -484,6 +549,37 @@ export default function WorkoutDetailPage() {
           </div>
         </div>
       </ScrollArea>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-400" />
+              Delete Workout
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Are you sure you want to delete &ldquo;{workout?.name}&rdquo;? This will remove the workout from your history and recalculate your stats, PBs, and medals.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteConfirm(false)}
+              className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleDelete}
+              className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

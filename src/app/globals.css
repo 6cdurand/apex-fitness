@@ -101,71 +101,48 @@
 }
 
 .dark {
-  /* ============================================
-     CATALIFT LIGHT BLUE THEME
-     Noticeable light blue background
-     ============================================ */
+  /* Deep charcoal-navy background (not pure black - feels premium) */
+  --background: oklch(0.16 0.01 260);
+  --foreground: oklch(0.96 0.005 250);
+  --card: oklch(0.18 0.01 260);
+  --card-foreground: oklch(0.96 0.005 250);
+  --popover: oklch(0.18 0.01 260);
+  --popover-foreground: oklch(0.96 0.005 250);
+  /* Emerald primary - growth, health, progress */
+  --primary: oklch(0.696 0.17 162.48);
+  --primary-foreground: oklch(0.16 0.01 260);
+  --secondary: oklch(0.22 0.01 260);
+  --secondary-foreground: oklch(0.96 0.005 250);
+  --muted: oklch(0.22 0.01 260);
+  --muted-foreground: oklch(0.64 0.01 250);
+  /* Cyan accent for secondary highlights */
+  --accent: oklch(0.22 0.01 260);
+  --accent-foreground: oklch(0.96 0.005 250);
+  --destructive: oklch(0.396 0.141 25.723);
+  --destructive-foreground: oklch(0.637 0.237 25.331);
+  --border: oklch(0.26 0.01 260);
+  --input: oklch(0.22 0.01 260);
+  --ring: oklch(0.696 0.17 162.48);
+  /* Chart colors - emerald/cyan/amber palette */
+  --chart-1: oklch(0.696 0.17 162.48);
+  --chart-2: oklch(0.715 0.143 195);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar-background: oklch(0.14 0.01 260);
+  --sidebar-foreground: oklch(0.96 0.005 250);
+  --sidebar-primary: oklch(0.696 0.17 162.48);
+  --sidebar-primary-foreground: oklch(0.96 0.005 250);
+  --sidebar-accent: oklch(0.22 0.01 260);
+  --sidebar-accent-foreground: oklch(0.96 0.005 250);
+  --sidebar-border: oklch(0.26 0.01 260);
+  --sidebar-ring: oklch(0.696 0.17 162.48);
   
-  /* === SURFACE HIERARCHY === */
-  /* Level 0: Page background - LIGHT BLUE (visible blue tint) */
-  --background: oklch(0.85 0.08 230);
-  /* Level 1: Cards, containers - slightly lighter blue */
-  --card: oklch(0.90 0.06 230);
-  /* Level 2: Elevated elements (modals, popovers) */
-  --popover: oklch(0.92 0.05 230);
-  /* Level 3: Interactive hover states */
-  --elevated: oklch(0.88 0.07 230);
-  
-  /* === TEXT COLORS === */
-  --foreground: oklch(0.20 0.02 240);
-  --card-foreground: oklch(0.20 0.02 240);
-  --popover-foreground: oklch(0.20 0.02 240);
-  --muted-foreground: oklch(0.45 0.02 240);
-  --secondary-foreground: oklch(0.25 0.02 240);
-  --accent-foreground: oklch(0.20 0.02 240);
-  
-  /* === PRIMARY ACTION - Sky blue (calm, trustworthy) === */
-  --primary: oklch(0.60 0.16 230);
-  --primary-foreground: oklch(0.98 0 0);
-  
-  /* === SECONDARY/MUTED - Subtle, non-competing === */
-  --secondary: oklch(0.82 0.06 230);
-  --muted: oklch(0.82 0.06 230);
-  --accent: oklch(0.80 0.07 230);
-  
-  /* === PROGRESS & MILESTONES - "Radiant moments" === */
-  /* Use these ONLY for achievements, level-ups, streaks */
-  --progress: oklch(0.60 0.16 230);
-  --progress-glow: oklch(0.60 0.18 230 / 0.3);
-  --milestone: oklch(0.70 0.16 45);
-  --milestone-glow: oklch(0.70 0.20 45 / 0.4);
-  
-  /* === FUNCTIONAL COLORS === */
-  --destructive: oklch(0.55 0.22 25);
-  --success: oklch(0.55 0.18 145);
-  --warning: oklch(0.70 0.15 80);
-  
-  /* === BORDERS & INPUTS === */
-  --border: oklch(0.75 0.06 230);
-  --input: oklch(0.88 0.05 230);
-  --ring: oklch(0.60 0.16 230);
-  
-  /* === CHART PALETTE === */
-  --chart-1: oklch(0.60 0.16 230);
-  --chart-2: oklch(0.55 0.14 180);
-  --chart-3: oklch(0.70 0.16 45);
-  --chart-4: oklch(0.55 0.14 280);
-  --chart-5: oklch(0.65 0.18 30);
-  
-  /* === SIDEBAR === */
-  --sidebar: oklch(0.82 0.07 230);
-  --sidebar-foreground: oklch(0.20 0.02 240);
-  --sidebar-primary: oklch(0.60 0.16 230);
-  --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.78 0.08 230);
-  --sidebar-accent-foreground: oklch(0.20 0.02 240);
-  --sidebar-border: oklch(0.75 0.06 230);
-  --sidebar-ring: oklch(0.60 0.16 230);
+  /* Apex brand colors */
+  --progress: oklch(0.696 0.17 162.48);
+  --progress-glow: oklch(0.696 0.17 162.48 / 0.3);
+  --milestone: oklch(0.769 0.188 70.08);
+  --milestone-glow: oklch(0.769 0.188 70.08 / 0.3);
 }
 
 @layer base {
@@ -271,4 +248,71 @@
     background-color: var(--elevated);
     border-color: var(--ring);
   }
+  
+  /* === MEDAL EVOLUTION GLOW EFFECTS === */
+  /* Gold glow (5x earned) - rich golden radiance */
+  .medal-glow-gold {
+    box-shadow: 0 0 20px 6px rgba(255, 215, 0, 0.55), 0 0 40px 14px rgba(255, 215, 0, 0.2), 0 0 5px 2px rgba(255, 215, 0, 0.75);
+    animation: medal-pulse-gold 2.5s ease-in-out infinite;
+  }
+  
+  /* Diamond glow (20x earned) - electric blue-white */
+  .medal-glow-diamond {
+    box-shadow: 0 0 24px 8px rgba(185, 242, 255, 0.6), 0 0 48px 16px rgba(185, 242, 255, 0.2), 0 0 6px 2px rgba(185, 242, 255, 0.8);
+    animation: medal-pulse-diamond 2s ease-in-out infinite;
+  }
+  
+  /* Pink Diamond glow (50x earned) - vivid pink/magenta prismatic */
+  .medal-glow-pink-diamond {
+    box-shadow: 0 0 28px 10px rgba(255, 105, 180, 0.6), 0 0 56px 20px rgba(255, 105, 180, 0.2), 0 0 7px 3px rgba(255, 105, 180, 0.8);
+    animation: medal-pulse-pink-diamond 1.5s ease-in-out infinite;
+  }
+  
+  /* Medal frame rings */
+  .medal-frame-gold {
+    border: 2px solid rgba(255, 215, 0, 0.7);
+  }
+  .medal-frame-diamond {
+    border: 2px solid rgba(185, 242, 255, 0.7);
+  }
+  .medal-frame-pink-diamond {
+    border: 3px solid rgba(255, 105, 180, 0.8);
+    background: linear-gradient(135deg, rgba(255, 105, 180, 0.05), rgba(200, 80, 255, 0.05));
+  }
+  
+  /* Medal counter badge */
+  .medal-counter {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    z-index: 1;
+  }
+}
+
+/* Medal glow animations - outside @layer */
+@keyframes medal-pulse-gold {
+  0%, 100% { box-shadow: 0 0 20px 6px rgba(255, 215, 0, 0.55), 0 0 40px 14px rgba(255, 215, 0, 0.2), 0 0 5px 2px rgba(255, 215, 0, 0.75); }
+  50% { box-shadow: 0 0 28px 10px rgba(255, 215, 0, 0.7), 0 0 56px 20px rgba(255, 215, 0, 0.3), 0 0 7px 3px rgba(255, 215, 0, 0.85); }
+}
+
+@keyframes medal-pulse-diamond {
+  0%, 100% { box-shadow: 0 0 24px 8px rgba(185, 242, 255, 0.6), 0 0 48px 16px rgba(185, 242, 255, 0.2), 0 0 6px 2px rgba(185, 242, 255, 0.8); }
+  50% { box-shadow: 0 0 32px 12px rgba(185, 242, 255, 0.75), 0 0 64px 24px rgba(185, 242, 255, 0.3), 0 0 8px 3px rgba(185, 242, 255, 0.9); }
+}
+
+@keyframes medal-pulse-pink-diamond {
+  0% { box-shadow: 0 0 28px 10px rgba(255, 105, 180, 0.6), 0 0 56px 20px rgba(255, 105, 180, 0.2), 0 0 7px 3px rgba(255, 105, 180, 0.8); }
+  33% { box-shadow: 0 0 32px 12px rgba(200, 80, 255, 0.6), 0 0 64px 24px rgba(200, 80, 255, 0.25), 0 0 8px 3px rgba(200, 80, 255, 0.85); }
+  66% { box-shadow: 0 0 36px 14px rgba(255, 105, 180, 0.7), 0 0 72px 28px rgba(255, 105, 180, 0.3), 0 0 9px 4px rgba(255, 105, 180, 0.9); }
+  100% { box-shadow: 0 0 28px 10px rgba(255, 105, 180, 0.6), 0 0 56px 20px rgba(255, 105, 180, 0.2), 0 0 7px 3px rgba(255, 105, 180, 0.8); }
 }

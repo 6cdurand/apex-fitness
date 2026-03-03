@@ -20,9 +20,13 @@ import {
   Image as ImageIcon,
   Lock,
   Share2,
+  Mail,
+  Eye,
   X
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+export type ProfileCardContext = 'feed' | 'friends' | 'trainer-client' | 'profile' | 'default';
 
 interface ProfileCardProps {
   user: User;
@@ -37,8 +41,11 @@ interface ProfileCardProps {
   };
   isOwnProfile?: boolean;
   isFriend?: boolean;
+  context?: ProfileCardContext;
   onFollow?: () => void;
   onShare?: () => void;
+  onMessage?: () => void;
+  onViewProfile?: () => void;
 }
 
 export function ProfileCard({
@@ -49,8 +56,11 @@ export function ProfileCard({
   stats,
   isOwnProfile = false,
   isFriend = false,
+  context = 'default',
   onFollow,
   onShare,
+  onMessage,
+  onViewProfile,
 }: ProfileCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedMedal, setSelectedMedal] = useState<Medal | null>(null);
@@ -339,23 +349,48 @@ export function ProfileCard({
 
             {/* Action Buttons */}
             <div className="flex gap-2 pt-2">
-              {!isOwnProfile && (
+              {!isOwnProfile && onFollow && (
                 <Button
-                  onClick={(e) => { e.stopPropagation(); onFollow?.(); }}
+                  onClick={(e) => { e.stopPropagation(); onFollow(); }}
                   className={isFriend ? 'flex-1 bg-gray-700' : 'flex-1 bg-sky-600 hover:bg-sky-700'}
+                  size="sm"
                 >
                   <Users className="w-4 h-4 mr-2" />
                   {isFriend ? 'Following' : 'Follow'}
                 </Button>
               )}
-              <Button
-                variant="outline"
-                onClick={(e) => { e.stopPropagation(); onShare?.(); }}
-                className="flex-1 border-gray-700"
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                Share
-              </Button>
+              {!isOwnProfile && onMessage && (
+                <Button
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); onMessage(); }}
+                  className="flex-1 border-gray-700"
+                  size="sm"
+                >
+                  <Mail className="w-4 h-4 mr-2" />
+                  Message
+                </Button>
+              )}
+              {onViewProfile && (
+                <Button
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); onViewProfile(); }}
+                  className="flex-1 border-gray-700"
+                  size="sm"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Profile
+                </Button>
+              )}
+              {onShare && (
+                <Button
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); onShare(); }}
+                  className="border-gray-700"
+                  size="sm"
+                >
+                  <Share2 className="w-4 h-4" />
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

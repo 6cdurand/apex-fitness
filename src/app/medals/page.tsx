@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useMedalStore, useWorkoutStore, useTrainerStore } from '@/lib/store';
-import { evolvingMedals } from '@/lib/medals';
+import { evolvingMedals, getEvolutionGlowClass, getEvolutionFrameClass, getEvolutionLabel, isCloseToEvolving, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -121,8 +121,10 @@ export default function MedalsPage() {
     { id: 'all', label: 'All', icon: Trophy },
     { id: 'workout', label: 'Workout', icon: Dumbbell },
     { id: 'strength', label: 'Strength', icon: Flame },
+    { id: 'cardio', label: 'Cardio', icon: Flame },
+    { id: 'circuit', label: 'Circuit', icon: Sparkles },
+    { id: 'stretch', label: 'Stretch', icon: Star },
     { id: 'consistency', label: 'Streak', icon: Sparkles },
-    { id: 'social', label: 'Social', icon: Users },
     { id: 'milestone', label: 'Volume', icon: Star },
   ];
 
@@ -295,25 +297,66 @@ export default function MedalsPage() {
         </div>
         )}
 
+        {/* Almost Evolved Section */}
+        {(() => {
+          const almostEvolvedMedals = filteredMedals.filter((m: any) => {
+            if (!m.earned) return false;
+            const evoCheck = isCloseToEvolving(m.timesEarned || 1, m.definitionId);
+            return evoCheck.close;
+          });
+          if (almostEvolvedMedals.length === 0) return null;
+          return (
+            <div className="mb-6">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-3">Almost Evolved</h3>
+              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                {almostEvolvedMedals.map((medal: any) => {
+                  const evoCheck = isCloseToEvolving(medal.timesEarned || 1, medal.definitionId);
+                  const glowClass = getEvolutionGlowClass(medal.evolutionTier || 'base');
+                  const frameClass = getEvolutionFrameClass(medal.evolutionTier || 'base');
+                  return (
+                    <div key={medal.id} className="flex-shrink-0 w-24 text-center">
+                      <div className={`relative w-16 h-16 mx-auto rounded-full flex items-center justify-center bg-gradient-to-br ${getTierGradient(medal.tier, true)} ${glowClass} ${frameClass}`}>
+                        <span className="text-2xl">{medal.icon}</span>
+                        <span className="medal-counter">{medal.timesEarned || 1}x</span>
+                      </div>
+                      <p className="text-[10px] text-foreground mt-1.5 font-medium truncate">{medal.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{evoCheck.remaining} more to evolve</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Regular Medals Grid */}
         <div className="grid grid-cols-2 gap-4">
           {filteredMedals.map((medal: any) => {
             const isEarned = medal.earned;
             const tierLabel = getTierLabel(medal.tier);
             const progress = medal.target ? (medal.progress / medal.target) * 100 : 0;
+            const glowClass = isEarned ? getEvolutionGlowClass(medal.evolutionTier || 'base') : '';
+            const frameClass = isEarned ? getEvolutionFrameClass(medal.evolutionTier || 'base') : '';
+            const evoLabel = isEarned && medal.evolutionTier && medal.evolutionTier !== 'base' ? getEvolutionLabel(medal.evolutionTier) : '';
             
             return (
               <Card 
                 key={medal.id} 
                 className={`overflow-hidden border-2 ${getTierBorder(medal.tier, isEarned)} ${
                   isEarned ? '' : 'opacity-60'
-                }`}
+                } ${frameClass}`}
               >
                 <div className={`bg-gradient-to-br ${getTierGradient(medal.tier, isEarned)} p-4`}>
                   <div className="flex items-start justify-between mb-3">
-                    <span className={`text-4xl ${!isEarned ? 'grayscale' : ''}`}>
-                      {medal.icon}
-                    </span>
+                    <div className={`relative ${glowClass} rounded-full p-1`}>
+                      <span className={`text-4xl ${!isEarned ? 'grayscale' : ''}`}>
+                        {medal.icon}
+                      </span>
+                      {/* Always show counter badge on earned medals */}
+                      {isEarned && (medal.timesEarned || 1) > 0 && (
+                        <span className="medal-counter">{medal.timesEarned || 1}x</span>
+                      )}
+                    </div>
                     {isEarned ? (
                       <BadgeCheck className="w-5 h-5 text-sky-400" />
                     ) : (
@@ -328,11 +371,39 @@ export default function MedalsPage() {
                     {medal.description}
                   </p>
                   
-                  {tierLabel.text && (
-                    <Badge className={`${tierLabel.color} text-[10px] mb-2`}>
-                      {tierLabel.text}
-                    </Badge>
-                  )}
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {tierLabel.text && (
+                      <Badge className={`${tierLabel.color} text-[10px]`}>
+                        {tierLabel.text}
+                      </Badge>
+                    )}
+                    {evoLabel && (
+                      <Badge className="text-[10px] bg-white/20 text-white">
+                        {evoLabel}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {/* Evolution progress for earned medals */}
+                  {isEarned && (() => {
+                    const nextThreshold = getNextEvolutionThreshold(medal.timesEarned || 1);
+                    if (!nextThreshold) return <p className="text-[10px] text-white/50">Max Evolution</p>;
+                    const evoProgress = ((medal.timesEarned || 1) / nextThreshold) * 100;
+                    return (
+                      <div className="mt-1">
+                        <div className="flex justify-between text-[10px] mb-1">
+                          <span className="text-white/60">Next evolution</span>
+                          <span className="text-white/80 font-medium">{medal.timesEarned || 1}/{nextThreshold}</span>
+                        </div>
+                        <div className="h-1.5 bg-black/30 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-white/40 rounded-full transition-all"
+                            style={{ width: `${Math.min(evoProgress, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
                   
                   {/* Progress to earn medal */}
                   {!isEarned && medal.target && (

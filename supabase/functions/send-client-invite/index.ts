@@ -14,6 +14,7 @@ interface InviteEmailRequest {
   trainerName: string
   inviteToken: string
   appUrl: string
+  password?: string  // Client's login password (default: client123)
 }
 
 serve(async (req) => {
@@ -23,7 +24,8 @@ serve(async (req) => {
   }
 
   try {
-    const { to, clientName, trainerName, inviteToken, appUrl }: InviteEmailRequest = await req.json()
+    const { to, clientName, trainerName, inviteToken, appUrl, password }: InviteEmailRequest = await req.json()
+    const clientPassword = password || 'client123'
 
     if (!to || !inviteToken || !appUrl) {
       return new Response(
@@ -59,6 +61,19 @@ serve(async (req) => {
             <p style="margin: 0 0 24px 0; font-size: 16px; line-height: 1.6; color: #a1a1aa;">
               <strong style="color: #0ea5e9;">${trainerName}</strong> has invited you to join Catalift to track your workouts, monitor your progress, and achieve your fitness goals together.
             </p>
+            
+            <div style="background-color: #1a1a1a; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+              <p style="margin: 0 0 12px 0; font-size: 14px; color: #a1a1aa; font-weight: 600;">Your Login Details:</p>
+              <div style="background-color: #262626; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <p style="margin: 0 0 8px 0; font-size: 13px; color: #a1a1aa;">Email:</p>
+                <p style="margin: 0; font-size: 15px; color: #ffffff; font-weight: 500;">${to}</p>
+              </div>
+              <div style="background-color: #262626; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                <p style="margin: 0 0 8px 0; font-size: 13px; color: #a1a1aa;">Password:</p>
+                <p style="margin: 0; font-size: 15px; color: #ffffff; font-weight: 500;">${clientPassword}</p>
+              </div>
+              <p style="margin: 0; font-size: 12px; color: #f97316;">⚠️ You can change your password in the app settings after logging in.</p>
+            </div>
             
             <div style="background-color: #1a1a1a; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
               <p style="margin: 0 0 8px 0; font-size: 14px; color: #a1a1aa;">With Catalift you can:</p>

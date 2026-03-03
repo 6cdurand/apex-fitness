@@ -2,6 +2,7 @@
 export type Gender = 'male' | 'female' | 'other';
 export type UserMode = 'user' | 'trainer';
 export type WeightUnit = 'kg' | 'lb';
+export type MembershipTier = 'free' | 'pro' | 'trainer';
 
 export interface User {
   id: string;
@@ -25,6 +26,26 @@ export interface User {
   followers: string[];
   following: string[];
   trainerId?: string; // If user has a trainer
+  membershipTier?: MembershipTier; // free | pro | trainer — defaults to 'pro' for now
+  // Profile card preferences
+  featuredMedalIds?: string[]; // Up to 3 medal definitionIds to feature on profile card
+  showStrengthRating?: boolean; // Whether to show strength rating on profile card (default true)
+  contactLinks?: {
+    instagram?: string;
+    email?: string;
+    phone?: string;
+    website?: string;
+  };
+  // Gym affiliation
+  gymId?: string;
+  gymName?: string;
+  // Health & service connections
+  healthConnections?: {
+    appleHealth?: { connected: boolean; lastSync?: string };
+    googleHealth?: { connected: boolean; lastSync?: string };
+    calendar?: { connected: boolean; provider?: 'apple' | 'google' };
+    stripe?: { connected: boolean; accountId?: string };
+  };
 }
 
 // Exercise Types
@@ -36,6 +57,13 @@ export type MuscleGroup =
 export type ExerciseCategory = 'compound' | 'isolation' | 'cardio' | 'stretching' | 'warmup' | 'activation';
 export type Equipment = 'barbell' | 'dumbbell' | 'machine' | 'cable' | 'bodyweight' | 'kettlebell' | 'bands' | 'other';
 
+export interface FormCues {
+  setup: string;
+  execution: string[];
+  commonMistakes?: string[];
+  breathing?: string;
+}
+
 export interface Exercise {
   id: string;
   name: string;
@@ -44,10 +72,14 @@ export interface Exercise {
   category: ExerciseCategory;
   equipment: Equipment;
   instructions?: string;
+  imageUrl?: string;
   videoUrl?: string;
+  animationUrl?: string;
+  formCues?: FormCues;
   isCustom?: boolean;
   createdBy?: string;
   blockTypes?: BlockType[];
+  alternatingSides?: boolean;
 }
 
 // Set Types
@@ -98,12 +130,22 @@ export interface WorkoutExercise {
   groupType?: SupersetGroupType;
   groupOrder?: string; // A1, A2, A3, B1, B2, etc.
   miniRestSeconds?: number; // Optional rest between exercises in superset
+  isUnilateral?: boolean; // Toggle for alternating sides (L/R) exercises
 }
 
 // Workout Block (for organizing exercises in the builder)
 export interface WorkoutBlock {
   id: string;
+  type: BlockType;
   name: string;
+  // Circuit-specific settings
+  circuitStyle?: 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';
+  rounds?: number;
+  roundDuration?: string;
+  restBetweenRounds?: string;
+  targetTime?: string;
+  workInterval?: string;
+  restInterval?: string;
   exercises: {
     id: string;
     exerciseId: string;
@@ -217,10 +259,12 @@ export interface Workout {
   totalVolume: number; // kg
   userId: string;
   notes?: string;
+  trainerNotes?: string; // Private notes visible only to the trainer who conducted the session
   status: 'active' | 'completed' | 'cancelled';
   assignedBy?: string; // Trainer ID if assigned
   scheduledDate?: string;
   blocks?: WorkoutBlock[]; // Session workout blocks
+  deletedAt?: string; // Soft delete timestamp — null means active
 }
 
 // Personal Best / Records
@@ -299,7 +343,8 @@ export interface StrengthRating {
 
 // Medals & Achievements
 export type MedalTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
-export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special' | 'trainer';
+export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special' | 'trainer' | 'cardio' | 'circuit' | 'stretch';
+export type EvolutionGlowTier = 'base' | 'gold_glow' | 'diamond_glow' | 'pink_diamond_glow';
 export type MedalRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
 export interface MedalDefinition {
@@ -312,6 +357,7 @@ export interface MedalDefinition {
   rarity: MedalRarity;
   requirement: string;
   target?: number;
+  canEvolve?: boolean; // false for streaks and one-time milestones
 }
 
 export interface Medal {
@@ -334,6 +380,8 @@ export interface Medal {
   isEvolving?: boolean;
   currentEvolutionTier?: MedalTier;
   nextEvolutionTarget?: number;
+  // Visual evolution glow tier (computed from timesEarned)
+  evolutionTier: EvolutionGlowTier;
 }
 
 // Social / Feed
@@ -452,6 +500,8 @@ export interface CalendarEvent {
   color?: string;
   clientConfirmed?: boolean; // Client has confirmed this session
   clientConfirmedAt?: string;
+  recurrenceGroup?: string; // Links recurring events for bulk delete
+  contactName?: string; // Name for consultations without a registered client
 }
 
 // Booking Request (for trainer-client scheduling)
@@ -727,6 +777,16 @@ export interface CardioBlock {
   notes?: string;
 }
 
+// Gym (user-generated)
+export interface Gym {
+  id: string;
+  name: string;
+  location?: string;
+  createdBy: string;
+  memberCount?: number;
+  createdAt: string;
+}
+
 // Calendar Activity (non-gym activities like Yoga, Walk, Run)
 export interface CalendarActivity {
   id: string;
@@ -762,6 +822,8 @@ export interface ClientProgrammingProfile {
   
   // Availability
   daysPerWeek: number;
+  availableDays?: string[]; // e.g. ['Monday', 'Wednesday', 'Friday']
+  scheduleNotes?: string; // e.g. 'Afternoons only', 'Before 3pm on Wednesdays'
   sessionLength: number; // minutes
   trainAloneOutsidePT: 'yes' | 'maybe' | 'no';
   
@@ -867,6 +929,7 @@ export interface ClientProgram {
   startDate: string;
   endDate?: string;
   status: 'active' | 'completed' | 'paused';
+  autoRepeat?: boolean;
   
   createdAt: string;
   updatedAt: string;

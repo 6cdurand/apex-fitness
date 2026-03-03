@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useSocialStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useSocialStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ export default function FriendsPage() {
   const { user, isAuthenticated } = useAuthStore();
   const { followUser, unfollowUser } = useSocialStore();
   const { createBookingRequest } = useTrainerStore();
+  const { workoutHistory, personalBests } = useWorkoutStore();
+  const { medals } = useMedalStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -298,33 +300,47 @@ export default function FriendsPage() {
       {/* Profile Card Popup */}
       <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
         <DialogContent className="bg-transparent border-none shadow-none max-w-md p-0">
-          {selectedUser && (
-            <ProfileCard
-              user={selectedUser}
-              medals={[]}
-              strengthRating={null}
-              personalBests={[]}
-              stats={{
-                totalWorkouts: Math.floor(Math.random() * 50) + 10,
-                totalVolume: Math.floor(Math.random() * 500000) + 100000,
-                followers: selectedUser.followers?.length || 0,
-                following: selectedUser.following?.length || 0,
-              }}
-              isOwnProfile={false}
-              isFriend={user?.following?.includes(selectedUser.id)}
-              onFollow={() => {
-                if (user?.following?.includes(selectedUser.id)) {
-                  unfollowUser(selectedUser.id);
-                } else {
-                  followUser(selectedUser.id);
-                }
-              }}
-              onShare={() => {
-                navigator.clipboard?.writeText(window.location.href);
-                toast.success('Profile link copied!');
-              }}
-            />
-          )}
+          {selectedUser && (() => {
+            const userWorkouts = workoutHistory.filter(w => w.userId === selectedUser.id && w.status === 'completed');
+            const userPBs = personalBests.filter(pb => pb.userId === selectedUser.id);
+            const userMedals = medals.filter(m => m.userId === selectedUser.id && m.earned);
+            return (
+              <ProfileCard
+                user={selectedUser}
+                medals={userMedals}
+                strengthRating={null}
+                personalBests={userPBs}
+                context="friends"
+                stats={{
+                  totalWorkouts: userWorkouts.length,
+                  totalVolume: userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0),
+                  followers: selectedUser.followers?.length || 0,
+                  following: selectedUser.following?.length || 0,
+                }}
+                isOwnProfile={false}
+                isFriend={user?.following?.includes(selectedUser.id)}
+                onFollow={() => {
+                  if (user?.following?.includes(selectedUser.id)) {
+                    unfollowUser(selectedUser.id);
+                  } else {
+                    followUser(selectedUser.id);
+                  }
+                }}
+                onMessage={() => {
+                  setSelectedUser(null);
+                  router.push('/messages');
+                }}
+                onViewProfile={() => {
+                  setSelectedUser(null);
+                  router.push(`/profile/${selectedUser.id}`);
+                }}
+                onShare={() => {
+                  navigator.clipboard?.writeText(window.location.href);
+                  toast.success('Profile link copied!');
+                }}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

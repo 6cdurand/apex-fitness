@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { calculateFullStrengthRating } from '@/lib/strengthRating';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -14,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -48,13 +50,24 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { evolvingMedals } from '@/lib/medals';
 import { registerUserToSupabase, fetchAllUsersFromSupabase, linkClientToTrainer } from '@/lib/supabaseSync';
+import { ClientNameLink } from '@/components/ClientNameLink';
+import Link from 'next/link';
 
 export default function ClientsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ClientsPageContent />
+    </Suspense>
+  );
+}
+
+function ClientsPageContent() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { clients, clientGroups, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent, addClientGroup, updateClientGroup, deleteClientGroup } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   const { getOrCreateConversation } = useMessageStore();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddClient, setShowAddClient] = useState(false);
   const [showAssignWorkout, setShowAssignWorkout] = useState(false);
@@ -94,6 +107,13 @@ export default function ClientsPage() {
   
   // View mode (clients or groups)
   const [viewMode, setViewMode] = useState<'clients' | 'groups'>('clients');
+
+  // Auto-open Add Client dialog when ?new=true
+  useEffect(() => {
+    if (searchParams.get('new') === 'true') {
+      setShowAddClient(true);
+    }
+  }, [searchParams]);
   
   // Group management state
   const [showAddGroup, setShowAddGroup] = useState(false);
@@ -103,6 +123,7 @@ export default function ClientsPage() {
   const [newGroupColor, setNewGroupColor] = useState('#3b82f6');
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<string[]>([]);
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
+  const [groupToDelete, setGroupToDelete] = useState<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -239,24 +260,23 @@ export default function ClientsPage() {
       toast.error('Please enter a client name');
       return;
     }
-    if (!newClientEmail.trim()) {
-      toast.error('Please enter client email for login');
-      return;
-    }
-    
-    // Check for duplicate email in existing users
-    const currentUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    const emailExists = currentUsers.some((u: any) => u.email?.toLowerCase() === newClientEmail.toLowerCase().trim());
-    if (emailExists) {
-      toast.error('A user with this email already exists. Use "Link Existing" instead.');
-      return;
+    // Check for duplicate email if one was provided
+    if (newClientEmail.trim()) {
+      const currentUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      const emailExists = currentUsers.some((u: any) => u.email?.toLowerCase() === newClientEmail.toLowerCase().trim());
+      if (emailExists) {
+        toast.error('A user with this email already exists. Use "Link Existing" instead.');
+        return;
+      }
     }
 
     // Generate proper UUID for Supabase (not client-XXXX format)
     const newClientId = generateUUID();
     
-    // Use provided email
-    const clientEmail = newClientEmail.toLowerCase().trim();
+    // Use provided email or generate placeholder
+    const clientEmail = newClientEmail.trim() 
+      ? newClientEmail.toLowerCase().trim() 
+      : `${newClientName.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}@placeholder.local`;
     
     // Create a user entry for the client
     const newClientUser = {
@@ -307,7 +327,9 @@ export default function ClientsPage() {
     setNewClientPhone('');
     setNewClientGender('other');
     setNewClientPassword('client123');
-    toast.success(`Added ${newClientName} as a client. Login: ${clientEmail} / ${newClientPassword}`);
+    toast.success(newClientEmail.trim() 
+      ? `Added ${newClientName} as a client. Login: ${clientEmail} / ${newClientPassword}`
+      : `Added ${newClientName} as a client (no email — add later)`);
     
     return newClientId;
   };
@@ -509,7 +531,7 @@ export default function ClientsPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Email * (for login)</Label>
+                    <Label className="text-gray-300">Email <span className="text-gray-500">(optional)</span></Label>
                     <Input
                       type="email"
                       placeholder="client@example.com"
@@ -556,7 +578,7 @@ export default function ClientsPage() {
                     <Button 
                       onClick={handleAddClientAndOnboard}
                       className="flex-1 bg-rose-500 hover:bg-rose-600"
-                      disabled={!newClientName.trim() || !newClientEmail.trim()}
+                      disabled={!newClientName.trim()}
                     >
                       Add & Onboard
                     </Button>
@@ -564,7 +586,7 @@ export default function ClientsPage() {
                       onClick={handleAddClientSkipOnboarding}
                       variant="outline"
                       className="flex-1"
-                      disabled={!newClientName.trim() || !newClientEmail.trim()}
+                      disabled={!newClientName.trim()}
                     >
                       Skip Onboarding
                     </Button>
@@ -760,25 +782,26 @@ export default function ClientsPage() {
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
-                        <Avatar 
-                          className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProfileClientId(client.clientId);
-                            setShowProfileCard(true);
-                          }}
-                        >
-                          <AvatarImage src={clientUser?.profilePhoto} />
-                          <AvatarFallback className="bg-gray-800 text-white">
-                            {clientUser?.displayName?.[0] || clientUser?.username?.[0] || '?'}
-                          </AvatarFallback>
-                        </Avatar>
+                        <Link href={`/profile/${client.clientId}`} onClick={(e) => e.stopPropagation()}>
+                          <Avatar 
+                            className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all"
+                          >
+                            <AvatarImage src={clientUser?.profilePhoto} />
+                            <AvatarFallback className="bg-gray-800 text-white">
+                              {clientUser?.displayName?.[0] || clientUser?.username?.[0] || '?'}
+                            </AvatarFallback>
+                          </Avatar>
+                        </Link>
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-semibold text-white truncate">
+                            <Link
+                              href={`/clients/${client.clientId}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors"
+                            >
                               {clientUser?.displayName || clientUser?.username || 'Unknown'}
-                            </h3>
+                            </Link>
                             {clientUser?.gender && clientUser.gender !== 'other' && (
                               <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 capitalize">
                                 {clientUser.gender === 'female' ? '♀' : '♂'}
@@ -945,10 +968,7 @@ export default function ClientsPage() {
                               className="h-8 w-8 text-gray-400 hover:text-red-400"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (confirm(`Delete group "${group.name}"?`)) {
-                                  deleteClientGroup(group.id);
-                                  toast.success('Group deleted');
-                                }
+                                setGroupToDelete(group);
                               }}
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1174,14 +1194,13 @@ export default function ClientsPage() {
               onClick={() => {
                 if (!bookingClientId || !bookingDate || !bookingTime) return;
                 
-                const clientUser = allUsers.find(u => u.id === bookingClientId);
                 const startDateTime = new Date(`${bookingDate}T${bookingTime}:00`);
                 const endDateTime = new Date(startDateTime.getTime() + parseInt(bookingDuration) * 60 * 1000);
                 
                 addCalendarEvent({
                   trainerId: user?.id || '',
                   clientId: bookingClientId,
-                  title: `Session with ${clientUser?.displayName || 'Client'}`,
+                  title: `Session with ${getClientNameUtil(bookingClientId)}`,
                   type: 'session',
                   date: bookingDate,
                   startTime: bookingTime,
@@ -1438,6 +1457,23 @@ export default function ClientsPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!groupToDelete}
+        onOpenChange={(open) => { if (!open) setGroupToDelete(null); }}
+        title="Delete Group"
+        description={`Delete group "${groupToDelete?.name}"? This cannot be undone.`}
+        confirmLabel="Delete Group"
+        variant="destructive"
+        onConfirm={() => {
+          if (groupToDelete) {
+            deleteClientGroup(groupToDelete.id);
+            toast.success('Group deleted');
+            setGroupToDelete(null);
+          }
+        }}
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
     </MainLayout>
   );
 }

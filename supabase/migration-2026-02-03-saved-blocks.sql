@@ -1,6 +1,7 @@
 -- Migration: Saved Blocks (Block Library) for cross-device sync
 -- Date: 2026-02-03
 -- Description: Creates tables for storing trainer's saved workout blocks that can be synced across devices
+-- NOTE: Uses custom users table (not auth.users) since app uses custom authentication
 
 -- ============================================
 -- SAVED BLOCKS TABLE
@@ -9,7 +10,7 @@
 
 CREATE TABLE IF NOT EXISTS saved_blocks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  trainer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  trainer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   block_type TEXT NOT NULL CHECK (block_type IN ('warmup', 'work', 'cooldown', 'cardio', 'circuit')),
   
@@ -34,23 +35,23 @@ CREATE INDEX IF NOT EXISTS idx_saved_blocks_block_type ON saved_blocks(block_typ
 -- Enable Row Level Security
 ALTER TABLE saved_blocks ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Trainers can only see and manage their own blocks
-CREATE POLICY "Trainers can view own saved blocks"
+-- RLS Policies: Allow all operations (app handles auth via custom users table)
+CREATE POLICY "Allow all select on saved_blocks"
   ON saved_blocks FOR SELECT
-  USING (auth.uid() = trainer_id);
+  USING (true);
 
-CREATE POLICY "Trainers can insert own saved blocks"
+CREATE POLICY "Allow all insert on saved_blocks"
   ON saved_blocks FOR INSERT
-  WITH CHECK (auth.uid() = trainer_id);
+  WITH CHECK (true);
 
-CREATE POLICY "Trainers can update own saved blocks"
+CREATE POLICY "Allow all update on saved_blocks"
   ON saved_blocks FOR UPDATE
-  USING (auth.uid() = trainer_id)
-  WITH CHECK (auth.uid() = trainer_id);
+  USING (true)
+  WITH CHECK (true);
 
-CREATE POLICY "Trainers can delete own saved blocks"
+CREATE POLICY "Allow all delete on saved_blocks"
   ON saved_blocks FOR DELETE
-  USING (auth.uid() = trainer_id);
+  USING (true);
 
 -- ============================================
 -- BLOCK PERFORMANCE TRACKING TABLE
@@ -61,8 +62,8 @@ CREATE TABLE IF NOT EXISTS block_performances (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   block_id UUID REFERENCES saved_blocks(id) ON DELETE SET NULL,
   block_name TEXT NOT NULL,
-  client_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  trainer_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  trainer_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   workout_id UUID, -- Reference to the workout this was performed in
   
   -- Performance data stored as JSONB array
@@ -88,23 +89,23 @@ CREATE INDEX IF NOT EXISTS idx_block_performances_performed_at ON block_performa
 -- Enable Row Level Security
 ALTER TABLE block_performances ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Trainers can see client performances, clients can see their own
-CREATE POLICY "Trainers can view client block performances"
+-- RLS Policies: Allow all operations (app handles auth via custom users table)
+CREATE POLICY "Allow all select on block_performances"
   ON block_performances FOR SELECT
-  USING (auth.uid() = trainer_id OR auth.uid() = client_id);
+  USING (true);
 
-CREATE POLICY "Trainers can insert block performances"
+CREATE POLICY "Allow all insert on block_performances"
   ON block_performances FOR INSERT
-  WITH CHECK (auth.uid() = trainer_id OR auth.uid() = client_id);
+  WITH CHECK (true);
 
-CREATE POLICY "Trainers can update own client performances"
+CREATE POLICY "Allow all update on block_performances"
   ON block_performances FOR UPDATE
-  USING (auth.uid() = trainer_id)
-  WITH CHECK (auth.uid() = trainer_id);
+  USING (true)
+  WITH CHECK (true);
 
-CREATE POLICY "Trainers can delete own client performances"
+CREATE POLICY "Allow all delete on block_performances"
   ON block_performances FOR DELETE
-  USING (auth.uid() = trainer_id);
+  USING (true);
 
 -- ============================================
 -- UPDATED_AT TRIGGER

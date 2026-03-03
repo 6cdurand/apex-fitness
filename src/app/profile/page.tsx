@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
+import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { sortMedalsByPriority, getMedalDefinition, milestoneMedals } from '@/lib/medals';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -59,13 +60,12 @@ export default function ProfilePage() {
     }
   }, [isAuthenticated, router]);
 
-  // Recalculate PBs and strength rating when profile loads
+  // Run deriveAll pipeline when profile loads for full consistency
   useEffect(() => {
     if (user?.id) {
-      // Trigger PB recalculation from all workout history
-      const { recalculatePBsForUser } = useWorkoutStore.getState();
-      recalculatePBsForUser(user.id);
-      console.log('[Profile] Triggered PB recalculation for user:', user.id);
+      const { runDeriveAll } = useWorkoutStore.getState();
+      runDeriveAll(user.id);
+      console.log('[Profile] Triggered deriveAll for user:', user.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -184,8 +184,8 @@ export default function ProfilePage() {
   
   // For trainers: count sessions they've conducted (where assignedBy === their id)
   // For regular users: count their own workouts (userId === their id, no assignedBy)
-  const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user.id);
-  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy);
+  const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user.id && !w.deletedAt);
+  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy && !w.deletedAt);
   
   // Total workouts: trainer sees sessions conducted, user sees own workouts
   const userWorkouts = isTrainerMode ? trainerConductedWorkouts : userOwnWorkouts;
@@ -289,6 +289,53 @@ export default function ProfilePage() {
       ? totalEarnings / trainerPayments.length 
       : avgPricePerSession;
     
+    // Payment collection rate
+    const collectionRate = totalUsedSessions > 0 
+      ? Math.round((totalPaidSessionsFromPackages / totalUsedSessions) * 100) 
+      : 100;
+    
+    // Best client by revenue
+    let bestClient = { name: '—', revenue: 0, sessions: 0 };
+    trainerPackages.forEach(pkg => {
+      const revenue = (pkg.paidSessions || 0) * (pkg.pricePerSession || 0);
+      if (revenue > bestClient.revenue) {
+        const client = clients.find(c => c.clientId === pkg.clientId);
+        bestClient = {
+          name: client?.client?.displayName || client?.client?.username || 'Client',
+          revenue,
+          sessions: pkg.usedSessions || 0,
+        };
+      }
+    });
+    
+    // Busiest day of week from sessions
+    const dayCounts: Record<string, number> = {};
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    sessions.filter(s => s.trainerId === user.id && s.status === 'completed').forEach(s => {
+      const day = dayNames[new Date(s.date).getDay()];
+      dayCounts[day] = (dayCounts[day] || 0) + 1;
+    });
+    const busiestDay = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0];
+    
+    // Monthly growth: compare this month earnings vs previous month
+    const prevMonthStart = new Date(monthStart);
+    prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
+    const prevMonthEnd = new Date(monthStart.getTime() - 1);
+    const prevMonthPayments = trainerPayments.filter(p => {
+      const paidDate = p.paidAt ? new Date(p.paidAt) : null;
+      return paidDate && paidDate >= prevMonthStart && paidDate <= prevMonthEnd;
+    });
+    const prevMonthEarnings = prevMonthPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const monthlyGrowth = prevMonthEarnings > 0 
+      ? Math.round(((monthEarnings - prevMonthEarnings) / prevMonthEarnings) * 100) 
+      : monthEarnings > 0 ? 100 : 0;
+    
+    // Total clients ever
+    const totalClientsEver = clients.filter(c => c.trainerId === user.id).length;
+    
+    // Revenue per client
+    const revenuePerClient = activeClients > 0 ? Math.round(totalEarnings / activeClients) : 0;
+    
     return {
       totalSessions: totalUsedSessions,
       weekSessions: weekPayments.length,
@@ -302,6 +349,12 @@ export default function ProfilePage() {
       outstandingAmount,
       totalPaidSessions: totalPaidSessionsFromPackages,
       totalUnpaidSessions: Math.max(0, totalUsedSessions - totalPaidSessionsFromPackages),
+      collectionRate,
+      bestClient,
+      busiestDay: busiestDay ? { day: busiestDay[0], count: busiestDay[1] } : null,
+      monthlyGrowth,
+      totalClientsEver,
+      revenuePerClient,
     };
   }, [user, sessions, sessionPackages, clients, payments]);
   
@@ -446,12 +499,31 @@ export default function ProfilePage() {
           </Card>
         )}
 
-        {/* Mode Switch */}
+        {/* Membership & Mode Switch */}
+        <div className="flex items-center gap-2 mb-4">
+          <Badge className={
+            (user.membershipTier || 'pro') === 'pro' || (user.membershipTier || 'pro') === 'trainer'
+              ? 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+              : 'bg-gray-700/50 text-gray-400 border-gray-600'
+          }>
+            <Crown className="w-3 h-3 mr-1" />
+            {(user.membershipTier || 'pro') === 'trainer' ? 'Trainer Pro' : (user.membershipTier || 'pro') === 'pro' ? 'Pro Member' : 'Free'}
+          </Badge>
+          {isTrainerMode && (
+            <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/30">
+              Trainer Mode
+            </Badge>
+          )}
+        </div>
         {user.isTrainer && (
           <Button
             onClick={handleSwitchMode}
             variant="outline"
-            className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20 mb-4"
+            className={`w-full mb-4 ${
+              isTrainerMode 
+                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20' 
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
+            }`}
           >
             {isTrainerMode ? (
               <>
@@ -528,6 +600,42 @@ export default function ProfilePage() {
                 </button>
               </div>
               
+              {/* Enhanced Insights */}
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/10 mt-3">
+                <div className="text-center p-1.5 bg-white/5 rounded-lg">
+                  <p className="text-sm font-semibold text-white">{trainerStats.collectionRate}%</p>
+                  <p className="text-[9px] text-white/50">Collection Rate</p>
+                </div>
+                <div className="text-center p-1.5 bg-white/5 rounded-lg">
+                  <p className="text-sm font-semibold text-white">${trainerStats.revenuePerClient}</p>
+                  <p className="text-[9px] text-white/50">Rev/Client</p>
+                </div>
+                <div className="text-center p-1.5 bg-white/5 rounded-lg">
+                  <p className={`text-sm font-semibold ${trainerStats.monthlyGrowth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {trainerStats.monthlyGrowth > 0 ? '+' : ''}{trainerStats.monthlyGrowth}%
+                  </p>
+                  <p className="text-[9px] text-white/50">Monthly Growth</p>
+                </div>
+              </div>
+              {(trainerStats.bestClient.revenue > 0 || trainerStats.busiestDay) && (
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {trainerStats.bestClient.revenue > 0 && (
+                    <div className="p-2 bg-white/5 rounded-lg">
+                      <p className="text-[9px] text-white/40 uppercase tracking-wide">Top Client</p>
+                      <p className="text-xs font-semibold text-white truncate">{trainerStats.bestClient.name}</p>
+                      <p className="text-[10px] text-sky-400">${trainerStats.bestClient.revenue} • {trainerStats.bestClient.sessions} sessions</p>
+                    </div>
+                  )}
+                  {trainerStats.busiestDay && (
+                    <div className="p-2 bg-white/5 rounded-lg">
+                      <p className="text-[9px] text-white/40 uppercase tracking-wide">Busiest Day</p>
+                      <p className="text-xs font-semibold text-white">{trainerStats.busiestDay.day}</p>
+                      <p className="text-[10px] text-sky-400">{trainerStats.busiestDay.count} sessions total</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Payment History Link */}
               <Button 
                 variant="outline" 
@@ -776,8 +884,7 @@ export default function ProfilePage() {
                     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 5)
                     .map((session) => {
-                      const clientData = clients.find(c => c.clientId === session.clientId);
-                      const clientName = clientData?.client?.displayName || clientData?.client?.username || 'Client';
+                      const clientName = getClientNameUtil(session.clientId);
                       return (
                         <div
                           key={session.id}
@@ -938,6 +1045,7 @@ export default function ProfilePage() {
             onShare={() => {
               navigator.clipboard?.writeText(window.location.href);
             }}
+            onUpdateUser={updateUser}
           />
         </DialogContent>
       </Dialog>

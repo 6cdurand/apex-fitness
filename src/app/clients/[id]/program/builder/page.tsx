@@ -22,7 +22,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useTrainerStore } from '@/lib/store';
+import { useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
 import { programTemplates } from '@/lib/programTemplates';
 import { BlockType, MovementPattern } from '@/types';
 import { 
@@ -126,10 +127,23 @@ export default function WorkoutBuilderPage() {
   const clientId = params.id as string;
   const templateId = searchParams.get('templateId');
   const dayIndex = parseInt(searchParams.get('day') || '0');
+  const eventId = searchParams.get('eventId');
   
-  const { clients } = useTrainerStore();
+  const { clients, addCalendarEvent, updateCalendarEvent, addClientProgram, calendarEvents } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
-  const template = programTemplates.find(t => t.id === templateId);
+  const template = templateId ? programTemplates.find(t => t.id === templateId) : null;
+  const { workoutHistory } = useWorkoutStore();
+  
+  // Standalone builder state
+  const [workoutName, setWorkoutName] = useState(template?.days[dayIndex]?.dayLabel || 'Custom Workout');
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [programName, setProgramName] = useState('');
+  const [assignToCalendar, setAssignToCalendar] = useState(!eventId); // Don't show calendar assign if linking to existing event
+  // Pre-fill date/time from existing calendar event if eventId is provided
+  const linkedEvent = eventId ? calendarEvents.find(e => e.id === eventId) : null;
+  const [assignDate, setAssignDate] = useState(linkedEvent?.date || new Date().toISOString().split('T')[0]);
+  const [assignTime, setAssignTime] = useState(linkedEvent?.startTime || '09:00');
+  
   
   // Initialize blocks from template day
   const initialBlocks = useMemo(() => {
@@ -164,9 +178,14 @@ export default function WorkoutBuilderPage() {
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showSwapPanel, setShowSwapPanel] = useState(false);
 
-  const filteredExercises = COMMON_EXERCISES.filter(ex => 
-    ex.name.toLowerCase().includes(exerciseSearch.toLowerCase())
-  );
+  const filteredExercises = useMemo(() => {
+    const blockType = showAddExercise ? blocks.find(b => b.id === showAddExercise)?.type : null;
+    return filterExercisesBySearch(COMMON_EXERCISES, exerciseSearch, blockType || null);
+  }, [exerciseSearch, showAddExercise, blocks]);
+  
+  const exerciseUsageCounts = useMemo(() => {
+    return getExerciseUsageCounts(workoutHistory, clientId);
+  }, [workoutHistory, clientId]);
 
   // Helper to sort blocks: warmup first, work in middle, cooldown last
   const sortBlocks = (blocksToSort: WorkoutBlock[]): WorkoutBlock[] => {
@@ -277,6 +296,88 @@ export default function WorkoutBuilderPage() {
     router.back();
   };
 
+  const handleSaveStandalone = () => {
+    if (blocks.length === 0) return;
+    const totalEx = blocks.reduce((s, b) => s + b.exercises.length, 0);
+    const name = workoutName || 'Custom Workout';
+
+    // Create as active program for the client
+    const weeklyPlan = [{
+      dayLabel: name,
+      blocks: blocks.map(block => ({
+        id: block.id,
+        type: block.type,
+        name: block.name,
+        exercises: block.exercises.map(ex => ({
+          id: ex.id,
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.exerciseName,
+          movementPattern: ex.movementPattern,
+          sets: ex.sets,
+          reps: ex.reps,
+          rest: ex.rest,
+          tempo: ex.tempo,
+          notes: ex.notes,
+          trainerNotes: ex.trainerNotes,
+        })),
+      })),
+    }];
+
+    const trainerId = client?.trainerId || '';
+    addClientProgram({
+      id: `program-${Date.now()}`,
+      clientId,
+      trainerId,
+      templateId: 'custom',
+      templateName: programName || name,
+      phase: 'foundation',
+      goal: 'general',
+      weeklyPlan: weeklyPlan.map((day, i) => ({
+        id: `day-${Date.now()}-${i}`,
+        ...day,
+        blocks: day.blocks.map(b => ({
+          ...b,
+          exercises: b.exercises.map(ex => ({
+            ...ex,
+            movementPattern: ex.movementPattern || ('push' as any),
+          })),
+        })),
+      })),
+      startDate: assignDate || new Date().toISOString().split('T')[0],
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    // Link to existing calendar event or create new one
+    if (eventId && linkedEvent) {
+      // Update existing calendar event with workout details
+      updateCalendarEvent(eventId, {
+        title: name,
+        notes: `${totalEx} exercises • ${programName || name}`,
+      });
+    } else if (assignToCalendar && assignDate) {
+      addCalendarEvent({
+        title: name,
+        type: 'session',
+        date: assignDate,
+        startTime: assignTime,
+        endTime: (() => {
+          const [h, m] = assignTime.split(':').map(Number);
+          const endH = h + 1;
+          return `${String(endH).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        })(),
+        clientId,
+        trainerId: useTrainerStore.getState().clients.find(c => c.clientId === clientId)?.trainerId || '',
+        status: 'scheduled',
+        notes: `${totalEx} exercises • ${programName || name}`,
+      });
+    }
+
+    setShowSaveDialog(false);
+    router.back();
+  };
+
   const getBlockIcon = (type: BlockType) => {
     const blockType = BLOCK_TYPES.find(b => b.value === type);
     return blockType?.icon || <Dumbbell className="h-4 w-4" />;
@@ -297,9 +398,12 @@ export default function WorkoutBuilderPage() {
           <ArrowLeft className="h-4 w-4 mr-2" /> Back
         </Button>
         <h1 className="text-2xl font-bold">Workout Builder</h1>
-        <p className="text-muted-foreground">
-          {template?.days[dayIndex]?.dayLabel || 'Custom Workout'}
-        </p>
+        <Input
+          value={workoutName}
+          onChange={(e) => setWorkoutName(e.target.value)}
+          placeholder="Workout name..."
+          className="mt-1 text-lg font-medium border-none p-0 h-auto focus-visible:ring-0 bg-transparent text-muted-foreground"
+        />
       </div>
 
       {/* Blocks */}
@@ -394,19 +498,27 @@ export default function WorkoutBuilderPage() {
                     </div>
                     <ScrollArea className="h-[300px]">
                       <div className="space-y-1">
-                        {filteredExercises.map(ex => (
-                          <Button
-                            key={ex.id}
-                            variant="ghost"
-                            className="w-full justify-start"
-                            onClick={() => addExercise(block.id, ex)}
-                          >
-                            <span className="flex-1 text-left">{ex.name}</span>
-                            <Badge variant="outline" className="text-xs capitalize">
-                              {ex.pattern}
-                            </Badge>
-                          </Button>
-                        ))}
+                        {filteredExercises.map(ex => {
+                          const count = exerciseUsageCounts[ex.id] || 0;
+                          return (
+                            <Button
+                              key={ex.id}
+                              variant="ghost"
+                              className="w-full justify-start"
+                              onClick={() => addExercise(block.id, { ...ex, pattern: ex.pattern || 'compound' } as typeof COMMON_EXERCISES[0])}
+                            >
+                              <span className="flex-1 text-left">{ex.name}</span>
+                              {count > 0 && (
+                                <Badge variant="secondary" className="text-xs bg-sky-500/20 text-sky-400 mr-1">
+                                  {count}×
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {ex.pattern}
+                              </Badge>
+                            </Button>
+                          );
+                        })}
                       </div>
                     </ScrollArea>
                   </DialogContent>
@@ -676,6 +788,74 @@ export default function WorkoutBuilderPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Save & Assign Dialog (standalone mode) */}
+      <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Save className="h-5 w-5 text-sky-500" />
+              Save Program
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Program Name</Label>
+              <Input
+                value={programName}
+                onChange={(e) => setProgramName(e.target.value)}
+                placeholder={workoutName || 'e.g. Foundation Phase A'}
+                className="mt-1"
+              />
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-lg border">
+              <input
+                type="checkbox"
+                checked={assignToCalendar}
+                onChange={(e) => setAssignToCalendar(e.target.checked)}
+                className="rounded"
+              />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Assign to calendar</p>
+                <p className="text-xs text-muted-foreground">Schedule the first session</p>
+              </div>
+            </div>
+            {assignToCalendar && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Date</Label>
+                  <Input
+                    type="date"
+                    value={assignDate}
+                    onChange={(e) => setAssignDate(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label>Time</Label>
+                  <Select value={assignTime} onValueChange={setAssignTime}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30',
+                        '10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00',
+                        '16:00','16:30','17:00','17:30','18:00','18:30','19:00','20:00'].map(t => (
+                        <SelectItem key={t} value={t}>{t}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+            <Button onClick={handleSaveStandalone} className="w-full" disabled={blocks.length === 0}>
+              <Save className="h-4 w-4 mr-2" />
+              {assignToCalendar ? 'Save & Schedule' : 'Save Program'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
         <div className="container mx-auto max-w-4xl flex items-center justify-between">
@@ -685,8 +865,8 @@ export default function WorkoutBuilderPage() {
               {blocks.reduce((acc, b) => acc + b.exercises.length, 0)} exercises
             </p>
           </div>
-          <Button onClick={handleSave} size="lg">
-            <Save className="h-4 w-4 mr-2" /> Save Workout
+          <Button onClick={template ? handleSave : () => setShowSaveDialog(true)} size="lg">
+            <Save className="h-4 w-4 mr-2" /> {template ? 'Save Workout' : 'Save & Assign'}
           </Button>
         </div>
       </div>

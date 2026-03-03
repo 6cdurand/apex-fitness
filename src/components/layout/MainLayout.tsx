@@ -2,15 +2,20 @@
 
 import React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useSocialStore } from '@/lib/store';
+import { useMessageStore } from '@/lib/messageStore';
 import { cn } from '@/lib/utils';
 import {
   Dumbbell,
   Newspaper,
   Users,
   UserCircle,
-  Calendar,
+  CalendarDays,
   GraduationCap,
+  Mail,
+  Hammer,
+  Play,
+  Bell,
 } from 'lucide-react';
 
 interface NavItem {
@@ -20,18 +25,18 @@ interface NavItem {
 }
 
 const userNavItems: NavItem[] = [
-  { icon: Dumbbell, label: 'Train', href: '/workout' },
+  { icon: CalendarDays, label: 'Today', href: '/today' },
   { icon: Newspaper, label: 'Feed', href: '/feed' },
-  { icon: Users, label: 'Friends', href: '/friends' },
-  { icon: GraduationCap, label: 'Trainer', href: '/trainer' },
+  { icon: Users, label: 'Community', href: '/community' },
+  { icon: GraduationCap, label: 'Program', href: '/program' },
   { icon: UserCircle, label: 'Profile', href: '/profile' },
 ];
 
 const trainerNavItems: NavItem[] = [
-  { icon: Dumbbell, label: 'Log', href: '/workout' },
+  { icon: CalendarDays, label: 'Today', href: '/today' },
   { icon: Newspaper, label: 'Feed', href: '/feed' },
   { icon: Users, label: 'Clients', href: '/clients' },
-  { icon: Calendar, label: 'Calendar', href: '/calendar' },
+  { icon: Hammer, label: 'Builder', href: '/builder' },
   { icon: UserCircle, label: 'Profile', href: '/profile' },
 ];
 
@@ -39,8 +44,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
+  const { activeWorkout } = useWorkoutStore();
 
   const isTrainerMode = user?.mode === 'trainer';
+  const isOnActivePage = pathname === '/workout/active';
   const navItems = isTrainerMode ? trainerNavItems : userNavItems;
 
   // Theme colors based on mode
@@ -59,6 +66,29 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 pb-24 overflow-auto">
         {children}
       </main>
+
+      {/* Active Workout Bar — shown when workout is in progress and user navigated away */}
+      {activeWorkout && !isOnActivePage && (
+        <div
+          className="fixed bottom-[72px] left-0 right-0 z-50 cursor-pointer"
+          onClick={() => router.push('/workout/active')}
+        >
+          <div className="max-w-lg mx-auto px-4">
+            <div className="flex items-center justify-between bg-gradient-to-r from-green-500 to-emerald-500 rounded-t-2xl px-4 py-3 shadow-lg shadow-green-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center animate-pulse">
+                  <Dumbbell className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{activeWorkout.name || 'Workout in Progress'}</p>
+                  <p className="text-[11px] text-white/70">{activeWorkout.exercises?.length || 0} exercises • Tap to continue</p>
+                </div>
+              </div>
+              <Play className="w-5 h-5 text-white" />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Navigation - Refined, calmer */}
       <nav className={cn(
@@ -160,8 +190,56 @@ export function PageHeader({
             )}
           </div>
         </div>
-        {action && <div>{action}</div>}
+        <div className="flex items-center gap-2">
+          <NotifBellButton />
+          <MessageButton />
+          {action && <div>{action}</div>}
+        </div>
       </div>
     </header>
+  );
+}
+
+function NotifBellButton() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const { getUnreadCount } = useSocialStore();
+  const unread = user ? getUnreadCount() : 0;
+
+  return (
+    <button
+      onClick={() => router.push('/notifications')}
+      className="relative p-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm"
+      aria-label="Notifications"
+    >
+      <Bell className="w-5 h-5 text-white" />
+      {unread > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function MessageButton() {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const { getUnreadCount } = useMessageStore();
+  const unread = user ? getUnreadCount(user.id) : 0;
+
+  return (
+    <button
+      onClick={() => router.push('/messages')}
+      className="relative p-2.5 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm"
+      aria-label="Messages"
+    >
+      <Mail className="w-5 h-5 text-white" />
+      {unread > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </button>
   );
 }

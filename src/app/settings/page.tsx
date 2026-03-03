@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { Suspense, useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { 
   User, 
   Bell, 
@@ -22,10 +23,20 @@ import {
   ChevronRight,
   Save,
   Upload,
-  Users
+  Users,
+  Dumbbell,
+  Heart,
+  Smartphone,
+  Calendar,
+  CreditCard,
+  Link2,
+  Search,
+  Plus,
+  X,
+  Check
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { Gender, WeightUnit } from '@/types';
+import { Gender, WeightUnit, Gym } from '@/types';
 import { resetSeedData, resetWorkoutDataOnly } from '@/lib/seedData';
 import { 
   syncTrainerClientToSupabase,
@@ -44,6 +55,14 @@ import { useWorkoutStore } from '@/lib/store';
 import { Cloud, CloudUpload, RefreshCw, Database, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageContent />
+    </Suspense>
+  );
+}
+
+function SettingsPageContent() {
   const router = useRouter();
   const { user, isAuthenticated, updateUser, deleteAccount } = useAuthStore();
   const { 
@@ -388,6 +407,60 @@ export default function SettingsPage() {
   const [exerciseUnit, setExerciseUnit] = useState<WeightUnit>('kg');
   const [isPublicProfile, setIsPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
+  
+  // Gym affiliation
+  const [gymName, setGymName] = useState('');
+  const [gymSearch, setGymSearch] = useState('');
+  const [showGymSearch, setShowGymSearch] = useState(false);
+  const [gyms, setGyms] = useState<Gym[]>([]);
+  
+  // Health connections
+  const [healthConnections, setHealthConnections] = useState(user?.healthConnections || {});
+  const [showHealthInfo, setShowHealthInfo] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  // Handle OAuth callbacks from Google Calendar and Stripe
+  const handleOAuthCallback = useCallback(() => {
+    const gcalStatus = searchParams.get('gcal');
+    const stripeStatus = searchParams.get('stripe');
+    const callbackData = searchParams.get('data');
+
+    if (gcalStatus === 'success' && callbackData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(callbackData));
+        const updated = { ...healthConnections, calendar: { connected: true, provider: 'google' as const, lastSync: new Date().toISOString(), email: data.email } };
+        setHealthConnections(updated);
+        updateUser({ healthConnections: updated });
+        toast.success(`Google Calendar connected (${data.email})`);
+      } catch { /* ignore parse errors */ }
+      window.history.replaceState({}, '', '/settings');
+    } else if (gcalStatus === 'error') {
+      const reason = searchParams.get('reason');
+      toast.error(`Calendar connection failed: ${reason || 'Unknown error'}`);
+      window.history.replaceState({}, '', '/settings');
+    }
+
+    if (stripeStatus === 'success' && callbackData) {
+      try {
+        const data = JSON.parse(decodeURIComponent(callbackData));
+        const updated = { ...healthConnections, stripe: { connected: true, accountId: data.accountId } };
+        setHealthConnections(updated);
+        updateUser({ healthConnections: updated });
+        toast.success('Stripe account connected!');
+      } catch { /* ignore parse errors */ }
+      window.history.replaceState({}, '', '/settings');
+    } else if (stripeStatus === 'error') {
+      const reason = searchParams.get('reason');
+      toast.error(`Stripe connection failed: ${reason || 'Unknown error'}`);
+      window.history.replaceState({}, '', '/settings');
+    }
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    handleOAuthCallback();
+  }, [handleOAuthCallback]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -404,8 +477,16 @@ export default function SettingsPage() {
       setPreferredUnit(user.preferredUnit || 'kg');
       setExerciseUnit(user.exerciseUnit || 'kg');
       setIsPublicProfile(user.isPublicProfile !== false); // Default to true
+      setGymName(user.gymName || '');
+      setHealthConnections(user.healthConnections || {});
     }
   }, [user]);
+
+  // Load gyms list
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('apex-gyms') || '[]');
+    setGyms(stored);
+  }, []);
 
   const handleSaveProfile = () => {
     updateUser({
@@ -416,8 +497,92 @@ export default function SettingsPage() {
       preferredUnit,
       exerciseUnit,
       isPublicProfile,
+      gymName: gymName || undefined,
+      healthConnections,
     });
     toast.success('Profile updated successfully');
+  };
+
+  const handleAddGym = (name: string) => {
+    if (!name.trim() || !user) return;
+    const newGym: Gym = {
+      id: `gym-${Date.now()}`,
+      name: name.trim(),
+      createdBy: user.id,
+      createdAt: new Date().toISOString(),
+    };
+    const updated = [...gyms, newGym];
+    setGyms(updated);
+    localStorage.setItem('apex-gyms', JSON.stringify(updated));
+    setGymName(name.trim());
+    setGymSearch('');
+    setShowGymSearch(false);
+  };
+
+  const handleToggleConnection = (service: string) => {
+    // Calendar and Stripe use real OAuth — redirect to provider
+    if (service === 'calendar') {
+      handleGoogleCalendarConnect();
+      return;
+    }
+    if (service === 'stripe') {
+      handleStripeConnect();
+      return;
+    }
+    // Apple Health & Google Health show info dialog (native-only)
+    setShowHealthInfo(service);
+  };
+
+  const handleGoogleCalendarConnect = async () => {
+    if (!user?.id) return;
+    setOauthLoading('calendar');
+    try {
+      const res = await fetch(`/api/auth/google-calendar?userId=${user.id}`);
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || 'Failed to start Google Calendar connection. Check that GOOGLE_CLIENT_ID is set in .env.local');
+        setOauthLoading(null);
+      }
+    } catch {
+      toast.error('Failed to connect to Google Calendar');
+      setOauthLoading(null);
+    }
+  };
+
+  const handleStripeConnect = async () => {
+    if (!user?.id) return;
+    setOauthLoading('stripe');
+    try {
+      const res = await fetch(`/api/auth/stripe-connect?userId=${user.id}`);
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error(data.error || 'Failed to start Stripe connection. Check that STRIPE_CONNECT_CLIENT_ID is set in .env.local');
+        setOauthLoading(null);
+      }
+    } catch {
+      toast.error('Failed to connect to Stripe');
+      setOauthLoading(null);
+    }
+  };
+
+  const handleConfirmConnection = (service: string) => {
+    // For health services (native-only) — mark as interested / waiting for native app
+    const updated = { ...healthConnections, [service]: { connected: false, interested: true, requestedAt: new Date().toISOString() } };
+    setHealthConnections(updated);
+    updateUser({ healthConnections: updated });
+    setShowHealthInfo(null);
+    toast.success(`${service === 'appleHealth' ? 'Apple Health' : 'Google Health'} — you'll be notified when the native app is ready!`);
+  };
+
+  const handleDisconnectService = async (service: string) => {
+    const updated = { ...healthConnections, [service]: { connected: false } };
+    setHealthConnections(updated);
+    updateUser({ healthConnections: updated });
+    toast.success('Disconnected');
   };
 
   if (!isAuthenticated || !user) return null;
@@ -485,8 +650,258 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label className="text-gray-300">Gym</Label>
+              {gymName && !showGymSearch ? (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-md px-3 py-2">
+                    <Dumbbell className="w-4 h-4 text-sky-400" />
+                    <span className="text-white text-sm">{gymName}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-gray-400 hover:text-white"
+                    onClick={() => { setShowGymSearch(true); setGymSearch(gymName); }}
+                  >
+                    <Search className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-gray-400 hover:text-red-400"
+                    onClick={() => { setGymName(''); }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    value={gymSearch}
+                    onChange={(e) => { setGymSearch(e.target.value); setShowGymSearch(true); }}
+                    onFocus={() => setShowGymSearch(true)}
+                    placeholder="Search or add your gym..."
+                    className="bg-gray-800 border-gray-700 text-white"
+                  />
+                  {showGymSearch && gymSearch.trim() && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg z-50 max-h-48 overflow-y-auto shadow-xl">
+                      {gyms
+                        .filter(g => g.name.toLowerCase().includes(gymSearch.toLowerCase()))
+                        .slice(0, 5)
+                        .map(g => (
+                          <button
+                            key={g.id}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm text-white flex items-center gap-2"
+                            onClick={() => { setGymName(g.name); setGymSearch(''); setShowGymSearch(false); }}
+                          >
+                            <Dumbbell className="w-3 h-3 text-sky-400" />
+                            {g.name}
+                            {g.location && <span className="text-gray-500 text-xs">• {g.location}</span>}
+                          </button>
+                        ))}
+                      {!gyms.some(g => g.name.toLowerCase() === gymSearch.toLowerCase()) && (
+                        <button
+                          className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm text-sky-400 flex items-center gap-2 border-t border-gray-700"
+                          onClick={() => handleAddGym(gymSearch)}
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add &quot;{gymSearch.trim()}&quot;
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
+
+        {/* Connected Services */}
+        <Card className="bg-gray-900 border-gray-800">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-emerald-400" />
+              Connected Services
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Apple Health */}
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                  <Heart className="w-5 h-5 text-red-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-white text-sm">Apple Health</p>
+                  <p className="text-xs text-gray-500">Requires iOS app (HealthKit)</p>
+                </div>
+              </div>
+              {(healthConnections?.appleHealth as any)?.interested ? (
+                <span className="text-xs text-amber-400">Notify me</span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-gray-600 text-gray-300 hover:border-red-500/50 hover:text-red-400"
+                  onClick={() => handleToggleConnection('appleHealth')}
+                >
+                  Set Up
+                </Button>
+              )}
+            </div>
+
+            {/* Google/Samsung Health */}
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-white text-sm">Google / Samsung Health</p>
+                  <p className="text-xs text-gray-500">Requires Android app (Health Connect)</p>
+                </div>
+              </div>
+              {(healthConnections?.googleHealth as any)?.interested ? (
+                <span className="text-xs text-amber-400">Notify me</span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-gray-600 text-gray-300 hover:border-green-500/50 hover:text-green-400"
+                  onClick={() => handleToggleConnection('googleHealth')}
+                >
+                  Set Up
+                </Button>
+              )}
+            </div>
+
+            {/* Calendar */}
+            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <p className="font-medium text-white text-sm">Google Calendar</p>
+                  <p className="text-xs text-gray-500">Sign in to sync bookings & workouts</p>
+                </div>
+              </div>
+              {healthConnections?.calendar?.connected ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-emerald-400">Connected</span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-gray-400 hover:text-red-400"
+                    onClick={() => handleDisconnectService('calendar')}
+                  >
+                    Disconnect
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs border-gray-600 text-gray-300 hover:border-blue-500/50 hover:text-blue-400"
+                  disabled={oauthLoading === 'calendar'}
+                  onClick={() => handleToggleConnection('calendar')}
+                >
+                  {oauthLoading === 'calendar' ? 'Redirecting...' : 'Sign In'}
+                </Button>
+              )}
+            </div>
+
+            {/* Stripe — trainers only */}
+            {user.isTrainer && (
+              <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white text-sm">Stripe</p>
+                    <p className="text-xs text-gray-500">Connect account to accept payments</p>
+                  </div>
+                </div>
+                {healthConnections?.stripe?.connected ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-emerald-400">Connected</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs text-gray-400 hover:text-red-400"
+                      onClick={() => handleDisconnectService('stripe')}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs border-gray-600 text-gray-300 hover:border-purple-500/50 hover:text-purple-400"
+                    disabled={oauthLoading === 'stripe'}
+                    onClick={() => handleToggleConnection('stripe')}
+                  >
+                    {oauthLoading === 'stripe' ? 'Redirecting...' : 'Connect'}
+                  </Button>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 text-center pt-1">
+              Calendar & Stripe connect via OAuth. Health data requires the native iOS/Android app.
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Connection Info Dialog */}
+        {showHealthInfo && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowHealthInfo(null)}>
+            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+              <div className="text-center">
+                <div className={`w-16 h-16 rounded-2xl mx-auto mb-3 flex items-center justify-center ${
+                  showHealthInfo === 'appleHealth' ? 'bg-red-500/20' :
+                  showHealthInfo === 'googleHealth' ? 'bg-green-500/20' :
+                  showHealthInfo === 'calendar' ? 'bg-blue-500/20' : 'bg-purple-500/20'
+                }`}>
+                  {showHealthInfo === 'appleHealth' && <Heart className="w-8 h-8 text-red-400" />}
+                  {showHealthInfo === 'googleHealth' && <Smartphone className="w-8 h-8 text-green-400" />}
+                  {showHealthInfo === 'calendar' && <Calendar className="w-8 h-8 text-blue-400" />}
+                  {showHealthInfo === 'stripe' && <CreditCard className="w-8 h-8 text-purple-400" />}
+                </div>
+                <h3 className="text-lg font-semibold text-white">
+                  {showHealthInfo === 'appleHealth' ? 'Apple Health' : 'Google / Samsung Health'}
+                </h3>
+                <p className="text-sm text-gray-400 mt-2">
+                  {showHealthInfo === 'appleHealth' && 'Apple Health uses HealthKit which requires a native iOS app. Once our iOS app is available, it will read your steps, calories, heart rate, and sleep data directly from your Apple ID.'}
+                  {showHealthInfo === 'googleHealth' && 'Google Health Connect requires a native Android app. Once our Android app is available, it will read your steps, calories, and heart rate data from your Google or Samsung account.'}
+                </p>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mt-2">
+                  <p className="text-xs text-amber-300">📱 Native app coming soon! Tap below to be notified when it launches.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-700 text-gray-300"
+                  onClick={() => setShowHealthInfo(null)}
+                >
+                  Not Now
+                </Button>
+                <Button
+                  className={`flex-1 ${
+                    showHealthInfo === 'appleHealth' ? 'bg-red-500 hover:bg-red-600' : 'bg-green-500 hover:bg-green-600'
+                  }`}
+                  onClick={() => handleConfirmConnection(showHealthInfo)}
+                >
+                  <Bell className="w-4 h-4 mr-2" /> Notify Me
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Preferences */}
         <Card className="bg-gray-900 border-gray-800">
@@ -765,13 +1180,7 @@ export default function SettingsPage() {
             <Button
               variant="destructive"
               className="w-full bg-red-600 hover:bg-red-700"
-              onClick={() => {
-                if (confirm('Are you sure you want to delete your account? This cannot be undone.')) {
-                  deleteAccount();
-                  toast.success('Account deleted');
-                  setTimeout(() => window.location.href = '/auth', 500);
-                }
-              }}
+              onClick={() => setShowDeleteAccountConfirm(true)}
             >
               Delete My Account
             </Button>
@@ -826,6 +1235,19 @@ export default function SettingsPage() {
           <p className="mt-1">Made with 💪 for fitness enthusiasts</p>
         </div>
       </div>
+      <ConfirmDialog
+        open={showDeleteAccountConfirm}
+        onOpenChange={setShowDeleteAccountConfirm}
+        title="Delete Account"
+        description="Are you sure you want to delete your account? This cannot be undone. All your data will be permanently removed."
+        confirmLabel="Delete My Account"
+        variant="destructive"
+        onConfirm={() => {
+          deleteAccount();
+          toast.success('Account deleted');
+          setTimeout(() => window.location.href = '/auth', 500);
+        }}
+      />
     </MainLayout>
   );
 }

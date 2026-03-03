@@ -12,7 +12,10 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName } from '@/lib/exercises';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
+import { getClientDisplayInfo } from '@/lib/clientUtils';
+import { getMedalDefinition } from '@/lib/medals';
 import { cn } from '@/lib/utils';
+import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { Exercise, WorkoutSet } from '@/types';
 import { 
   Plus, 
@@ -34,7 +37,11 @@ import {
   Settings,
   StickyNote,
   History,
-  Link2
+  Link2,
+  Edit,
+  ArrowLeftRight,
+  TrendingUp,
+  Dumbbell
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -73,40 +80,16 @@ export default function ActiveWorkoutPage() {
     getExerciseNotes,
     setExerciseNotes,
   } = useWorkoutStore();
-  const _medalStore = useMedalStore(); // Medal earning handled by store.ts endWorkout
+  const _medalStore = useMedalStore();
+  const { lastDeriveResult } = useWorkoutStore();
   const { createPost } = useSocialStore();
   const { clients, saveToWorkoutLibrary, saveCircuitTemplate } = useTrainerStore();
   
-  // Get client name if this is a PT session
-  // Try multiple lookup methods since clientId might be stored differently
-  const currentClient = currentClientId 
-    ? clients.find(c => c.clientId === currentClientId || c.id === currentClientId)
-    : activeWorkout?.assignedBy 
-      ? clients.find(c => c.clientId === activeWorkout.userId)
-      : null;
-  
-  // Get display name from client object, or fall back to looking up in stored users
-  const [clientName, setClientName] = useState<string | null>(null);
-  
-  useEffect(() => {
-    if (currentClient?.client?.displayName || currentClient?.client?.username) {
-      setClientName(currentClient.client.displayName || currentClient.client.username || null);
-    } else if (currentClientId || (activeWorkout?.assignedBy && activeWorkout?.userId)) {
-      // Try to get from localStorage as fallback
-      const targetId = currentClientId || activeWorkout?.userId;
-      if (targetId) {
-        try {
-          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-          const user = storedUsers.find((u: any) => u.id === targetId);
-          if (user) {
-            setClientName(user.displayName || user.username || null);
-          }
-        } catch (e) {
-          console.error('Error looking up client name:', e);
-        }
-      }
-    }
-  }, [currentClient, currentClientId, activeWorkout]);
+  // Get client name if this is a PT session — centralized resolution
+  const resolvedClientId = currentClientId || (activeWorkout?.assignedBy ? activeWorkout.userId : null);
+  const clientInfo = resolvedClientId ? getClientDisplayInfo(resolvedClientId) : null;
+  const clientName = clientInfo?.displayName || null;
+  const isPT = !!activeWorkout?.assignedBy;
 
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
@@ -125,12 +108,19 @@ export default function ActiveWorkoutPage() {
     pbs: string[];
     isPTSession: boolean;
     clientId?: string;
+    startTime: string;
+    endTime: string;
+    previousRating?: { overall: number; overallTier: string; categories: Record<string, { tier: string; score: number }> };
   } | null>(null);
+  const [editingTimes, setEditingTimes] = useState(false);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
   const [defaultRestTime, setDefaultRestTime] = useState(90);
   const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
+  const [shareToFeed, setShareToFeed] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
   
   // Save workout state
@@ -215,20 +205,34 @@ export default function ActiveWorkoutPage() {
   const hasStrength = workoutBlocks.some(b => b.type === 'strength');
 
   // Redirect if not authenticated or no active workout
+  // BUT skip redirect if the summary is showing (activeWorkout is null after endWorkout)
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/auth');
-    } else if (!activeWorkout) {
+    } else if (!activeWorkout && !showSummary && !completedWorkoutData) {
       router.replace('/workout');
     }
-  }, [isAuthenticated, activeWorkout, router]);
+  }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, router]);
+
+  // Map block types from builder format to active workout format
+  const mapBlockType = (type: string): 'warmup' | 'strength' | 'circuit' | 'cardio' => {
+    const typeMap: Record<string, 'warmup' | 'strength' | 'circuit' | 'cardio'> = {
+      'warmup': 'warmup',
+      'work': 'strength',
+      'strength': 'strength',
+      'circuit': 'circuit',
+      'cardio': 'cardio',
+      'cooldown': 'warmup', // Map cooldown to warmup styling
+    };
+    return typeMap[type] || 'strength';
+  };
 
   // Initialize blocks from activeWorkout.blocks (for session workouts)
   useEffect(() => {
     if (activeWorkout?.blocks && activeWorkout.blocks.length > 0 && workoutBlocks.length === 0) {
       const initialBlocks = activeWorkout.blocks.map((block: any) => ({
         id: block.id || `block-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        type: block.type || 'strength',
+        type: mapBlockType(block.type),
         name: block.name || 'Block',
         circuitStyle: block.circuitStyle,
         circuitDuration: block.circuitDuration,
@@ -240,6 +244,7 @@ export default function ActiveWorkoutPage() {
         roundsCompleted: [],
       }));
       setWorkoutBlocks(initialBlocks);
+      console.log('[Active Workout] Initialized blocks:', initialBlocks.map(b => ({ id: b.id, type: b.type, name: b.name })));
     }
   }, [activeWorkout?.blocks]);
 
@@ -311,12 +316,15 @@ export default function ActiveWorkoutPage() {
   const getFilteredExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
     
-    // When searching, search entire library first
+    // When searching, search entire library by name, muscles, equipment, and category
     if (exerciseSearch) {
+      const search = exerciseSearch.toLowerCase();
       return exerciseLibrary.filter(e => 
-        e.name.toLowerCase().includes(exerciseSearch.toLowerCase()) ||
-        e.primaryMuscles.some(m => m.toLowerCase().includes(exerciseSearch.toLowerCase())) ||
-        e.equipment.toLowerCase().includes(exerciseSearch.toLowerCase())
+        e.name.toLowerCase().includes(search) ||
+        e.primaryMuscles.some(m => m.toLowerCase().includes(search)) ||
+        e.secondaryMuscles.some(m => m.toLowerCase().includes(search)) ||
+        e.equipment.toLowerCase().includes(search) ||
+        e.category.toLowerCase().includes(search)
       );
     }
     
@@ -686,16 +694,19 @@ export default function ActiveWorkoutPage() {
       (sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0
     ) || 0;
     
+    // Snapshot current strength rating BEFORE ending (for comparison in summary)
+    const prevRating = useMedalStore.getState().strengthRating;
+    const previousRating = prevRating ? {
+      overall: prevRating.overall,
+      overallTier: prevRating.overallTier,
+      categories: Object.fromEntries(
+        Object.entries(prevRating.categories).map(([k, v]: [string, any]) => [k, { tier: v.tier, score: v.totalPoints }])
+      ),
+    } : undefined;
+
     const completed = endWorkout(workoutNotes);
     if (completed) {
-      // Create feed post with PB info
-      const pbText = newPBs.length > 0 ? ` 🏆 ${newPBs.length} new PR${newPBs.length > 1 ? 's' : ''}!` : '';
-      createPost(
-        'workout_complete',
-        `Completed ${completed.name}! 💪 ${completed.exercises.length} exercises, ${Math.round(completed.totalVolume)}kg total volume.${pbText}`,
-        undefined,
-        completed.id
-      );
+      // Feed post is now opt-in — created in handleCloseSummary if shareToFeed is checked
 
       // Create session record for PT sessions to track session count
       if (isPT && clientId && trainerId) {
@@ -752,6 +763,7 @@ export default function ActiveWorkoutPage() {
       }
 
       // Show summary popup instead of redirecting
+      const endTimeStr = completed.endTime || new Date().toISOString();
       setCompletedWorkoutData({
         id: completed.id,
         name: workoutName,
@@ -762,56 +774,116 @@ export default function ActiveWorkoutPage() {
         pbs: newPBs,
         isPTSession: isPT,
         clientId: isPT ? clientId : undefined,
+        startTime: completed.startTime,
+        endTime: endTimeStr,
+        previousRating,
       });
+      // Pre-fill editable time fields
+      setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+      setEditEndTime(new Date(endTimeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setShowFinishDialog(false);
       setShowSummary(true);
     }
   };
 
   const handleCloseSummary = () => {
-    // Save notes if provided
+    // Save edited times if changed
+    if (editingTimes && completedWorkoutData?.id) {
+      const origDate = new Date(completedWorkoutData.startTime);
+      const dateStr = origDate.toISOString().split('T')[0];
+      const [sh, sm] = editStartTime.split(':').map(Number);
+      const [eh, em] = editEndTime.split(':').map(Number);
+      const newStart = new Date(`${dateStr}T${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00`);
+      const newEnd = new Date(`${dateStr}T${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00`);
+      // Handle case where end is past midnight
+      if (newEnd <= newStart) newEnd.setDate(newEnd.getDate() + 1);
+      const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / 1000);
+      useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, {
+        startTime: newStart.toISOString(),
+        endTime: newEnd.toISOString(),
+        duration: newDuration,
+      });
+      setEditingTimes(false);
+    }
+    // Save notes — PT session notes go to trainerNotes (private), personal workout notes go to notes (visible)
     if (workoutNotes.trim() && completedWorkoutData?.id) {
-      useWorkoutStore.getState().updateWorkoutNotes(completedWorkoutData.id, workoutNotes.trim());
+      if (completedWorkoutData.isPTSession) {
+        // Trainer's notes are private — save to trainerNotes field
+        useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, { 
+          trainerNotes: workoutNotes.trim() 
+        });
+      } else {
+        // Personal workout — notes visible to user
+        useWorkoutStore.getState().updateWorkoutNotes(completedWorkoutData.id, workoutNotes.trim());
+      }
     }
     
-    // Update session paid status and add payment record for PT session
-    if (completedWorkoutData?.isPTSession && completedWorkoutData?.clientId && sessionPaid) {
+    // Share to feed (opt-in only)
+    if (shareToFeed && completedWorkoutData) {
+      const pbText = completedWorkoutData.pbs.length > 0 
+        ? ` 🏆 ${completedWorkoutData.pbs.length} new PR${completedWorkoutData.pbs.length > 1 ? 's' : ''}!` 
+        : '';
+      createPost(
+        'workout_complete',
+        `Completed ${completedWorkoutData.name}! 💪 ${completedWorkoutData.exercises} exercises, ${Math.round(completedWorkoutData.totalVolume)}kg total volume.${pbText}`,
+        undefined,
+        completedWorkoutData.id
+      );
+    }
+    
+    // Update session paid status and create payment record for PT session
+    if (completedWorkoutData?.isPTSession && completedWorkoutData?.clientId) {
       const { getPackagesForClient, updateSessionPackage, addPayment, sessions, toggleSessionPaid } = useTrainerStore.getState();
       const packages = getPackagesForClient(completedWorkoutData.clientId);
       const activePackage = packages.find(p => p.status === 'active');
       const pricePerSession = activePackage?.pricePerSession || 0;
       
-      // Find the session record we just created and mark it as paid
+      // Find the session record we just created
       const today = new Date().toISOString().split('T')[0];
       const sessionRecord = sessions.find(s => 
         s.clientId === completedWorkoutData.clientId && 
         s.date === today && 
         s.workoutId === completedWorkoutData.id
       );
-      if (sessionRecord && !sessionRecord.paid) {
-        toggleSessionPaid(sessionRecord.id);
-      }
       
-      // Add payment record for tracking
-      if (pricePerSession > 0) {
-        addPayment({
-          clientId: completedWorkoutData.clientId,
-          trainerId: useAuthStore.getState().user?.id || '',
-          amount: pricePerSession,
-          currency: 'NZD',
-          type: 'single_session',
-          status: 'paid',
-          method: 'cash',
-          description: `PT Session - ${completedWorkoutData.name}`,
-          paidAt: new Date().toISOString(),
-        });
-      }
-      
-      if (activePackage) {
-        // Increment paid sessions
-        updateSessionPackage(activePackage.id, {
-          paidSessions: (activePackage.paidSessions || 0) + 1,
-        });
+      if (sessionPaid) {
+        // Mark session as paid
+        if (sessionRecord && !sessionRecord.paid) {
+          toggleSessionPaid(sessionRecord.id);
+        }
+        // Add paid payment record
+        if (pricePerSession > 0) {
+          addPayment({
+            clientId: completedWorkoutData.clientId,
+            trainerId: useAuthStore.getState().user?.id || '',
+            amount: pricePerSession,
+            currency: 'NZD',
+            type: 'single_session',
+            status: 'paid',
+            method: 'cash',
+            description: `PT Session - ${completedWorkoutData.name}`,
+            paidAt: new Date().toISOString(),
+          });
+        }
+        if (activePackage) {
+          updateSessionPackage(activePackage.id, {
+            paidSessions: (activePackage.paidSessions || 0) + 1,
+          });
+        }
+      } else {
+        // Always create a pending payment so unpaid sessions are tracked
+        if (pricePerSession > 0) {
+          addPayment({
+            clientId: completedWorkoutData.clientId,
+            trainerId: useAuthStore.getState().user?.id || '',
+            amount: pricePerSession,
+            currency: 'NZD',
+            type: 'single_session',
+            status: 'pending',
+            method: 'cash',
+            description: `PT Session - ${completedWorkoutData.name} (unpaid)`,
+          });
+        }
       }
     }
     
@@ -819,6 +891,9 @@ export default function ActiveWorkoutPage() {
     setCompletedWorkoutData(null);
     setWorkoutNotes('');
     setSessionPaid(false);
+    setShareToFeed(false);
+    // Clear derive result so medals don't persist to next workout
+    useWorkoutStore.setState({ lastDeriveResult: null });
     router.push('/workout');
   };
 
@@ -904,16 +979,251 @@ export default function ActiveWorkoutPage() {
     ? searchExercises(exerciseSearch)
     : exerciseLibrary;
 
-  if (!activeWorkout) return null;
+  if (!activeWorkout && !completedWorkoutData) return null;
 
-  const completedSets = activeWorkout.exercises.reduce(
+  const completedSets = activeWorkout?.exercises.reduce(
     (sum, ex) => sum + ex.sets.filter(s => s.completed).length, 
     0
-  );
-  const totalSets = activeWorkout.exercises.reduce(
+  ) || 0;
+  const totalSets = activeWorkout?.exercises.reduce(
     (sum, ex) => sum + ex.sets.length, 
     0
-  );
+  ) || 0;
+
+  // When workout is finished and summary is showing, render ONLY the summary screen
+  if (!activeWorkout && completedWorkoutData) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex flex-col">
+        {/* Sticky header with Done button */}
+        <header className="sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 px-4 pt-12 pb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-bold text-white">Workout Complete</h1>
+            <Button onClick={handleCloseSummary} className="bg-sky-500 hover:bg-sky-600 h-9 px-5">
+              Done
+            </Button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 pb-8">
+          <div className="max-w-sm mx-auto space-y-3">
+            {/* Compact Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center flex-shrink-0">
+                <Check className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <p className="font-semibold text-white">{completedWorkoutData?.name}</p>
+                {completedWorkoutData?.isPTSession && (
+                  <Badge className="bg-blue-500/20 text-blue-400 text-[10px] h-5">
+                    <Users className="w-3 h-3 mr-1" />
+                    PT Session
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Session Time */}
+            <div className="p-2.5 bg-gray-800 rounded-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-400">Session Time</span>
+                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                  <Edit className="w-3 h-3" />
+                  {editingTimes ? 'Cancel' : 'Edit'}
+                </button>
+              </div>
+              {editingTimes ? (
+                <div className="flex items-center gap-2 justify-center mt-1">
+                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                  <span className="text-gray-500">→</span>
+                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-3 text-sm mt-0.5">
+                  <span className="text-white font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-500">→</span>
+                  <span className="text-white font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Compact Stats Row */}
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-white">{formatTime(completedWorkoutData?.duration || 0)}</p>
+                <p className="text-[10px] text-gray-500">Duration</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-white">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-500">kg Vol</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-purple-400">{completedWorkoutData?.exercises || 0}</p>
+                <p className="text-[10px] text-gray-500">Exercises</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-cyan-400">{completedWorkoutData?.sets || 0}</p>
+                <p className="text-[10px] text-gray-500">Sets</p>
+              </div>
+            </div>
+            
+            {/* New PRs */}
+            {completedWorkoutData?.pbs && completedWorkoutData.pbs.length > 0 && (
+              <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-3">
+                <div className="flex items-center justify-center gap-2 mb-1.5">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="font-semibold text-amber-400 text-sm">{completedWorkoutData.pbs.length} New PR{completedWorkoutData.pbs.length > 1 ? 's' : ''}!</span>
+                </div>
+                <div className="flex flex-wrap gap-1 justify-center">
+                  {completedWorkoutData.pbs.map((pb, idx) => (
+                    <Badge key={idx} variant="secondary" className="bg-amber-500/20 text-amber-300 text-[11px]">{pb}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Medals Earned — top 3 with expand */}
+            {lastDeriveResult?.medalsAwarded && lastDeriveResult.medalsAwarded.length > 0 && (() => {
+              const medals = lastDeriveResult.medalsAwarded;
+              const showAll = (completedWorkoutData as any)?._showAllMedals;
+              const visibleMedals = showAll ? medals : medals.slice(0, 3);
+              return (
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <span className="text-base">🏅</span>
+                    <span className="font-semibold text-purple-400 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {visibleMedals.map((medalId, idx) => {
+                      const def = getMedalDefinition(medalId);
+                      return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                    })}
+                  </div>
+                  {medals.length > 3 && !showAll && (
+                    <button
+                      onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: true } : prev)}
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                    >
+                      Show all {medals.length} medals
+                    </button>
+                  )}
+                  {showAll && medals.length > 3 && (
+                    <button
+                      onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: false } : prev)}
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                    >
+                      Show less
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Strength Rating — only show if a category improved by ≥10% */}
+            {(() => {
+              const currentRating = useMedalStore.getState().strengthRating;
+              const prev = completedWorkoutData?.previousRating;
+              if (!currentRating || !prev) return null;
+              const tierColors: Record<string, string> = { untrained: 'text-gray-400', beginner: 'text-green-400', novice: 'text-blue-400', intermediate: 'text-purple-400', advanced: 'text-amber-400', elite: 'text-red-400' };
+              
+              // Check per-category improvements — only show if any category improved ≥10%
+              const categories = ['chest', 'back', 'shoulders', 'legs'] as const;
+              const improvedCategories = categories.filter(cat => {
+                const currVal = currentRating.categories?.[cat]?.totalPoints;
+                const prevVal = (prev.categories as any)?.[cat]?.score;
+                if (!currVal || !prevVal || prevVal === 0) return false;
+                const pctChange = ((currVal - prevVal) / prevVal) * 100;
+                return pctChange >= 10;
+              });
+              
+              if (improvedCategories.length === 0) return null;
+              
+              const overallDelta = Math.round((currentRating.overall - prev.overall) * 10) / 10;
+              const tierChanged = currentRating.overallTier !== prev.overallTier;
+              return (
+                <div className="bg-gradient-to-r from-sky-500/10 to-indigo-500/10 border border-sky-500/20 rounded-xl p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-sky-400" />
+                      <span className="font-semibold text-sky-400 text-sm">Strength Rating</span>
+                    </div>
+                    <Badge variant="outline" className="border-sky-500/30 text-sky-300 text-[10px] h-5">
+                      <Dumbbell className="w-3 h-3 mr-1" />
+                      Free Weights Only
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <span className={`text-2xl font-bold ${tierColors[currentRating.overallTier] || 'text-white'}`}>{Math.round(currentRating.overall)}</span>
+                    {overallDelta > 0 && <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">+{overallDelta}</span>}
+                  </div>
+                  <p className={`text-xs font-medium text-center ${tierColors[currentRating.overallTier] || 'text-gray-400'}`}>
+                    {currentRating.overallTier.charAt(0).toUpperCase() + currentRating.overallTier.slice(1)}
+                    {tierChanged && <span className="text-emerald-400 ml-1">↑ from {prev.overallTier}</span>}
+                  </p>
+                  <div className="flex flex-wrap gap-1 justify-center mt-1.5">
+                    {improvedCategories.map(cat => {
+                      const currVal = currentRating.categories?.[cat]?.totalPoints || 0;
+                      const prevVal = (prev.categories as any)?.[cat]?.score || 1;
+                      const pct = Math.round((currVal - prevVal) / prevVal * 100);
+                      return (
+                        <Badge key={cat} variant="secondary" className="bg-emerald-500/20 text-emerald-300 text-[10px]">
+                          {cat.charAt(0).toUpperCase() + cat.slice(1)} +{pct}%
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Session Paid — PT sessions */}
+            {completedWorkoutData?.isPTSession && (
+              <div className="p-3 bg-gray-800 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                  <div className="text-left">
+                    <span className="text-white font-medium text-sm">Session Paid</span>
+                    <p className="text-[11px] text-gray-400">Check if client has paid for this session</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Share to Feed */}
+            <div className="p-3 bg-gray-800 rounded-lg">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                <div className="text-left">
+                  <span className="text-white font-medium text-sm">Share to Feed</span>
+                  <p className="text-[11px] text-gray-400">Post this workout to your activity feed</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Workout Notes */}
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block text-left">
+                {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
+              </label>
+              <textarea
+                value={workoutNotes}
+                onChange={(e) => setWorkoutNotes(e.target.value)}
+                placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
+                className={`w-full h-16 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'}`}
+              />
+            </div>
+            
+            {/* Bottom Done button */}
+            <Button onClick={handleCloseSummary} className="w-full bg-sky-500 hover:bg-sky-600" size="lg">
+              Done
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // At this point activeWorkout is guaranteed non-null (early returns above handle null cases)
+  const workout = activeWorkout!;
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
@@ -923,14 +1233,14 @@ export default function ActiveWorkoutPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setShowExitDialog(true)}
+            onClick={() => router.push('/today')}
             className="text-white hover:bg-white/20"
           >
             <X className="w-5 h-5 mr-1" />
-            Exit
+            Minimize
           </Button>
           <div className="text-center">
-            <h1 className="text-lg font-semibold text-white">{activeWorkout.name}</h1>
+            <h1 className="text-lg font-semibold text-white">{workout.name}</h1>
             {/* Client name for PT sessions */}
             {clientName && (
               <p className="text-white/90 text-sm font-medium">with {clientName}</p>
@@ -938,11 +1248,11 @@ export default function ActiveWorkoutPage() {
             {/* PT vs Solo Session Indicator */}
             <div className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mt-1",
-              activeWorkout.assignedBy 
+              workout.assignedBy 
                 ? "bg-blue-500/30 text-blue-100" 
                 : "bg-white/20 text-white/80"
             )}>
-              {activeWorkout.assignedBy ? (
+              {workout.assignedBy ? (
                 <>
                   <Users className="w-3 h-3" />
                   PT Session
@@ -955,10 +1265,19 @@ export default function ActiveWorkoutPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowExitDialog(true)}
+              className="text-red-200 hover:bg-red-500/20 h-7 text-xs"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1" />
+              Discard
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="text-white hover:bg-white/20">
+                <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-7 w-7 p-0">
                   <Settings className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -966,7 +1285,7 @@ export default function ActiveWorkoutPage() {
                 <DropdownMenuItem
                   className="text-sky-400 focus:text-sky-300"
                   onClick={() => {
-                    setSaveWorkoutName(activeWorkout.name || '');
+                    setSaveWorkoutName(workout.name || '');
                     setShowSaveWorkoutDialog(true);
                   }}
                 >
@@ -992,7 +1311,7 @@ export default function ActiveWorkoutPage() {
             <Button
               size="sm"
               onClick={() => setShowFinishDialog(true)}
-              className="bg-white text-sky-600 hover:bg-gray-100"
+              className="bg-white text-sky-600 hover:bg-gray-100 h-7 text-xs"
             >
               <Check className="w-4 h-4 mr-1" />
               Finish
@@ -1032,12 +1351,13 @@ export default function ActiveWorkoutPage() {
               <StickyNote className="w-5 h-5" />
             </Button>
             <Button
-              size="icon"
+              size="sm"
               variant="ghost"
               onClick={() => setShowRestSettings(true)}
-              className="text-white hover:bg-white/20"
+              className="text-white hover:bg-white/20 gap-1 px-2"
             >
-              <Settings className="w-5 h-5" />
+              <Timer className="w-4 h-4" />
+              <span className="text-xs font-mono">{autoRestEnabled ? `${defaultRestTime}s` : 'Off'}</span>
             </Button>
           </div>
 
@@ -1229,7 +1549,7 @@ export default function ActiveWorkoutPage() {
           
           {/* Render workout blocks */}
           {workoutBlocks.map((block) => {
-            const blockExercises = activeWorkout.exercises.filter(
+            const blockExercises = workout.exercises.filter(
               (e: any) => e.blockId === block.id
             );
             const colors: Record<string, { bg: string; border: string; text: string; accent: string }> = {
@@ -1600,7 +1920,7 @@ export default function ActiveWorkoutPage() {
                       const exercisePB = getPBForExercise(workoutExercise.exerciseId);
                       // Filter workout history by current client/user to show only their previous results
                       const clientWorkoutHistory = workoutHistory.filter((w: any) => 
-                        w.userId === activeWorkout.userId
+                        w.userId === workout.userId
                       );
                       const lastWorkout = clientWorkoutHistory.find((w: any) => 
                         w.exercises?.some((e: any) => e.exerciseId === workoutExercise.exerciseId)
@@ -1614,7 +1934,12 @@ export default function ActiveWorkoutPage() {
                         <div className="px-4 py-3">
                           <div className="flex items-center justify-between mb-2">
                             <div>
-                              <p className="font-medium text-white">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                              <div className="flex items-center gap-1.5">
+                                <p className="font-medium text-white">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                                {workoutExercise.isUnilateral && (
+                                  <Badge className="bg-emerald-500/20 text-emerald-400 text-[9px] border-0 px-1.5 py-0">L/R</Badge>
+                                )}
+                              </div>
                               <p className="text-xs text-gray-500">{workoutExercise.exercise?.primaryMuscles?.join(', ')}</p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1651,6 +1976,13 @@ export default function ActiveWorkoutPage() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                                  <DropdownMenuItem
+                                    className={workoutExercise.isUnilateral ? "text-emerald-400 focus:text-emerald-300" : "text-gray-300 focus:text-gray-200"}
+                                    onClick={() => updateExercise(workoutExercise.id, { isUnilateral: !workoutExercise.isUnilateral })}
+                                  >
+                                    <ArrowLeftRight className="w-4 h-4 mr-2" />
+                                    {workoutExercise.isUnilateral ? '✓ Alternating Sides' : 'Alternating Sides'}
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem
                                     className="text-blue-400 focus:text-blue-300"
                                     onClick={() => {
@@ -1699,7 +2031,7 @@ export default function ActiveWorkoutPage() {
                         {/* Sets Header */}
                         <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium">
                           <div className="col-span-1">SET</div>
-                          {workoutExercise.exercise?.category === 'stretching' ? (
+                          {(workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio') ? (
                             <>
                               <div className="col-span-4 text-center">TIME (sec)</div>
                               <div className="col-span-5 text-center">TIMER</div>
@@ -1716,10 +2048,10 @@ export default function ActiveWorkoutPage() {
                         {/* Sets */}
                         <div className="px-4 pb-3 divide-y divide-gray-800/50">
                           {(workoutExercise.sets || []).map((set: any, idx: number) => {
-                            const previousDisplay = set.previousWeight && set.previousReps 
+                            const previousDisplay = (set.previousWeight != null && set.previousReps) 
                               ? `${set.previousWeight}kg × ${set.previousReps}` 
                               : '—';
-                            const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching';
+                            const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio';
                             const setTimer = activeSetTimers[set.id];
                             return (
                             <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-sky-500/10")}>
@@ -1729,9 +2061,10 @@ export default function ActiveWorkoutPage() {
                                   <button className={cn(
                                     "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
                                     set.completed && "bg-sky-500 text-white",
-                                    !set.completed && "bg-gray-800 text-gray-400"
+                                    !set.completed && workoutExercise.isUnilateral && "bg-emerald-900 text-emerald-400",
+                                    !set.completed && !workoutExercise.isUnilateral && "bg-gray-800 text-gray-400"
                                   )}>
-                                    {set.completed ? <Check className="w-4 h-4" /> : idx + 1}
+                                    {set.completed ? <Check className="w-4 h-4" /> : workoutExercise.isUnilateral ? (idx % 2 === 0 ? 'L' : 'R') : idx + 1}
                                   </button>
                                 </div>
                                 
@@ -1795,8 +2128,17 @@ export default function ActiveWorkoutPage() {
                                       <Input
                                         type="number"
                                         placeholder="0"
-                                        value={set.weight || ''}
-                                        onChange={(e) => updateSet(workoutExercise.id, set.id, { weight: parseFloat(e.target.value) || 0 })}
+                                        min="0"
+                                        step="0.5"
+                                        value={set.weight != null && set.weight !== undefined ? set.weight : ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val === '' || val === undefined) {
+                                            updateSet(workoutExercise.id, set.id, { weight: undefined });
+                                          } else {
+                                            updateSet(workoutExercise.id, set.id, { weight: parseFloat(val) });
+                                          }
+                                        }}
                                         disabled={set.completed}
                                         className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
                                       />
@@ -1806,8 +2148,16 @@ export default function ActiveWorkoutPage() {
                                       <Input
                                         type="number"
                                         placeholder="0"
-                                        value={set.reps || ''}
-                                        onChange={(e) => updateSet(workoutExercise.id, set.id, { reps: parseInt(e.target.value) || 0 })}
+                                        min="0"
+                                        value={set.reps != null && set.reps !== undefined ? set.reps : ''}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          if (val === '' || val === undefined) {
+                                            updateSet(workoutExercise.id, set.id, { reps: undefined });
+                                          } else {
+                                            updateSet(workoutExercise.id, set.id, { reps: parseInt(val) });
+                                          }
+                                        }}
                                         disabled={set.completed}
                                         className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
                                       />
@@ -1833,7 +2183,7 @@ export default function ActiveWorkoutPage() {
                                         ? handleCompleteTimedSet(workoutExercise.id, set.id, workoutExercise.exercise?.name || 'Exercise')
                                         : handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')
                                       }
-                                      disabled={isTimedSet ? !set.duration : (set.weight === undefined || set.weight === null || !set.reps)}
+                                      disabled={isTimedSet ? !set.duration : (set.weight == null || !set.reps)}
                                       className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
                                     >
                                       <Check className="w-5 h-5" />
@@ -1879,7 +2229,8 @@ export default function ActiveWorkoutPage() {
                                       newDrops[dropIdx] = { ...drop, weight: parseFloat(e.target.value) || 0 };
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
-                                    className="w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm"
+                                    disabled={drop.completed}
+                                    className={cn("w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm", drop.completed && "opacity-50")}
                                   />
                                   <span className="text-gray-600">×</span>
                                   <Input
@@ -1891,8 +2242,38 @@ export default function ActiveWorkoutPage() {
                                       newDrops[dropIdx] = { ...drop, reps: parseInt(e.target.value) || 0 };
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
-                                    className="w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm"
+                                    disabled={drop.completed}
+                                    className={cn("w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm", drop.completed && "opacity-50")}
                                   />
+                                  {/* Drop set complete/undo button */}
+                                  {!drop.completed ? (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        const newDrops = [...(set.drops || [])];
+                                        newDrops[dropIdx] = { ...drop, completed: true };
+                                        updateSet(workoutExercise.id, set.id, { drops: newDrops });
+                                      }}
+                                      disabled={!drop.weight || !drop.reps}
+                                      className="h-7 w-7 text-purple-400 hover:text-purple-300 hover:bg-purple-500/20 disabled:opacity-30"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                  ) : (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => {
+                                        const newDrops = [...(set.drops || [])];
+                                        newDrops[dropIdx] = { ...drop, completed: false };
+                                        updateSet(workoutExercise.id, set.id, { drops: newDrops });
+                                      }}
+                                      className="h-7 w-7 text-green-400"
+                                    >
+                                      <Check className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                   <Button
                                     size="icon"
                                     variant="ghost"
@@ -1959,19 +2340,19 @@ export default function ActiveWorkoutPage() {
           })}
           
           {/* Exercises without blocks */}
-          {activeWorkout.exercises.filter((e: any) => !e.blockId).map((workoutExercise, index) => {
+          {workout.exercises.filter((e: any) => !e.blockId).map((workoutExercise, index) => {
             const pb = getPBForExercise(workoutExercise.exerciseId);
             
             // Check if this exercise is in a superset
             const isInSuperset = !!workoutExercise.groupId;
             const supersetPartners = isInSuperset 
-              ? activeWorkout.exercises.filter(e => e.groupId === workoutExercise.groupId && e.id !== workoutExercise.id)
+              ? workout.exercises.filter(e => e.groupId === workoutExercise.groupId && e.id !== workoutExercise.id)
               : [];
             const isPairingTarget = supersetPairingId && supersetPairingId !== workoutExercise.id;
             
             // Check if we need to show a block header
             const currentBlockName = (workoutExercise as any).blockName;
-            const prevExercise = index > 0 ? activeWorkout.exercises[index - 1] : null;
+            const prevExercise = index > 0 ? workout.exercises[index - 1] : null;
             const prevBlockName = prevExercise ? (prevExercise as any).blockName : null;
             const showBlockHeader = currentBlockName && currentBlockName !== prevBlockName;
             
@@ -2052,6 +2433,10 @@ export default function ActiveWorkoutPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-white">{workoutExercise.exercise?.name || 'Exercise'}</h3>
+                        <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                        {workoutExercise.isUnilateral && (
+                          <Badge className="bg-emerald-500/20 text-emerald-400 text-[9px] border-0 px-1.5 py-0">L/R</Badge>
+                        )}
                         {pb && (
                           <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-400">
                             <Trophy className="w-3 h-3 mr-1" />
@@ -2071,6 +2456,13 @@ export default function ActiveWorkoutPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                        <DropdownMenuItem
+                          className={workoutExercise.isUnilateral ? "text-emerald-400 focus:text-emerald-300" : "text-gray-300 focus:text-gray-200"}
+                          onClick={() => updateExercise(workoutExercise.id, { isUnilateral: !workoutExercise.isUnilateral })}
+                        >
+                          <ArrowLeftRight className="w-4 h-4 mr-2" />
+                          {workoutExercise.isUnilateral ? '✓ Alternating Sides' : 'Alternating Sides'}
+                        </DropdownMenuItem>
                         <DropdownMenuItem 
                           className="text-gray-300 focus:text-white focus:bg-gray-700"
                           onClick={() => {
@@ -2596,7 +2988,7 @@ export default function ActiveWorkoutPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Exercises</span>
-              <span className="text-white font-medium">{activeWorkout.exercises.length}</span>
+              <span className="text-white font-medium">{workout.exercises.length}</span>
             </div>
             {newPBs.length > 0 && (
               <div className="flex justify-between text-sm">
@@ -2652,107 +3044,209 @@ export default function ActiveWorkoutPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Workout Summary Dialog */}
+      {/* Workout Summary Dialog — compact version */}
       <Dialog open={showSummary} onOpenChange={(open) => !open && handleCloseSummary()}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
-          <div className="text-center py-4">
-            {/* Success Icon */}
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center">
-              <Check className="w-10 h-10 text-white" />
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm max-h-[85vh] overflow-y-auto">
+          <div className="space-y-3 py-2">
+            {/* Compact header */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center flex-shrink-0">
+                <Check className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-bold text-white">Workout Complete!</h2>
+                <p className="text-sm text-gray-400">{completedWorkoutData?.name}</p>
+              </div>
+              {completedWorkoutData?.isPTSession && (
+                <Badge className="bg-blue-500/20 text-blue-400 text-[10px] h-5">
+                  <Users className="w-3 h-3 mr-1" /> PT
+                </Badge>
+              )}
+            </div>
+
+            {/* Session Time */}
+            <div className="p-2.5 bg-gray-800 rounded-xl">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-gray-400">Session Time</span>
+                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                  <Edit className="w-3 h-3" /> {editingTimes ? 'Cancel' : 'Edit'}
+                </button>
+              </div>
+              {editingTimes ? (
+                <div className="flex items-center gap-2 justify-center mt-1">
+                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                  <span className="text-gray-500">→</span>
+                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                </div>
+              ) : (
+                <div className="flex items-center justify-center gap-3 text-sm mt-0.5">
+                  <span className="text-white font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-500">→</span>
+                  <span className="text-white font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Compact Stats */}
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-white">{formatTime(completedWorkoutData?.duration || 0)}</p>
+                <p className="text-[10px] text-gray-500">Duration</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-white">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
+                <p className="text-[10px] text-gray-500">kg Vol</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-purple-400">{completedWorkoutData?.exercises || 0}</p>
+                <p className="text-[10px] text-gray-500">Exercises</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-cyan-400">{completedWorkoutData?.sets || 0}</p>
+                <p className="text-[10px] text-gray-500">Sets</p>
+              </div>
             </div>
             
-            <h2 className="text-2xl font-bold text-white mb-1">Workout Complete!</h2>
-            {completedWorkoutData?.isPTSession && (
-              <Badge className="bg-blue-500/20 text-blue-400 mb-2">
-                <Users className="w-3 h-3 mr-1" />
-                PT Session
-              </Badge>
-            )}
-            <p className="text-gray-400 mb-6">{completedWorkoutData?.name}</p>
-            
-            {/* Stats Grid */}
-            <div className="grid grid-cols-2 gap-3 mb-6">
-              <div className="bg-gray-800 rounded-xl p-4">
-                <Clock className="w-5 h-5 text-sky-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-white">
-                  {formatTime(completedWorkoutData?.duration || 0)}
-                </p>
-                <p className="text-xs text-gray-500">Duration</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-4">
-                <Trophy className="w-5 h-5 text-amber-400 mx-auto mb-1" />
-                <p className="text-2xl font-bold text-white">
-                  {Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">kg Volume</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-4">
-                <div className="w-5 h-5 mx-auto mb-1 text-purple-400 font-bold text-lg">
-                  {completedWorkoutData?.exercises || 0}
-                </div>
-                <p className="text-xs text-gray-500">Exercises</p>
-              </div>
-              <div className="bg-gray-800 rounded-xl p-4">
-                <div className="w-5 h-5 mx-auto mb-1 text-cyan-400 font-bold text-lg">
-                  {completedWorkoutData?.sets || 0}
-                </div>
-                <p className="text-xs text-gray-500">Sets</p>
-              </div>
-            </div>
-            
-            {/* New PRs Section */}
+            {/* PRs */}
             {completedWorkoutData?.pbs && completedWorkoutData.pbs.length > 0 && (
-              <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-4 mb-4">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <Trophy className="w-5 h-5 text-amber-400" />
-                  <span className="font-semibold text-amber-400">
-                    {completedWorkoutData.pbs.length} New PR{completedWorkoutData.pbs.length > 1 ? 's' : ''}!
-                  </span>
+              <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-3">
+                <div className="flex items-center justify-center gap-2 mb-1.5">
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span className="font-semibold text-amber-400 text-sm">{completedWorkoutData.pbs.length} New PR{completedWorkoutData.pbs.length > 1 ? 's' : ''}!</span>
                 </div>
                 <div className="flex flex-wrap gap-1 justify-center">
                   {completedWorkoutData.pbs.map((pb, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-500/20 text-amber-300">
-                      {pb}
-                    </Badge>
+                    <Badge key={idx} variant="secondary" className="bg-amber-500/20 text-amber-300 text-[11px]">{pb}</Badge>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Session Paid Checkbox - Only for PT sessions */}
+            {/* Medals — top 3 with expand */}
+            {lastDeriveResult?.medalsAwarded && lastDeriveResult.medalsAwarded.length > 0 && (() => {
+              const medals = lastDeriveResult.medalsAwarded;
+              const showAll = (completedWorkoutData as any)?._showAllMedals;
+              const visibleMedals = showAll ? medals : medals.slice(0, 3);
+              return (
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <span className="text-base">🏅</span>
+                    <span className="font-semibold text-purple-400 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1 justify-center">
+                    {visibleMedals.map((medalId, idx) => {
+                      const def = getMedalDefinition(medalId);
+                      return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                    })}
+                  </div>
+                  {medals.length > 3 && !showAll && (
+                    <button
+                      onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: true } : prev)}
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                    >
+                      Show all {medals.length} medals
+                    </button>
+                  )}
+                  {showAll && medals.length > 3 && (
+                    <button
+                      onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: false } : prev)}
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                    >
+                      Show less
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Strength Rating — only show if a category improved by ≥10% */}
+            {(() => {
+              const currentRating = useMedalStore.getState().strengthRating;
+              const prev = completedWorkoutData?.previousRating;
+              if (!currentRating || !prev) return null;
+              const tierColors: Record<string, string> = { untrained: 'text-gray-400', beginner: 'text-green-400', novice: 'text-blue-400', intermediate: 'text-purple-400', advanced: 'text-amber-400', elite: 'text-red-400' };
+              const categories = ['chest', 'back', 'shoulders', 'legs', 'arms', 'core'] as const;
+              const improvedCategories = categories.filter(cat => {
+                const currVal = (currentRating as any)[cat];
+                const prevVal = (prev as any)[cat];
+                if (!currVal || !prevVal || prevVal === 0) return false;
+                return ((currVal - prevVal) / prevVal) * 100 >= 10;
+              });
+              if (improvedCategories.length === 0) return null;
+              const overallDelta = Math.round((currentRating.overall - prev.overall) * 10) / 10;
+              const tierChanged = currentRating.overallTier !== prev.overallTier;
+              return (
+                <div className="bg-gradient-to-r from-sky-500/10 to-indigo-500/10 border border-sky-500/20 rounded-xl p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-sky-400" />
+                      <span className="font-semibold text-sky-400 text-sm">Strength Rating</span>
+                    </div>
+                    <Badge variant="outline" className="border-sky-500/30 text-sky-300 text-[10px] h-5">
+                      <Dumbbell className="w-3 h-3 mr-1" />
+                      Free Weights Only
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 mt-2">
+                    <span className={`text-2xl font-bold ${tierColors[currentRating.overallTier] || 'text-white'}`}>{Math.round(currentRating.overall)}</span>
+                    {overallDelta > 0 && <span className="text-xs font-semibold text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded">+{overallDelta}</span>}
+                  </div>
+                  <p className={`text-xs font-medium text-center ${tierColors[currentRating.overallTier] || 'text-gray-400'}`}>
+                    {currentRating.overallTier.charAt(0).toUpperCase() + currentRating.overallTier.slice(1)}
+                    {tierChanged && <span className="text-emerald-400 ml-1">↑ from {prev.overallTier}</span>}
+                  </p>
+                  <div className="flex flex-wrap gap-1 justify-center mt-1.5">
+                    {improvedCategories.map(cat => {
+                      const pct = Math.round(((currentRating as any)[cat] - (prev as any)[cat]) / (prev as any)[cat] * 100);
+                      return (
+                        <Badge key={cat} variant="secondary" className="bg-emerald-500/20 text-emerald-300 text-[10px]">
+                          {cat.charAt(0).toUpperCase() + cat.slice(1)} +{pct}%
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Session Paid */}
             {completedWorkoutData?.isPTSession && (
-              <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+              <div className="p-3 bg-gray-800 rounded-lg">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={sessionPaid}
-                    onChange={(e) => setSessionPaid(e.target.checked)}
-                    className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500"
-                  />
+                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
                   <div className="text-left">
-                    <span className="text-white font-medium">Session Paid</span>
-                    <p className="text-xs text-gray-400">Check if client has paid for this session</p>
+                    <span className="text-white font-medium text-sm">Session Paid</span>
+                    <p className="text-[11px] text-gray-400">Check if client has paid for this session</p>
                   </div>
                 </label>
               </div>
             )}
 
-            {/* Workout Notes */}
-            <div className="mb-4">
-              <label className="text-sm text-gray-400 mb-2 block text-left">Add notes (optional)</label>
+            {/* Share to Feed */}
+            <div className="p-3 bg-gray-800 rounded-lg">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                <div className="text-left">
+                  <span className="text-white font-medium text-sm">Share to Feed</span>
+                  <p className="text-[11px] text-gray-400">Post this workout to your activity feed</p>
+                </div>
+              </label>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="text-xs text-gray-400 mb-1.5 block text-left">
+                {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
+              </label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
-                placeholder="How did this workout feel? Any notes for next time..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
+                className={`w-full h-16 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'}`}
               />
             </div>
             
-            <Button
-              onClick={handleCloseSummary}
-              className="w-full bg-sky-500 hover:bg-sky-600"
-              size="lg"
-            >
+            <Button onClick={handleCloseSummary} className="w-full bg-sky-500 hover:bg-sky-600" size="lg">
               Done
             </Button>
           </div>
@@ -2840,19 +3334,25 @@ export default function ActiveWorkoutPage() {
         <DialogContent className="bg-gray-900 border-gray-800">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <StickyNote className="w-5 h-5 text-sky-400" />
-              Workout Notes
+              <StickyNote className={`w-5 h-5 ${isPT ? 'text-amber-400' : 'text-sky-400'}`} />
+              {isPT ? 'Trainer Notes' : 'Workout Notes'}
             </DialogTitle>
             <DialogDescription>
-              Add notes during your workout - they'll be saved with this session
+              {isPT 
+                ? 'Private notes — client won\'t see these. Session observations, form cues, etc.' 
+                : 'Add notes during your workout - they\'ll be saved with this session'}
             </DialogDescription>
           </DialogHeader>
           
           <textarea
             value={workoutNotes}
             onChange={(e) => setWorkoutNotes(e.target.value)}
-            placeholder="How's the workout going? Track energy levels, form notes, things to remember..."
-            className="w-full h-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+            placeholder={isPT 
+              ? "Session observations, form cues, programming adjustments..." 
+              : "How's the workout going? Track energy levels, form notes, things to remember..."}
+            className={`w-full h-32 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${
+              isPT ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'
+            }`}
           />
           
           <Button
@@ -3104,20 +3604,20 @@ function SetRow({
   onUncomplete: () => void;
   onRemove: () => void;
 }) {
-  const [weight, setWeight] = useState(set.weight?.toString() || '');
-  const [reps, setReps] = useState(set.reps?.toString() || '');
+  const [weight, setWeight] = useState(set.weight != null ? set.weight.toString() : '');
+  const [reps, setReps] = useState(set.reps != null ? set.reps.toString() : '');
 
   const handleComplete = () => {
-    const w = parseFloat(weight);
+    const w = weight === '' ? 0 : parseFloat(weight);
     const r = parseInt(reps) || 0;
-    // Allow 0 or negative weight for bodyweight exercises (assisted dips)
+    // Allow 0 weight for bodyweight exercises (push-ups, dips, etc.)
     if (!isNaN(w) && r > 0) {
       onUpdate({ weight: w, reps: r });
       onComplete(w, r);
     }
   };
 
-  const previousDisplay = set.previousWeight && set.previousReps
+  const previousDisplay = (set.previousWeight != null && set.previousReps)
     ? `${set.previousWeight}kg × ${set.previousReps}`
     : '—';
 
@@ -3166,7 +3666,10 @@ function SetRow({
               placeholder="0"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              onBlur={() => onUpdate({ weight: parseFloat(weight) || undefined })}
+              onBlur={() => {
+                const v = parseFloat(weight);
+                onUpdate({ weight: !isNaN(v) ? v : undefined });
+              }}
               disabled={set.completed}
               className={cn(
                 "h-9 text-center bg-gray-800 border-gray-700 text-white flex-1",
@@ -3184,7 +3687,10 @@ function SetRow({
             placeholder="0"
             value={reps}
             onChange={(e) => setReps(e.target.value)}
-            onBlur={() => onUpdate({ reps: parseInt(reps) || undefined })}
+            onBlur={() => {
+              const v = parseInt(reps);
+              onUpdate({ reps: !isNaN(v) && v > 0 ? v : undefined });
+            }}
             disabled={set.completed}
             className={cn(
               "h-9 text-center bg-gray-800 border-gray-700 text-white",
@@ -3199,7 +3705,7 @@ function SetRow({
               size="icon"
               variant="ghost"
               onClick={handleComplete}
-              disabled={weight === '' || !reps}
+              disabled={!reps || (weight === '' && reps === '')}
               className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
             >
               <Check className="w-5 h-5" />
@@ -3254,7 +3760,12 @@ function SetRow({
                   type="number"
                   inputMode="decimal"
                   placeholder="0"
-                  defaultValue={drop.weight || ''}
+                  value={drop.weight || ''}
+                  onChange={(e) => {
+                    const newDrops = [...(set.drops || [])];
+                    newDrops[idx] = { ...drop, weight: parseFloat(e.target.value) || 0 };
+                    onUpdate({ drops: newDrops });
+                  }}
                   className="h-8 text-center bg-gray-800/50 border-gray-700 text-white text-sm"
                 />
               </div>
@@ -3263,7 +3774,12 @@ function SetRow({
                   type="number"
                   inputMode="numeric"
                   placeholder="0"
-                  defaultValue={drop.reps || ''}
+                  value={drop.reps || ''}
+                  onChange={(e) => {
+                    const newDrops = [...(set.drops || [])];
+                    newDrops[idx] = { ...drop, reps: parseInt(e.target.value) || 0 };
+                    onUpdate({ drops: newDrops });
+                  }}
                   className="h-8 text-center bg-gray-800/50 border-gray-700 text-white text-sm"
                 />
               </div>

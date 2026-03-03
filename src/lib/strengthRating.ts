@@ -3,7 +3,7 @@ import { StrengthTier, StrengthSlice, StrengthCategory, StrengthRating, TierRang
 // ============ TIER RANGES (kg) ============
 // Based on StrengthLevel.com data with trend math applied
 // Compound lifts: steeper progression (1.0x → 1.55x → 2.15x → 2.9x → 3.7x)
-// Machines/Cables: flatter progression + 7% heavier requirement
+// Free weights only: barbell, dumbbell, bodyweight (machines/cables excluded from strength rating)
 
 export const maleTierRanges: Record<string, TierRange> = {
   // ========== CHEST ==========
@@ -70,29 +70,6 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [35, 55],
     elite: [55, 80],
   },
-  // Machine Chest Press
-  'machine-chest-press': {
-    beginner: [0, 32],
-    novice: [32, 57],
-    intermediate: [57, 90],
-    advanced: [90, 131],
-    elite: [131, 177],
-  },
-  // Machine/Cable Chest Fly
-  'chest-fly': {
-    beginner: [0, 34],
-    novice: [34, 57],
-    intermediate: [57, 87],
-    advanced: [87, 124],
-    elite: [124, 166],
-  },
-  'machine-chest-fly': {
-    beginner: [0, 34],
-    novice: [34, 57],
-    intermediate: [57, 87],
-    advanced: [87, 124],
-    elite: [124, 166],
-  },
 
   // ========== BACK ==========
   // Deadlift (compound, steeper) - also counts for legs
@@ -117,6 +94,14 @@ export const maleTierRanges: Record<string, TierRange> = {
     intermediate: [85, 118],
     advanced: [118, 160],
     elite: [160, 204],
+  },
+  // Dumbbell Romanian Deadlift (dumbbell hinge)
+  'dumbbell-rdl': {
+    beginner: [0, 10],
+    novice: [10, 18],
+    intermediate: [18, 28],
+    advanced: [28, 40],
+    elite: [40, 54],
   },
   // Barbell Row (compound)
   'barbell-row': {
@@ -163,51 +148,6 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [28, 45],
     elite: [45, 65],
   },
-  // Lat Pulldown (+7% cable)
-  'lat-pulldown': {
-    beginner: [0, 42],
-    novice: [42, 61],
-    intermediate: [61, 88],
-    advanced: [88, 114],
-    elite: [114, 145],
-  },
-  // Seated Cable Row (+7%)
-  'seated-cable-row': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 92],
-    advanced: [92, 120],
-    elite: [120, 152],
-  },
-  'cable-row': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 92],
-    advanced: [92, 120],
-    elite: [120, 152],
-  },
-  'seated-row': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 92],
-    advanced: [92, 120],
-    elite: [120, 152],
-  },
-  // Machine Row (+7%)
-  'machine-back-row': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 92],
-    advanced: [92, 120],
-    elite: [120, 152],
-  },
-  'row-machine': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 92],
-    advanced: [92, 120],
-    elite: [120, 152],
-  },
   // T-Bar Row (compound)
   't-bar-row': {
     beginner: [0, 35],
@@ -241,14 +181,6 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [28, 38],
     elite: [38, 48],
   },
-  // Machine Shoulder Press
-  'machine-shoulder-press': {
-    beginner: [0, 24],
-    novice: [24, 46],
-    intermediate: [46, 77],
-    advanced: [77, 115],
-    elite: [115, 159],
-  },
   // Lateral Raise (dumbbell - isolation, lighter weights)
   'lateral-raise': {
     beginner: [0, 4],
@@ -264,38 +196,6 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [15, 22],
     elite: [22, 30],
   },
-  // Cable Lateral Raise
-  'cable-lateral-raise': {
-    beginner: [0, 1],
-    novice: [1, 7],
-    intermediate: [7, 18],
-    advanced: [18, 36],
-    elite: [36, 58],
-  },
-  // Face Pull - rear delts
-  'face-pull': {
-    beginner: [0, 12],
-    novice: [12, 26],
-    intermediate: [26, 46],
-    advanced: [46, 71],
-    elite: [71, 101],
-  },
-  // Rear Delt Fly / Machine Reverse Fly
-  'rear-delt-fly': {
-    beginner: [0, 23],
-    novice: [23, 40],
-    intermediate: [40, 64],
-    advanced: [64, 93],
-    elite: [93, 126],
-  },
-  'reverse-fly': {
-    beginner: [0, 23],
-    novice: [23, 40],
-    intermediate: [40, 64],
-    advanced: [64, 93],
-    elite: [93, 126],
-  },
-
   // ========== LEGS ==========
   // Squat (compound, steeper)
   'squat': {
@@ -335,96 +235,6 @@ export const maleTierRanges: Record<string, TierRange> = {
     intermediate: [76, 129],
     advanced: [129, 196],
     elite: [196, 273],
-  },
-  // Leg Press (sled)
-  'leg-press': {
-    beginner: [0, 86],
-    novice: [86, 147],
-    intermediate: [147, 226],
-    advanced: [226, 324],
-    elite: [324, 432],
-  },
-  'leg-press-machine': {
-    beginner: [0, 86],
-    novice: [86, 147],
-    intermediate: [147, 226],
-    advanced: [226, 324],
-    elite: [324, 432],
-  },
-  'leg-press-machine-single-leg': {
-    beginner: [0, 47],
-    novice: [47, 68],
-    intermediate: [68, 94],
-    advanced: [94, 122],
-    elite: [122, 155],
-  },
-  // Hack Squat (+7% machine)
-  'hack-squat': {
-    beginner: [0, 64],
-    novice: [64, 93],
-    intermediate: [93, 129],
-    advanced: [129, 168],
-    elite: [168, 213],
-  },
-  // Leg Extension
-  'leg-extension': {
-    beginner: [0, 35],
-    novice: [35, 61],
-    intermediate: [61, 96],
-    advanced: [96, 139],
-    elite: [139, 186],
-  },
-  // Leg Curl
-  'lying-leg-curl': {
-    beginner: [0, 29],
-    novice: [29, 50],
-    intermediate: [50, 79],
-    advanced: [79, 114],
-    elite: [114, 154],
-  },
-  'leg-curl': {
-    beginner: [0, 29],
-    novice: [29, 50],
-    intermediate: [50, 79],
-    advanced: [79, 114],
-    elite: [114, 154],
-  },
-  'seated-leg-curl': {
-    beginner: [0, 29],
-    novice: [29, 50],
-    intermediate: [50, 79],
-    advanced: [79, 114],
-    elite: [114, 154],
-  },
-  // Calf Raise (+7% machine)
-  'calf-raise': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 86],
-    advanced: [86, 112],
-    elite: [112, 142],
-  },
-  'machine-calf-raise': {
-    beginner: [0, 43],
-    novice: [43, 62],
-    intermediate: [62, 86],
-    advanced: [86, 112],
-    elite: [112, 142],
-  },
-  // Hip Abductor/Adductor (+7% machine)
-  'abductor': {
-    beginner: [0, 32],
-    novice: [32, 46],
-    intermediate: [46, 64],
-    advanced: [64, 83],
-    elite: [83, 105],
-  },
-  'hip-adduction': {
-    beginner: [0, 32],
-    novice: [32, 46],
-    intermediate: [46, 64],
-    advanced: [64, 83],
-    elite: [83, 105],
   },
   // Split Squat / Bulgarian (dumbbell)
   'split-squat': {
@@ -521,13 +331,13 @@ export const categoryDefinitions: Record<string, CategoryDefinition> = {
         id: 'vertical-pull', 
         name: 'Vertical Pull (Lats)', 
         weight: 35, 
-        exercises: ['pull-up', 'chin-up', 'lat-pulldown'] 
+        exercises: ['pull-up', 'chin-up'] 
       },
       { 
         id: 'horizontal-pull', 
         name: 'Horizontal Pull (Mid Back)', 
         weight: 35, 
-        exercises: ['barbell-row', 'bent-over-row', 'dumbbell-row', 'single-arm-dumbbell-row', 't-bar-row', 'seated-cable-row', 'cable-row', 'seated-row', 'machine-back-row', 'row-machine'] 
+        exercises: ['barbell-row', 'bent-over-row', 'dumbbell-row', 'single-arm-dumbbell-row', 't-bar-row'] 
       },
       { 
         id: 'posterior-chain', 
@@ -545,20 +355,14 @@ export const categoryDefinitions: Record<string, CategoryDefinition> = {
       { 
         id: 'front-delt', 
         name: 'Front Delts', 
-        weight: 35, 
-        exercises: ['overhead-press', 'military-press', 'dumbbell-shoulder-press', 'machine-shoulder-press'] 
+        weight: 55, 
+        exercises: ['overhead-press', 'military-press', 'dumbbell-shoulder-press'] 
       },
       { 
         id: 'side-delt', 
         name: 'Side Delts', 
-        weight: 35, 
-        exercises: ['lateral-raise', 'dumbbell-lateral-raise', 'cable-lateral-raise'] 
-      },
-      { 
-        id: 'rear-delt', 
-        name: 'Rear Delts', 
-        weight: 30, 
-        exercises: ['face-pull', 'rear-delt-fly', 'reverse-fly'] 
+        weight: 45, 
+        exercises: ['lateral-raise', 'dumbbell-lateral-raise'] 
       },
     ],
   },
@@ -571,13 +375,13 @@ export const categoryDefinitions: Record<string, CategoryDefinition> = {
         id: 'quads', 
         name: 'Quads', 
         weight: 50, 
-        exercises: ['squat', 'back-squat', 'front-squat', 'goblet-squat', 'leg-press', 'leg-press-machine', 'leg-press-machine-single-leg', 'hack-squat', 'leg-extension', 'split-squat', 'bulgarian-split-squat'] 
+        exercises: ['squat', 'back-squat', 'front-squat', 'goblet-squat', 'split-squat', 'bulgarian-split-squat'] 
       },
       { 
         id: 'glutes-hamstrings', 
         name: 'Glutes/Hamstrings', 
         weight: 50, 
-        exercises: ['deadlift', 'romanian-deadlift', 'rdl', 'hip-thrust', 'leg-curl', 'lying-leg-curl', 'seated-leg-curl', 'abductor', 'hip-adduction', 'calf-raise', 'machine-calf-raise'] 
+        exercises: ['deadlift', 'romanian-deadlift', 'rdl', 'dumbbell-rdl', 'hip-thrust', 'squat', 'back-squat', 'front-squat', 'goblet-squat', 'split-squat', 'bulgarian-split-squat'] 
       },
     ],
   },
@@ -652,6 +456,22 @@ export function getProgressInTier(oneRM: number, exerciseId: string, isMale: boo
 }
 
 /**
+ * Calculate recency decay factor for a PB based on when it was achieved.
+ * - Within 90 days: 100% (no decay)
+ * - 90–180 days: linear decay from 100% → 75%
+ * - 180–365 days: linear decay from 75% → 50%
+ * - Beyond 365 days: 50% floor (all-time still counts, just reduced)
+ */
+export function getRecencyFactor(achievedAt: string | undefined): number {
+  if (!achievedAt) return 0.5; // Unknown date = treat as old
+  const daysSince = (Date.now() - new Date(achievedAt).getTime()) / (1000 * 60 * 60 * 24);
+  if (daysSince <= 90) return 1.0;
+  if (daysSince <= 180) return 1.0 - 0.25 * ((daysSince - 90) / 90);
+  if (daysSince <= 365) return 0.75 - 0.25 * ((daysSince - 180) / 185);
+  return 0.5;
+}
+
+/**
  * Get tier name for display
  */
 export function getTierName(tier: StrengthTier): string {
@@ -711,12 +531,17 @@ export function calculateCategory(
     
     for (const exerciseId of sliceDef.exercises) {
       const pb = personalBests.find(p => p.exerciseId === exerciseId);
-      if (pb && pb.oneRepMax > bestOneRM) {
-        bestOneRM = pb.oneRepMax;
-        bestExerciseId = exerciseId;
-        bestLiftName = exerciseId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-        bestWeight = pb.bestWeight || 0;
-        bestReps = pb.bestReps || 0;
+      if (pb && pb.oneRepMax > 0) {
+        // Apply recency decay — recent PBs count more
+        const decay = getRecencyFactor(pb.achievedAt);
+        const decayed1RM = pb.oneRepMax * decay;
+        if (decayed1RM > bestOneRM) {
+          bestOneRM = decayed1RM;
+          bestExerciseId = exerciseId;
+          bestLiftName = exerciseId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+          bestWeight = pb.bestWeight || 0;
+          bestReps = pb.bestReps || 0;
+        }
       }
     }
     
@@ -791,18 +616,32 @@ export function calculateFullStrengthRating(
   const shoulders = calculateCategory(categoryDefinitions.shoulders, personalBests, isMale);
   const legs = calculateCategory(categoryDefinitions.legs, personalBests, isMale);
   
-  // Overall is average of all category totals
-  const categoryScores = [chest.totalPoints, back.totalPoints, shoulders.totalPoints, legs.totalPoints];
+  // Overall tier is the lowest category tier (only from categories with data)
+  const tierOrder: StrengthTier[] = ['beginner', 'novice', 'intermediate', 'advanced', 'elite'];
+  const allCategories = [chest, back, shoulders, legs];
+  const categoriesWithData = allCategories.filter(c => c.totalPoints > 0);
+  const allTiers = categoriesWithData.length > 0 
+    ? categoriesWithData.map(c => c.tier)
+    : allCategories.map(c => c.tier);
+  const lowestTierIndex = Math.min(...allTiers.map(t => tierOrder.indexOf(t)));
+  const overallTier = tierOrder[lowestTierIndex];
+  
+  // Overall score: average of all category contributions
+  // KEY RULE: If a category has surpassed the overall tier, it counts as 100%
+  // (e.g., Legs at 35% Intermediate counts as 100% if overall tier is Beginner)
+  const overallTierIdx = tierOrder.indexOf(overallTier);
+  const categoryScores = allCategories.map(cat => {
+    if (cat.totalPoints <= 0) return 0; // no data = 0
+    const catTierIdx = tierOrder.indexOf(cat.tier);
+    if (catTierIdx > overallTierIdx) {
+      return 100; // surpassed overall tier → counts as 100%
+    }
+    return cat.totalPoints;
+  });
   const validScores = categoryScores.filter(s => s > 0);
   const overall = validScores.length > 0 
     ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
     : 0;
-  
-  // Overall tier is the lowest category tier
-  const tierOrder: StrengthTier[] = ['beginner', 'novice', 'intermediate', 'advanced', 'elite'];
-  const allTiers = [chest.tier, back.tier, shoulders.tier, legs.tier];
-  const lowestTierIndex = Math.min(...allTiers.map(t => tierOrder.indexOf(t)));
-  const overallTier = tierOrder[lowestTierIndex];
   
   return {
     overall,

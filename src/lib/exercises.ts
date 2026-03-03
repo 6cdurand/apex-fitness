@@ -1,8 +1,8 @@
 import { Exercise, MuscleGroup, Equipment } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
 
-// Comprehensive exercise library with muscle targeting
-export const exerciseLibrary: Exercise[] = [
+// Comprehensive exercise library with muscle targeting (deduplicated — first occurrence of each ID wins)
+const _rawExerciseLibrary: Exercise[] = [
   // CHEST
   {
     id: 'bench-press',
@@ -122,6 +122,14 @@ export const exerciseLibrary: Exercise[] = [
     equipment: 'barbell',
   },
   {
+    id: 'dumbbell-rdl',
+    name: 'Dumbbell Romanian Deadlift',
+    primaryMuscles: ['hamstrings', 'glutes'],
+    secondaryMuscles: ['lower_back'],
+    category: 'compound',
+    equipment: 'dumbbell',
+  },
+  {
     id: 'barbell-row',
     name: 'Barbell Bent-Over Row',
     primaryMuscles: ['back', 'lats'],
@@ -144,6 +152,7 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'dumbbell',
+    alternatingSides: true,
   },
   {
     id: 'pull-ups',
@@ -380,6 +389,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['biceps'],
     secondaryMuscles: [],
     category: 'isolation',
+    alternatingSides: true,
     equipment: 'dumbbell',
   },
   {
@@ -462,6 +472,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['triceps'],
     secondaryMuscles: [],
     category: 'isolation',
+    alternatingSides: true,
     equipment: 'dumbbell',
   },
   {
@@ -530,6 +541,7 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'barbell',
+    alternatingSides: true,
   },
   {
     id: 'walking-lunges',
@@ -538,6 +550,16 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'dumbbell',
+    alternatingSides: true,
+  },
+  {
+    id: 'split-squat',
+    name: 'Split Squat',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings'],
+    category: 'compound',
+    equipment: 'dumbbell',
+    alternatingSides: true,
   },
   {
     id: 'bulgarian-split-squat',
@@ -546,6 +568,7 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'dumbbell',
+    alternatingSides: true,
   },
   {
     id: 'step-ups',
@@ -554,6 +577,7 @@ export const exerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'compound',
     equipment: 'dumbbell',
+    alternatingSides: true,
   },
   {
     id: 'sissy-squat',
@@ -619,6 +643,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['glutes'],
     secondaryMuscles: [],
     category: 'isolation',
+    alternatingSides: true,
     equipment: 'cable',
   },
   {
@@ -973,6 +998,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['quads', 'glutes'],
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
+    alternatingSides: true,
     equipment: 'machine',
   },
   {
@@ -1039,6 +1065,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['glutes'],
     secondaryMuscles: ['hamstrings'],
     category: 'isolation',
+    alternatingSides: true,
     equipment: 'machine',
   },
   {
@@ -1095,7 +1122,7 @@ export const exerciseLibrary: Exercise[] = [
     id: 'kettlebell-deadlift',
     name: 'Kettlebell Deadlift',
     primaryMuscles: ['glutes', 'hamstrings'],
-    secondaryMuscles: ['lower_back'],
+    secondaryMuscles: ['lower_back', 'quads'],
     category: 'compound',
     equipment: 'other',
   },
@@ -1115,6 +1142,55 @@ export const exerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'other',
   },
+  // OLYMPIC / EXPLOSIVE LIFTS
+  {
+    id: 'power-clean',
+    name: 'Power Clean',
+    primaryMuscles: ['glutes', 'hamstrings'],
+    secondaryMuscles: ['quads', 'traps', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'power-snatch',
+    name: 'Power Snatch',
+    primaryMuscles: ['glutes', 'hamstrings'],
+    secondaryMuscles: ['shoulders', 'traps', 'quads'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'clean-and-jerk',
+    name: 'Clean & Jerk',
+    primaryMuscles: ['glutes', 'hamstrings'],
+    secondaryMuscles: ['shoulders', 'quads', 'triceps', 'traps'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'hang-clean',
+    name: 'Hang Clean',
+    primaryMuscles: ['glutes', 'hamstrings'],
+    secondaryMuscles: ['traps', 'quads', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'hang-snatch',
+    name: 'Hang Snatch',
+    primaryMuscles: ['glutes', 'hamstrings'],
+    secondaryMuscles: ['shoulders', 'traps', 'quads'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
+  {
+    id: 'squat-clean',
+    name: 'Squat Clean',
+    primaryMuscles: ['quads', 'glutes'],
+    secondaryMuscles: ['hamstrings', 'traps', 'shoulders'],
+    category: 'compound',
+    equipment: 'barbell',
+  },
   {
     id: 'dumbbell-curl-to-press',
     name: 'Dumbbell Curl to Press',
@@ -1129,6 +1205,7 @@ export const exerciseLibrary: Exercise[] = [
     primaryMuscles: ['quads', 'glutes'],
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
+    alternatingSides: true,
     equipment: 'dumbbell',
   },
   {
@@ -1769,18 +1846,30 @@ export const exerciseLibrary: Exercise[] = [
   },
 ];
 
-// Get exercise by ID
+// Deduplicated export — first occurrence of each ID wins
+export const exerciseLibrary: Exercise[] = (() => {
+  const seen = new Set<string>();
+  return _rawExerciseLibrary.filter(ex => {
+    if (seen.has(ex.id)) return false;
+    seen.add(ex.id);
+    return true;
+  });
+})();
+
+// Get exercise by ID — O(1) via pre-built Map
 export function getExerciseById(id: string): Exercise | undefined {
-  return exerciseLibrary.find(e => e.id === id);
+  return exerciseLibraryMap.get(id);
 }
 
-// Search exercises
+// Search exercises by name, muscles, equipment, and category
 export function searchExercises(query: string): Exercise[] {
   const lowerQuery = query.toLowerCase();
   return exerciseLibrary.filter(e => 
     e.name.toLowerCase().includes(lowerQuery) ||
     e.primaryMuscles.some(m => m.toLowerCase().includes(lowerQuery)) ||
-    e.equipment.toLowerCase().includes(lowerQuery)
+    e.secondaryMuscles.some(m => m.toLowerCase().includes(lowerQuery)) ||
+    e.equipment.toLowerCase().includes(lowerQuery) ||
+    e.category.toLowerCase().includes(lowerQuery)
   );
 }
 
@@ -1861,8 +1950,7 @@ export function createCustomExercise(
 
 // Get exercises suitable for a specific block type
 export function getExercisesForBlockType(blockType: string): Exercise[] {
-  // Use allExercises which includes warmup, cardio, and strength exercises
-  const all = [...exerciseLibrary, ...warmupExercises, ...cardioExercises];
+  const all = allExercises;
   
   switch (blockType) {
     case 'warmup':
@@ -1945,9 +2033,93 @@ export const cardioExercises: Exercise[] = [
   { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight' },
 ];
 
-// Combined exercise library with all categories
-export const allExercises: Exercise[] = [
-  ...exerciseLibrary,
-  ...warmupExercises,
-  ...cardioExercises,
-];
+// Combined exercise library with all categories (deduplicated — exerciseLibrary takes priority)
+export const allExercises: Exercise[] = (() => {
+  const seen = new Set<string>();
+  const result: Exercise[] = [];
+  for (const ex of [...exerciseLibrary, ...warmupExercises, ...cardioExercises]) {
+    if (!seen.has(ex.id)) {
+      seen.add(ex.id);
+      result.push(ex);
+    }
+  }
+  return result;
+})();
+
+// ============ EXERCISE LOOKUP MAP (O(1) by ID) ============
+
+// Pre-built map for O(1) exercise lookups — use instead of exerciseLibrary.find()
+export const exerciseLibraryMap: Map<string, Exercise> = new Map(
+  allExercises.map(ex => [ex.id, ex])
+);
+
+// ============ UNIFIED EXERCISE SEARCH ============
+
+// Efficient search across name, aliases, muscles, equipment, category, pattern
+// Used by all exercise pickers across the app for consistent search behavior
+export function filterExercisesBySearch(
+  exercises: Array<{ id: string; name: string; pattern?: string; aliases?: string[]; isCustom?: boolean }>,
+  query: string,
+  blockType?: string | null,
+): typeof exercises {
+  const search = query.toLowerCase().trim();
+
+  return exercises.filter(ex => {
+    // Search filter
+    if (search) {
+      const libEntry = exerciseLibraryMap.get(ex.id);
+      const matchesSearch =
+        ex.name.toLowerCase().includes(search) ||
+        (ex.aliases?.some(a => a.toLowerCase().includes(search)) ?? false) ||
+        (libEntry?.primaryMuscles?.some(m => m.toLowerCase().includes(search)) ?? false) ||
+        (libEntry?.secondaryMuscles?.some(m => m.toLowerCase().includes(search)) ?? false) ||
+        (libEntry?.equipment?.toLowerCase().includes(search) ?? false) ||
+        (libEntry?.category?.toLowerCase().includes(search) ?? false) ||
+        (ex.pattern?.toLowerCase().includes(search) ?? false);
+      if (!matchesSearch) return false;
+    }
+
+    // Block type filter
+    if (blockType) {
+      const pattern = (ex.pattern || '').toLowerCase();
+      const category = ((ex as any).category || exerciseLibraryMap.get(ex.id)?.category || '').toLowerCase();
+
+      switch (blockType) {
+        case 'warmup':
+          return pattern === 'warmup' || category === 'warmup' || category === 'stretching' || category === 'activation';
+        case 'cooldown':
+          return pattern === 'warmup' || category === 'stretching';
+        case 'cardio':
+          return pattern === 'cardio' || category === 'cardio';
+        case 'work':
+        case 'circuit':
+        default:
+          return pattern !== 'warmup' && pattern !== 'cardio' &&
+            category !== 'warmup' && category !== 'cardio' &&
+            category !== 'stretching' && category !== 'activation';
+      }
+    }
+
+    return true;
+  });
+}
+
+// ============ EXERCISE USAGE COUNTS ============
+
+// Count how many times each exercise has been completed across workout history
+// Pass userId for self-mode, or clientId for trainer mode
+export function getExerciseUsageCounts(
+  workoutHistory: Array<{ userId?: string; deletedAt?: string; exercises?: Array<{ exerciseId?: string }> }>,
+  userId: string,
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const w of workoutHistory) {
+    if (w.userId !== userId || w.deletedAt) continue;
+    if (!w.exercises) continue;
+    for (const ex of w.exercises) {
+      const id = ex.exerciseId || '';
+      if (id) counts[id] = (counts[id] || 0) + 1;
+    }
+  }
+  return counts;
+}

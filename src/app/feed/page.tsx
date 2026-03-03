@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useSocialStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useSocialStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import Link from 'next/link';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,6 +33,9 @@ export default function FeedPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { posts, likePost, unlikePost, commentOnPost, createPost, followUser, unfollowUser } = useSocialStore();
+  const { workoutHistory, personalBests } = useWorkoutStore();
+  const { medals } = useMedalStore();
+  const { clients } = useTrainerStore();
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -91,14 +95,29 @@ export default function FeedPage() {
     }
   };
 
-  // Show all posts (social feed)
-  const feedPosts = posts;
+  // Mode-based feed filtering
+  // Trainer mode: show own posts + client posts only
+  // User mode: show own posts + following/friends posts
+  const isTrainerMode = user?.mode === 'trainer';
+  const clientIds = clients.map(c => c.clientId);
+  const followingIds = user?.following || [];
+
+  const feedPosts = posts.filter(post => {
+    const postUserId = post.userId || post.user?.id;
+    if (!postUserId) return true; // Show system posts
+    if (postUserId === user?.id) return true; // Always show own posts
+    if (isTrainerMode) {
+      return clientIds.includes(postUserId);
+    } else {
+      return followingIds.includes(postUserId);
+    }
+  });
 
   return (
     <MainLayout>
       <PageHeader 
         title="Feed" 
-        subtitle="See what your friends are up to"
+        subtitle={isTrainerMode ? "Your clients' activity" : "See what your friends are up to"}
         action={
           <Dialog open={showCreatePost} onOpenChange={setShowCreatePost}>
             <DialogTrigger asChild>
@@ -178,29 +197,43 @@ export default function FeedPage() {
       {/* Profile Card Popup */}
       <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
         <DialogContent className="bg-transparent border-none shadow-none max-w-md p-0">
-          {selectedUser && (
-            <ProfileCard
-              user={selectedUser}
-              medals={[]}
-              strengthRating={null}
-              personalBests={[]}
-              stats={{
-                totalWorkouts: Math.floor(Math.random() * 50) + 10,
-                totalVolume: Math.floor(Math.random() * 500000) + 100000,
-                followers: selectedUser.followers?.length || 0,
-                following: selectedUser.following?.length || 0,
-              }}
-              isOwnProfile={selectedUser.id === user?.id}
-              isFriend={user?.following?.includes(selectedUser.id)}
-              onFollow={() => {
-                if (user?.following?.includes(selectedUser.id)) {
-                  unfollowUser(selectedUser.id);
-                } else {
-                  followUser(selectedUser.id);
-                }
-              }}
-            />
-          )}
+          {selectedUser && (() => {
+            const userWorkouts = workoutHistory.filter(w => w.userId === selectedUser.id && w.status === 'completed');
+            const userPBs = personalBests.filter(pb => pb.userId === selectedUser.id);
+            const userMedals = medals.filter(m => m.userId === selectedUser.id && m.earned);
+            return (
+              <ProfileCard
+                user={selectedUser}
+                medals={userMedals}
+                strengthRating={null}
+                personalBests={userPBs}
+                context="feed"
+                stats={{
+                  totalWorkouts: userWorkouts.length,
+                  totalVolume: userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0),
+                  followers: selectedUser.followers?.length || 0,
+                  following: selectedUser.following?.length || 0,
+                }}
+                isOwnProfile={selectedUser.id === user?.id}
+                isFriend={user?.following?.includes(selectedUser.id)}
+                onFollow={() => {
+                  if (user?.following?.includes(selectedUser.id)) {
+                    unfollowUser(selectedUser.id);
+                  } else {
+                    followUser(selectedUser.id);
+                  }
+                }}
+                onMessage={() => {
+                  setSelectedUser(null);
+                  router.push('/messages');
+                }}
+                onViewProfile={() => {
+                  setSelectedUser(null);
+                  router.push(`/profile/${selectedUser.id}`);
+                }}
+              />
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </MainLayout>
@@ -239,19 +272,23 @@ function PostCard({
       <CardContent className="p-4">
         {/* Post Header */}
         <div className="flex items-start gap-3 mb-3">
-          <button onClick={onAvatarClick} className="group">
+          <Link href={post.user?.id ? `/profile/${post.user.id}` : '#'} onClick={(e) => e.stopPropagation()} className="group">
             <Avatar className="w-11 h-11 ring-2 ring-slate-700 group-hover:ring-sky-500 transition-all duration-200">
               <AvatarImage src={post.user?.profilePhoto} />
               <AvatarFallback className="bg-slate-800 text-white font-semibold">
                 {post.user?.displayName?.[0] || post.user?.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
-          </button>
+          </Link>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="font-semibold text-white truncate">
+              <Link
+                href={post.user?.id ? `/profile/${post.user.id}` : '#'}
+                onClick={(e) => e.stopPropagation()}
+                className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors"
+              >
                 {post.user?.displayName || post.user?.username}
-              </p>
+              </Link>
               {post.user?.isVerifiedTrainer && (
                 <BadgeCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
               )}
@@ -306,15 +343,20 @@ function PostCard({
           <div className="mt-4 pt-4 border-t border-gray-800 space-y-3">
             {post.comments.map((comment) => (
               <div key={comment.id} className="flex gap-2">
-                <Avatar className="w-8 h-8">
-                  <AvatarFallback className="bg-gray-800 text-white text-xs">
-                    {comment.user?.displayName?.[0] || '?'}
-                  </AvatarFallback>
-                </Avatar>
+                <Link href={comment.user?.id ? `/profile/${comment.user.id}` : '#'}>
+                  <Avatar className="w-8 h-8 hover:ring-2 hover:ring-sky-500/50 transition-all cursor-pointer">
+                    <AvatarFallback className="bg-gray-800 text-white text-xs">
+                      {comment.user?.displayName?.[0] || '?'}
+                    </AvatarFallback>
+                  </Avatar>
+                </Link>
                 <div className="flex-1 bg-gray-800 rounded-xl px-3 py-2">
-                  <p className="text-sm font-medium text-white">
+                  <Link
+                    href={comment.user?.id ? `/profile/${comment.user.id}` : '#'}
+                    className="text-sm font-medium text-white hover:text-sky-400 hover:underline transition-colors"
+                  >
                     {comment.user?.displayName || comment.user?.username}
-                  </p>
+                  </Link>
                   <p className="text-sm text-gray-300">{comment.content}</p>
                 </div>
               </div>

@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,20 +11,39 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail } from 'lucide-react';
+import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail, Heart, Smartphone, CreditCard, Link2, Check } from 'lucide-react';
 import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
+import { acceptInvitation, checkInvitationByToken } from '@/lib/supabaseSync';
+import { Loader2 } from 'lucide-react';
 
-type Step = 'credentials' | 'profile' | 'goals';
+type Step = 'credentials' | 'profile' | 'goals' | 'connections';
 
-export default function AuthPage() {
+function AuthPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('invite');
+  const modeParam = searchParams.get('mode');
+  
   const { login, register, isLoading, user } = useAuthStore();
   const { loadFromSupabase } = useTrainerStore();
   
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
+  const [activeTab, setActiveTab] = useState<'login' | 'register'>(modeParam === 'login' ? 'login' : 'login');
   const [step, setStep] = useState<Step>('credentials');
+  const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  
+  // Check invite token and pre-fill email
+  useEffect(() => {
+    if (inviteToken) {
+      checkInvitationByToken(inviteToken).then((result) => {
+        if (result.valid && result.email) {
+          setInviteEmail(result.email);
+          setLoginEmail(result.email);
+        }
+      });
+    }
+  }, [inviteToken]);
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -41,6 +60,14 @@ export default function AuthPage() {
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [isTrainer, setIsTrainer] = useState(false);
+  
+  // Connections (onboarding step 4)
+  const [onboardConnections, setOnboardConnections] = useState<Record<string, boolean>>({
+    appleHealth: false,
+    googleHealth: false,
+    calendar: false,
+    stripe: false,
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +80,15 @@ export default function AuthPage() {
       if (loggedInUser?.mode === 'trainer' || loggedInUser?.isTrainer) {
         console.log('[Auth] Loading trainer data from Supabase...');
         loadFromSupabase(loggedInUser.id);
+      }
+      
+      // Handle invite token if present
+      if (inviteToken && loggedInUser) {
+        console.log('[Auth] Accepting invitation...');
+        const accepted = await acceptInvitation(inviteToken, loggedInUser.id);
+        if (accepted) {
+          toast.success('Invitation accepted! You are now connected with your trainer.');
+        }
       }
       
       router.push('/workout');
@@ -78,16 +114,26 @@ export default function AuthPage() {
       setStep('profile');
     } else if (step === 'profile') {
       setStep('goals');
+    } else if (step === 'goals') {
+      setStep('connections');
     }
   };
 
   const handlePrevStep = () => {
     if (step === 'profile') setStep('credentials');
     else if (step === 'goals') setStep('profile');
+    else if (step === 'connections') setStep('goals');
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Build health connections from onboarding selections
+    const healthConnections: Record<string, any> = {};
+    if (onboardConnections.appleHealth) healthConnections.appleHealth = { connected: true, lastSync: new Date().toISOString() };
+    if (onboardConnections.googleHealth) healthConnections.googleHealth = { connected: true, lastSync: new Date().toISOString() };
+    if (onboardConnections.calendar) healthConnections.calendar = { connected: true };
+    if (onboardConnections.stripe) healthConnections.stripe = { connected: true };
     
     const success = await register({
       email,
@@ -99,6 +145,7 @@ export default function AuthPage() {
       height: height ? parseFloat(height) : undefined,
       weight: weight ? parseFloat(weight) : undefined,
       isTrainer,
+      healthConnections: Object.keys(healthConnections).length > 0 ? healthConnections : undefined,
     });
 
     if (success) {
@@ -194,6 +241,12 @@ export default function AuthPage() {
 
             <TabsContent value="login" className="mt-0">
               <CardHeader>
+                {inviteEmail && (
+                  <div className="mb-4 p-3 bg-sky-500/10 border border-sky-500/30 rounded-lg">
+                    <p className="text-sky-400 text-sm font-medium">🎉 You&apos;ve been invited!</p>
+                    <p className="text-gray-400 text-xs mt-1">Sign in with your credentials to connect with your trainer.</p>
+                  </div>
+                )}
                 <CardTitle className="text-white">Welcome Back</CardTitle>
                 <CardDescription>Sign in to continue your fitness journey</CardDescription>
               </CardHeader>
@@ -286,20 +339,22 @@ export default function AuthPage() {
                 <CardTitle className="text-white">
                   {step === 'credentials' && 'Create Account'}
                   {step === 'profile' && 'About You'}
-                  {step === 'goals' && 'Final Step'}
+                  {step === 'goals' && 'Your Path'}
+                  {step === 'connections' && 'Connect Your Data'}
                 </CardTitle>
                 <CardDescription>
                   {step === 'credentials' && 'Start your fitness journey today'}
                   {step === 'profile' && 'Help us personalize your experience'}
                   {step === 'goals' && 'Choose your path'}
+                  {step === 'connections' && 'Optional — connect health & services'}
                 </CardDescription>
                 {/* Progress indicator */}
                 <div className="flex gap-2 mt-4">
-                  {['credentials', 'profile', 'goals'].map((s, i) => (
+                  {['credentials', 'profile', 'goals', 'connections'].map((s, i) => (
                     <div
                       key={s}
                       className={`h-1 flex-1 rounded-full transition-colors ${
-                        ['credentials', 'profile', 'goals'].indexOf(step) >= i
+                        ['credentials', 'profile', 'goals', 'connections'].indexOf(step) >= i
                           ? 'bg-sky-500'
                           : 'bg-gray-700'
                       }`}
@@ -308,7 +363,7 @@ export default function AuthPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <form onSubmit={step === 'goals' ? handleRegister : (e) => { e.preventDefault(); handleNextStep(); }}>
+                <form onSubmit={step === 'connections' ? handleRegister : (e) => { e.preventDefault(); handleNextStep(); }}>
                   {step === 'credentials' && (
                     <div className="space-y-4">
                       <div className="space-y-2">
@@ -488,6 +543,100 @@ export default function AuthPage() {
                     </div>
                   )}
 
+                  {step === 'connections' && (
+                    <div className="space-y-3">
+                      <p className="text-xs text-gray-500 mb-2">
+                        Connect now or skip — you can always change this in Settings later.
+                      </p>
+
+                      {/* Apple Health */}
+                      <button
+                        type="button"
+                        onClick={() => setOnboardConnections(c => ({ ...c, appleHealth: !c.appleHealth }))}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          onboardConnections.appleHealth
+                            ? 'bg-red-500/10 border-red-500/40'
+                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
+                          <Heart className="w-5 h-5 text-red-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-white text-sm">Apple Health</p>
+                          <p className="text-[11px] text-gray-500">Steps, calories, heart rate, sleep</p>
+                        </div>
+                        {onboardConnections.appleHealth && <Check className="w-5 h-5 text-red-400" />}
+                      </button>
+
+                      {/* Google/Samsung Health */}
+                      <button
+                        type="button"
+                        onClick={() => setOnboardConnections(c => ({ ...c, googleHealth: !c.googleHealth }))}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          onboardConnections.googleHealth
+                            ? 'bg-green-500/10 border-green-500/40'
+                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                          <Smartphone className="w-5 h-5 text-green-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-white text-sm">Google / Samsung Health</p>
+                          <p className="text-[11px] text-gray-500">Steps, calories, heart rate</p>
+                        </div>
+                        {onboardConnections.googleHealth && <Check className="w-5 h-5 text-green-400" />}
+                      </button>
+
+                      {/* Calendar */}
+                      <button
+                        type="button"
+                        onClick={() => setOnboardConnections(c => ({ ...c, calendar: !c.calendar }))}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                          onboardConnections.calendar
+                            ? 'bg-blue-500/10 border-blue-500/40'
+                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
+                          <Calendar className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <p className="font-medium text-white text-sm">Calendar</p>
+                          <p className="text-[11px] text-gray-500">Sync workouts to your phone calendar</p>
+                        </div>
+                        {onboardConnections.calendar && <Check className="w-5 h-5 text-blue-400" />}
+                      </button>
+
+                      {/* Stripe — only show if trainer selected */}
+                      {isTrainer && (
+                        <button
+                          type="button"
+                          onClick={() => setOnboardConnections(c => ({ ...c, stripe: !c.stripe }))}
+                          className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                            onboardConnections.stripe
+                              ? 'bg-purple-500/10 border-purple-500/40'
+                              : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                          }`}
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-5 h-5 text-purple-400" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="font-medium text-white text-sm">Stripe</p>
+                            <p className="text-[11px] text-gray-500">Accept payments from clients</p>
+                          </div>
+                          {onboardConnections.stripe && <Check className="w-5 h-5 text-purple-400" />}
+                        </button>
+                      )}
+
+                      <p className="text-[11px] text-gray-600 text-center pt-1">
+                        Real-time sync available when the native app is installed
+                      </p>
+                    </div>
+                  )}
+
                   <div className="flex gap-3 mt-6">
                     {step !== 'credentials' && (
                       <Button
@@ -505,8 +654,8 @@ export default function AuthPage() {
                       className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
                       disabled={isLoading}
                     >
-                      {step === 'goals' ? (isLoading ? 'Creating...' : 'Create Account') : 'Continue'}
-                      {step !== 'goals' && <ChevronRight className="w-4 h-4 ml-1" />}
+                      {step === 'connections' ? (isLoading ? 'Creating...' : 'Create Account') : 'Continue'}
+                      {step !== 'connections' && <ChevronRight className="w-4 h-4 ml-1" />}
                     </Button>
                   </div>
                 </form>
@@ -516,5 +665,17 @@ export default function AuthPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-sky-500 animate-spin" />
+      </div>
+    }>
+      <AuthPageContent />
+    </Suspense>
   );
 }

@@ -12,6 +12,7 @@ import { useAuthStore } from '@/lib/store';
 import { maleTierRanges, femaleTierRanges, getTierColor, getTierBgColor } from '@/lib/strengthRating';
 import { Workout, WorkoutExercise } from '@/types';
 import { Search, Dumbbell, TrendingUp, ChevronRight, Trophy } from 'lucide-react';
+import { ExerciseImage } from '@/components/ExerciseImage';
 import { format } from 'date-fns';
 
 type StrengthTier = 'beginner' | 'novice' | 'intermediate' | 'advanced' | 'elite';
@@ -199,9 +200,10 @@ export default function ExercisesPage() {
                   onClick={() => router.push(`/exercises/${exercise.exerciseId}`)}
                 >
                   <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-white">{exercise.exerciseName}</h4>
+                    <div className="flex items-center gap-3 mb-3">
+                      <ExerciseImage exerciseId={exercise.exerciseId} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-white truncate">{exercise.exerciseName}</h4>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-lg font-bold text-white">{exercise.personalBest}kg</span>
                           <Badge className={`${getTierBgColor(exercise.tier)} ${getTierTextColor(exercise.tier)} border-0 text-xs`}>
@@ -209,7 +211,7 @@ export default function ExercisesPage() {
                           </Badge>
                         </div>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-slate-600" />
+                      <ChevronRight className="w-5 h-5 text-slate-600 flex-shrink-0" />
                     </div>
                     <Progress 
                       value={exercise.tierProgress} 
@@ -243,8 +245,11 @@ export default function ExercisesPage() {
                   onClick={() => router.push(`/exercises/${exercise.exerciseId}`)}
                 >
                   <CardContent className="p-3">
-                    <p className="text-sm text-slate-400 truncate">{exercise.exerciseName}</p>
-                    <p className="text-xs text-slate-600 mt-1">Tap to view standards</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <ExerciseImage exerciseId={exercise.exerciseId} size="sm" className="!w-8 !h-8 !rounded-md" />
+                      <p className="text-sm text-slate-400 truncate flex-1">{exercise.exerciseName}</p>
+                    </div>
+                    <p className="text-xs text-slate-600">Tap to view standards</p>
                   </CardContent>
                 </Card>
               ))}

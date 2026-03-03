@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, Suspense } from 'react';
+import { getClientDisplayInfo, getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { useTrainerStore, useAuthStore } from '@/lib/store';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { ExerciseImage } from '@/components/ExerciseImage';
+import { ExerciseHowTo } from '@/components/ExerciseHowTo';
+import { useTrainerStore, useAuthStore, useWorkoutStore } from '@/lib/store';
 import { defaultTemplates } from '@/lib/templates';
 import { BlockType, MovementPattern } from '@/types';
 import { 
@@ -39,9 +43,14 @@ import {
   Zap,
   Heart,
   Loader2,
+  RefreshCw,
+  Eye,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
+import { exerciseLibrary, exerciseLibraryMap, filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
 import { 
   estimateWorkoutLengthSeconds, 
   formatDuration, 
@@ -217,14 +226,9 @@ const COMMON_EXERCISES = [
   { id: 'jump-rope', name: 'Jump Rope', pattern: 'cardio', aliases: ['skipping', 'skip rope'] },
   { id: 'box-jump', name: 'Box Jump', pattern: 'cardio', aliases: ['plyo box', 'plyometric jump'] },
   { id: 'kb-swing', name: 'Kettlebell Swing', pattern: 'cardio', aliases: ['kb swing', 'russian swing', 'american swing'] },
-  { id: 'kb-goblet-squat', name: 'KB Goblet Squat', pattern: 'cardio', aliases: ['kettlebell squat', 'goblet squat'] },
   { id: 'kb-clean', name: 'Kettlebell Clean', pattern: 'cardio', aliases: ['kb clean', 'kettlebell clean'] },
   { id: 'kb-snatch', name: 'Kettlebell Snatch', pattern: 'cardio', aliases: ['kb snatch'] },
   { id: 'kb-thruster', name: 'Kettlebell Thruster', pattern: 'cardio', aliases: ['kb thruster', 'squat to press'] },
-  { id: 'kb-lunge', name: 'Kettlebell Lunge', pattern: 'cardio', aliases: ['kb walking lunge', 'kettlebell lunge'] },
-  { id: 'kb-reverse-lunge', name: 'KB Reverse Lunge', pattern: 'cardio', aliases: ['kettlebell reverse lunge', 'kb step back lunge'] },
-  { id: 'kb-deadlift', name: 'Kettlebell Deadlift', pattern: 'cardio', aliases: ['kb dl', 'kb rdl'] },
-  { id: 'kb-row', name: 'Kettlebell Row', pattern: 'cardio', aliases: ['kb bent over row', 'single arm kb row'] },
   { id: 'burpee', name: 'Burpee', pattern: 'cardio', aliases: ['burpees'] },
   { id: 'mountain-climber', name: 'Mountain Climber', pattern: 'cardio', aliases: ['mountain climbers'] },
   { id: 'battle-ropes', name: 'Battle Ropes', pattern: 'cardio', aliases: ['rope waves', 'battling ropes'] },
@@ -245,6 +249,11 @@ const COMMON_EXERCISES = [
   { id: 'med-ball-slam', name: 'Med Ball Slam', pattern: 'hinge', aliases: ['ball slam', 'medicine ball slam'] },
   { id: 'sumo-deadlift-high-pull', name: 'Sumo Deadlift High Pull', pattern: 'hinge', aliases: ['sdhp', 'sumo high pull'] },
   { id: 'hang-clean', name: 'Hang Clean', pattern: 'hinge', aliases: ['db hang clean', 'barbell hang clean'] },
+  { id: 'power-clean', name: 'Power Clean', pattern: 'hinge', aliases: ['barbell clean', 'clean'] },
+  { id: 'power-snatch', name: 'Power Snatch', pattern: 'hinge', aliases: ['barbell snatch', 'snatch'] },
+  { id: 'clean-and-jerk', name: 'Clean & Jerk', pattern: 'hinge', aliases: ['clean jerk', 'c&j', 'olympic clean and jerk'] },
+  { id: 'hang-snatch', name: 'Hang Snatch', pattern: 'hinge', aliases: ['barbell hang snatch', 'hang power snatch'] },
+  { id: 'squat-clean', name: 'Squat Clean', pattern: 'squat', aliases: ['full clean', 'clean to front squat'] },
   { id: 'push-press', name: 'Push Press', pattern: 'push', aliases: ['bb push press', 'db push press'] },
   { id: 'thrusters', name: 'Thrusters', pattern: 'squat', aliases: ['barbell thruster', 'db thruster'] },
   { id: 'step-ups', name: 'Step Ups', pattern: 'lunge', aliases: ['box step up', 'weighted step up'] },
@@ -347,6 +356,7 @@ function WorkoutBuilderContent() {
   const libraryId = searchParams.get('libraryId'); // For loading from library
   
   const { user } = useAuthStore();
+  const { workoutHistory } = useWorkoutStore();
   const { 
     clients, 
     calendarEvents, 
@@ -364,6 +374,10 @@ function WorkoutBuilderContent() {
     saveBlock,
     deleteBlock,
     getBlocksByType,
+    loadFromSupabase,
+    blockPerformances,
+    getBlockPerformances,
+    getBestBlockPerformance,
   } = useTrainerStore();
   
   const client = clients.find(c => c.clientId === clientId);
@@ -393,18 +407,21 @@ function WorkoutBuilderContent() {
   
   // Block Library state
   const [showBlockLibraryDialog, setShowBlockLibraryDialog] = useState(false);
+  const [previewBlockId, setPreviewBlockId] = useState<string | null>(null);
+  const [isSyncingBlocks, setIsSyncingBlocks] = useState(false);
   const [showSaveBlockDialog, setShowSaveBlockDialog] = useState(false);
   const [blockLibraryName, setBlockLibraryName] = useState('');
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
+  const [blockToDelete, setBlockToDelete] = useState<any>(null);
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
   
   // Custom exercise state
   const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
   const [customExerciseName, setCustomExerciseName] = useState('');
-  const [customExerciseType, setCustomExerciseType] = useState<'normal' | 'cardio'>('normal');
-  const [customExercises, setCustomExercises] = useState<Array<{ id: string; name: string; type: 'normal' | 'cardio' }>>(() => {
+  const [customExerciseType, setCustomExerciseType] = useState<'normal' | 'cardio' | 'stretch'>('normal');
+  const [customExercises, setCustomExercises] = useState<Array<{ id: string; name: string; type: 'normal' | 'cardio' | 'stretch' }>>(() => {
     if (typeof window !== 'undefined') {
       return JSON.parse(localStorage.getItem('apex-custom-exercises') || '[]');
     }
@@ -422,6 +439,7 @@ function WorkoutBuilderContent() {
   }, []);
   
   const clientUser = allUsers.find(u => u.id === clientId);
+  const clientDisplayName = getClientNameUtil(clientId);
   
   // Initialize blocks from existing workout, library, template, or empty
   const initialBlocks = useMemo(() => {
@@ -437,7 +455,7 @@ function WorkoutBuilderContent() {
       const workBlock: WorkoutBlock = {
         id: 'main-block',
         type: 'work',
-        name: 'Main Workout',
+        name: 'Strength',
         exercises: template.exercises.map((ex, idx) => ({
           id: `ex-${idx}`,
           exerciseId: ex.exerciseId,
@@ -471,7 +489,7 @@ function WorkoutBuilderContent() {
   
   const selectedPhase = TRAINING_PHASES.find(p => p.id === selectedPhaseId);
   const selectedClient = clients.find(c => c.clientId === selectedClientId);
-  const selectedClientUser = allUsers.find(u => u.id === selectedClientId);
+  const selectedClientName = getClientNameUtil(selectedClientId);
   
   // Apply phase configuration to all exercises
   const applyPhaseToExercises = (phaseId: string) => {
@@ -609,43 +627,16 @@ function WorkoutBuilderContent() {
   // Get the current block type being edited for exercise filtering
   const currentBlockType = showAddExercise ? blocks.find(b => b.id === showAddExercise)?.type : null;
   
-  const filteredExercises = allExercises.filter(ex => {
-    const search = exerciseSearch.toLowerCase();
-    // First filter by search term
-    const matchesSearch = ex.name.toLowerCase().includes(search) ||
-      (ex.aliases?.some(alias => alias.toLowerCase().includes(search)) ?? false);
-    
-    if (!matchesSearch) return false;
-    
-    // Then filter by block type if we're adding to a specific block
-    if (currentBlockType) {
-      // Check both pattern (for COMMON_EXERCISES) and category (for exerciseLibrary)
-      const pattern = (ex.pattern || '').toLowerCase();
-      const category = ((ex as any).category || '').toLowerCase();
-      
-      switch (currentBlockType) {
-        case 'warmup':
-          // Warmup blocks: warmup, stretching, activation exercises only
-          return pattern === 'warmup' || category === 'warmup' || 
-                 category === 'stretching' || category === 'activation';
-        case 'cooldown':
-          // Cooldown blocks: stretching exercises only
-          return pattern === 'warmup' || category === 'stretching';
-        case 'cardio':
-          // Cardio blocks: ONLY cardio exercises (strict filtering)
-          return pattern === 'cardio' || category === 'cardio';
-        case 'work':
-        case 'circuit':
-        default:
-          // Work/circuit blocks: strength exercises (not warmup/cardio)
-          return pattern !== 'warmup' && pattern !== 'cardio' && 
-                 category !== 'warmup' && category !== 'cardio' && 
-                 category !== 'stretching' && category !== 'activation';
-      }
-    }
-    
-    return true;
-  });
+  const filteredExercises = useMemo(() => {
+    return filterExercisesBySearch(allExercises, exerciseSearch, currentBlockType);
+  }, [allExercises, exerciseSearch, currentBlockType]);
+  
+  // Exercise usage counts for the target user (self or client in trainer mode)
+  const targetUserId = clientId || user?.id || '';
+  const exerciseUsageCounts = useMemo(() => {
+    if (!targetUserId) return {};
+    return getExerciseUsageCounts(workoutHistory, targetUserId);
+  }, [workoutHistory, targetUserId]);
   
   // Handler to save custom exercise
   const handleCreateCustomExercise = () => {
@@ -671,7 +662,7 @@ function WorkoutBuilderContent() {
       const exerciseToAdd = {
         id: newExercise.id,
         name: newExercise.name,
-        pattern: newExercise.type === 'cardio' ? 'cardio' : 'compound',
+        pattern: newExercise.type === 'cardio' ? 'cardio' : newExercise.type === 'stretch' ? 'warmup' : 'compound',
         aliases: [],
       };
       addExercise(pendingBlockId, exerciseToAdd as typeof COMMON_EXERCISES[0]);
@@ -705,7 +696,7 @@ function WorkoutBuilderContent() {
     const newBlock: WorkoutBlock = {
       id: `block-${Date.now()}`,
       type,
-      name: type === 'warmup' ? 'Warm-up' : type === 'cooldown' ? 'Cool-down' : type === 'circuit' ? 'Circuit' : 'Main Work',
+      name: type === 'warmup' ? 'Warm-up' : type === 'cooldown' ? 'Cool-down' : type === 'circuit' ? 'Circuit' : 'Strength',
       exercises: [],
       // Default circuit settings
       ...(type === 'circuit' && {
@@ -768,6 +759,7 @@ function WorkoutBuilderContent() {
   };
 
   const handleSave = () => {
+    console.log('[Builder] Saving blocks:', blocks.map(b => ({ id: b.id, type: b.type, name: b.name })));
     if (isEditMode && existingWorkout) {
       // Update existing workout
       updateSessionWorkout(existingWorkout.id, {
@@ -964,6 +956,45 @@ function WorkoutBuilderContent() {
     setExistingBlockToReplace(null);
   };
 
+  const handleSyncBlockLibrary = async () => {
+    setIsSyncingBlocks(true);
+    try {
+      const { syncSavedBlockToSupabase } = await import('@/lib/supabaseSync');
+      const trainerId = useAuthStore.getState().user?.id;
+      if (!trainerId) {
+        toast.error('Please log in to sync blocks');
+        return;
+      }
+      
+      // First sync all local blocks to Supabase
+      for (const block of savedBlocks) {
+        await syncSavedBlockToSupabase({
+          id: block.id,
+          name: block.name,
+          type: block.type,
+          trainerId: block.trainerId,
+          exercises: block.exercises,
+          circuitStyle: block.circuitStyle,
+          circuitRounds: block.circuitRounds,
+          circuitDuration: block.circuitDuration,
+          circuitRestBetween: block.circuitRestBetween,
+          createdAt: block.createdAt,
+          updatedAt: block.updatedAt,
+        });
+      }
+      
+      // Reload all data from Supabase (updates savedBlocks in store)
+      await loadFromSupabase(trainerId);
+      
+      toast.success('Block library synced!');
+    } catch (error) {
+      console.error('Error syncing blocks:', error);
+      toast.error('Failed to sync blocks');
+    } finally {
+      setIsSyncingBlocks(false);
+    }
+  };
+
   const handleLoadBlock = (savedBlock: typeof savedBlocks[0]) => {
     // Create a new block with the saved block's data
     const newBlock: WorkoutBlock = {
@@ -1026,22 +1057,25 @@ function WorkoutBuilderContent() {
       </div>
 
       {/* Client Selection */}
-      <Card className="mb-4">
+      <Card className="mb-4 bg-gray-900/50 border-gray-800">
         <CardContent className="p-4">
-          <Label className="mb-2 block">Assign to Client</Label>
+          <Label className="mb-3 block text-white">Assign to Client</Label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
             {clients.map((c) => {
-              const cUser = allUsers.find(u => u.id === c.clientId);
+              const isSelected = selectedClientId === c.clientId;
               return (
-                <Button
+                <button
                   key={c.clientId}
-                  variant={selectedClientId === c.clientId ? "default" : "outline"}
-                  className={`h-auto py-2 px-3 justify-start ${selectedClientId === c.clientId ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all ${
+                    isSelected 
+                      ? 'bg-sky-500/20 border-sky-500 text-sky-400 ring-2 ring-sky-500/50' 
+                      : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-sky-500/50 hover:bg-gray-800'
+                  }`}
                   onClick={() => setSelectedClientId(c.clientId)}
                 >
-                  <Users className="h-4 w-4 mr-2" />
-                  <span className="truncate">{cUser?.displayName || c.clientId}</span>
-                </Button>
+                  <Users className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate text-sm font-medium">{getClientNameUtil(c.clientId)}</span>
+                </button>
               );
             })}
             {clients.length === 0 && (
@@ -1520,7 +1554,10 @@ function WorkoutBuilderContent() {
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                         <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
                         <div className="flex-1">
-                          <p className="font-medium text-sm">{exercise.exerciseName}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-sm">{exercise.exerciseName}</p>
+                            <ExerciseHowTo exerciseId={exercise.exerciseId} exerciseName={exercise.exerciseName} />
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             {block.type === 'circuit' 
                               ? `${exercise.reps}${exercise.repType === 'time' ? '' : ' reps'}`
@@ -1579,19 +1616,26 @@ function WorkoutBuilderContent() {
                               </div>
                             ) : (
                               <>
-                                {filteredExercises.map((ex) => (
-                                  <Button
-                                    key={ex.id}
-                                    variant="ghost"
-                                    className="w-full justify-start h-auto py-2"
-                                    onClick={() => addExercise(block.id, ex)}
-                                  >
-                                    <div className="text-left">
-                                      <p className="font-medium text-sm">{ex.name} {(ex as any).isCustom && <span className="text-xs text-sky-400">(custom)</span>}</p>
-                                      <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
-                                    </div>
-                                  </Button>
-                                ))}
+                                {filteredExercises.map((ex) => {
+                                  const count = exerciseUsageCounts[ex.id] || 0;
+                                  return (
+                                    <Button
+                                      key={ex.id}
+                                      variant="ghost"
+                                      className="w-full justify-start h-auto py-2"
+                                      onClick={() => addExercise(block.id, ex as typeof COMMON_EXERCISES[0])}
+                                    >
+                                      <ExerciseImage exerciseId={ex.id} size="sm" className="!w-8 !h-8 !rounded-md mr-2 flex-shrink-0" />
+                                      <div className="text-left flex-1">
+                                        <p className="font-medium text-sm">{ex.name} {(ex as any).isCustom && <span className="text-xs text-sky-400">(custom)</span>}</p>
+                                        <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
+                                      </div>
+                                      {count > 0 && (
+                                        <Badge variant="secondary" className="text-xs bg-sky-500/20 text-sky-400 ml-1">{count}×</Badge>
+                                      )}
+                                    </Button>
+                                  );
+                                })}
                                 <Button
                                   variant="ghost"
                                   size="sm"
@@ -1744,33 +1788,44 @@ function WorkoutBuilderContent() {
                     <TabsContent value="muscle" className="mt-2">
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
-                          {COMMON_EXERCISES.filter(ex => 
-                            ex.pattern === editingExercise.exercise.movementPattern &&
-                            ex.id !== editingExercise.exercise.exerciseId
-                          ).map(ex => (
-                            <Button
-                              key={ex.id}
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-left h-auto py-2"
-                              onClick={() => {
-                                setEditingExercise({
-                                  ...editingExercise,
-                                  exercise: {
-                                    ...editingExercise.exercise,
-                                    exerciseId: ex.id,
-                                    exerciseName: ex.name,
-                                  }
-                                });
-                                setShowSwapPanel(false);
-                              }}
-                            >
-                              <div>
-                                <p className="font-medium text-sm">{ex.name}</p>
-                                <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
-                              </div>
-                            </Button>
-                          ))}
+                          {(() => {
+                            const currentLib = exerciseLibraryMap.get(editingExercise.exercise.exerciseId);
+                            const currentMuscles = currentLib?.primaryMuscles || [];
+                            return COMMON_EXERCISES.filter(ex => {
+                              if (ex.id === editingExercise.exercise.exerciseId) return false;
+                              if (ex.pattern === editingExercise.exercise.movementPattern) return true;
+                              const lib = exerciseLibraryMap.get(ex.id);
+                              return lib?.primaryMuscles?.some(m => currentMuscles.includes(m as any)) ?? false;
+                            }).map(ex => {
+                              const lib = exerciseLibraryMap.get(ex.id);
+                              return (
+                                <Button
+                                  key={ex.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-left h-auto py-2"
+                                  onClick={() => {
+                                    setEditingExercise({
+                                      ...editingExercise,
+                                      exercise: {
+                                        ...editingExercise.exercise,
+                                        exerciseId: ex.id,
+                                        exerciseName: ex.name,
+                                      }
+                                    });
+                                    setShowSwapPanel(false);
+                                  }}
+                                >
+                                  <div>
+                                    <p className="font-medium text-sm">{ex.name}</p>
+                                    <p className="text-xs text-muted-foreground capitalize">
+                                      {lib?.primaryMuscles?.join(', ') || ex.pattern}
+                                    </p>
+                                  </div>
+                                </Button>
+                              );
+                            });
+                          })()}
                         </div>
                       </ScrollArea>
                     </TabsContent>
@@ -1787,32 +1842,40 @@ function WorkoutBuilderContent() {
                       </div>
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
-                          {filteredExercises.filter(ex => ex.id !== editingExercise.exercise.exerciseId).map(ex => (
-                            <Button
-                              key={ex.id}
-                              variant="ghost"
-                              size="sm"
-                              className="w-full justify-start text-left h-auto py-2"
-                              onClick={() => {
-                                setEditingExercise({
-                                  ...editingExercise,
-                                  exercise: {
-                                    ...editingExercise.exercise,
-                                    exerciseId: ex.id,
-                                    exerciseName: ex.name,
-                                    movementPattern: ex.pattern as MovementPattern,
-                                  }
-                                });
-                                setShowSwapPanel(false);
-                                setExerciseSearch('');
-                              }}
-                            >
-                              <div>
-                                <p className="font-medium text-sm">{ex.name}</p>
-                                <p className="text-xs text-muted-foreground capitalize">{ex.pattern}</p>
-                              </div>
-                            </Button>
-                          ))}
+                          {filterExercisesBySearch(allExercises, exerciseSearch)
+                          .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
+                          .map(ex => {
+                            const libEntry = exerciseLibraryMap.get(ex.id);
+                            return (
+                              <Button
+                                key={ex.id}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-left h-auto py-2"
+                                onClick={() => {
+                                  setEditingExercise({
+                                    ...editingExercise,
+                                    exercise: {
+                                      ...editingExercise.exercise,
+                                      exerciseId: ex.id,
+                                      exerciseName: ex.name,
+                                      movementPattern: ex.pattern as MovementPattern,
+                                    }
+                                  });
+                                  setShowSwapPanel(false);
+                                  setExerciseSearch('');
+                                }}
+                              >
+                                <div>
+                                  <p className="font-medium text-sm">{ex.name}</p>
+                                  <p className="text-xs text-muted-foreground capitalize">
+                                    {libEntry?.equipment || ex.pattern}
+                                    {libEntry?.primaryMuscles?.length ? ` · ${libEntry.primaryMuscles.join(', ')}` : ''}
+                                  </p>
+                                </div>
+                              </Button>
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </TabsContent>
@@ -2548,7 +2611,23 @@ function WorkoutBuilderContent() {
       }}>
         <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>📚 Block Library</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle>📚 Block Library</DialogTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSyncBlockLibrary}
+                disabled={isSyncingBlocks}
+                className="gap-1"
+              >
+                {isSyncingBlocks ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Sync
+              </Button>
+            </div>
           </DialogHeader>
           <div className="flex gap-2 mb-4 flex-wrap">
             <Button
@@ -2583,6 +2662,10 @@ function WorkoutBuilderContent() {
                   .filter(b => blockLibraryFilter === 'all' || b.type === blockLibraryFilter)
                   .map((block) => {
                     const blockStyle = getBlockStyles(block.type);
+                    // Get client's performance history for this block
+                    const clientPerfs = clientId ? blockPerformances.filter(p => p.blockId === block.id && p.clientId === clientId) : [];
+                    const bestPerf = clientId ? getBestBlockPerformance(block.id, clientId) : undefined;
+                    const lastPerf = clientPerfs.length > 0 ? clientPerfs.sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())[0] : undefined;
                     return (
                       <Card 
                         key={block.id} 
@@ -2601,6 +2684,21 @@ function WorkoutBuilderContent() {
                                 {block.circuitStyle && ` • ${block.circuitStyle}`}
                                 {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
                               </p>
+                              {/* Show client's previous and best times for circuits */}
+                              {clientId && block.type === 'circuit' && (lastPerf || bestPerf) && (
+                                <div className="flex gap-3 mt-2 text-xs">
+                                  {lastPerf?.completionTime && (
+                                    <span className="text-gray-400">
+                                      Last: <span className="text-sky-400 font-medium">{Math.floor(lastPerf.completionTime / 60)}:{String(lastPerf.completionTime % 60).padStart(2, '0')}</span>
+                                    </span>
+                                  )}
+                                  {bestPerf?.completionTime && (
+                                    <span className="text-gray-400">
+                                      Best: <span className="text-green-400 font-medium">{Math.floor(bestPerf.completionTime / 60)}:{String(bestPerf.completionTime % 60).padStart(2, '0')}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
                               <Badge variant="outline" className={blockStyle.badge}>
@@ -2609,19 +2707,43 @@ function WorkoutBuilderContent() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewBlockId(previewBlockId === block.id ? null : block.id);
+                                }}
+                              >
+                                {previewBlockId === block.id ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (confirm(`Delete "${block.name}" from your library?`)) {
-                                    deleteBlock(block.id);
-                                    toast.success('Block deleted from library');
-                                  }
+                                  setBlockToDelete(block);
                                 }}
                               >
                                 <Trash2 className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
+                          {/* Exercise Preview */}
+                          {previewBlockId === block.id && block.exercises && block.exercises.length > 0 && (
+                            <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-1.5">
+                              {block.exercises.map((ex, idx) => (
+                                <div key={ex.id} className="flex items-center justify-between text-xs py-1 px-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-500 w-4">{idx + 1}.</span>
+                                    <span className="text-slate-300">{ex.exerciseName}</span>
+                                  </div>
+                                  <span className="text-slate-500">
+                                    {ex.sets} × {ex.reps}{ex.repType === 'time' ? '' : ' reps'} • {ex.rest}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     );
@@ -2674,28 +2796,75 @@ function WorkoutBuilderContent() {
                   <div className="space-y-2">
                     {savedBlocks.filter(b => b.type === selectedBlockType).map((block) => {
                       const blockStyle = getBlockStyles(block.type);
+                      // Get client's performance history for this block
+                      const clientPerfs = clientId ? blockPerformances.filter(p => p.blockId === block.id && p.clientId === clientId) : [];
+                      const bestPerf = clientId ? getBestBlockPerformance(block.id, clientId) : undefined;
+                      const lastPerf = clientPerfs.length > 0 ? clientPerfs.sort((a, b) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())[0] : undefined;
                       return (
-                        <Button
-                          key={block.id}
-                          variant="outline"
-                          className={`w-full justify-start h-auto py-3 ${blockStyle.border} hover:${blockStyle.bg}`}
-                          onClick={() => {
-                            handleLoadBlock(block);
-                            setShowBlockTypeDialog(false);
-                            setSelectedBlockType(null);
-                          }}
-                        >
-                          <div className="flex items-center gap-3 w-full">
-                            {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
-                            <div className="text-left flex-1">
-                              <p className="font-medium">{block.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {block.exercises?.length || 0} exercises
-                                {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
-                              </p>
+                        <div key={block.id} className={`rounded-lg border ${blockStyle.border} overflow-hidden`}>
+                          <Button
+                            variant="outline"
+                            className={`w-full justify-start h-auto py-3 border-0 hover:${blockStyle.bg}`}
+                            onClick={() => {
+                              handleLoadBlock(block);
+                              setShowBlockTypeDialog(false);
+                              setSelectedBlockType(null);
+                            }}
+                          >
+                            <div className="flex items-center gap-3 w-full">
+                              {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
+                              <div className="text-left flex-1">
+                                <p className="font-medium">{block.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {block.exercises?.length || 0} exercises
+                                  {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
+                                </p>
+                                {/* Show client's previous and best times for circuits */}
+                                {clientId && block.type === 'circuit' && (lastPerf || bestPerf) && (
+                                  <div className="flex gap-3 mt-1">
+                                    {lastPerf?.completionTime && (
+                                      <span className="text-gray-400">
+                                        Last: <span className="text-sky-400 font-medium">{Math.floor(lastPerf.completionTime / 60)}:{String(lastPerf.completionTime % 60).padStart(2, '0')}</span>
+                                      </span>
+                                    )}
+                                    {bestPerf?.completionTime && (
+                                      <span className="text-gray-400">
+                                        Best: <span className="text-green-400 font-medium">{Math.floor(bestPerf.completionTime / 60)}:{String(bestPerf.completionTime % 60).padStart(2, '0')}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                className="p-1.5 rounded text-sky-400 hover:bg-sky-500/15 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  setPreviewBlockId(previewBlockId === block.id ? null : block.id);
+                                }}
+                              >
+                                {previewBlockId === block.id ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
                             </div>
-                          </div>
-                        </Button>
+                          </Button>
+                          {/* Exercise Preview */}
+                          {previewBlockId === block.id && block.exercises && block.exercises.length > 0 && (
+                            <div className="px-4 pb-3 pt-1 border-t border-slate-700/50 space-y-1.5">
+                              {block.exercises.map((ex, idx) => (
+                                <div key={ex.id} className="flex items-center justify-between text-xs py-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-slate-500 w-4">{idx + 1}.</span>
+                                    <span className="text-slate-300">{ex.exerciseName}</span>
+                                  </div>
+                                  <span className="text-slate-500">
+                                    {ex.sets} × {ex.reps}{ex.repType === 'time' ? '' : ' reps'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -2732,7 +2901,7 @@ function WorkoutBuilderContent() {
                   onClick={() => setCustomExerciseType('normal')}
                   className="flex-1"
                 >
-                  💪 Normal (Strength)
+                  💪 Strength
                 </Button>
                 <Button
                   variant={customExerciseType === 'cardio' ? 'default' : 'outline'}
@@ -2742,11 +2911,21 @@ function WorkoutBuilderContent() {
                 >
                   🏃 Cardio
                 </Button>
+                <Button
+                  variant={customExerciseType === 'stretch' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setCustomExerciseType('stretch')}
+                  className="flex-1"
+                >
+                  🧘 Stretch
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 {customExerciseType === 'cardio' 
                   ? 'Cardio exercises default to time-based sets (e.g., 30s)'
-                  : 'Normal exercises default to rep-based sets (e.g., 8-12 reps)'}
+                  : customExerciseType === 'stretch'
+                  ? 'Stretch exercises default to timed holds with start/stop timer'
+                  : 'Strength exercises default to rep-based sets (e.g., 8-12 reps)'}
               </p>
             </div>
             <div className="flex gap-2">
@@ -2771,6 +2950,23 @@ function WorkoutBuilderContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!blockToDelete}
+        onOpenChange={(open) => { if (!open) setBlockToDelete(null); }}
+        title="Delete Block"
+        description={`Delete "${blockToDelete?.name}" from your library?`}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          if (blockToDelete) {
+            deleteBlock(blockToDelete.id);
+            toast.success('Block deleted from library');
+            setBlockToDelete(null);
+          }
+        }}
+        icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
     </div>
   );
 }

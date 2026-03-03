@@ -10,6 +10,8 @@ import {
   debugSupabase,
   ensureUserExistsInSupabase,
   cleanupDeletedClients,
+  fetchWorkoutTemplatesFromSupabase,
+  syncWorkoutTemplateToSupabase,
   type MessageData,
   type ConversationData,
 } from '@/lib/supabaseSync';
@@ -94,6 +96,21 @@ export function SupabaseSync() {
         followers: remoteData.followers,
         following: remoteData.following,
       });
+
+      // Load user-created workout templates from Supabase
+      const supabaseTemplates = await fetchWorkoutTemplatesFromSupabase(user.id);
+      if (supabaseTemplates.length > 0) {
+        const localTemplates = useWorkoutStore.getState().templates;
+        const localOnly = localTemplates.filter(
+          lt => !supabaseTemplates.find((st: any) => st.id === lt.id)
+        );
+        localOnly.forEach(t => syncWorkoutTemplateToSupabase(t));
+        useWorkoutStore.setState({ templates: [...supabaseTemplates, ...localOnly] });
+      } else {
+        // Push any local-only templates to Supabase
+        const localTemplates = useWorkoutStore.getState().templates;
+        localTemplates.forEach(t => syncWorkoutTemplateToSupabase(t));
+      }
 
       // Recalculate strength rating from synced PBs (it's derived from personal bests)
       setTimeout(() => {

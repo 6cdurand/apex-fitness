@@ -532,6 +532,7 @@ function fromDbMedal(dbMedal: any): Medal {
     progress: dbMedal.progress,
     target: dbMedal.target,
     timesEarned: dbMedal.times_earned || 1,
+    evolutionTier: dbMedal.evolution_tier || 'base',
   };
 }
 
@@ -1585,9 +1586,9 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
 // Clear all local storage data for Apex
 export function clearAllLocalData(): void {
   console.log('[Local Cleanup] Clearing localStorage...');
-  localStorage.removeItem('catalift-users');
+  localStorage.removeItem('apex-users');
   localStorage.removeItem('apex-auth-storage');
-  localStorage.removeItem('catalift-workout-storage');
+  localStorage.removeItem('apex-workout');
   localStorage.removeItem('apex-medal-storage');
   console.log('[Local Cleanup] ✅ All local data cleared');
 }
@@ -1995,6 +1996,7 @@ export async function syncSessionWorkoutToSupabase(workout: any): Promise<boolea
   if (!isSupabaseConfigured()) return false;
   
   try {
+    console.log('[Supabase Sync] Syncing session workout blocks:', workout.blocks?.map((b: any) => ({ id: b.id, type: b.type, name: b.name })));
     const dbWorkout = {
       id: workout.id,
       name: workout.name,
@@ -2032,15 +2034,20 @@ export async function fetchSessionWorkoutsFromSupabase(trainerId: string): Promi
       return [];
     }
     
-    return (data || []).map(w => ({
-      id: w.id,
-      name: w.name,
-      clientId: w.client_id,
-      eventId: w.event_id,
-      trainerId: w.trainer_id,
-      blocks: typeof w.blocks === 'string' ? JSON.parse(w.blocks) : (w.blocks || []),
-      createdAt: w.created_at,
-    }));
+    const result = (data || []).map(w => {
+      const blocks = typeof w.blocks === 'string' ? JSON.parse(w.blocks) : (w.blocks || []);
+      console.log('[Supabase Fetch] Session workout blocks loaded:', blocks.map((b: any) => ({ id: b.id, type: b.type, name: b.name })));
+      return {
+        id: w.id,
+        name: w.name,
+        clientId: w.client_id,
+        eventId: w.event_id,
+        trainerId: w.trainer_id,
+        blocks,
+        createdAt: w.created_at,
+      };
+    });
+    return result;
   } catch (e) {
     console.error('[Session Workout Fetch] Exception:', e);
     return [];
@@ -2238,7 +2245,8 @@ export async function sendClientInvitation(
   clientId: string,
   clientEmail: string,
   trainerName: string,
-  clientName: string
+  clientName: string,
+  clientPassword?: string
 ): Promise<{ success: boolean; inviteToken?: string; error?: string }> {
   if (!isSupabaseConfigured()) {
     return { success: false, error: 'Supabase not configured' };
@@ -2274,6 +2282,7 @@ export async function sendClientInvitation(
         trainerName,
         inviteToken,
         appUrl: typeof window !== 'undefined' ? window.location.origin : 'https://catalift.app',
+        password: clientPassword || 'client123',
       },
     });
 
@@ -2409,34 +2418,44 @@ interface SavedBlockData {
 
 // Sync a saved block to Supabase
 export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase] Not configured, skipping saved block sync');
+    return false;
+  }
+
+  console.log('[Supabase] Syncing saved block:', block.id, block.name);
 
   try {
-    const { error } = await supabase
+    const dbBlock = {
+      id: block.id,
+      trainer_id: block.trainerId,
+      name: block.name,
+      block_type: block.type,
+      exercises: block.exercises || [],
+      circuit_style: block.circuitStyle || null,
+      circuit_rounds: block.circuitRounds || null,
+      circuit_duration: block.circuitDuration || null,
+      circuit_rest_between: block.circuitRestBetween || null,
+      created_at: block.createdAt || new Date().toISOString(),
+      updated_at: block.updatedAt || new Date().toISOString(),
+    };
+    
+    console.log('[Supabase] Saved block data to upsert:', JSON.stringify(dbBlock, null, 2));
+
+    const { data, error } = await supabase
       .from('saved_blocks')
-      .upsert({
-        id: block.id,
-        trainer_id: block.trainerId,
-        name: block.name,
-        block_type: block.type,
-        exercises: block.exercises,
-        circuit_style: block.circuitStyle,
-        circuit_rounds: block.circuitRounds,
-        circuit_duration: block.circuitDuration,
-        circuit_rest_between: block.circuitRestBetween,
-        created_at: block.createdAt,
-        updated_at: block.updatedAt,
-      }, { onConflict: 'id' });
+      .upsert(dbBlock, { onConflict: 'id' })
+      .select();
 
     if (error) {
-      console.error('[Supabase] Error syncing saved block:', error);
+      console.error('[Supabase] Error syncing saved block:', error.message, error.details, error.hint);
       return false;
     }
 
-    console.log('[Supabase] Saved block synced:', block.id);
+    console.log('[Supabase] Saved block synced successfully:', block.id, data);
     return true;
   } catch (e) {
-    console.error('[Supabase] Error syncing saved block:', e);
+    console.error('[Supabase] Exception syncing saved block:', e);
     return false;
   }
 }
@@ -2457,10 +2476,11 @@ export async function fetchSavedBlocksFromSupabase(trainerId: string): Promise<S
       return [];
     }
 
+    console.log('[Supabase] Raw saved blocks from DB:', data.map((b: any) => ({ id: b.id, name: b.name, block_type: b.block_type })));
     return data.map(block => ({
       id: block.id,
       name: block.name,
-      type: block.block_type,
+      type: block.block_type || 'work',
       trainerId: block.trainer_id,
       exercises: block.exercises || [],
       circuitStyle: block.circuit_style,
@@ -2496,5 +2516,322 @@ export async function deleteSavedBlockFromSupabase(blockId: string): Promise<boo
   } catch (e) {
     console.error('[Supabase] Error deleting saved block:', e);
     return false;
+  }
+}
+
+// ============================================
+// BLOCK PERFORMANCE SYNC FUNCTIONS
+// ============================================
+
+export interface BlockPerformanceData {
+  id: string;
+  blockId: string;
+  blockName: string;
+  blockType: string;
+  clientId: string;
+  trainerId: string;
+  workoutId: string;
+  completionTime?: number;
+  roundsCompleted?: number;
+  roundTimes?: number[];
+  intervalTimes?: number[];
+  difficultyRating?: string | null;
+  cardioMode?: string;
+  cardioActivity?: string;
+  distance?: number;
+  avgPace?: number;
+  caloriesBurned?: number;
+  totalVolume?: number;
+  exerciseStats?: any[];
+  performedAt: string;
+  notes?: string;
+}
+
+// Sync a block performance to Supabase
+export async function syncBlockPerformanceToSupabase(performance: BlockPerformanceData): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase] Not configured, skipping block performance sync');
+    return false;
+  }
+
+  console.log('[Supabase] Syncing block performance:', performance.id, performance.blockName);
+
+  try {
+    const dbPerformance = {
+      id: performance.id,
+      block_id: performance.blockId || null,
+      block_name: performance.blockName,
+      client_id: performance.clientId,
+      trainer_id: performance.trainerId,
+      workout_id: performance.workoutId || null,
+      exercises: performance.exerciseStats || [],
+      total_volume: performance.totalVolume || null,
+      duration_seconds: performance.completionTime || null,
+      notes: performance.notes || null,
+      performed_at: performance.performedAt,
+      created_at: performance.performedAt,
+    };
+
+    const { data, error } = await supabase
+      .from('block_performances')
+      .upsert(dbPerformance, { onConflict: 'id' })
+      .select();
+
+    if (error) {
+      console.error('[Supabase] Error syncing block performance:', error.message, error.details, error.hint);
+      return false;
+    }
+
+    console.log('[Supabase] Block performance synced successfully:', performance.id, data);
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Exception syncing block performance:', e);
+    return false;
+  }
+}
+
+// Fetch all block performances for a trainer's clients
+export async function fetchBlockPerformancesFromSupabase(trainerId: string): Promise<BlockPerformanceData[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('block_performances')
+      .select('*')
+      .eq('trainer_id', trainerId)
+      .order('performed_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('[Supabase] Error fetching block performances:', error);
+      return [];
+    }
+
+    return data.map(p => ({
+      id: p.id,
+      blockId: p.block_id,
+      blockName: p.block_name,
+      blockType: 'circuit', // Default, not stored in DB currently
+      clientId: p.client_id,
+      trainerId: p.trainer_id,
+      workoutId: p.workout_id,
+      completionTime: p.duration_seconds,
+      totalVolume: p.total_volume,
+      exerciseStats: p.exercises,
+      performedAt: p.performed_at,
+      notes: p.notes,
+    }));
+  } catch (e) {
+    console.error('[Supabase] Error fetching block performances:', e);
+    return [];
+  }
+}
+
+// Fetch block performances for a specific client
+export async function fetchClientBlockPerformances(clientId: string): Promise<BlockPerformanceData[]> {
+  if (!isSupabaseConfigured()) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('block_performances')
+      .select('*')
+      .eq('client_id', clientId)
+      .order('performed_at', { ascending: false });
+
+    if (error || !data) {
+      console.error('[Supabase] Error fetching client block performances:', error);
+      return [];
+    }
+
+    return data.map(p => ({
+      id: p.id,
+      blockId: p.block_id,
+      blockName: p.block_name,
+      blockType: 'circuit',
+      clientId: p.client_id,
+      trainerId: p.trainer_id,
+      workoutId: p.workout_id,
+      completionTime: p.duration_seconds,
+      totalVolume: p.total_volume,
+      exerciseStats: p.exercises,
+      performedAt: p.performed_at,
+      notes: p.notes,
+    }));
+  } catch (e) {
+    console.error('[Supabase] Error fetching client block performances:', e);
+    return [];
+  }
+}
+
+// ============ CLIENT PROGRAMMING PROFILES SYNC ============
+
+export async function syncClientProfileToSupabase(profile: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbProfile = {
+      id: profile.id,
+      client_id: profile.clientId,
+      trainer_id: profile.trainerId,
+      primary_goal: profile.primaryGoal,
+      secondary_goal: profile.secondaryGoal || null,
+      custom_goal_text: profile.customGoalText || null,
+      training_preference: profile.trainingPreference,
+      experience_level: profile.experienceLevel,
+      injury_flags: JSON.stringify(profile.injuryFlags || []),
+      injury_notes: profile.injuryNotes || null,
+      days_per_week: profile.daysPerWeek,
+      available_days: JSON.stringify(profile.availableDays || []),
+      schedule_notes: profile.scheduleNotes || null,
+      session_length: profile.sessionLength,
+      train_alone_outside_pt: profile.trainAloneOutsidePT,
+      movement_confidence: JSON.stringify(profile.movementConfidence || {}),
+      wants_classes: profile.wantsClasses,
+      class_ready: profile.classReady,
+      sleep_quality: profile.sleepQuality,
+      stress_level: profile.stressLevel,
+      job_activity: profile.jobActivity,
+      current_phase: profile.currentPhase,
+      progression_plan: profile.progressionPlan ? JSON.stringify(profile.progressionPlan) : null,
+      created_at: profile.createdAt,
+      updated_at: profile.updatedAt || new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('client_profiles').upsert(dbProfile, { onConflict: 'id' });
+    if (error) {
+      console.error('[Profile Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Profile Sync] ✅ Profile synced:', profile.clientId);
+    return true;
+  } catch (e) {
+    console.error('[Profile Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchClientProfilesFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('client_profiles')
+      .select('*')
+      .eq('trainer_id', trainerId);
+    
+    if (error) {
+      console.error('[Profile Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(p => ({
+      id: p.id,
+      clientId: p.client_id,
+      trainerId: p.trainer_id,
+      primaryGoal: p.primary_goal,
+      secondaryGoal: p.secondary_goal,
+      customGoalText: p.custom_goal_text,
+      trainingPreference: p.training_preference,
+      experienceLevel: p.experience_level,
+      injuryFlags: typeof p.injury_flags === 'string' ? JSON.parse(p.injury_flags) : (p.injury_flags || []),
+      injuryNotes: p.injury_notes,
+      daysPerWeek: p.days_per_week,
+      availableDays: typeof p.available_days === 'string' ? JSON.parse(p.available_days) : (p.available_days || []),
+      scheduleNotes: p.schedule_notes,
+      sessionLength: p.session_length,
+      trainAloneOutsidePT: p.train_alone_outside_pt,
+      movementConfidence: typeof p.movement_confidence === 'string' ? JSON.parse(p.movement_confidence) : (p.movement_confidence || {}),
+      wantsClasses: p.wants_classes,
+      classReady: p.class_ready,
+      sleepQuality: p.sleep_quality,
+      stressLevel: p.stress_level,
+      jobActivity: p.job_activity,
+      currentPhase: p.current_phase,
+      progressionPlan: p.progression_plan ? (typeof p.progression_plan === 'string' ? JSON.parse(p.progression_plan) : p.progression_plan) : undefined,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    }));
+  } catch (e) {
+    console.error('[Profile Fetch] Exception:', e);
+    return [];
+  }
+}
+
+// ============ WORKOUT TEMPLATES SYNC ============
+
+export async function syncWorkoutTemplateToSupabase(template: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbTemplate = {
+      id: template.id,
+      name: template.name,
+      description: template.description || null,
+      exercises: JSON.stringify(template.exercises || []),
+      blocks: template.blocks ? JSON.stringify(template.blocks) : null,
+      created_by: template.createdBy,
+      is_public: template.isPublic || false,
+      category: template.category || null,
+      estimated_duration: template.estimatedDuration || null,
+      created_at: template.createdAt,
+      updated_at: template.updatedAt || new Date().toISOString(),
+    };
+    
+    const { error } = await supabase.from('workout_templates').upsert(dbTemplate, { onConflict: 'id' });
+    if (error) {
+      console.error('[Template Sync] Error:', error.message);
+      return false;
+    }
+    console.log('[Template Sync] ✅ Template synced:', template.name);
+    return true;
+  } catch (e) {
+    console.error('[Template Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function deleteWorkoutTemplateFromSupabase(templateId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('workout_templates').delete().eq('id', templateId);
+    if (error) {
+      console.error('[Template Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function fetchWorkoutTemplatesFromSupabase(userId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('workout_templates')
+      .select('*')
+      .eq('created_by', userId);
+    
+    if (error) {
+      console.error('[Template Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      exercises: typeof t.exercises === 'string' ? JSON.parse(t.exercises) : (t.exercises || []),
+      blocks: t.blocks ? (typeof t.blocks === 'string' ? JSON.parse(t.blocks) : t.blocks) : undefined,
+      createdBy: t.created_by,
+      isPublic: t.is_public,
+      category: t.category,
+      estimatedDuration: t.estimated_duration,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+    }));
+  } catch (e) {
+    console.error('[Template Fetch] Exception:', e);
+    return [];
   }
 }

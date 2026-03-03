@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,36 +12,38 @@ import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useTrainerStore, useAuthStore, useSocialStore } from '@/lib/store';
-import { registerUserToSupabase, fetchAllUsersFromSupabase, syncSessionPackageToSupabase } from '@/lib/supabaseSync';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useTrainerStore, useAuthStore, useSocialStore, useWorkoutStore } from '@/lib/store';
+import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import { exerciseLibrary, searchExercises, getExerciseUsageCounts, getExerciseById } from '@/lib/exercises';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
   TrainingGoal, 
   InjuryFlag, 
   ExperienceLevel, 
   TrainingPhase,
-  ClientProgrammingProfile 
+  ClientProgrammingProfile,
+  MuscleGroup,
 } from '@/types';
 import { 
   ArrowLeft, 
-  ArrowRight, 
   Check, 
   Target, 
   Activity, 
   AlertTriangle, 
   Calendar, 
   Dumbbell,
-  Heart,
-  Zap,
   User,
   Mail,
-  Lock,
   CheckCircle2,
-  Package,
-  DollarSign,
-  Bell,
   Loader2,
-  Ruler
+  Bell,
+  Plus,
+  Trash2,
+  Search,
+  Play,
+  X,
 } from 'lucide-react';
 
 const GOALS: { value: TrainingGoal; label: string; description: string }[] = [
@@ -69,54 +70,10 @@ const INJURIES: { value: InjuryFlag; label: string }[] = [
 
 const EXPERIENCE_LEVELS: { value: ExperienceLevel; label: string; description: string }[] = [
   { value: 'new', label: 'Brand New', description: 'Never trained before' },
-  { value: 'some', label: 'Some Experience', description: 'Trained inconsistently or casually' },
+  { value: 'some', label: 'Some Experience', description: 'Trained inconsistently' },
   { value: 'confident', label: 'Confident', description: 'Regular training, knows basics' },
   { value: 'advanced', label: 'Advanced', description: 'Years of consistent training' },
 ];
-
-const PHASES: { value: TrainingPhase; label: string; description: string; icon: React.ReactNode }[] = [
-  { value: 'return', label: 'Return to Training', description: 'Rebuilding after injury or long break', icon: <Heart className="h-5 w-5" /> },
-  { value: 'foundation', label: 'Foundation', description: 'Building movement quality and base fitness', icon: <Activity className="h-5 w-5" /> },
-  { value: 'strength', label: 'Strength', description: 'Building strength and muscle', icon: <Dumbbell className="h-5 w-5" /> },
-  { value: 'performance', label: 'Performance', description: 'Power, speed, and athletic performance', icon: <Zap className="h-5 w-5" /> },
-];
-
-const PAYMENT_FREQUENCIES = [
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'fortnightly', label: 'Fortnightly' },
-  { value: 'monthly', label: 'Monthly' },
-  { value: 'per_session', label: 'Per Session' },
-];
-
-interface OnboardingData {
-  primaryGoal: TrainingGoal | '';
-  secondaryGoal: TrainingGoal | '';
-  customGoalText: string;
-  trainingPreference: '1:1' | 'group' | 'solo' | 'mixed' | '';
-  experienceLevel: ExperienceLevel | '';
-  injuryFlags: InjuryFlag[];
-  injuryNotes: string;
-  ptSessionsPerWeek: number;
-  personalSessionsPerWeek: number;
-  preferredPTDays: string[];
-  sessionLength: number;
-  trainAloneOutsidePT: 'yes' | 'maybe' | 'no' | '';
-  movementConfidence: { squat: number; hinge: number; push: number; pull: number; core: number };
-  sleepQuality: number;
-  stressLevel: number;
-  jobActivity: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' | '';
-  currentPhase: TrainingPhase | '';
-  height: string;
-  weight: string;
-  packageName: string;
-  packageSessions: number;
-  packagePrice: number;
-  paymentFrequency: 'weekly' | 'fortnightly' | 'monthly' | 'per_session' | '';
-  firstSessionDate: string;
-  firstSessionTime: string;
-}
-
-const TOTAL_STEPS = 8;
 
 export default function ClientOnboardingPage() {
   const params = useParams();
@@ -124,83 +81,66 @@ export default function ClientOnboardingPage() {
   const clientId = params.id as string;
   
   const { user } = useAuthStore();
-  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession, addSessionPackage } = useTrainerStore();
+  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession } = useTrainerStore();
   const { addNotification } = useSocialStore();
   const client = clients.find(c => c.clientId === clientId);
   
-  // Account creation state
+  // Phase 1: Quick info popup
+  const [showQuickInfo, setShowQuickInfo] = useState(true);
   const [accountName, setAccountName] = useState('');
   const [accountEmail, setAccountEmail] = useState('');
-  const [accountUsername, setAccountUsername] = useState('');
-  const [accountPassword, setAccountPassword] = useState('client123');
   const [accountGender, setAccountGender] = useState<'male' | 'female' | 'other'>('other');
   const [accountCreated, setAccountCreated] = useState(false);
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
-  const [linkedExistingAccount, setLinkedExistingAccount] = useState(false);
   
-  const [currentStep, setCurrentStep] = useState(1);
+  // Phase 2: Assessment data
+  const [primaryGoal, setPrimaryGoal] = useState<TrainingGoal | ''>('');
+  const [secondaryGoal, setSecondaryGoal] = useState<TrainingGoal | ''>('');
+  const [goalNotes, setGoalNotes] = useState('');
+  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | ''>('');
+  const [trainingPreference, setTrainingPreference] = useState<'1:1' | 'group' | 'solo' | 'mixed' | ''>('');
+  const [injuryFlags, setInjuryFlags] = useState<InjuryFlag[]>([]);
+  const [injuryNotes, setInjuryNotes] = useState('');
+  const [movementConfidence, setMovementConfidence] = useState({ squat: 3, hinge: 3, push: 3, pull: 3, core: 3 });
+  const [availableDays, setAvailableDays] = useState<string[]>([]);
+  const [scheduleNotes, setScheduleNotes] = useState('');
+  const [sessionLength, setSessionLength] = useState(60);
+  const [trainAloneOutsidePT, setTrainAloneOutsidePT] = useState<'yes' | 'maybe' | 'no' | ''>('');
   
-  // Auto-skip Step 1 if client already has an account (created from Add Client page)
+  // Book first session (optional)
+  const [firstSessionDate, setFirstSessionDate] = useState('');
+  const [firstSessionTime, setFirstSessionTime] = useState('09:00');
+  
+  // Exercise demo during consultation
+  const [showExercisePicker, setShowExercisePicker] = useState(false);
+  const [exerciseSearch, setExerciseSearch] = useState('');
+  const [consultationExercises, setConsultationExercises] = useState<{
+    id: string;
+    exerciseId: string;
+    name: string;
+    sets: { id: string; weight?: number; reps?: number; completed: boolean }[];
+    notes: string;
+  }[]>([]);
+  
+  // Completion
+  const [isComplete, setIsComplete] = useState(false);
+
+  // Auto-skip popup if client already exists
   useEffect(() => {
-    // Check if the client already exists (was created from the Add Client modal)
     const allUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
     const existingUser = allUsers.find((u: any) => u.id === clientId);
     
     if (existingUser) {
-      // Client account already exists - skip step 1
       setAccountName(existingUser.displayName || existingUser.username || '');
       setAccountEmail(existingUser.email || '');
-      setAccountUsername(existingUser.username || '');
       setAccountGender(existingUser.gender || 'other');
       setAccountCreated(true);
       setCreatedClientId(clientId);
-      setCurrentStep(2); // Skip to goals
+      setShowQuickInfo(false);
     }
   }, [clientId]);
-  
-  const [data, setData] = useState<OnboardingData>({
-    primaryGoal: '',
-    secondaryGoal: '',
-    customGoalText: '',
-    trainingPreference: '',
-    experienceLevel: '',
-    injuryFlags: [],
-    injuryNotes: '',
-    ptSessionsPerWeek: 2,
-    personalSessionsPerWeek: 0,
-    preferredPTDays: [],
-    sessionLength: 60,
-    trainAloneOutsidePT: '',
-    movementConfidence: { squat: 3, hinge: 3, push: 3, pull: 3, core: 3 },
-    sleepQuality: 3,
-    stressLevel: 3,
-    jobActivity: '',
-    currentPhase: '',
-    height: '',
-    weight: '',
-    packageName: '',
-    packageSessions: 10,
-    packagePrice: 0,
-    paymentFrequency: '',
-    firstSessionDate: '',
-    firstSessionTime: '09:00',
-  });
 
-  const progress = (currentStep / TOTAL_STEPS) * 100;
-  const isSkippableStep = currentStep >= 6;
-
-  const canProceed = () => {
-    switch (currentStep) {
-      case 1: return accountCreated;
-      case 2: return data.primaryGoal !== '';
-      case 3: return data.experienceLevel !== '' && data.trainingPreference !== '';
-      case 4: return data.injuryFlags.length > 0;
-      case 5: return data.ptSessionsPerWeek > 0 && data.trainAloneOutsidePT !== '';
-      default: return true; // Steps 6-8 are skippable
-    }
-  };
-  
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
       const r = Math.random() * 16 | 0;
@@ -209,53 +149,47 @@ export default function ClientOnboardingPage() {
     });
   };
 
-  // Auto-link: Check if email exists when creating account
-  const handleCreateAccount = async () => {
-    if (!accountName.trim() || !accountEmail.trim()) {
-      toast.error('Please enter name and email');
+  const handleCreateClient = async () => {
+    if (!accountName.trim()) {
+      toast.error('Please enter a name');
       return;
     }
     
     setIsCreatingAccount(true);
     
-    // Check if email already exists - auto-link if so
-    try {
-      const existingUsers = await fetchAllUsersFromSupabase();
-      const existingUser = existingUsers.find((u: any) => 
-        u.email?.toLowerCase() === accountEmail.toLowerCase().trim()
-      );
-      
-      if (existingUser) {
-        // Auto-link existing account
-        console.log('[Onboarding] Auto-linking existing account:', existingUser.email);
-        const { addClient } = useTrainerStore.getState();
-        addClient(existingUser.id, {
-          goals: [],
-          onboardingComplete: false,
-          status: 'active',
-        });
+    // Check if email exists — auto-link
+    if (accountEmail.trim()) {
+      try {
+        const existingUsers = await fetchAllUsersFromSupabase();
+        const existingUser = existingUsers.find((u: any) => 
+          u.email?.toLowerCase() === accountEmail.toLowerCase().trim()
+        );
         
-        setCreatedClientId(existingUser.id);
-        setAccountName(existingUser.displayName || accountName);
-        setAccountUsername(existingUser.username || '');
-        setLinkedExistingAccount(true);
-        setAccountCreated(true);
-        setIsCreatingAccount(false);
-        toast.success(`Linked to existing account: ${existingUser.email}`);
-        return;
+        if (existingUser) {
+          const { addClient } = useTrainerStore.getState();
+          addClient(existingUser.id, { goals: [], onboardingComplete: false, status: 'active' });
+          setCreatedClientId(existingUser.id);
+          setAccountName(existingUser.displayName || accountName);
+          setAccountCreated(true);
+          setIsCreatingAccount(false);
+          setShowQuickInfo(false);
+          toast.success(`Linked to existing account: ${existingUser.email}`);
+          return;
+        }
+      } catch (e) {
+        console.log('[Onboarding] Could not check for existing users');
       }
-    } catch (e) {
-      console.log('[Onboarding] Could not check for existing users, creating new');
     }
     
-    // Create new account
+    // Create new client
     const newClientId = generateUUID();
-    const username = accountUsername.trim() || accountName.toLowerCase().replace(/\s+/g, '_');
+    const username = accountName.toLowerCase().replace(/\s+/g, '_');
+    const password = 'client123';
     
     const newClientUser = {
       id: newClientId,
-      email: accountEmail.toLowerCase().trim(),
-      username: username,
+      email: accountEmail.toLowerCase().trim() || `${username}@placeholder.local`,
+      username,
       displayName: accountName,
       phone: '',
       gender: accountGender,
@@ -267,9 +201,7 @@ export default function ClientOnboardingPage() {
       followers: [],
       following: [],
       trainerId: user?.id,
-      password: accountPassword,
-      height: data.height || undefined,
-      weight: data.weight || undefined,
+      password,
     };
     
     // Save to localStorage
@@ -278,59 +210,45 @@ export default function ClientOnboardingPage() {
     
     // Sync to Supabase
     try {
-      await registerUserToSupabase(newClientUser as any, accountPassword);
-      toast.success(`Account created! Login: ${newClientUser.email}`);
+      await registerUserToSupabase(newClientUser as any, password);
+      if (accountEmail.trim()) {
+        toast.success(`Account created! Invite link sent to ${accountEmail}`);
+      } else {
+        toast.success('Client added!');
+      }
     } catch (e) {
-      toast.success(`Account saved locally`);
+      toast.success('Client saved locally');
     }
     
     // Add to trainer's client list
     const { addClient } = useTrainerStore.getState();
-    addClient(newClientId, {
-      goals: [],
-      onboardingComplete: false,
-      status: 'active',
-    });
+    addClient(newClientId, { goals: [], onboardingComplete: false, status: 'active' });
     
     setCreatedClientId(newClientId);
-    setAccountUsername(username);
     setAccountCreated(true);
     setIsCreatingAccount(false);
-  };
-
-  const handleNext = () => {
-    if (currentStep < TOTAL_STEPS) {
-      setCurrentStep(currentStep + 1);
-    } else {
-      handleComplete();
-    }
-  };
-
-  const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
+    setShowQuickInfo(false);
   };
 
   const toggleInjury = (injury: InjuryFlag) => {
     if (injury === 'none') {
-      setData({ ...data, injuryFlags: ['none'] });
+      setInjuryFlags(['none']);
     } else {
-      const newFlags = data.injuryFlags.filter(i => i !== 'none');
+      const newFlags = injuryFlags.filter(i => i !== 'none');
       if (newFlags.includes(injury)) {
-        setData({ ...data, injuryFlags: newFlags.filter(i => i !== injury) });
+        setInjuryFlags(newFlags.filter(i => i !== injury));
       } else {
-        setData({ ...data, injuryFlags: [...newFlags, injury] });
+        setInjuryFlags([...newFlags, injury]);
       }
     }
   };
 
-  const handleComplete = () => {
+  const handleFinish = () => {
     const actualClientId = createdClientId || clientId;
     const trainerId = user?.id || '';
     
     if (!accountCreated) {
-      toast.error('Please create an account first');
+      toast.error('Please create a client first');
       return;
     }
     
@@ -339,23 +257,25 @@ export default function ClientOnboardingPage() {
       id: `profile-${actualClientId}`,
       clientId: actualClientId,
       trainerId,
-      primaryGoal: data.primaryGoal as TrainingGoal,
-      secondaryGoal: data.secondaryGoal as TrainingGoal || undefined,
-      customGoalText: data.customGoalText || undefined,
-      trainingPreference: data.trainingPreference as '1:1' | 'group' | 'solo' | 'mixed',
-      experienceLevel: data.experienceLevel as ExperienceLevel,
-      injuryFlags: data.injuryFlags,
-      injuryNotes: data.injuryNotes || undefined,
-      daysPerWeek: data.ptSessionsPerWeek + (data.trainAloneOutsidePT === 'yes' ? data.personalSessionsPerWeek : 0),
-      sessionLength: data.sessionLength,
-      trainAloneOutsidePT: data.trainAloneOutsidePT as 'yes' | 'maybe' | 'no',
-      movementConfidence: data.movementConfidence,
+      primaryGoal: (primaryGoal as TrainingGoal) || 'general',
+      secondaryGoal: (secondaryGoal as TrainingGoal) || undefined,
+      customGoalText: goalNotes || undefined,
+      trainingPreference: (trainingPreference as '1:1' | 'group' | 'solo' | 'mixed') || '1:1',
+      experienceLevel: (experienceLevel as ExperienceLevel) || 'some',
+      injuryFlags: injuryFlags.length > 0 ? injuryFlags : ['none'],
+      injuryNotes: injuryNotes || undefined,
+      daysPerWeek: availableDays.length || 2,
+      availableDays: availableDays.length > 0 ? availableDays : undefined,
+      scheduleNotes: scheduleNotes || undefined,
+      sessionLength,
+      trainAloneOutsidePT: (trainAloneOutsidePT as 'yes' | 'maybe' | 'no') || 'maybe',
+      movementConfidence,
       wantsClasses: 'maybe',
-      classReady: data.experienceLevel === 'confident' || data.experienceLevel === 'advanced',
-      sleepQuality: data.sleepQuality as 1 | 2 | 3 | 4 | 5,
-      stressLevel: data.stressLevel as 1 | 2 | 3 | 4 | 5,
-      jobActivity: data.jobActivity as 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active',
-      currentPhase: data.currentPhase as TrainingPhase || 'foundation',
+      classReady: experienceLevel === 'confident' || experienceLevel === 'advanced',
+      sleepQuality: 3 as 1 | 2 | 3 | 4 | 5,
+      stressLevel: 3 as 1 | 2 | 3 | 4 | 5,
+      jobActivity: 'moderate',
+      currentPhase: 'foundation' as TrainingPhase,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -363,846 +283,695 @@ export default function ClientOnboardingPage() {
 
     // Update client record
     updateClient(actualClientId, {
-      goals: data.primaryGoal ? [data.primaryGoal, data.secondaryGoal].filter(Boolean) as string[] : [],
-      injuryHistory: data.injuryFlags.filter(i => i !== 'none').join(', ') + (data.injuryNotes ? ` - ${data.injuryNotes}` : ''),
-      notes: data.customGoalText,
+      goals: primaryGoal ? [primaryGoal, secondaryGoal].filter(Boolean) as string[] : [],
+      injuryHistory: injuryFlags.filter(i => i !== 'none').join(', ') + (injuryNotes ? ` - ${injuryNotes}` : ''),
+      notes: goalNotes,
       onboardingComplete: true,
     });
 
-    // Create package if filled out
-    if (data.packageName && data.packagePrice > 0) {
-      const newPackage = {
-        trainerId,
-        clientId: actualClientId,
-        name: data.packageName,
-        totalSessions: data.packageSessions,
-        paidSessions: data.packageSessions,
-        priceTotal: data.packagePrice,
-        pricePerSession: data.packagePrice / data.packageSessions,
-        purchaseDate: new Date().toISOString(),
-        paymentId: `pay-${generateUUID()}`,
-        status: 'active' as const,
-        paymentFrequency: data.paymentFrequency || undefined,
-        nextPaymentDue: data.paymentFrequency && data.paymentFrequency !== 'per_session' 
-          ? calculateNextPaymentDate(data.paymentFrequency) 
-          : undefined,
-      };
-      addSessionPackage(newPackage);
-    }
-
     // Book first session if date selected
-    if (data.firstSessionDate) {
-      const sessionDate = new Date(data.firstSessionDate);
-      const [hours, minutes] = data.firstSessionTime.split(':').map(Number);
+    if (firstSessionDate) {
+      const sessionDate = new Date(firstSessionDate);
+      const [hours, minutes] = firstSessionTime.split(':').map(Number);
       sessionDate.setHours(hours, minutes, 0, 0);
       
-      const endHour = hours + Math.floor((minutes + data.sessionLength) / 60);
-      const endMin = (minutes + data.sessionLength) % 60;
+      const endHour = hours + Math.floor((minutes + sessionLength) / 60);
+      const endMin = (minutes + sessionLength) % 60;
       const endTime = `${String(endHour).padStart(2, '0')}:${String(endMin).padStart(2, '0')}`;
       
-      // Add calendar event
       addCalendarEvent({
         title: 'PT Session',
         type: 'session',
         date: sessionDate.toISOString(),
-        startTime: data.firstSessionTime,
+        startTime: firstSessionTime,
         endTime,
         clientId: actualClientId,
         trainerId,
         status: 'scheduled',
       });
       
-      // Add session record
       addSession({
         trainerId,
         clientId: actualClientId,
         date: sessionDate.toISOString(),
-        startTime: data.firstSessionTime,
+        startTime: firstSessionTime,
         endTime,
-        duration: data.sessionLength,
+        duration: sessionLength,
         type: 'pt_session',
         status: 'scheduled',
         paid: false,
       });
       
-      // Send in-app notification to client
       addNotification({
         userId: actualClientId,
         type: 'workout_assigned',
         title: 'Session Booked',
-        message: `Your first PT session is booked for ${sessionDate.toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at ${data.firstSessionTime}`,
+        message: `Your first PT session is booked for ${sessionDate.toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at ${firstSessionTime}`,
       });
-      
-      toast.success(`Onboarding complete! First session booked.`);
-    } else {
-      toast.success('Onboarding complete!');
     }
+
+    // Save consultation exercises as a workout in client's history
+    if (consultationExercises.length > 0) {
+      const { workoutHistory } = useWorkoutStore.getState();
+      const consultWorkout = {
+        id: `consult-workout-${Date.now()}`,
+        name: 'Consultation Session',
+        exercises: consultationExercises.map((ex, i) => ({
+          id: ex.id,
+          exerciseId: ex.exerciseId,
+          exercise: getExerciseById(ex.exerciseId) || {
+            id: ex.exerciseId, name: ex.name,
+            primaryMuscles: [] as MuscleGroup[], secondaryMuscles: [] as MuscleGroup[],
+            category: 'compound' as const, equipment: 'barbell' as const,
+          },
+          sets: ex.sets.map((s, si) => ({
+            id: s.id, setNumber: si + 1, type: 'normal' as const,
+            weight: s.weight || 0, reps: s.reps || 0, completed: true,
+          })),
+          restTimerSeconds: 90,
+          notes: ex.notes || undefined,
+        })),
+        startTime: new Date().toISOString(),
+        endTime: new Date().toISOString(),
+        totalVolume: consultationExercises.reduce((sum, ex) => 
+          sum + ex.sets.reduce((s, set) => s + (set.weight || 0) * (set.reps || 0), 0), 0),
+        userId: actualClientId,
+        assignedBy: trainerId,
+        status: 'completed' as const,
+        notes: 'Exercises performed during consultation',
+        trainerNotes: `Consultation onboarding session for ${accountName}`,
+      };
+      useWorkoutStore.setState({ workoutHistory: [...workoutHistory, consultWorkout] });
+    }
+
+    setIsComplete(true);
+    toast.success(firstSessionDate ? 'Onboarding complete! First session booked.' : 'Onboarding complete!');
     
-    // Navigate to client file
-    router.push(`/clients/${actualClientId}`);
-  };
-  
-  const calculateNextPaymentDate = (frequency: string): string => {
-    const now = new Date();
-    switch (frequency) {
-      case 'weekly': now.setDate(now.getDate() + 7); break;
-      case 'fortnightly': now.setDate(now.getDate() + 14); break;
-      case 'monthly': now.setMonth(now.getMonth() + 1); break;
-      default: break;
-    }
-    return now.toISOString();
+    // Navigate to client page after short delay
+    setTimeout(() => {
+      router.push(`/clients`);
+    }, 1500);
   };
 
-  const handleSkipToFinish = () => {
-    handleComplete();
-  };
+  // Completion screen
+  if (isComplete) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="text-center">
+          <CheckCircle2 className="h-20 w-20 text-emerald-400 mx-auto mb-4 animate-pulse" />
+          <h1 className="text-2xl font-bold text-white mb-2">Onboarding Complete!</h1>
+          <p className="text-gray-400">Redirecting to clients...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto p-4 max-w-2xl">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <Button variant="ghost" onClick={() => router.back()}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
-          {accountCreated && (
-            <Button variant="outline" size="sm" onClick={handleSkipToFinish}>
-              Finish & Save
-            </Button>
-          )}
-        </div>
-        <h1 className="text-2xl font-bold">Client Onboarding</h1>
-        <p className="text-muted-foreground">{accountName || 'New Client'}</p>
-        <Progress value={progress} className="mt-4" />
-        <p className="text-sm text-muted-foreground mt-2">
-          Step {currentStep} of {TOTAL_STEPS}
-          {isSkippableStep && <span className="text-sky-400 ml-2">(Optional)</span>}
-        </p>
-      </div>
-
-      {/* Step 1: Account Creation */}
-      {currentStep === 1 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" /> Client Account
-            </CardTitle>
-            <CardDescription>
-              Create account for your client (auto-links if email exists)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {!accountCreated ? (
-              <>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="name" className="flex items-center gap-2">
-                      <User className="h-4 w-4" /> Client Name *
-                    </Label>
-                    <Input
-                      id="name"
-                      placeholder="e.g. John Smith"
-                      value={accountName}
-                      onChange={(e) => setAccountName(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="email" className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" /> Email *
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="e.g. john@example.com"
-                      value={accountEmail}
-                      onChange={(e) => setAccountEmail(e.target.value)}
-                      className="mt-2"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      If this email exists, we'll link to their account automatically
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor="username">Username (optional)</Label>
-                    <Input
-                      id="username"
-                      placeholder="Auto-generated if blank"
-                      value={accountUsername}
-                      onChange={(e) => setAccountUsername(e.target.value)}
-                      className="mt-2"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="password" className="flex items-center gap-2">
-                        <Lock className="h-4 w-4" /> Password
-                      </Label>
-                      <Input
-                        id="password"
-                        type="text"
-                        value={accountPassword}
-                        onChange={(e) => setAccountPassword(e.target.value)}
-                        className="mt-2"
-                      />
-                    </div>
-                    <div>
-                      <Label>Gender</Label>
-                      <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
-                        <SelectTrigger className="mt-2">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="male">Male</SelectItem>
-                          <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  {/* Optional Height/Weight */}
-                  <div className="pt-4 border-t">
-                    <Label className="flex items-center gap-2 text-muted-foreground">
-                      <Ruler className="h-4 w-4" /> Height & Weight (optional)
-                    </Label>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                      <div>
-                        <Input
-                          placeholder="Height (cm)"
-                          value={data.height}
-                          onChange={(e) => setData({ ...data, height: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <Input
-                          placeholder="Weight (kg)"
-                          value={data.weight}
-                          onChange={(e) => setData({ ...data, weight: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Client can update these later in their profile
-                    </p>
-                  </div>
-                </div>
-                
-                <Button 
-                  onClick={handleCreateAccount} 
-                  className="w-full bg-sky-500 hover:bg-sky-600"
-                  disabled={isCreatingAccount}
-                >
-                  {isCreatingAccount ? (
-                    <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</>
-                  ) : (
-                    'Create Account'
-                  )}
-                </Button>
-              </>
-            ) : (
-              <div className="text-center py-6">
-                <CheckCircle2 className="h-16 w-16 text-sky-500 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-sky-400 mb-2">
-                  {linkedExistingAccount ? 'Account Linked!' : 'Account Created!'}
-                </h3>
-                <div className="p-4 bg-muted rounded-lg text-left space-y-2">
-                  <p className="text-sm"><strong>Name:</strong> {accountName}</p>
-                  <p className="text-sm"><strong>Email:</strong> {accountEmail}</p>
-                  {!linkedExistingAccount && (
-                    <p className="text-sm"><strong>Password:</strong> {accountPassword}</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 2: Goals */}
-      {currentStep === 2 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="h-5 w-5" /> Goals
-            </CardTitle>
-            <CardDescription>What does {accountName.split(' ')[0] || 'this client'} want to achieve?</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+    <div className="min-h-screen bg-slate-950">
+      {/* Quick Info Popup — Phase 1 */}
+      <Dialog open={showQuickInfo} onOpenChange={(open) => { if (accountCreated) setShowQuickInfo(open); }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <User className="w-5 h-5 text-sky-400" />
+              New Client
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Enter basic info to get started
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
             <div>
-              <Label className="text-base font-medium">Primary Goal *</Label>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                {GOALS.map(goal => (
-                  <div
-                    key={goal.value}
-                    onClick={() => setData({ ...data, primaryGoal: goal.value })}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      data.primaryGoal === goal.value 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <p className="font-medium">{goal.label}</p>
-                    <p className="text-sm text-muted-foreground">{goal.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Secondary Goal (Optional)</Label>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                {GOALS.filter(g => g.value !== data.primaryGoal).map(goal => (
-                  <div
-                    key={goal.value}
-                    onClick={() => setData({ 
-                      ...data, 
-                      secondaryGoal: data.secondaryGoal === goal.value ? '' : goal.value 
-                    })}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      data.secondaryGoal === goal.value 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <p className="font-medium">{goal.label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Additional Notes</Label>
-              <Textarea
-                placeholder="Any specific goals or context..."
-                value={data.customGoalText}
-                onChange={(e) => setData({ ...data, customGoalText: e.target.value })}
-                className="mt-2"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 3: Experience & Preferences */}
-      {currentStep === 3 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="h-5 w-5" /> Experience & Preferences
-            </CardTitle>
-            <CardDescription>Understanding their training background</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <Label className="text-base font-medium">Training Experience *</Label>
-              <div className="space-y-3 mt-3">
-                {EXPERIENCE_LEVELS.map(level => (
-                  <div
-                    key={level.value}
-                    onClick={() => setData({ ...data, experienceLevel: level.value })}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      data.experienceLevel === level.value 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <p className="font-medium">{level.label}</p>
-                    <p className="text-sm text-muted-foreground">{level.description}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Training Preference *</Label>
-              <RadioGroup
-                value={data.trainingPreference}
-                onValueChange={(v) => setData({ ...data, trainingPreference: v as any })}
-                className="mt-3 space-y-3"
-              >
-                <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="1:1" id="pref-1" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="pref-1" className="font-medium cursor-pointer">1 on 1 Personal Training</Label>
-                    <p className="text-sm text-muted-foreground">In-person sessions with you</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="group" id="pref-2" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="pref-2" className="font-medium cursor-pointer">Group Training</Label>
-                    <p className="text-sm text-muted-foreground">Classes or group sessions</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer">
-                  <RadioGroupItem value="mixed" id="pref-3" className="mt-0.5" />
-                  <div>
-                    <Label htmlFor="pref-3" className="font-medium cursor-pointer">Mix of Options</Label>
-                    <p className="text-sm text-muted-foreground">PT + classes and/or independent</p>
-                  </div>
-                </div>
-              </RadioGroup>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 4: Injuries */}
-      {currentStep === 4 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> Injuries & Limitations
-            </CardTitle>
-            <CardDescription>Any areas we need to be careful with?</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <Label className="text-base font-medium">Current Pain or Injury Areas *</Label>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                {INJURIES.map(injury => (
-                  <div
-                    key={injury.value}
-                    onClick={() => toggleInjury(injury.value)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all flex items-center gap-2 ${
-                      data.injuryFlags.includes(injury.value)
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <Checkbox checked={data.injuryFlags.includes(injury.value)} />
-                    <span>{injury.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {data.injuryFlags.length > 0 && !data.injuryFlags.includes('none') && (
-              <div>
-                <Label>Injury Details</Label>
-                <Textarea
-                  placeholder="Any additional details..."
-                  value={data.injuryNotes}
-                  onChange={(e) => setData({ ...data, injuryNotes: e.target.value })}
-                  className="mt-2"
-                />
-              </div>
-            )}
-
-            <div>
-              <Label className="text-base font-medium">Movement Confidence</Label>
-              <p className="text-sm text-muted-foreground mb-4">Rate confidence in each pattern (1-5)</p>
-              {(['squat', 'hinge', 'push', 'pull', 'core'] as const).map(pattern => (
-                <div key={pattern} className="mb-4">
-                  <div className="flex justify-between mb-2">
-                    <Label className="capitalize">{pattern}</Label>
-                    <span className="text-sm text-muted-foreground">{data.movementConfidence[pattern]}</span>
-                  </div>
-                  <Slider
-                    value={[data.movementConfidence[pattern]]}
-                    onValueChange={([v]) => setData({
-                      ...data,
-                      movementConfidence: { ...data.movementConfidence, [pattern]: v }
-                    })}
-                    min={1}
-                    max={5}
-                    step={1}
-                  />
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 5: Schedule */}
-      {currentStep === 5 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" /> Schedule
-            </CardTitle>
-            <CardDescription>PT sessions and training schedule</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="p-4 bg-sky-500/10 border border-sky-500/30 rounded-lg space-y-4">
-              <div>
-                <Label className="text-base font-medium text-sky-400">PT Sessions Per Week *</Label>
-                <div className="flex gap-2 mt-3">
-                  {[1, 2, 3, 4, 5].map(days => (
-                    <Button
-                      key={days}
-                      variant={data.ptSessionsPerWeek === days ? 'default' : 'outline'}
-                      onClick={() => setData({ ...data, ptSessionsPerWeek: days })}
-                      className="flex-1"
-                    >
-                      {days}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              
-              <div>
-                <Label className="text-sm">Preferred Days</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                    <Button
-                      key={day}
-                      size="sm"
-                      variant={data.preferredPTDays.includes(day) ? 'default' : 'outline'}
-                      onClick={() => {
-                        const newDays = data.preferredPTDays.includes(day)
-                          ? data.preferredPTDays.filter(d => d !== day)
-                          : [...data.preferredPTDays, day];
-                        setData({ ...data, preferredPTDays: newDays });
-                      }}
-                    >
-                      {day}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Will they train alone outside PT? *</Label>
-              <RadioGroup
-                value={data.trainAloneOutsidePT}
-                onValueChange={(v) => setData({ ...data, trainAloneOutsidePT: v as any })}
-                className="mt-3 space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="yes" id="alone-1" />
-                  <Label htmlFor="alone-1">Yes, homework workouts</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="maybe" id="alone-2" />
-                  <Label htmlFor="alone-2">Maybe, let's see</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="no" id="alone-3" />
-                  <Label htmlFor="alone-3">No, PT sessions only</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Session Length (minutes)</Label>
-              <div className="flex gap-2 mt-3">
-                {[30, 45, 60, 75, 90].map(mins => (
-                  <Button
-                    key={mins}
-                    variant={data.sessionLength === mins ? 'default' : 'outline'}
-                    onClick={() => setData({ ...data, sessionLength: mins })}
-                    className="flex-1"
-                  >
-                    {mins}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 6: Lifestyle (Skippable) */}
-      {currentStep === 6 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Heart className="h-5 w-5" /> Lifestyle Factors
-              <Badge variant="secondary" className="ml-2">Optional</Badge>
-            </CardTitle>
-            <CardDescription>Understanding recovery capacity</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div>
-              <Label className="text-base font-medium">Job Activity Level</Label>
-              <RadioGroup
-                value={data.jobActivity}
-                onValueChange={(v) => setData({ ...data, jobActivity: v as any })}
-                className="mt-3 space-y-2"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="sedentary" id="job-1" />
-                  <Label htmlFor="job-1">Sedentary (desk job)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="light" id="job-2" />
-                  <Label htmlFor="job-2">Light (some walking)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="moderate" id="job-3" />
-                  <Label htmlFor="job-3">Moderate (regular movement)</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="active" id="job-4" />
-                  <Label htmlFor="job-4">Active (physical job)</Label>
-                </div>
-              </RadioGroup>
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-2">
-                <Label>Sleep Quality</Label>
-                <span className="text-sm text-muted-foreground">
-                  {['Poor', 'Below Avg', 'Average', 'Good', 'Excellent'][data.sleepQuality - 1]}
-                </span>
-              </div>
-              <Slider
-                value={[data.sleepQuality]}
-                onValueChange={([v]) => setData({ ...data, sleepQuality: v })}
-                min={1}
-                max={5}
-                step={1}
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between mb-2">
-                <Label>Stress Level</Label>
-                <span className="text-sm text-muted-foreground">
-                  {['Very Low', 'Low', 'Moderate', 'High', 'Very High'][data.stressLevel - 1]}
-                </span>
-              </div>
-              <Slider
-                value={[data.stressLevel]}
-                onValueChange={([v]) => setData({ ...data, stressLevel: v })}
-                min={1}
-                max={5}
-                step={1}
-              />
-            </div>
-
-            <div>
-              <Label className="text-base font-medium">Training Phase</Label>
-              <div className="space-y-3 mt-3">
-                {PHASES.map(phase => (
-                  <div
-                    key={phase.value}
-                    onClick={() => setData({ ...data, currentPhase: phase.value })}
-                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                      data.currentPhase === phase.value 
-                        ? 'border-primary bg-primary/10' 
-                        : 'border-border hover:border-primary/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-full ${
-                        data.currentPhase === phase.value ? 'bg-primary text-primary-foreground' : 'bg-muted'
-                      }`}>
-                        {phase.icon}
-                      </div>
-                      <div>
-                        <p className="font-medium">{phase.label}</p>
-                        <p className="text-sm text-muted-foreground">{phase.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 7: Package Creation (Skippable) */}
-      {currentStep === 7 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" /> Session Package
-              <Badge variant="secondary" className="ml-2">Optional</Badge>
-            </CardTitle>
-            <CardDescription>Create a session package with payment plan</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-              <p className="text-sm text-blue-400">
-                You can also create packages later from the client file or skip this step entirely.
-              </p>
-            </div>
-
-            <div>
-              <Label>Package Name</Label>
+              <Label className="text-gray-300">Name *</Label>
               <Input
-                placeholder="e.g. 10 Session Bundle"
-                value={data.packageName}
-                onChange={(e) => setData({ ...data, packageName: e.target.value })}
-                className="mt-2"
+                placeholder="e.g. John Smith"
+                value={accountName}
+                onChange={(e) => setAccountName(e.target.value)}
+                className="mt-1.5 bg-gray-800 border-gray-700"
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Number of Sessions</Label>
-                <Select 
-                  value={String(data.packageSessions)} 
-                  onValueChange={(v) => setData({ ...data, packageSessions: parseInt(v) })}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {[5, 10, 15, 20, 25, 30, 40, 50].map(n => (
-                      <SelectItem key={n} value={String(n)}>{n} sessions</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Total Price ($)</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={data.packagePrice || ''}
-                  onChange={(e) => setData({ ...data, packagePrice: parseFloat(e.target.value) || 0 })}
-                  className="mt-2"
-                />
-              </div>
-            </div>
-
-            {data.packagePrice > 0 && data.packageSessions > 0 && (
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-sm">
-                  <strong>Price per session:</strong> ${(data.packagePrice / data.packageSessions).toFixed(2)}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <Label className="flex items-center gap-2">
-                <DollarSign className="h-4 w-4" /> Payment Frequency
-              </Label>
-              <div className="grid grid-cols-2 gap-3 mt-3">
-                {PAYMENT_FREQUENCIES.map(freq => (
-                  <div
-                    key={freq.value}
-                    onClick={() => setData({ ...data, paymentFrequency: freq.value as any })}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all text-center ${
-                      data.paymentFrequency === freq.value 
-                        ? 'border-sky-500 bg-sky-500/10' 
-                        : 'border-border hover:border-sky-500/50'
-                    }`}
-                  >
-                    <p className="font-medium">{freq.label}</p>
-                  </div>
-                ))}
-              </div>
-              {data.paymentFrequency && data.paymentFrequency !== 'per_session' && (
-                <p className="text-xs text-muted-foreground mt-2">
-                  Next payment will be tracked automatically
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Step 8: Book First Session (Skippable) */}
-      {currentStep === 8 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" /> Book First Session
-              <Badge variant="secondary" className="ml-2">Optional</Badge>
-            </CardTitle>
-            <CardDescription>Schedule their first PT session</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="p-4 bg-purple-500/10 border border-purple-500/30 rounded-lg">
-              <p className="text-sm text-purple-400 flex items-center gap-2">
-                <Bell className="h-4 w-4" />
-                Client will receive an in-app notification when you book
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={data.firstSessionDate}
-                  onChange={(e) => setData({ ...data, firstSessionDate: e.target.value })}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="mt-2"
-                />
-              </div>
-              <div>
-                <Label>Time</Label>
-                <Select
-                  value={data.firstSessionTime}
-                  onValueChange={(v) => setData({ ...data, firstSessionTime: v })}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['06:00', '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30', 
-                      '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30',
-                      '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-                      '18:00', '18:30', '19:00', '19:30', '20:00'].map(time => (
-                      <SelectItem key={time} value={time}>{time}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </div>
             
-            {data.firstSessionDate && (
-              <div className="p-3 bg-purple-500/20 rounded-lg text-sm text-purple-300 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4" />
-                {new Date(data.firstSessionDate).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at {data.firstSessionTime}
-              </div>
-            )}
-
-            {/* Summary */}
-            <div className="p-4 bg-muted rounded-lg space-y-2">
-              <p className="font-medium mb-3">Onboarding Summary</p>
-              <p className="text-sm"><strong>Goal:</strong> {GOALS.find(g => g.value === data.primaryGoal)?.label || 'Not set'}</p>
-              <p className="text-sm"><strong>Experience:</strong> {EXPERIENCE_LEVELS.find(e => e.value === data.experienceLevel)?.label || 'Not set'}</p>
-              <p className="text-sm"><strong>PT Sessions:</strong> {data.ptSessionsPerWeek}/week</p>
-              {data.packageName && (
-                <p className="text-sm"><strong>Package:</strong> {data.packageName} (${data.packagePrice})</p>
-              )}
+            <div>
+              <Label className="text-gray-300">Gender</Label>
+              <Select value={accountGender} onValueChange={(v) => setAccountGender(v as any)}>
+                <SelectTrigger className="mt-1.5 bg-gray-800 border-gray-700">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="male">Male</SelectItem>
+                  <SelectItem value="female">Female</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Navigation */}
-      <div className="flex justify-between mt-6">
-        <Button
-          variant="outline"
-          onClick={handleBack}
-          disabled={currentStep === 1}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" /> Back
-        </Button>
-        <div className="flex gap-2">
-          {isSkippableStep && currentStep < TOTAL_STEPS && (
+            
+            <div>
+              <Label className="text-gray-300">Email <span className="text-gray-500">(optional)</span></Label>
+              <Input
+                type="email"
+                placeholder="john@example.com"
+                value={accountEmail}
+                onChange={(e) => setAccountEmail(e.target.value)}
+                className="mt-1.5 bg-gray-800 border-gray-700"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                {accountEmail.trim() ? 'An invite link will be sent to create their account' : 'Skip to add email later'}
+              </p>
+            </div>
+            
             <Button
-              variant="ghost"
-              onClick={() => setCurrentStep(currentStep + 1)}
+              onClick={handleCreateClient}
+              disabled={isCreatingAccount || !accountName.trim()}
+              className="w-full bg-sky-500 hover:bg-sky-600"
             >
-              Skip
+              {isCreatingAccount ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Creating...</>
+              ) : (
+                'Continue'
+              )}
             </Button>
-          )}
-          <Button
-            onClick={handleNext}
-            disabled={!canProceed()}
-          >
-            {currentStep === TOTAL_STEPS ? (
-              <>Complete <Check className="h-4 w-4 ml-2" /></>
-            ) : (
-              <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
-            )}
-          </Button>
-        </div>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Phase 2: Single scrollable assessment page */}
+      {accountCreated && !showQuickInfo && (
+        <>
+          {/* Header */}
+          <header className="sticky top-0 z-40 bg-gradient-to-b from-sky-500 via-sky-600 to-orange-500 px-5 pt-14 pb-6 shadow-xl">
+            <div className="relative flex items-center justify-between">
+              <button onClick={() => router.back()} className="p-2.5 -ml-2 rounded-xl bg-white/10 hover:bg-white/20 transition-all">
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </button>
+              <div className="text-center flex-1">
+                <h1 className="text-xl font-bold text-white">Onboarding</h1>
+                <p className="text-white/80 text-sm">{accountName}</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleFinish}
+                disabled={!primaryGoal}
+                className="bg-white text-sky-600 hover:bg-gray-100 font-semibold"
+              >
+                <Check className="w-4 h-4 mr-1" /> Finish
+              </Button>
+            </div>
+          </header>
+
+          <div className="px-4 py-5 space-y-6 pb-32">
+            {/* Goals */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center gap-2 text-base">
+                  <Target className="h-5 w-5 text-sky-400" /> Goals
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-gray-300 text-sm">Primary Goal *</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {GOALS.map(g => (
+                      <div
+                        key={g.value}
+                        onClick={() => setPrimaryGoal(g.value)}
+                        className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all ${
+                          primaryGoal === g.value 
+                            ? 'border-sky-500 bg-sky-500/20' 
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <p className={`text-sm font-medium ${primaryGoal === g.value ? 'text-sky-400' : 'text-white'}`}>{g.label}</p>
+                        <p className="text-[11px] text-gray-500">{g.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Secondary Goal</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {GOALS.filter(g => g.value !== primaryGoal).map(g => (
+                      <div
+                        key={g.value}
+                        onClick={() => setSecondaryGoal(secondaryGoal === g.value ? '' : g.value)}
+                        className={`p-2 rounded-lg border-2 cursor-pointer transition-all ${
+                          secondaryGoal === g.value 
+                            ? 'border-sky-500 bg-sky-500/20' 
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <p className={`text-sm ${secondaryGoal === g.value ? 'text-sky-400' : 'text-gray-300'}`}>{g.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Notes</Label>
+                  <Textarea
+                    placeholder="Any specific goals..."
+                    value={goalNotes}
+                    onChange={(e) => setGoalNotes(e.target.value)}
+                    className="mt-1.5 bg-gray-800 border-gray-700 text-white"
+                    rows={2}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Experience */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center gap-2 text-base">
+                  <Activity className="h-5 w-5 text-purple-400" /> Experience
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-gray-300 text-sm">Training Experience</Label>
+                  <div className="space-y-2 mt-2">
+                    {EXPERIENCE_LEVELS.map(level => (
+                      <div
+                        key={level.value}
+                        onClick={() => setExperienceLevel(level.value)}
+                        className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                          experienceLevel === level.value 
+                            ? 'border-purple-500 bg-purple-500/20' 
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <p className={`font-medium text-sm ${experienceLevel === level.value ? 'text-purple-400' : 'text-white'}`}>{level.label}</p>
+                        <p className="text-[11px] text-gray-500">{level.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Training Preference</Label>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {[
+                      { value: '1:1', label: '1-on-1 PT' },
+                      { value: 'group', label: 'Group' },
+                      { value: 'mixed', label: 'Mixed' },
+                      { value: 'solo', label: 'Solo + Guidance' },
+                    ].map(p => (
+                      <div
+                        key={p.value}
+                        onClick={() => setTrainingPreference(p.value as any)}
+                        className={`p-2.5 rounded-lg border-2 cursor-pointer text-center transition-all ${
+                          trainingPreference === p.value 
+                            ? 'border-purple-500 bg-purple-500/20' 
+                            : 'border-gray-700 hover:border-gray-600'
+                        }`}
+                      >
+                        <p className={`text-sm font-medium ${trainingPreference === p.value ? 'text-purple-400' : 'text-gray-300'}`}>{p.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Injuries */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center gap-2 text-base">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" /> Injuries & Limitations
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {INJURIES.map(injury => (
+                    <div
+                      key={injury.value}
+                      onClick={() => toggleInjury(injury.value)}
+                      className={`p-2.5 rounded-lg border-2 cursor-pointer transition-all flex items-center gap-2 ${
+                        injuryFlags.includes(injury.value)
+                          ? 'border-amber-500 bg-amber-500/10' 
+                          : 'border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <Checkbox checked={injuryFlags.includes(injury.value)} className="pointer-events-none" />
+                      <span className="text-sm text-gray-300">{injury.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {injuryFlags.length > 0 && !injuryFlags.includes('none') && (
+                  <Textarea
+                    placeholder="Injury details..."
+                    value={injuryNotes}
+                    onChange={(e) => setInjuryNotes(e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white"
+                    rows={2}
+                  />
+                )}
+
+                <div>
+                  <Label className="text-gray-300 text-sm mb-3 block">Movement Confidence (1-5)</Label>
+                  {(['squat', 'hinge', 'push', 'pull', 'core'] as const).map(pattern => (
+                    <div key={pattern} className="mb-3">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-xs text-gray-400 capitalize">{pattern}</span>
+                        <span className="text-xs text-gray-500">{movementConfidence[pattern]}</span>
+                      </div>
+                      <Slider
+                        value={[movementConfidence[pattern]]}
+                        onValueChange={([v]) => setMovementConfidence({ ...movementConfidence, [pattern]: v })}
+                        min={1} max={5} step={1}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Schedule */}
+            <Card className="bg-gray-900 border-gray-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center gap-2 text-base">
+                  <Calendar className="h-5 w-5 text-emerald-400" /> Schedule
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label className="text-gray-300 text-sm">Available Days</Label>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(day => (
+                      <Button key={day} size="sm"
+                        variant={availableDays.includes(day) ? 'default' : 'outline'}
+                        onClick={() => setAvailableDays(prev => 
+                          prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
+                        )}
+                        className="text-xs px-3"
+                      >{day.slice(0, 3)}</Button>
+                    ))}
+                  </div>
+                  {availableDays.length > 0 && (
+                    <p className="text-xs text-gray-500 mt-1">{availableDays.length} day{availableDays.length !== 1 ? 's' : ''} selected</p>
+                  )}
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Schedule Notes</Label>
+                  <Textarea
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                    placeholder="e.g. Afternoons only, Before 3pm on Wednesdays..."
+                    className="bg-gray-800 border-gray-700 text-white mt-2 h-16 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Session Length</Label>
+                  <div className="flex gap-2 mt-2">
+                    {[30, 45, 60, 75, 90].map(m => (
+                      <Button key={m} size="sm"
+                        variant={sessionLength === m ? 'default' : 'outline'}
+                        onClick={() => setSessionLength(m)}
+                        className="flex-1"
+                      >{m}m</Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-gray-300 text-sm">Train alone outside PT?</Label>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {[
+                      { value: 'yes', label: 'Yes' },
+                      { value: 'maybe', label: 'Maybe' },
+                      { value: 'no', label: 'No' },
+                    ].map(o => (
+                      <Button key={o.value} size="sm"
+                        variant={trainAloneOutsidePT === o.value ? 'default' : 'outline'}
+                        onClick={() => setTrainAloneOutsidePT(o.value as any)}
+                      >{o.label}</Button>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Consultation Exercises (Optional) — Full Width Active Workout Style */}
+            <div className="-mx-4 bg-gray-950 border-t border-b border-sky-500/30">
+              <div className="px-4 py-4">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Dumbbell className="h-5 w-5 text-sky-400" />
+                    <h3 className="text-base font-semibold text-white">Consultation Exercises</h3>
+                    <Badge className="bg-gray-800 text-gray-400 text-[10px]">Optional</Badge>
+                  </div>
+                  {consultationExercises.length > 0 && (
+                    <span className="text-xs text-gray-500">{consultationExercises.length} exercise{consultationExercises.length !== 1 ? 's' : ''}</span>
+                  )}
+                </div>
+                <p className="text-gray-500 text-xs mb-4">
+                  Take the client through exercises during the consultation — saved to their file
+                </p>
+              </div>
+
+              {consultationExercises.length > 0 && (
+                <div className="space-y-0">
+                  {consultationExercises.map((ex, exIdx) => (
+                    <div key={ex.id} className="bg-gray-900 border-t border-gray-800 px-4 py-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 text-sm font-bold">
+                            {exIdx + 1}
+                          </div>
+                          <span className="text-base font-medium text-white">{ex.name}</span>
+                        </div>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                          onClick={() => setConsultationExercises(consultationExercises.filter(e => e.id !== ex.id))}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* Set Header */}
+                      <div className="flex items-center gap-3 mb-2 px-1">
+                        <span className="w-10 text-[11px] text-gray-500 font-medium text-center">SET</span>
+                        <span className="flex-1 text-[11px] text-gray-500 font-medium text-center">KG</span>
+                        <span className="flex-1 text-[11px] text-gray-500 font-medium text-center">REPS</span>
+                        <span className="w-8"></span>
+                      </div>
+
+                      {/* Sets */}
+                      <div className="space-y-2">
+                        {ex.sets.map((set, si) => (
+                          <div key={set.id} className="flex items-center gap-3">
+                            <span className="w-10 text-center text-sm text-gray-400 font-semibold">{si + 1}</span>
+                            <Input
+                              type="number"
+                              inputMode="decimal"
+                              placeholder="0"
+                              value={set.weight || ''}
+                              onChange={(e) => {
+                                const updated = [...consultationExercises];
+                                updated[exIdx].sets[si].weight = parseFloat(e.target.value) || undefined;
+                                setConsultationExercises(updated);
+                              }}
+                              className="flex-1 h-10 text-base font-medium bg-gray-800 border-gray-700 text-center text-white"
+                            />
+                            <Input
+                              type="number"
+                              inputMode="numeric"
+                              placeholder="0"
+                              value={set.reps || ''}
+                              onChange={(e) => {
+                                const updated = [...consultationExercises];
+                                updated[exIdx].sets[si].reps = parseInt(e.target.value) || undefined;
+                                setConsultationExercises(updated);
+                              }}
+                              className="flex-1 h-10 text-base font-medium bg-gray-800 border-gray-700 text-center text-white"
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-gray-500 hover:text-red-400"
+                              onClick={() => {
+                                const updated = [...consultationExercises];
+                                updated[exIdx].sets = updated[exIdx].sets.filter((_, i) => i !== si);
+                                setConsultationExercises(updated);
+                              }}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="mt-2 text-sky-400 hover:text-sky-300 text-sm"
+                        onClick={() => {
+                          const updated = [...consultationExercises];
+                          updated[exIdx].sets.push({ id: `set-${Date.now()}`, completed: false });
+                          setConsultationExercises(updated);
+                        }}
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Add Set
+                      </Button>
+
+                      {/* Notes */}
+                      <Input
+                        placeholder="Notes for this exercise..."
+                        value={ex.notes}
+                        onChange={(e) => {
+                          const updated = [...consultationExercises];
+                          updated[exIdx].notes = e.target.value;
+                          setConsultationExercises(updated);
+                        }}
+                        className="mt-3 h-9 text-sm bg-gray-800 border-gray-700"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="px-4 py-4">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 border-dashed border-gray-700 text-gray-400 hover:text-white hover:border-sky-500/50 text-base"
+                  onClick={() => { setExerciseSearch(''); setShowExercisePicker(true); }}
+                >
+                  <Plus className="w-5 h-5 mr-2" /> Add Exercise
+                </Button>
+              </div>
+            </div>
+
+            {/* Book First Session (Optional) */}
+            <Card className="bg-gray-900 border-emerald-500/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-white flex items-center gap-2 text-base">
+                  <Dumbbell className="h-5 w-5 text-emerald-400" /> Book First Session
+                  <Badge className="bg-gray-800 text-gray-400 text-[10px]">Optional</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                  <p className="text-xs text-emerald-400 flex items-center gap-2">
+                    <Bell className="h-3.5 w-3.5" />
+                    Client will receive a notification when you book
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-gray-300 text-sm">Date</Label>
+                    <Input
+                      type="date"
+                      value={firstSessionDate}
+                      onChange={(e) => setFirstSessionDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="mt-1.5 bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-gray-300 text-sm">Time</Label>
+                    <Select value={firstSessionTime} onValueChange={setFirstSessionTime}>
+                      <SelectTrigger className="mt-1.5 bg-gray-800 border-gray-700">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {['06:00','06:30','07:00','07:30','08:00','08:30','09:00','09:30',
+                          '10:00','10:30','11:00','11:30','12:00','13:00','14:00','15:00',
+                          '16:00','16:30','17:00','17:30','18:00','18:30','19:00','20:00'].map(t => (
+                          <SelectItem key={t} value={t}>{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {firstSessionDate && (
+                  <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    {new Date(firstSessionDate).toLocaleDateString('en-NZ', { weekday: 'long', month: 'short', day: 'numeric' })} at {firstSessionTime}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Finish Button */}
+            <Button
+              onClick={handleFinish}
+              disabled={!primaryGoal}
+              className="w-full py-6 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 text-white font-bold text-base rounded-xl shadow-lg"
+            >
+              <Check className="w-5 h-5 mr-2" />
+              {firstSessionDate ? 'Finish & Book Session' : 'Finish Onboarding'}
+            </Button>
+          </div>
+        </>
+      )}
+      {/* Exercise Picker Dialog */}
+      <Dialog open={showExercisePicker} onOpenChange={setShowExercisePicker}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm max-h-[70vh]">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Dumbbell className="w-5 h-5 text-sky-400" />
+              Add Exercise
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Input
+              placeholder="Search exercises..."
+              value={exerciseSearch}
+              onChange={(e) => setExerciseSearch(e.target.value)}
+              className="pl-9 bg-gray-800 border-gray-700 text-white"
+              autoFocus
+            />
+          </div>
+          <ScrollArea className="max-h-[40vh]">
+            <div className="space-y-1">
+              {searchExercises(exerciseSearch || '')
+                .filter(ex => ex.category !== 'warmup' && ex.category !== 'stretching')
+                .slice(0, 30)
+                .map(ex => {
+                  const counts = getExerciseUsageCounts(useWorkoutStore.getState().workoutHistory, clientId);
+                  const count = counts[ex.id] || 0;
+                  return (
+                    <div
+                      key={ex.id}
+                      className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-800 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setConsultationExercises([...consultationExercises, {
+                          id: `consult-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          exerciseId: ex.id,
+                          name: ex.name,
+                          sets: [
+                            { id: `set-1-${Date.now()}`, completed: false },
+                            { id: `set-2-${Date.now()}`, completed: false },
+                            { id: `set-3-${Date.now()}`, completed: false },
+                          ],
+                          notes: '',
+                        }]);
+                        setShowExercisePicker(false);
+                      }}
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm text-white">{ex.name}</p>
+                        <p className="text-[10px] text-gray-500">
+                          {ex.primaryMuscles.join(', ')} • {ex.equipment}
+                        </p>
+                      </div>
+                      {count > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-400 font-medium mr-2">{count}×</span>
+                      )}
+                      <Plus className="w-4 h-4 text-sky-400" />
+                    </div>
+                  );
+                })}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -334,7 +334,7 @@ export function initializeSeedData(): void {
   });
   
   // Save to localStorage with proper store format
-  localStorage.setItem('catalift-users', JSON.stringify(allUsers));
+  localStorage.setItem('apex-users', JSON.stringify(allUsers));
   
   // Get Christo's data (christoId already defined above)
   // Trainers start with empty workouts, PBs, and medals - they build their own history
@@ -344,8 +344,8 @@ export function initializeSeedData(): void {
   const christoClients = clients.filter(c => c.trainerId === christoId);
   const christoEvents = events.filter(e => e.trainerId === christoId);
   
-  // Workout store format (key: catalift-workout)
-  localStorage.setItem('catalift-workout', JSON.stringify({ 
+  // Workout store format (key: apex-workout)
+  localStorage.setItem('apex-workout', JSON.stringify({ 
     state: { 
       workoutHistory: christoWorkouts, 
       personalBests: christoPbs, 
@@ -425,7 +425,7 @@ export function resetSeedData(): void {
 export function resetWorkoutDataOnly(): void {
   if (typeof window === 'undefined') return;
   // Clear only workout-related data - keep auth/user intact
-  localStorage.setItem('catalift-workout', JSON.stringify({ 
+  localStorage.setItem('apex-workout', JSON.stringify({ 
     state: { workoutHistory: [], personalBests: [], activeWorkout: null, templates: [], workoutTimer: { isRunning: false, seconds: 0, type: 'workout' }, restTimer: { isRunning: false, seconds: 0, type: 'rest' } }, 
     version: 0 
   }));
@@ -456,7 +456,7 @@ export function addWorkoutForClient(
 ): void {
   if (typeof window === 'undefined') return;
   
-  const workoutStore = JSON.parse(localStorage.getItem('catalift-workout') || '{}');
+  const workoutStore = JSON.parse(localStorage.getItem('apex-workout') || '{}');
   const state = workoutStore.state || { workoutHistory: [], personalBests: [] };
   
   const workoutDate = dateOverride || new Date();
@@ -497,7 +497,7 @@ export function addWorkoutForClient(
   
   state.workoutHistory = [workout, ...(state.workoutHistory || [])];
   
-  localStorage.setItem('catalift-workout', JSON.stringify({ state, version: 0 }));
+  localStorage.setItem('apex-workout', JSON.stringify({ state, version: 0 }));
   console.log(`Added workout "${workoutName}" for client ${clientId}. Volume: ${totalVolume}kg`);
 }
 
@@ -508,7 +508,7 @@ export function addWorkoutForClient(
 export function listClients(trainerId: string = 'trainer-christo'): void {
   if (typeof window === 'undefined') return;
   
-  const users = JSON.parse(localStorage.getItem('catalift-users') || '[]');
+  const users = JSON.parse(localStorage.getItem('apex-users') || '[]');
   const clients = users.filter((u: any) => u.trainerId === trainerId);
   
   console.log(`\nClients for ${trainerId}:`);

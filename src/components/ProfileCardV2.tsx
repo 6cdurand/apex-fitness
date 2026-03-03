@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Medal, StrengthRating, StrengthCategory } from '@/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -18,7 +18,9 @@ import {
   TrendingUp,
   ChevronRight,
   Share2,
-  X
+  X,
+  Pencil,
+  Check
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -37,6 +39,7 @@ interface ProfileCardV2Props {
   onFollow?: () => void;
   onShare?: () => void;
   onClose?: () => void;
+  onUpdateUser?: (updates: Partial<User>) => void;
 }
 
 export function ProfileCardV2({
@@ -49,13 +52,33 @@ export function ProfileCardV2({
   onFollow,
   onShare,
   onClose,
+  onUpdateUser,
 }: ProfileCardV2Props) {
   const router = useRouter();
   const [selectedMedal, setSelectedMedal] = useState<Medal | null>(null);
+  const [showMedalPicker, setShowMedalPicker] = useState(false);
+  const [pendingFeatured, setPendingFeatured] = useState<string[]>([]);
 
   // Filter out trainer medals - only show fitness/lifting medals
   const fitnessmedals = medals.filter(m => m.earned && m.category !== 'trainer');
-  const topMedals = fitnessmedals.slice(0, 6);
+
+  // Tier rank for sorting: higher = better
+  const tierRank: Record<string, number> = { diamond: 5, platinum: 4, gold: 3, silver: 2, bronze: 1 };
+
+  // Auto-select top 3 by tier, or use user's chosen featured medals
+  const featuredMedals = useMemo(() => {
+    const ids = user.featuredMedalIds;
+    if (ids && ids.length > 0) {
+      // Use user's explicit picks (filter to still-earned medals)
+      return ids
+        .map(id => fitnessmedals.find(m => m.definitionId === id))
+        .filter(Boolean) as Medal[];
+    }
+    // Auto-select: sort by tier rank descending, take top 3
+    return [...fitnessmedals]
+      .sort((a, b) => (tierRank[b.tier || ''] || 0) - (tierRank[a.tier || ''] || 0))
+      .slice(0, 3);
+  }, [fitnessmedals, user.featuredMedalIds]);
 
   const getTierColor = (tier?: string) => {
     switch (tier) {
@@ -159,8 +182,8 @@ export function ProfileCardV2({
             )}
           </div>
 
-          {/* Strength Rating Section */}
-          {strengthRating && (
+          {/* Strength Rating Section — only show if user opted in */}
+          {strengthRating && user.showStrengthRating && (
             <button 
               onClick={handleStrengthClick}
               className="w-full text-left hover:bg-gray-800/50 rounded-xl transition-colors p-3 -m-3"
@@ -170,6 +193,7 @@ export function ProfileCardV2({
                 <h3 className="text-sm font-medium text-gray-400 flex items-center gap-2">
                   <Zap className="w-4 h-4 text-amber-400" />
                   Strength Rating
+                  <span className="text-[9px] text-gray-500 font-normal ml-1">(Free Weights)</span>
                 </h3>
                 {isOwnProfile && <ChevronRight className="w-4 h-4 text-gray-500" />}
               </div>
@@ -224,23 +248,43 @@ export function ProfileCardV2({
             </button>
           )}
 
-          {/* Medals Section - Non-Trainer Only */}
+          {/* Featured Medals — auto top 3 or user-chosen */}
           {fitnessmedals.length > 0 && (
             <div>
-              <button
-                onClick={handleMedalsClick}
-                disabled={!isOwnProfile}
-                className="w-full flex items-center justify-between mb-3 hover:opacity-80"
-              >
-                <h3 className="text-sm font-medium text-gray-400 flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  Achievements ({fitnessmedals.length})
-                </h3>
-                {isOwnProfile && <ChevronRight className="w-4 h-4 text-gray-500" />}
-              </button>
+              <div className="flex items-center justify-between mb-3">
+                <button
+                  onClick={handleMedalsClick}
+                  disabled={!isOwnProfile}
+                  className="flex items-center gap-2 hover:opacity-80"
+                >
+                  <h3 className="text-sm font-medium text-gray-400 flex items-center gap-2">
+                    <Trophy className="w-4 h-4 text-amber-400" />
+                    Featured ({featuredMedals.length}) · {fitnessmedals.length} total
+                  </h3>
+                </button>
+                <div className="flex items-center gap-1">
+                  {isOwnProfile && (
+                    <button
+                      onClick={() => {
+                        setPendingFeatured(
+                          user.featuredMedalIds?.length
+                            ? [...user.featuredMedalIds]
+                            : featuredMedals.map(m => m.definitionId)
+                        );
+                        setShowMedalPicker(true);
+                      }}
+                      className="p-1 rounded-md text-gray-500 hover:text-white hover:bg-gray-800 transition-colors"
+                      title="Edit featured medals"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {isOwnProfile && <ChevronRight className="w-4 h-4 text-gray-500 cursor-pointer" onClick={handleMedalsClick} />}
+                </div>
+              </div>
               
               <div className="flex flex-wrap gap-2">
-                {topMedals.map((medal) => (
+                {featuredMedals.map((medal) => (
                   <button
                     key={medal.id}
                     onClick={() => setSelectedMedal(medal)}
@@ -249,12 +293,12 @@ export function ProfileCardV2({
                     {medal.icon}
                   </button>
                 ))}
-                {fitnessmedals.length > 6 && (
+                {fitnessmedals.length > featuredMedals.length && (
                   <button
                     onClick={handleMedalsClick}
                     className="w-12 h-12 rounded-xl bg-gray-800 flex items-center justify-center text-gray-400 text-sm font-medium hover:bg-gray-700"
                   >
-                    +{fitnessmedals.length - 6}
+                    +{fitnessmedals.length - featuredMedals.length}
                   </button>
                 )}
               </div>
@@ -281,6 +325,30 @@ export function ProfileCardV2({
             </div>
           </div>
 
+          {/* Show Strength Rating Toggle — own profile only */}
+          {isOwnProfile && strengthRating && !user.showStrengthRating && (
+            <button
+              onClick={() => onUpdateUser?.({ showStrengthRating: true })}
+              className="w-full text-left p-2.5 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400 flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  Show Strength Rating on card
+                </span>
+                <span className="text-[10px] text-sky-400">Enable</span>
+              </div>
+            </button>
+          )}
+          {isOwnProfile && user.showStrengthRating && (
+            <button
+              onClick={() => onUpdateUser?.({ showStrengthRating: false })}
+              className="w-full text-right"
+            >
+              <span className="text-[10px] text-gray-600 hover:text-gray-400">Hide strength rating</span>
+            </button>
+          )}
+
           {/* Action Buttons */}
           <div className="flex gap-2">
             {!isOwnProfile && (
@@ -303,6 +371,69 @@ export function ProfileCardV2({
           </div>
         </CardContent>
       </Card>
+
+      {/* Medal Picker Dialog — choose up to 3 featured medals */}
+      <Dialog open={showMedalPicker} onOpenChange={setShowMedalPicker}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-400" />
+              Choose Featured Medals
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-gray-400 -mt-2">Select up to 3 medals to showcase on your profile card</p>
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            {fitnessmedals
+              .sort((a, b) => (tierRank[b.tier || ''] || 0) - (tierRank[a.tier || ''] || 0))
+              .map((medal) => {
+                const isSelected = pendingFeatured.includes(medal.definitionId);
+                return (
+                  <button
+                    key={medal.id}
+                    onClick={() => {
+                      if (isSelected) {
+                        setPendingFeatured(prev => prev.filter(id => id !== medal.definitionId));
+                      } else if (pendingFeatured.length < 3) {
+                        setPendingFeatured(prev => [...prev, medal.definitionId]);
+                      }
+                    }}
+                    className={`relative w-full aspect-square rounded-xl bg-gradient-to-br ${getTierGradient(medal.tier)} flex items-center justify-center text-xl transition-all ${
+                      isSelected ? 'ring-2 ring-sky-400 scale-105' : 'opacity-60 hover:opacity-100'
+                    } ${!isSelected && pendingFeatured.length >= 3 ? 'opacity-30 cursor-not-allowed' : ''}`}
+                    disabled={!isSelected && pendingFeatured.length >= 3}
+                  >
+                    {medal.icon}
+                    {isSelected && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-sky-500 rounded-full flex items-center justify-center">
+                        <Check className="w-2.5 h-2.5 text-white" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Button
+              variant="outline"
+              className="flex-1 border-gray-700 text-gray-300"
+              onClick={() => { setPendingFeatured([]); }}
+            >
+              Auto (Top 3)
+            </Button>
+            <Button
+              className="flex-1 bg-sky-600 hover:bg-sky-700"
+              onClick={() => {
+                onUpdateUser?.({
+                  featuredMedalIds: pendingFeatured.length > 0 ? pendingFeatured : undefined,
+                });
+                setShowMedalPicker(false);
+              }}
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Medal Detail Modal */}
       <Dialog open={!!selectedMedal} onOpenChange={() => setSelectedMedal(null)}>

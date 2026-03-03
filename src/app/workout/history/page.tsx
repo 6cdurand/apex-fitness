@@ -2,24 +2,33 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Workout } from '@/types';
-import { Search, Dumbbell, Clock, TrendingUp, ChevronRight, Calendar, X, Flame, Trophy } from 'lucide-react';
+import { Search, Dumbbell, Clock, TrendingUp, ChevronRight, Calendar, X, Flame, Trophy, Edit, Users, StickyNote, Bookmark } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, isThisWeek, isThisMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 
 export default function WorkoutHistoryPage() {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const { workoutHistory } = useWorkoutStore();
+  const { workoutHistory, personalBests, updateCompletedWorkout, updateWorkoutNotes } = useWorkoutStore();
+  const { saveToWorkoutLibrary } = useTrainerStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  const [editingTimes, setEditingTimes] = useState(false);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [showSaveToLibrary, setShowSaveToLibrary] = useState(false);
+  const [saveLibraryName, setSaveLibraryName] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -29,12 +38,15 @@ export default function WorkoutHistoryPage() {
 
   if (!isAuthenticated) return null;
 
+  // Exclude soft-deleted workouts
+  const activeWorkouts = workoutHistory.filter(w => !w.deletedAt);
+
   const filteredWorkouts = searchQuery
-    ? workoutHistory.filter(w => 
+    ? activeWorkouts.filter(w => 
         w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         w.exercises.some(e => e.exercise.name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
-    : workoutHistory;
+    : activeWorkouts;
 
   // Group workouts by date
   const groupedWorkouts = filteredWorkouts.reduce((groups, workout) => {
@@ -56,11 +68,56 @@ export default function WorkoutHistoryPage() {
     return `${mins}m`;
   };
 
+  const formatDurationLong = (seconds?: number) => {
+    if (!seconds) return '--';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) return `${hrs}h ${mins}m`;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const openWorkoutSummary = (workout: Workout) => {
+    setSelectedWorkout(workout);
+    setEditingTimes(false);
+    setEditingNotes(false);
+    setEditNotes(workout.notes || '');
+    setEditStartTime(new Date(workout.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
+    setEditEndTime(workout.endTime ? new Date(workout.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
+  };
+
+  const handleSaveTimes = () => {
+    if (!selectedWorkout || !editStartTime || !editEndTime) return;
+    const origDate = new Date(selectedWorkout.startTime);
+    const dateStr = origDate.toISOString().split('T')[0];
+    const [sh, sm] = editStartTime.split(':').map(Number);
+    const [eh, em] = editEndTime.split(':').map(Number);
+    const newStart = new Date(`${dateStr}T${String(sh).padStart(2, '0')}:${String(sm).padStart(2, '0')}:00`);
+    const newEnd = new Date(`${dateStr}T${String(eh).padStart(2, '0')}:${String(em).padStart(2, '0')}:00`);
+    if (newEnd <= newStart) newEnd.setDate(newEnd.getDate() + 1);
+    const newDuration = Math.round((newEnd.getTime() - newStart.getTime()) / 1000);
+    updateCompletedWorkout(selectedWorkout.id, {
+      startTime: newStart.toISOString(),
+      endTime: newEnd.toISOString(),
+      duration: newDuration,
+    });
+    // Update local selected workout reference
+    setSelectedWorkout({ ...selectedWorkout, startTime: newStart.toISOString(), endTime: newEnd.toISOString(), duration: newDuration });
+    setEditingTimes(false);
+  };
+
+  const handleSaveNotes = () => {
+    if (!selectedWorkout) return;
+    updateWorkoutNotes(selectedWorkout.id, editNotes.trim());
+    setSelectedWorkout({ ...selectedWorkout, notes: editNotes.trim() });
+    setEditingNotes(false);
+  };
+
   return (
     <MainLayout>
       <PageHeader 
         title="Workout History" 
-        subtitle={`${workoutHistory.length} total workouts`}
+        subtitle={`${activeWorkouts.length} total workouts`}
         showBack
       />
 
@@ -81,7 +138,7 @@ export default function WorkoutHistoryPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-sky-400">
-                {workoutHistory.filter(w => isThisWeek(new Date(w.startTime))).length}
+                {activeWorkouts.filter(w => isThisWeek(new Date(w.startTime))).length}
               </p>
               <p className="text-xs text-gray-400">This Week</p>
             </CardContent>
@@ -89,7 +146,7 @@ export default function WorkoutHistoryPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-blue-400">
-                {workoutHistory.filter(w => isThisMonth(new Date(w.startTime))).length}
+                {activeWorkouts.filter(w => isThisMonth(new Date(w.startTime))).length}
               </p>
               <p className="text-xs text-gray-400">This Month</p>
             </CardContent>
@@ -97,7 +154,7 @@ export default function WorkoutHistoryPage() {
           <Card className="bg-gray-900 border-gray-800">
             <CardContent className="p-3 text-center">
               <p className="text-2xl font-bold text-purple-400">
-                {workoutHistory.length}
+                {activeWorkouts.length}
               </p>
               <p className="text-xs text-gray-400">All Time</p>
             </CardContent>
@@ -129,7 +186,7 @@ export default function WorkoutHistoryPage() {
                       <Card
                         key={workout.id}
                         className="bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-850 transition-colors"
-                        onClick={() => setSelectedWorkout(workout)}
+                        onClick={() => openWorkoutSummary(workout)}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
@@ -181,7 +238,7 @@ export default function WorkoutHistoryPage() {
 
         {/* Workout Summary Modal */}
         <Dialog open={!!selectedWorkout} onOpenChange={() => setSelectedWorkout(null)}>
-          <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[85vh] overflow-y-auto">
             {selectedWorkout && (
               <>
                 <DialogHeader>
@@ -189,36 +246,135 @@ export default function WorkoutHistoryPage() {
                     <Dumbbell className="w-5 h-5 text-sky-400" />
                     {selectedWorkout.name}
                   </DialogTitle>
-                  <p className="text-sm text-gray-500">
-                    {format(new Date(selectedWorkout.startTime), 'EEEE, MMMM d, yyyy • h:mm a')}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-gray-500">
+                      {format(new Date(selectedWorkout.startTime), 'EEEE, MMMM d, yyyy')}
+                    </p>
+                    {selectedWorkout.assignedBy && (
+                      <Badge className="bg-blue-500/20 text-blue-400 text-xs">
+                        <Users className="w-3 h-3 mr-1" />
+                        PT Session
+                      </Badge>
+                    )}
+                  </div>
                 </DialogHeader>
 
                 <div className="space-y-4 mt-4">
-                  {/* Quick Stats */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3 bg-gray-800 rounded-lg text-center">
+                  {/* Session Time — Editable */}
+                  <div className="p-3 bg-gray-800 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400 font-medium">Session Time</span>
+                      {editingTimes ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditingTimes(false)}
+                            className="text-xs text-gray-500 hover:text-gray-300"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={handleSaveTimes}
+                            className="text-xs text-sky-400 hover:text-sky-300 font-medium"
+                          >
+                            Save
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setEditingTimes(true)}
+                          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                        >
+                          <Edit className="w-3 h-3" />
+                          Edit
+                        </button>
+                      )}
+                    </div>
+                    {editingTimes ? (
+                      <div className="flex items-center gap-2 justify-center">
+                        <input
+                          type="time"
+                          value={editStartTime}
+                          onChange={(e) => setEditStartTime(e.target.value)}
+                          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center"
+                        />
+                        <span className="text-gray-500">→</span>
+                        <input
+                          type="time"
+                          value={editEndTime}
+                          onChange={(e) => setEditEndTime(e.target.value)}
+                          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-3 text-sm">
+                        <span className="text-white font-medium">
+                          {new Date(selectedWorkout.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                        </span>
+                        <span className="text-gray-500">→</span>
+                        <span className="text-white font-medium">
+                          {selectedWorkout.endTime
+                            ? new Date(selectedWorkout.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+                            : '--'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Stats Grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 bg-gray-800 rounded-xl text-center">
                       <Clock className="w-4 h-4 text-blue-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{formatDuration(selectedWorkout.duration)}</p>
+                      <p className="text-lg font-bold text-white">{formatDurationLong(selectedWorkout.duration)}</p>
                       <p className="text-xs text-gray-500">Duration</p>
                     </div>
-                    <div className="p-3 bg-gray-800 rounded-lg text-center">
-                      <TrendingUp className="w-4 h-4 text-sky-400 mx-auto mb-1" />
+                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                      <Trophy className="w-4 h-4 text-amber-400 mx-auto mb-1" />
                       <p className="text-lg font-bold text-white">{Math.round(selectedWorkout.totalVolume).toLocaleString()}</p>
                       <p className="text-xs text-gray-500">Volume (kg)</p>
                     </div>
-                    <div className="p-3 bg-gray-800 rounded-lg text-center">
+                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                      <Dumbbell className="w-4 h-4 text-purple-400 mx-auto mb-1" />
+                      <p className="text-lg font-bold text-white">{selectedWorkout.exercises.length}</p>
+                      <p className="text-xs text-gray-500">Exercises</p>
+                    </div>
+                    <div className="p-3 bg-gray-800 rounded-xl text-center">
                       <Flame className="w-4 h-4 text-orange-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{selectedWorkout.exercises.reduce((sum, ex) => sum + ex.sets.length, 0)}</p>
-                      <p className="text-xs text-gray-500">Total Sets</p>
+                      <p className="text-lg font-bold text-white">{selectedWorkout.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0)}</p>
+                      <p className="text-xs text-gray-500">Sets Done</p>
                     </div>
                   </div>
+
+                  {/* PRs achieved in this workout */}
+                  {(() => {
+                    const workoutPRs = personalBests.filter(pb => pb.workoutId === selectedWorkout.id);
+                    if (workoutPRs.length === 0) return null;
+                    return (
+                      <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Trophy className="w-4 h-4 text-amber-400" />
+                          <span className="text-sm font-semibold text-amber-400">
+                            {workoutPRs.length} PR{workoutPRs.length > 1 ? 's' : ''} Set
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {workoutPRs.map(pr => {
+                            const ex = selectedWorkout.exercises.find(e => e.exerciseId === pr.exerciseId);
+                            return (
+                              <Badge key={pr.id} variant="secondary" className="bg-amber-500/20 text-amber-300 text-xs">
+                                {ex?.exercise?.name || pr.exerciseId} — {pr.bestWeight}kg × {pr.bestReps}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Exercises Summary */}
                   <div>
                     <h3 className="text-sm font-medium text-gray-400 mb-3">Exercises Performed</h3>
                     <div className="space-y-2">
-                      {selectedWorkout.exercises.map((ex, idx) => {
+                      {selectedWorkout.exercises.map((ex) => {
                         const completedSets = ex.sets.filter(s => s.completed).length;
                         const bestSet = ex.sets.reduce((best, set) => {
                           if (!set.completed) return best;
@@ -236,18 +392,25 @@ export default function WorkoutHistoryPage() {
                                   {completedSets}/{ex.sets.length} sets completed
                                 </p>
                               </div>
-                              {bestSet && bestSet.weight && (
+                              {bestSet && bestSet.weight ? (
                                 <div className="text-right">
                                   <p className="text-sm font-bold text-sky-400">
                                     {bestSet.weight}kg × {bestSet.reps}
                                   </p>
                                   <p className="text-xs text-gray-500">Best set</p>
                                 </div>
-                              )}
+                              ) : bestSet && bestSet.duration ? (
+                                <div className="text-right">
+                                  <p className="text-sm font-bold text-sky-400">
+                                    {bestSet.duration}s
+                                  </p>
+                                  <p className="text-xs text-gray-500">Duration</p>
+                                </div>
+                              ) : null}
                             </div>
                             {/* Set breakdown */}
                             <div className="flex flex-wrap gap-1 mt-2">
-                              {ex.sets.map((set, setIdx) => (
+                              {ex.sets.map((set) => (
                                 <span
                                   key={set.id}
                                   className={`text-xs px-2 py-0.5 rounded ${
@@ -256,7 +419,7 @@ export default function WorkoutHistoryPage() {
                                       : 'bg-gray-700 text-gray-500'
                                   }`}
                                 >
-                                  {set.weight || 0}×{set.reps || 0}
+                                  {set.weight ? `${set.weight}×${set.reps || 0}` : set.duration ? `${set.duration}s` : `${set.reps || 0}r`}
                                 </span>
                               ))}
                             </div>
@@ -266,16 +429,128 @@ export default function WorkoutHistoryPage() {
                     </div>
                   </div>
 
+                  {/* Notes */}
+                  <div className="p-3 bg-gray-800 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                        <StickyNote className="w-3 h-3" />
+                        Notes
+                      </span>
+                      {editingNotes ? (
+                        <div className="flex gap-2">
+                          <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-500 hover:text-gray-300">Cancel</button>
+                          <button onClick={handleSaveNotes} className="text-xs text-sky-400 hover:text-sky-300 font-medium">Save</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => { setEditNotes(selectedWorkout.notes || ''); setEditingNotes(true); }}
+                          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                        >
+                          <Edit className="w-3 h-3" />
+                          {selectedWorkout.notes ? 'Edit' : 'Add'}
+                        </button>
+                      )}
+                    </div>
+                    {editingNotes ? (
+                      <textarea
+                        value={editNotes}
+                        onChange={(e) => setEditNotes(e.target.value)}
+                        placeholder="Add workout notes..."
+                        className="w-full h-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-300">
+                        {selectedWorkout.notes || <span className="text-gray-600 italic">No notes</span>}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Save to Library */}
+                  {showSaveToLibrary ? (
+                    <div className="p-3 bg-gray-800 rounded-xl space-y-3">
+                      <p className="text-sm font-medium text-white">Save to Workout Library</p>
+                      <Input
+                        placeholder="Workout name..."
+                        value={saveLibraryName}
+                        onChange={(e) => setSaveLibraryName(e.target.value)}
+                        className="bg-gray-700 border-gray-600 text-white"
+                        autoFocus
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-sky-500 hover:bg-sky-600"
+                          disabled={!saveLibraryName.trim()}
+                          onClick={() => {
+                            const blocks = (selectedWorkout as any).blocks?.map((block: any) => ({
+                              id: block.id,
+                              type: block.type || 'strength',
+                              name: block.name || 'Block',
+                              exercises: selectedWorkout.exercises
+                                .filter((ex: any) => ex.blockId === block.id)
+                                .map((ex: any) => ({
+                                  exerciseId: ex.exerciseId,
+                                  exerciseName: ex.exercise?.name,
+                                  sets: ex.sets.length,
+                                  reps: ex.sets[0]?.reps || 10,
+                                  rest: ex.restTimerSeconds || 90,
+                                })),
+                            })) || [{
+                              id: 'default',
+                              type: 'strength',
+                              name: 'Main',
+                              exercises: selectedWorkout.exercises.map((ex: any) => ({
+                                exerciseId: ex.exerciseId,
+                                exerciseName: ex.exercise?.name,
+                                sets: ex.sets.length,
+                                reps: ex.sets[0]?.reps || 10,
+                                rest: ex.restTimerSeconds || 90,
+                              })),
+                            }];
+                            saveToWorkoutLibrary({
+                              name: saveLibraryName.trim(),
+                              blocks,
+                              estimatedMinutes: selectedWorkout.duration ? Math.round(selectedWorkout.duration / 60) : 45,
+                              tags: [],
+                            });
+                            setShowSaveToLibrary(false);
+                            setSaveLibraryName('');
+                          }}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-gray-600"
+                          onClick={() => { setShowSaveToLibrary(false); setSaveLibraryName(''); }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="w-full border-gray-700 text-gray-300 hover:text-white"
+                      onClick={() => { setShowSaveToLibrary(true); setSaveLibraryName(selectedWorkout.name); }}
+                    >
+                      <Bookmark className="w-4 h-4 mr-2" />
+                      Save to Library
+                    </Button>
+                  )}
+
                   {/* View Full Details Button */}
-                  <button
+                  <Button
                     onClick={() => {
                       setSelectedWorkout(null);
                       router.push(`/workout/${selectedWorkout.id}`);
                     }}
-                    className="w-full py-3 bg-sky-600 hover:bg-sky-700 text-white rounded-lg font-medium transition-colors"
+                    className="w-full bg-sky-500 hover:bg-sky-600"
+                    size="lg"
                   >
                     View Full Details
-                  </button>
+                  </Button>
                 </div>
               </>
             )}

@@ -25,7 +25,7 @@ import { Notification } from '@/types';
 export default function NotificationsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { notifications, markNotificationRead, markAllNotificationsRead } = useSocialStore();
+  const { notifications, markNotificationRead, markAllNotificationsRead, clearAllNotifications } = useSocialStore();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -76,17 +76,30 @@ export default function NotificationsPage() {
         subtitle={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up!'}
         showBack
         action={
-          unreadCount > 0 && (
-            <Button 
-              size="sm" 
-              variant="ghost"
-              onClick={markAllNotificationsRead}
-              className="text-sky-400"
-            >
-              <CheckCheck className="w-4 h-4 mr-2" />
-              Mark all read
-            </Button>
-          )
+          <div className="flex gap-1">
+            {unreadCount > 0 && (
+              <Button 
+                size="sm" 
+                variant="ghost"
+                onClick={markAllNotificationsRead}
+                className="text-sky-400"
+              >
+                <CheckCheck className="w-4 h-4 mr-1" />
+                Read all
+              </Button>
+            )}
+            {userNotifications.length > 0 && (
+              <Button 
+                size="sm" 
+                variant="ghost"
+                onClick={clearAllNotifications}
+                className="text-gray-400 hover:text-red-400"
+              >
+                <Trash2 className="w-4 h-4 mr-1" />
+                Clear
+              </Button>
+            )}
+          </div>
         }
       />
 

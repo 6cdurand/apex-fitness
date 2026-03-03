@@ -10,7 +10,9 @@ import { useWorkoutStore } from '@/lib/store';
 import { useAuthStore } from '@/lib/store';
 import { maleTierRanges, femaleTierRanges, getTierBgColor, calculate1RM } from '@/lib/strengthRating';
 import { calculateExerciseStats, normalizeExerciseId, getSmoothed1RMTrend } from '@/lib/exerciseStats';
-import { Trophy, TrendingUp, Calendar, Target, Dumbbell, BarChart3, Activity } from 'lucide-react';
+import { Trophy, TrendingUp, Calendar, Target, Dumbbell, BarChart3, Activity, AlertTriangle, Info } from 'lucide-react';
+import { ExerciseImage } from '@/components/ExerciseImage';
+import { getExerciseById, getMuscleDisplayName } from '@/lib/exercises';
 import { format } from 'date-fns';
 import { Workout, WorkoutExercise, WorkoutSet } from '@/types';
 
@@ -42,7 +44,9 @@ export default function ExerciseDetailPage() {
     return getSmoothed1RMTrend(stats.sessions, 3);
   }, [stats?.sessions]);
 
-  const exerciseName = normalizedId
+  const fullExercise = getExerciseById(normalizedId);
+
+  const exerciseName = fullExercise?.name || normalizedId
     .split('-')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
@@ -119,9 +123,12 @@ export default function ExerciseDetailPage() {
       />
       
       <div className="px-4 py-6 space-y-6 -mt-4">
-        {/* Current Stats Hero */}
+        {/* Exercise Image + Stats Hero */}
         <Card className="bg-slate-900/90 border-slate-800">
           <CardContent className="p-6">
+            <div className="flex justify-center mb-4">
+              <ExerciseImage exerciseId={normalizedId} size="lg" showGenerateButton className="max-w-[200px]" />
+            </div>
             <div className="text-center mb-6">
               <p className="text-sm text-slate-500 mb-2">Estimated 1RM</p>
               <p className="text-5xl font-bold text-white mb-2">
@@ -157,6 +164,87 @@ export default function ExerciseDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* How To Perform */}
+        {fullExercise && (fullExercise.instructions || fullExercise.formCues) && (
+          <Card className="bg-slate-900/90 border-slate-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Info className="w-5 h-5 text-sky-400" />
+                How To Perform
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Equipment & Category */}
+              <div className="flex items-center gap-2">
+                <Dumbbell className="w-4 h-4 text-slate-400" />
+                <Badge variant="outline" className="capitalize text-xs border-slate-700 text-slate-300">
+                  {fullExercise.equipment}
+                </Badge>
+                <Badge variant="outline" className="capitalize text-xs border-slate-700 text-slate-300">
+                  {fullExercise.category}
+                </Badge>
+              </div>
+
+              {/* Instructions */}
+              {fullExercise.instructions && (
+                <p className="text-sm text-slate-400 leading-relaxed">{fullExercise.instructions}</p>
+              )}
+
+              {/* Form Cues */}
+              {fullExercise.formCues && (
+                <div className="space-y-3">
+                  {fullExercise.formCues.setup && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-300 mb-1">Setup</h4>
+                      <p className="text-sm text-slate-400">{fullExercise.formCues.setup}</p>
+                    </div>
+                  )}
+                  {fullExercise.formCues.execution && fullExercise.formCues.execution.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-300 mb-1">Execution</h4>
+                      <ol className="list-decimal list-inside space-y-1">
+                        {fullExercise.formCues.execution.map((step, i) => (
+                          <li key={i} className="text-sm text-slate-400">{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                  {fullExercise.formCues.commonMistakes && fullExercise.formCues.commonMistakes.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-amber-400 mb-1 flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4" />
+                        Common Mistakes
+                      </h4>
+                      <ul className="list-disc list-inside space-y-1">
+                        {fullExercise.formCues.commonMistakes.map((mistake, i) => (
+                          <li key={i} className="text-sm text-slate-400">{mistake}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Muscles Worked */}
+              <div>
+                <h4 className="text-sm font-semibold text-slate-300 mb-2">Muscles Worked</h4>
+                <div className="flex flex-wrap gap-1.5">
+                  {fullExercise.primaryMuscles.map((m) => (
+                    <Badge key={m} className="bg-sky-500/20 text-sky-300 border-0 text-xs">
+                      {getMuscleDisplayName(m)}
+                    </Badge>
+                  ))}
+                  {fullExercise.secondaryMuscles.map((m) => (
+                    <Badge key={m} variant="outline" className="text-slate-500 border-slate-700 text-xs">
+                      {getMuscleDisplayName(m)}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">
