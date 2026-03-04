@@ -3544,16 +3544,6 @@ export const useMedalStore = create<MedalState>()(
             ),
           }));
           syncMedalToSupabase(updatedMedal);
-          // Notify on evolution tier change
-          if (newEvolutionTier !== oldEvolutionTier && newEvolutionTier !== 'base') {
-            const tierLabel = getEvolutionLabel(newEvolutionTier);
-            useSocialStore.getState().addNotification({
-              userId,
-              type: 'achievement',
-              title: 'Medal Evolved!',
-              message: `Your "${existingMedal.name}" medal evolved to ${tierLabel}!`,
-            });
-          }
           return;
         }
 
@@ -3588,14 +3578,6 @@ export const useMedalStore = create<MedalState>()(
 
         // Sync medal to Supabase
         syncMedalToSupabase(newMedal);
-
-        // Add notification
-        useSocialStore.getState().addNotification({
-          userId,
-          type: 'achievement',
-          title: 'Achievement Unlocked!',
-          message: `You earned the "${definition.name}" medal!`,
-        });
       },
 
       updateEvolvingMedalProgress: (medalId, progress) => {

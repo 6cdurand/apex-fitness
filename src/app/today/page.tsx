@@ -715,19 +715,42 @@ export default function TodayPage() {
                                           : null;
                                         
                                         if (sw && sw.blocks) {
-                                          // Start from session workout
+                                          // Start from session workout — convert builder block format to WorkoutExercise format
                                           const exercises = sw.blocks.flatMap((block: any) =>
-                                            (block.exercises || []).map((ex: any) => ({
-                                              ...ex,
-                                              id: ex.id || `ex-${Date.now()}-${Math.random()}`,
-                                              sets: (ex.sets || [{ id: `s1`, setNumber: 1, type: 'normal', weight: 0, reps: 0, completed: false }]),
-                                            }))
+                                            (block.exercises || []).map((ex: any) => {
+                                              // Builder stores sets as a number; convert to array of set objects
+                                              const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
+                                              const targetReps = typeof ex.reps === 'string' ? (parseInt(ex.reps) || 10) : (ex.reps || 10);
+                                              const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
+                                                id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                                                setNumber: si + 1,
+                                                type: 'normal',
+                                                targetReps,
+                                                reps: targetReps,
+                                                weight: 0,
+                                                completed: false,
+                                              }));
+                                              return {
+                                                id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                                exerciseId: ex.exerciseId || ex.id,
+                                                exercise: {
+                                                  id: ex.exerciseId || ex.id,
+                                                  name: ex.exerciseName || ex.name || 'Exercise',
+                                                  category: 'strength',
+                                                  muscleGroups: [],
+                                                },
+                                                sets: setsArray,
+                                                restTimerSeconds: parseInt(ex.rest) || 90,
+                                                notes: ex.notes || '',
+                                              };
+                                            })
                                           );
                                           startFromTemplate({
                                             id: `session-${event.id}`,
                                             name: sw.name || `Session - ${displayName}`,
                                             description: `PT Session`,
                                             exercises,
+                                            blocks: sw.blocks,
                                             category: 'strength',
                                             estimatedDuration: 60,
                                             isClientSession: true,
