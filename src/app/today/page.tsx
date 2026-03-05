@@ -51,6 +51,7 @@ export default function TodayPage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<WorkoutTemplate | null>(null);
   const [showStartOptions, setShowStartOptions] = useState(false);
+  const [showBookDialog, setShowBookDialog] = useState(false);
   const [dailySteps, setDailySteps] = useState<number>(0);
   const [stepsGoal] = useState(10000);
 
@@ -153,50 +154,50 @@ export default function TodayPage() {
     })
     .slice(0, 5);
 
-  // Smart medal progress — calculate actual % toward each unearned medal
+  // Smart medal progress — show achievement/count based progress only (no weight-based)
   const earnedIds = new Set(userMedals.map(m => m.definitionId));
-  const userPBs = personalBests.filter(pb => pb.userId === user.id);
   const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
-  const pbCount = userPBs.length;
+  const pbCount = personalBests.filter(pb => pb.userId === user.id).length;
 
   const closestUnearned = userWorkouts.length > 0
     ? milestoneMedals
         .filter(def => !earnedIds.has(def.id) && !isTrainerMedal(def.id))
+        // Exclude weight-based medals (bench/squat/deadlift kg progress)
+        .filter(def => !def.id.startsWith('bench-') && !def.id.startsWith('squat-') && !def.id.startsWith('deadlift-'))
         .map(def => {
           let current = 0;
           const target = def.target || 1;
-          // Calculate current progress based on medal category/id
+          let progressLabel = '';
           if (def.id.startsWith('first-blood') || def.id === 'getting-started' || def.id === 'dedicated' || def.id === 'committed' || def.id === 'centurion') {
             current = userWorkouts.length;
+            progressLabel = `${Math.max(target - current, 0)} more workout${target - current !== 1 ? 's' : ''} to go`;
           } else if (def.id.startsWith('volume-')) {
             current = Math.round(totalVolume);
+            const remaining = Math.max(target - current, 0);
+            progressLabel = `${remaining.toLocaleString()} kg volume to go`;
           } else if (def.id.startsWith('streak-')) {
             current = currentStreak;
+            progressLabel = `${Math.max(target - current, 0)} more week${target - current !== 1 ? 's' : ''} streak needed`;
           } else if (def.id === 'first-pr' || def.id === 'pr-hunter' || def.id === 'pr-collector') {
             current = pbCount;
-          } else if (def.id.startsWith('bench-')) {
-            const benchPB = userPBs.find(p => p.exerciseId?.includes('bench') && !p.exerciseId?.includes('incline'));
-            current = benchPB?.oneRepMax || benchPB?.bestWeight || 0;
-          } else if (def.id.startsWith('squat-')) {
-            const squatPB = userPBs.find(p => p.exerciseId?.includes('squat') && !p.exerciseId?.includes('split'));
-            current = squatPB?.oneRepMax || squatPB?.bestWeight || 0;
-          } else if (def.id.startsWith('deadlift-')) {
-            const dlPB = userPBs.find(p => p.exerciseId?.includes('deadlift') || p.exerciseId?.includes('rdl'));
-            current = dlPB?.oneRepMax || dlPB?.bestWeight || 0;
+            progressLabel = `${Math.max(target - current, 0)} more PR${target - current !== 1 ? 's' : ''} to go`;
           } else if (def.id === 'variety-king') {
             const uniqueExercises = new Set(userWorkouts.flatMap(w => w.exercises?.map(e => e.exerciseId) || []));
             current = uniqueExercises.size;
+            progressLabel = `${Math.max(target - current, 0)} more exercises to try`;
           } else if (def.id === 'weekly-warrior') {
             current = weekWorkouts.length;
+            progressLabel = `${Math.max(target - current, 0)} more this week`;
           } else {
-            current = 0; // Can't calculate — skip in sorting
+            current = 0;
+            progressLabel = '';
           }
           const pct = Math.min(Math.round((current / target) * 100), 99);
           const remaining = Math.max(target - current, 0);
-          return { ...def, current, pct, remaining };
+          return { ...def, current, pct, remaining, progressLabel };
         })
-        .filter(m => m.pct > 0 && m.pct < 100) // Only show medals with some progress
-        .sort((a, b) => b.pct - a.pct) // Closest to completion first
+        .filter(m => m.pct > 0 && m.pct < 100)
+        .sort((a, b) => b.pct - a.pct)
         .slice(0, 5)
     : [];
 
@@ -330,53 +331,7 @@ export default function TodayPage() {
         </div>
         )}
 
-        {/* Steps Section — user mode only */}
-        {user.mode !== 'trainer' && (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Footprints className="w-5 h-5 text-emerald-400" />
-                <span className="font-semibold text-white">Today&apos;s Steps</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {(user.healthConnections?.appleHealth?.connected || user.healthConnections?.googleHealth?.connected) && (
-                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    {user.healthConnections?.appleHealth?.connected ? 'Apple Health' : 'Google Health'}
-                  </span>
-                )}
-                <span className="text-sm text-gray-400">{stepsGoal.toLocaleString()} goal</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min((dailySteps / stepsGoal) * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  value={dailySteps || ''}
-                  onChange={(e) => updateSteps(parseInt(e.target.value) || 0)}
-                  placeholder="0"
-                  className="w-20 text-right text-lg font-bold text-emerald-400 bg-transparent border-none outline-none"
-                />
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mt-2">
-              {dailySteps >= stepsGoal 
-                ? 'Goal reached! Great job!' 
-                : (user.healthConnections?.appleHealth?.connected || user.healthConnections?.googleHealth?.connected)
-                  ? `${(stepsGoal - dailySteps).toLocaleString()} steps to go • auto-synced`
-                  : `${(stepsGoal - dailySteps).toLocaleString()} steps to go`}
-            </p>
-          </CardContent>
-        </Card>
-        )}
+        {/* Steps Section — hidden until native app with health integrations */}
 
         {/* Today's Workouts — user mode only (trainer sees client workouts below) */}
         {user.mode !== 'trainer' && todayWorkouts.length > 0 && isToday && (
@@ -528,9 +483,22 @@ export default function TodayPage() {
             e.trainerId === user.id && e.status !== 'cancelled'
           );
           
-          // Merge all events into one list sorted by startTime
+          // Merge all events: upcoming first, completed below, each sub-sorted by time
           const allEvents = trainerEvents
-            .sort((a, b) => (a.startTime || '').localeCompare(b.startTime || ''));
+            .sort((a, b) => {
+              const aDone = workoutHistory.some(w => 
+                w.userId === a.clientId && 
+                format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
+              );
+              const bDone = workoutHistory.some(w => 
+                w.userId === b.clientId && 
+                format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
+              );
+              // Upcoming first, completed below
+              if (aDone !== bDone) return aDone ? 1 : -1;
+              // Within same group, sort by time
+              return (a.startTime || '').localeCompare(b.startTime || '');
+            });
           
           // Outstanding unpaid sessions
           const unpaidSessions = sessions.filter(s => 
@@ -913,14 +881,46 @@ export default function TodayPage() {
                   <Users className="w-5 h-5" />
                   <span className="font-bold text-sm">Clients</span>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-auto py-5 bg-gray-800 border-gray-700 hover:bg-gray-700 flex flex-col items-center gap-2 rounded-2xl"
-                  onClick={() => router.push('/calendar')}
-                >
-                  <Calendar className="w-5 h-5 text-gray-400" />
-                  <span className="font-semibold text-sm text-white">Calendar</span>
-                </Button>
+                <Dialog open={showBookDialog} onOpenChange={setShowBookDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="h-auto py-5 bg-gray-800 border-gray-700 hover:bg-gray-700 flex flex-col items-center gap-2 rounded-2xl"
+                    >
+                      <Calendar className="w-5 h-5 text-sky-400" />
+                      <span className="font-semibold text-sm text-white">Book</span>
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-gray-900 border-gray-800 max-w-xs">
+                    <DialogHeader>
+                      <DialogTitle className="text-white">Book</DialogTitle>
+                      <DialogDescription>Choose an option</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3 py-2">
+                      <Button
+                        className="w-full justify-start gap-3 h-12 bg-sky-500 hover:bg-sky-600"
+                        onClick={() => {
+                          setShowBookDialog(false);
+                          router.push('/calendar?action=book');
+                        }}
+                      >
+                        <Plus className="w-5 h-5" />
+                        <span className="font-semibold">Book Now</span>
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start gap-3 h-12 border-gray-700 hover:bg-gray-800"
+                        onClick={() => {
+                          setShowBookDialog(false);
+                          router.push('/calendar');
+                        }}
+                      >
+                        <Calendar className="w-5 h-5 text-gray-400" />
+                        <span className="font-semibold text-white">Access Calendar</span>
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
               
               {/* Recent Client Completions */}
@@ -1017,7 +1017,7 @@ export default function TodayPage() {
                           />
                         </div>
                         <p className="text-[10px] text-gray-500 mt-0.5">
-                          {def.remaining <= 0 ? 'Almost there!' : `${def.remaining.toLocaleString()} ${def.id.startsWith('volume-') ? 'kg' : ''} to go`}
+                          {def.remaining <= 0 ? 'Almost there!' : (def.progressLabel || `${def.remaining} to go`)}
                         </p>
                       </div>
                     </div>

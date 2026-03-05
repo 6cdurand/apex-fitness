@@ -401,6 +401,7 @@ function SettingsPageContent() {
   };
 
   const [bio, setBio] = useState('');
+  const [personalEmail, setPersonalEmail] = useState('');
   const [height, setHeight] = useState('');
   const [weight, setWeight] = useState('');
   const [preferredUnit, setPreferredUnit] = useState<WeightUnit>('kg');
@@ -472,6 +473,7 @@ function SettingsPageContent() {
     if (user) {
       setDisplayName(user.displayName || '');
       setBio(user.bio || '');
+      setPersonalEmail(user.contactLinks?.email || user.email || '');
       setHeight(user.height?.toString() || '');
       setWeight(user.weight?.toString() || '');
       setPreferredUnit(user.preferredUnit || 'kg');
@@ -499,6 +501,10 @@ function SettingsPageContent() {
       isPublicProfile,
       gymName: gymName || undefined,
       healthConnections,
+      contactLinks: {
+        ...user?.contactLinks,
+        email: personalEmail || undefined,
+      },
     });
     toast.success('Profile updated successfully');
   };
@@ -618,6 +624,17 @@ function SettingsPageContent() {
                 placeholder="Your display name"
                 className="bg-gray-800 border-gray-700 text-white"
               />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-gray-300">Personal Email</Label>
+              <Input
+                type="email"
+                value={personalEmail}
+                onChange={(e) => setPersonalEmail(e.target.value)}
+                placeholder="your@email.com"
+                className="bg-gray-800 border-gray-700 text-white"
+              />
+              <p className="text-[11px] text-gray-500">Used for app access links and notifications</p>
             </div>
             <div className="space-y-2">
               <Label className="text-gray-300">Bio</Label>

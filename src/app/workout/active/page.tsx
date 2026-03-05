@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName } from '@/lib/exercises';
+import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition } from '@/lib/medals';
@@ -1666,8 +1666,9 @@ export default function ActiveWorkoutPage() {
                           <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs flex items-center justify-center font-bold">
                             {idx + 1}
                           </span>
-                          <div className="flex-1">
+                          <div className="flex-1 flex items-center gap-1.5">
                             <p className="text-white font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                            <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
                           </div>
                           <div className="flex items-center gap-1">
                             <Input
@@ -1935,7 +1936,15 @@ export default function ActiveWorkoutPage() {
                           <div className="flex items-center justify-between mb-2">
                             <div>
                               <div className="flex items-center gap-1.5">
-                                <p className="font-medium text-white">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                                <p className="font-medium text-white">
+                                  {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) 
+                                    ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise') 
+                                    : (workoutExercise.exercise?.name || 'Exercise')}
+                                </p>
+                                <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                                {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) && (
+                                  <Badge className="bg-purple-500/20 text-purple-400 text-[9px] border-0 px-1.5 py-0">−KG</Badge>
+                                )}
                                 {workoutExercise.isUnilateral && (
                                   <Badge className="bg-emerald-500/20 text-emerald-400 text-[9px] border-0 px-1.5 py-0">L/R</Badge>
                                 )}
@@ -2039,7 +2048,7 @@ export default function ActiveWorkoutPage() {
                           ) : (
                             <>
                               <div className="col-span-3">PREVIOUS</div>
-                              <div className="col-span-3 text-center">KG</div>
+                              <div className="col-span-3 text-center">{isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) ? '−KG' : 'KG'}</div>
                               <div className="col-span-3 text-center">REPS</div>
                             </>
                           )}
@@ -2048,8 +2057,9 @@ export default function ActiveWorkoutPage() {
                         {/* Sets */}
                         <div className="px-4 pb-3 divide-y divide-gray-800/50">
                           {(workoutExercise.sets || []).map((set: any, idx: number) => {
+                            const isAssisted = isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name);
                             const previousDisplay = (set.previousWeight != null && set.previousReps) 
-                              ? `${set.previousWeight}kg × ${set.previousReps}` 
+                              ? `${isAssisted ? '−' : ''}${Math.abs(set.previousWeight)}kg × ${set.previousReps}` 
                               : '—';
                             const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio';
                             const setTimer = activeSetTimers[set.id];
@@ -2432,8 +2442,15 @@ export default function ActiveWorkoutPage() {
                   <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-white">{workoutExercise.exercise?.name || 'Exercise'}</h3>
+                        <h3 className="font-semibold text-white">
+                          {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name)
+                            ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise')
+                            : (workoutExercise.exercise?.name || 'Exercise')}
+                        </h3>
                         <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                        {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) && (
+                          <Badge className="bg-purple-500/20 text-purple-400 text-[9px] border-0 px-1.5 py-0">−KG</Badge>
+                        )}
                         {workoutExercise.isUnilateral && (
                           <Badge className="bg-emerald-500/20 text-emerald-400 text-[9px] border-0 px-1.5 py-0">L/R</Badge>
                         )}

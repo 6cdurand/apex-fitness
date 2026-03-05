@@ -808,12 +808,18 @@ function ClientsPageContent() {
                               </span>
                             )}
                             <Badge 
-                              className={client.status === 'active' 
-                                ? 'bg-sky-500/20 text-sky-400' 
-                                : 'bg-amber-500/20 text-amber-400'
-                              }
+                              className={`cursor-pointer transition-colors ${client.status === 'active' 
+                                ? 'bg-sky-500/20 text-sky-400 hover:bg-red-500/20 hover:text-red-400' 
+                                : 'bg-amber-500/20 text-amber-400 hover:bg-sky-500/20 hover:text-sky-400'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newStatus = client.status === 'active' ? 'paused' : 'active';
+                                updateClient(client.clientId, { status: newStatus });
+                                toast.success(`${clientUser?.displayName || 'Client'} marked as ${newStatus === 'active' ? 'Active' : 'Non-Active'}`);
+                              }}
                             >
-                              {client.status}
+                              {client.status === 'active' ? 'Active' : 'Non-Active'}
                             </Badge>
                           </div>
                           

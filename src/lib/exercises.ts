@@ -2106,6 +2106,28 @@ export function filterExercisesBySearch(
 
 // ============ EXERCISE USAGE COUNTS ============
 
+// ============ ASSISTED EXERCISE HELPERS ============
+
+// Check if an exercise is an assisted movement (weight = counterbalance, progress toward 0)
+export function isAssistedExercise(exerciseId: string, exerciseName?: string): boolean {
+  const id = exerciseId.toLowerCase();
+  const name = (exerciseName || '').toLowerCase();
+  return id.includes('assisted') || name.includes('assisted');
+}
+
+// Format assisted exercise name: "Assisted Pull-Up Machine" → "Pull-Up Machine (Assisted)"
+export function formatAssistedName(name: string): string {
+  if (!name.toLowerCase().includes('assisted')) return name;
+  const cleaned = name.replace(/\bassisted\b\s*/i, '').trim();
+  return `${cleaned} (Assisted)`;
+}
+
+// Format weight display for assisted exercises: shows negative value
+export function formatAssistedWeight(weight: number, isAssisted: boolean): string {
+  if (!isAssisted || weight === 0) return `${weight}`;
+  return `−${Math.abs(weight)}`;
+}
+
 // Count how many times each exercise has been completed across workout history
 // Pass userId for self-mode, or clientId for trainer mode
 export function getExerciseUsageCounts(

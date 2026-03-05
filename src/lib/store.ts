@@ -484,31 +484,73 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetUserId = clientId || loggedInUserId;
         const pbs = get().personalBests.filter(p => p.userId === targetUserId);
         const userWorkoutHistory = get().workoutHistory.filter(w => w.userId === targetUserId);
+
+        // Use template blocks if present, otherwise auto-generate a single Strength block
+        let blocks = (template as any).blocks;
+        if (!blocks || blocks.length === 0) {
+          const autoBlockId = `block-${Date.now()}`;
+          blocks = [{
+            id: autoBlockId,
+            type: 'work',
+            name: 'Strength',
+            exercises: (template.exercises || []).map((ex: any) => ({
+              id: ex.id || uuidv4(),
+              exerciseId: ex.exerciseId,
+              exerciseName: ex.exercise?.name || 'Exercise',
+              sets: ex.sets?.length || 3,
+              reps: ex.sets?.[0]?.reps?.toString() || '10',
+              rest: `${ex.restTimerSeconds || 90}s`,
+              repType: 'reps' as const,
+              setStyle: 'fixed' as const,
+            })),
+          }];
+        }
+
+        // Build a lookup: exerciseId → block metadata (for tagging exercises with blockId)
+        const exerciseBlockMap = new Map<string, { blockId: string; blockName: string; blockType: string }>();
+        for (const block of blocks) {
+          for (const bex of (block.exercises || [])) {
+            exerciseBlockMap.set(bex.exerciseId, {
+              blockId: block.id,
+              blockName: block.name,
+              blockType: block.type === 'work' ? 'strength' : block.type,
+            });
+          }
+        }
         
-        // Clone template exercises with previous data from last workout
-        const exercises: WorkoutExercise[] = (template.exercises || []).map(ex => {
+        // Clone template exercises with previous data and block assignment
+        const exercises: WorkoutExercise[] = (template.exercises || []).map((ex: any, exIdx: number) => {
           const pb = pbs.find(p => p.exerciseId === ex.exerciseId);
           
           // Find the most recent workout that contains this exercise
           let lastExerciseData: { weight?: number; reps?: number }[] = [];
           for (const workout of userWorkoutHistory) {
-            const matchingEx = workout.exercises?.find(e => e.exerciseId === ex.exerciseId);
+            const matchingEx = workout.exercises?.find((e: any) => e.exerciseId === ex.exerciseId);
             if (matchingEx && matchingEx.sets?.length > 0) {
               lastExerciseData = matchingEx.sets
-                .filter(s => s.completed && s.weight && s.reps)
-                .map(s => ({ weight: s.weight, reps: s.reps }));
-              break; // Use the most recent workout
+                .filter((s: any) => s.completed && s.weight && s.reps)
+                .map((s: any) => ({ weight: s.weight, reps: s.reps }));
+              break;
             }
           }
+
+          // Find which block this exercise belongs to
+          const blockMeta = exerciseBlockMap.get(ex.exerciseId) || {
+            blockId: blocks[0]?.id || `block-fallback`,
+            blockName: blocks[0]?.name || 'Strength',
+            blockType: 'strength',
+          };
           
           return {
             ...ex,
             id: uuidv4(),
-            sets: (ex.sets || []).map((s, idx) => ({
+            blockId: blockMeta.blockId,
+            blockName: blockMeta.blockName,
+            blockType: blockMeta.blockType,
+            sets: (ex.sets || []).map((s: any, idx: number) => ({
               ...s,
               id: uuidv4(),
               completed: false,
-              // Use last workout's actual results for this set, fallback to PB
               previousWeight: lastExerciseData[idx]?.weight || pb?.bestWeight,
               previousReps: lastExerciseData[idx]?.reps || pb?.bestReps,
             })),
@@ -524,10 +566,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           totalVolume: 0,
           userId: targetUserId,
           status: 'active',
-          // Mark as PT session if training a client
           assignedBy: clientId ? loggedInUserId : undefined,
-          // Store blocks data for session workouts
-          blocks: (template as any).blocks || undefined,
+          blocks,
         };
         set({ 
           activeWorkout: workout,
