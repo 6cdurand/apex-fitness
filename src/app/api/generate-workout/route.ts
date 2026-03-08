@@ -2,9 +2,8 @@ import { createGroq } from '@ai-sdk/groq';
 import { generateText } from 'ai';
 import { NextRequest, NextResponse } from 'next/server';
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY,
-});
+// NOTE: groq client is created inside POST handler so env vars
+// are read at request time (required for Netlify serverless functions)
 
 // Equipment mapping for the prompt
 const equipmentDescriptions: Record<string, string> = {
@@ -79,12 +78,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    const groqApiKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
+    const debugInfo = {
+      hasGroqKey: !!process.env.GROQ_API_KEY,
+      keyLength: process.env.GROQ_API_KEY?.length || 0,
+      keyPrefix: process.env.GROQ_API_KEY?.substring(0, 6) || 'NONE',
+      isNetlify: !!process.env.NETLIFY,
+      nodeEnv: process.env.NODE_ENV,
+      matchingKeys: Object.keys(process.env).filter(k => k.toLowerCase().includes('groq')),
+    };
+    console.log('[generate-workout] ENV check:', JSON.stringify(debugInfo));
+
+    if (!groqApiKey) {
       return NextResponse.json(
-        { error: 'GROQ_API_KEY not configured. Add it to your .env.local file.' },
+        { error: 'GROQ_API_KEY not found in runtime environment.', debug: debugInfo },
         { status: 500 }
       );
     }
+
+    const groq = createGroq({ apiKey: groqApiKey });
 
     const equipmentDesc = equipmentDescriptions[equipment] || equipment;
     const durationMinutes = duration || 60;

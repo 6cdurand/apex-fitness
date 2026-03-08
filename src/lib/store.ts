@@ -99,6 +99,7 @@ interface AuthState {
   logout: () => void;
   deleteAccount: () => void;
   updateUser: (updates: Partial<User>) => void;
+  updatePassword: (email: string, oldPassword: string, newPassword: string) => boolean;
   switchMode: (mode: UserMode) => void;
 }
 
@@ -292,6 +293,19 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, isAuthenticated: false });
       },
 
+      updatePassword: (email, oldPassword, newPassword) => {
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const hashedOld = hashPassword(oldPassword);
+        const userIdx = storedUsers.findIndex((u: any) => 
+          u.email?.toLowerCase() === email.toLowerCase() && 
+          (u.password === hashedOld || u.password === oldPassword)
+        );
+        if (userIdx === -1) return false;
+        storedUsers[userIdx].password = hashPassword(newPassword);
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        return true;
+      },
+
       updateUser: (updates) => {
         const currentUser = get().user;
         if (currentUser) {
@@ -382,6 +396,7 @@ interface WorkoutState {
 
   // Template actions
   saveAsTemplate: (name: string, description?: string) => void;
+  saveCompletedWorkoutAsTemplate: (workout: Workout, name?: string) => void;
   deleteTemplate: (templateId: string) => void;
   
   // PB actions
@@ -615,6 +630,49 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         // Sync workout to Supabase for cross-device access
         syncWorkoutToSupabase(completedWorkout);
+
+        // Auto-create calendar event + session record for PT workouts
+        if (completedWorkout.assignedBy && completedWorkout.userId !== completedWorkout.assignedBy) {
+          const trainerId = completedWorkout.assignedBy;
+          const clientId = completedWorkout.userId;
+          const todayStr = new Date().toISOString().split('T')[0];
+          const trainerStore = useTrainerStore.getState();
+          
+          // Check if a session already exists for this client today to avoid duplicates
+          const existingSession = trainerStore.sessions.find(
+            s => s.clientId === clientId && s.date === todayStr && s.status !== 'cancelled'
+          );
+          
+          if (!existingSession) {
+            // Create a new completed session record
+            trainerStore.addSession({
+              clientId,
+              trainerId,
+              date: todayStr,
+              startTime: new Date(completedWorkout.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+              endTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+              duration: Math.round((workoutTimer.seconds || 0) / 60),
+              type: 'pt_session',
+              status: 'completed',
+              notes: completedWorkout.name,
+              workoutId: completedWorkout.id,
+              paid: false,
+            });
+            
+            // Also create a calendar event for the day
+            trainerStore.addCalendarEvent({
+              title: completedWorkout.name,
+              type: 'session',
+              date: todayStr,
+              clientId,
+              status: 'completed',
+              notes: `Completed PT session`,
+            });
+          } else {
+            // Mark the existing session as completed
+            trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
+          }
+        }
 
         // deriveAll pipeline: recompute PBs, medals, ratings, volume rollups
         const workoutUserId = completedWorkout.userId;
@@ -986,6 +1044,24 @@ export const useWorkoutStore = create<WorkoutState>()(
         syncWorkoutTemplateToSupabase(template);
       },
 
+      saveCompletedWorkoutAsTemplate: (workout, name) => {
+        const userId = useAuthStore.getState().user?.id || '';
+        const template: WorkoutTemplate = {
+          id: uuidv4(),
+          name: name || workout.name,
+          description: `Saved from ${new Date(workout.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} session`,
+          exercises: JSON.parse(JSON.stringify(workout.exercises)),
+          createdBy: userId,
+          isPublic: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        set(state => ({
+          templates: [...state.templates, template],
+        }));
+        syncWorkoutTemplateToSupabase(template);
+      },
+
       deleteTemplate: (templateId) => {
         set(state => ({
           templates: state.templates.filter(t => t.id !== templateId),
@@ -1001,6 +1077,10 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { normalizeExerciseId } = require('./exerciseStats');
         const normalizedId = normalizeExerciseId(exerciseId);
         
+        // Check if this is an assisted exercise (lower weight = better)
+        const { isAssistedExercise } = require('./exercises');
+        const isAssisted = isAssistedExercise(normalizedId, exerciseId);
+        
         const existingPB = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
         
         // calculate1RM returns null if reps > 20 (doesn't count toward strength rating)
@@ -1012,15 +1092,21 @@ export const useWorkoutStore = create<WorkoutState>()(
           return existingPB || null;
         }
 
-        if (!existingPB || calculatedRM > existingPB.oneRepMax) {
+        // For assisted exercises: lower weight = better (less assistance needed)
+        // For normal exercises: higher 1RM = better
+        const isBetter = isAssisted
+          ? (!existingPB || weight < existingPB.bestWeight)
+          : (!existingPB || calculatedRM > existingPB.oneRepMax);
+
+        if (isBetter) {
           const newPB: PersonalBest = {
             id: existingPB?.id || uuidv4(),
             exerciseId: normalizedId, // Use normalized ID
             userId: targetUserId,
-            oneRepMax: calculatedRM,
+            oneRepMax: isAssisted ? weight : calculatedRM, // For assisted, store weight directly (not 1RM)
             bestWeight: weight,
             bestReps: reps,
-            bestVolume: Math.max(volume, existingPB?.bestVolume || 0),
+            bestVolume: isAssisted ? 0 : Math.max(volume, existingPB?.bestVolume || 0),
             achievedAt: new Date().toISOString(),
             workoutId,
           };
@@ -1201,9 +1287,9 @@ export const useWorkoutStore = create<WorkoutState>()(
           return newPB;
         }
 
-        // Update best volume if higher
-        if (volume > (existingPB?.bestVolume || 0)) {
-          const updatedPB = { ...existingPB, bestVolume: volume };
+        // Update best volume if higher (skip for assisted exercises)
+        if (!isAssisted && existingPB && volume > (existingPB.bestVolume || 0)) {
+          const updatedPB: PersonalBest = { ...existingPB, bestVolume: volume };
           set(state => ({
             personalBests: state.personalBests.map(p => 
               p.id === existingPB.id ? updatedPB : p
@@ -1236,6 +1322,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { workoutHistory } = get();
         const workoutToDelete = workoutHistory.find(w => w.id === workoutId);
         const userId = workoutToDelete?.userId;
+        const assignedBy = workoutToDelete?.assignedBy;
         
         // Soft delete: mark with deletedAt timestamp instead of removing
         set(state => ({
@@ -1245,6 +1332,41 @@ export const useWorkoutStore = create<WorkoutState>()(
               : w
           ),
         }));
+        
+        // If this was a trainer-assigned workout, decrement session package counts
+        if (userId && assignedBy) {
+          const trainerStore = useTrainerStore.getState();
+          const activePackage = trainerStore.sessionPackages.find(
+            p => p.clientId === userId && p.trainerId === assignedBy && p.status === 'active'
+          );
+          if (activePackage && activePackage.usedSessions > 0) {
+            const isContinuous = activePackage.remainingSessions === -1 || activePackage.totalSessions === -1;
+            const newUsed = Math.max(0, (activePackage.usedSessions || 0) - 1);
+            const newRemaining = isContinuous ? -1 : Math.min(activePackage.totalSessions, (activePackage.remainingSessions || 0) + 1);
+            useTrainerStore.setState(state => ({
+              sessionPackages: state.sessionPackages.map(p =>
+                p.id === activePackage.id
+                  ? { ...p, usedSessions: newUsed, remainingSessions: newRemaining }
+                  : p
+              ),
+            }));
+            const updated = useTrainerStore.getState().sessionPackages.find(p => p.id === activePackage.id);
+            if (updated) syncSessionPackageToSupabase(updated);
+          }
+          
+          // Also mark corresponding session record as cancelled
+          const matchingSession = trainerStore.sessions.find(
+            s => s.clientId === userId && s.trainerId === assignedBy && s.status === 'completed' &&
+            workoutToDelete?.startTime && s.date === workoutToDelete.startTime.split('T')[0]
+          );
+          if (matchingSession) {
+            useTrainerStore.setState(state => ({
+              sessions: state.sessions.map(s =>
+                s.id === matchingSession.id ? { ...s, status: 'cancelled' as any } : s
+              ),
+            }));
+          }
+        }
         
         // Silently remove associated feed post
         const { posts } = useSocialStore.getState();
@@ -1376,11 +1498,12 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       recalculatePBsForUser: (userId: string) => {
-        const workouts = get().workoutHistory.filter(w => w.userId === userId);
+        const workouts = get().workoutHistory.filter(w => w.userId === userId && !w.deletedAt);
         const newPBs: Record<string, PersonalBest> = {};
         
         // Import normalizeExerciseId for consistent exercise ID matching
         const { normalizeExerciseId } = require('./exerciseStats');
+        const { isAssistedExercise } = require('./exercises');
         
         // Go through all workouts and find best lifts for each exercise
         workouts.forEach(workout => {
@@ -1390,20 +1513,27 @@ export const useWorkoutStore = create<WorkoutState>()(
             const exerciseId = normalizeExerciseId(rawId);
             if (!exerciseId) return;
             
+            const isAssisted = isAssistedExercise(exerciseId, ex.exercise?.name);
+            
             ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(set => {
               const oneRepMax = calculate1RM(set.weight!, set.reps!);
               if (oneRepMax === null) return; // Skip if reps > 20
               
               const existing = newPBs[exerciseId];
-              if (!existing || oneRepMax > existing.oneRepMax) {
+              // For assisted: lower weight = better. For normal: higher 1RM = better.
+              const isBetter = isAssisted
+                ? (!existing || set.weight! < existing.bestWeight)
+                : (!existing || oneRepMax > existing.oneRepMax);
+              
+              if (isBetter) {
                 newPBs[exerciseId] = {
                   id: existing?.id || uuidv4(),
                   exerciseId: exerciseId, // Use normalized ID
                   userId,
                   bestWeight: set.weight!,
                   bestReps: set.reps!,
-                  oneRepMax,
-                  bestVolume: existing?.bestVolume || 0,
+                  oneRepMax: isAssisted ? set.weight! : oneRepMax,
+                  bestVolume: isAssisted ? 0 : (existing?.bestVolume || 0),
                   achievedAt: workout.endTime || workout.startTime || new Date().toISOString(),
                   workoutId: workout.id,
                 };
@@ -2004,6 +2134,8 @@ export const useTrainerStore = create<TrainerState>()(
               onboardingComplete: updatedClient.onboardingComplete,
               notes: updatedClient.notes,
               goals: updatedClient.goals,
+              totalSessions: updatedClient.totalSessions,
+              totalPaid: updatedClient.totalPaid,
             });
           });
         }
@@ -2388,6 +2520,15 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         // Sync to Supabase for cross-device access
         syncTrainerSessionToSupabase(newSession);
+        // If added as already completed, increment client lifetime counter
+        if (session.status === 'completed' && session.type === 'pt_session') {
+          const client = get().clients.find(c => c.clientId === session.clientId);
+          if (client) {
+            get().updateClient(session.clientId, {
+              totalSessions: (client.totalSessions ?? 0) + 1,
+            });
+          }
+        }
       },
 
       updateSession: (sessionId, updates) => {
@@ -2417,9 +2558,15 @@ export const useTrainerStore = create<TrainerState>()(
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
           syncTrainerSessionToSupabase(session);
-          // Update package session count (only for PT sessions)
+          // Increment client lifetime session counter (decoupled from packages)
           if (session.type === 'pt_session') {
-            // Find active package - packages stay active and keep counting
+            const client = get().clients.find(c => c.clientId === session.clientId);
+            if (client) {
+              get().updateClient(session.clientId, {
+                totalSessions: (client.totalSessions ?? 0) + 1,
+              });
+            }
+            // Also update package's own internal counter if one exists (informational only)
             const activePackage = get().sessionPackages.find(
               p => p.clientId === session.clientId && p.status === 'active'
             );
@@ -2480,12 +2627,19 @@ export const useTrainerStore = create<TrainerState>()(
               : s
           ),
         }));
-        // Sync to Supabase and still decrement from active package (no-show still uses a session)
+        // Sync to Supabase and still count no-show (no-show still uses a session)
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
           syncTrainerSessionToSupabase(session);
           if (session.type === 'pt_session') {
-            // Find active package - packages stay active and keep counting
+            // Increment client lifetime counter
+            const client = get().clients.find(c => c.clientId === session.clientId);
+            if (client) {
+              get().updateClient(session.clientId, {
+                totalSessions: (client.totalSessions ?? 0) + 1,
+              });
+            }
+            // Also update package's own internal counter if one exists
             const activePackage = get().sessionPackages.find(
               p => p.clientId === session.clientId && p.status === 'active'
             );
@@ -2537,6 +2691,8 @@ export const useTrainerStore = create<TrainerState>()(
         const newPayment: ClientPayment = {
           id: uuidv4(),
           ...payment,
+          // Ensure paidAt is set when status is 'paid'
+          paidAt: payment.paidAt || (payment.status === 'paid' ? new Date().toISOString() : undefined),
           createdAt: new Date().toISOString(),
         };
         set(state => ({

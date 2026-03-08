@@ -15,11 +15,6 @@ import {
   ResponsiveContainer,
   Area,
   AreaChart,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
 } from 'recharts';
 import { TrendingUp, Dumbbell, Calendar, Activity, ChevronRight, Target } from 'lucide-react';
 import { format, subDays, eachWeekOfInterval, subWeeks, startOfWeek, endOfWeek } from 'date-fns';
@@ -170,34 +165,6 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
       }));
   }, [workoutHistory]);
 
-  // Muscle group balance for radar chart
-  const muscleBalanceData = useMemo(() => {
-    const totals: Record<MuscleGroup, number> = {
-      chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
-    };
-    
-    workoutHistory.forEach(w => {
-      w.exercises?.forEach(ex => {
-        const exId = (ex.exerciseId || '').toLowerCase();
-        const volume = ex.sets?.reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
-        
-        if (muscleGroupExercises.chest.some(e => exId.includes(e))) totals.chest += volume;
-        else if (muscleGroupExercises.back.some(e => exId.includes(e))) totals.back += volume;
-        else if (muscleGroupExercises.legs.some(e => exId.includes(e))) totals.legs += volume;
-        else if (muscleGroupExercises.shoulders.some(e => exId.includes(e))) totals.shoulders += volume;
-        else if (muscleGroupExercises.arms.some(e => exId.includes(e))) totals.arms += volume;
-        else if (muscleGroupExercises.core.some(e => exId.includes(e))) totals.core += volume;
-      });
-    });
-    
-    const maxVolume = Math.max(...Object.values(totals), 1);
-    
-    return Object.entries(totals).map(([group, volume]) => ({
-      muscle: group.charAt(0).toUpperCase() + group.slice(1),
-      value: Math.round((volume / maxVolume) * 100),
-      fullMark: 100,
-    }));
-  }, [workoutHistory]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -428,66 +395,32 @@ export function WorkoutStatsCharts({ workoutHistory, personalBests, compact = fa
         </CardContent>
       </Card>
 
-      {/* Two Column: Frequency + Muscle Balance */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Workout Frequency */}
-        <Card className="bg-gray-900/90 border-gray-800/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-white flex items-center gap-2 text-sm">
-              <Calendar className="w-4 h-4 text-purple-400" />
-              Frequency
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3">
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dailyFrequencyData.slice(-14)}>
-                  <XAxis dataKey="shortDate" hide />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
-                    labelStyle={{ color: '#fff', fontSize: 10 }}
-                    labelFormatter={(label) => dailyFrequencyData.find(d => d.shortDate === label)?.date}
-                    formatter={(value: number) => [`${value}`, 'Workouts']}
-                  />
-                  <Bar dataKey="workouts" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <p className="text-[10px] text-gray-500 text-center mt-1">Last 14 days</p>
-          </CardContent>
-        </Card>
-
-        {/* Muscle Balance Radar */}
-        <Card className="bg-gray-900/90 border-gray-800/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-white flex items-center gap-2 text-sm">
-              <Target className="w-4 h-4 text-amber-400" />
-              Balance
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3">
-            <div className="h-28">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart data={muscleBalanceData} cx="50%" cy="50%" outerRadius="70%">
-                  <PolarGrid stroke="#374151" />
-                  <PolarAngleAxis 
-                    dataKey="muscle" 
-                    tick={{ fill: '#9ca3af', fontSize: 8 }}
-                  />
-                  <PolarRadiusAxis hide />
-                  <Radar
-                    name="Volume"
-                    dataKey="value"
-                    stroke="#f59e0b"
-                    fill="#f59e0b"
-                    fillOpacity={0.3}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Workout Frequency */}
+      <Card className="bg-gray-900/90 border-gray-800/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-white flex items-center gap-2 text-sm">
+            <Calendar className="w-4 h-4 text-purple-400" />
+            Workout Frequency
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3">
+          <div className="h-28">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dailyFrequencyData.slice(-14)}>
+                <XAxis dataKey="shortDate" hide />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#fff', fontSize: 10 }}
+                  labelFormatter={(label) => dailyFrequencyData.find(d => d.shortDate === label)?.date}
+                  formatter={(value: number) => [`${value}`, 'Workouts']}
+                />
+                <Bar dataKey="workouts" fill="#8b5cf6" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-[10px] text-gray-500 text-center mt-1">Last 14 days</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

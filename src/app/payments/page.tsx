@@ -26,7 +26,9 @@ import {
   Settings,
   Check,
   X,
-  Plus
+  Plus,
+  Pencil,
+  Search
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, parseISO, subMonths } from 'date-fns';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -47,7 +49,7 @@ interface ClientPaymentSettings {
 export default function PaymentsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { sessions, payments, clients, sessionPackages, addPayment, deletePayment, updateSessionPackage, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
+  const { sessions, payments, clients, sessionPackages, addPayment, deletePayment, updateSessionPackage, updateClient, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('clients');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
@@ -59,6 +61,10 @@ export default function PaymentsPage() {
   const [paymentSettings, setPaymentSettings] = useState<Record<string, ClientPaymentSettings>>({});
   const [editingSettings, setEditingSettings] = useState<ClientPaymentSettings | null>(null);
   const [paymentToDelete, setPaymentToDelete] = useState<any>(null);
+  // Inline edit state for Sessions/Paid boxes
+  const [searchQuery, setSearchQuery] = useState('');
+  const [editingField, setEditingField] = useState<{ clientId: string; field: 'sessions' | 'paid' } | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -70,6 +76,33 @@ export default function PaymentsPage() {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
   }, []);
+
+  // Migration: initialize totalSessions/totalPaid for existing clients that don't have them
+  useEffect(() => {
+    if (!user?.id) return;
+    clients.forEach(client => {
+      if (client.trainerId !== user.id) return;
+      if (client.totalSessions !== undefined && client.totalPaid !== undefined) return;
+      // Derive initial values from package or records
+      const clientPackages = sessionPackages.filter(p => p.clientId === client.clientId && p.trainerId === user.id);
+      const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
+      const updates: { totalSessions?: number; totalPaid?: number } = {};
+      if (client.totalSessions === undefined) {
+        updates.totalSessions = activePackage?.usedSessions ?? sessions.filter(s => 
+          s.clientId === client.clientId && s.trainerId === user.id && s.status === 'completed'
+        ).length;
+      }
+      if (client.totalPaid === undefined) {
+        updates.totalPaid = activePackage?.paidSessions ?? payments.filter(p => 
+          p.clientId === client.clientId && p.trainerId === user.id
+        ).reduce((sum, p) => sum + (p.sessionsIncluded || 1), 0);
+      }
+      if (Object.keys(updates).length > 0) {
+        updateClient(client.clientId, updates);
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, clients.length]);
 
   // Load payment settings from localStorage
   useEffect(() => {
@@ -113,15 +146,15 @@ export default function PaymentsPage() {
     );
   };
 
-  // Get client payment data with outstanding balance calculation
-  // Prioritizes data from sessionPackages, then falls back to session/payment records
+  // Get client payment data — reads from client.totalSessions/totalPaid (decoupled from packages)
   const getClientPaymentData = (clientId: string) => {
     const now = new Date();
     const monthStart = startOfMonth(now);
     const monthEnd = endOfMonth(now);
     
     const settings = paymentSettings[clientId];
-    // Get all packages for this client (could have multiple over time)
+    const client = clients.find(c => c.clientId === clientId);
+    // Get active package (optional — for display only, NOT source of truth for totals)
     const clientPackages = sessionPackages.filter(p => p.clientId === clientId && p.trainerId === user?.id);
     const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
     
@@ -132,44 +165,34 @@ export default function PaymentsPage() {
     const monthSessions = getSessionsInRange(clientId, monthStart, monthEnd);
     const totalSessionsThisMonth = monthSessions.length;
     
-    // For totals, prefer package data if available (more accurate)
+    // DECOUPLED TOTALS — read from client record, NOT from package
+    // Migration: if client doesn't have these fields yet, derive from records/package
     let totalSessionsEver: number;
     let totalPaidSessions: number;
     
-    // Check if this is an upfront payment (all sessions paid for at purchase)
-    const isUpfrontPayment = activePackage && (
-      activePackage.paymentFrequency === 'upfront' ||
-      (activePackage.paidSessions >= activePackage.totalSessions && activePackage.totalSessions > 0)
-    );
-    
-    if (activePackage) {
-      // Use package tracking - usedSessions is total done, paidSessions is total paid
+    if (client?.totalSessions !== undefined) {
+      totalSessionsEver = client.totalSessions;
+    } else if (activePackage) {
+      // Migration fallback: use package data for initial value
       totalSessionsEver = activePackage.usedSessions || 0;
-      // For upfront payments, all sessions up to totalSessions are considered paid
-      if (isUpfrontPayment) {
-        totalPaidSessions = activePackage.totalSessions; // All sessions are pre-paid
-      } else {
-        totalPaidSessions = activePackage.paidSessions || 0;
-      }
     } else {
-      // Fallback to counting session/payment records
-      const allCompletedSessions = sessions.filter(s => 
-        s.clientId === clientId && 
-        s.trainerId === user?.id &&
-        s.status === 'completed'
-      );
-      const allPayments = payments.filter(p => 
-        p.clientId === clientId && 
-        p.trainerId === user?.id
-      );
-      totalSessionsEver = allCompletedSessions.length;
-      totalPaidSessions = allPayments.length;
+      // Final fallback: count from session records
+      totalSessionsEver = sessions.filter(s => 
+        s.clientId === clientId && s.trainerId === user?.id && s.status === 'completed'
+      ).length;
     }
     
-    // For upfront payments, outstanding is 0 as long as within package limit
-    const outstandingSessions = isUpfrontPayment 
-      ? Math.max(0, totalSessionsEver - activePackage!.totalSessions) // Only outstanding if exceeded package
-      : Math.max(0, totalSessionsEver - totalPaidSessions);
+    if (client?.totalPaid !== undefined) {
+      totalPaidSessions = client.totalPaid;
+    } else if (activePackage) {
+      totalPaidSessions = activePackage.paidSessions || 0;
+    } else {
+      totalPaidSessions = payments.filter(p => 
+        p.clientId === clientId && p.trainerId === user?.id
+      ).reduce((sum, p) => sum + (p.sessionsIncluded || 1), 0);
+    }
+    
+    const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
     const outstandingAmount = outstandingSessions * pricePerSession;
     
     // Payment plan tracking
@@ -181,18 +204,17 @@ export default function PaymentsPage() {
         : paymentFrequency === 'fortnightly' ? sessionsPerWeek * 2
         : sessionsPerWeek * 4);
     
-    // Calculate sessions since last payment cycle
-    // Payment is due when: (totalSessionsEver - totalPaidSessions) >= sessionsPerCycle
     const sessionsSinceLastPayment = outstandingSessions;
     const paymentDue = sessionsSinceLastPayment >= sessionsPerCycle;
     const sessionsUntilPaymentDue = Math.max(0, sessionsPerCycle - sessionsSinceLastPayment);
     const paymentCycleAmount = sessionsPerCycle * pricePerSession;
     
-    // Package info for display
+    // Package info for display only (optional — not controlling totals)
     const packageInfo = activePackage ? {
       name: activePackage.name,
       totalSessions: activePackage.totalSessions,
       remainingSessions: activePackage.remainingSessions,
+      usedSessions: activePackage.usedSessions,
       priceTotal: activePackage.priceTotal,
       isContinuous: activePackage.isContinuous,
     } : null;
@@ -207,7 +229,6 @@ export default function PaymentsPage() {
       outstandingAmount,
       hasOutstanding: outstandingSessions > 0,
       packageInfo,
-      // Payment plan data
       sessionsPerWeek,
       paymentFrequency,
       sessionsPerCycle,
@@ -217,26 +238,33 @@ export default function PaymentsPage() {
     };
   };
 
-  // Handle confirm payment
+  // Handle confirm payment — increments client.totalPaid (decoupled from packages)
   const handleConfirmPayment = (clientId: string, sessionsToConfirm: number = 1) => {
     const data = getClientPaymentData(clientId);
     
-    // Add payment records
-    for (let i = 0; i < sessionsToConfirm; i++) {
-      addPayment({
-        clientId,
-        trainerId: user?.id || '',
-        amount: data.pricePerSession,
-        currency: 'NZD',
-        type: 'single_session',
-        status: 'paid',
-        method: data.settings?.method || 'cash',
-        description: `PT Session Payment`,
-        paidAt: paymentDate + 'T12:00:00.000Z',
+    // Create ONE payment record for all sessions
+    addPayment({
+      clientId,
+      trainerId: user?.id || '',
+      amount: data.pricePerSession * sessionsToConfirm,
+      currency: 'NZD',
+      type: sessionsToConfirm > 1 ? 'session_pack' : 'single_session',
+      sessionsIncluded: sessionsToConfirm,
+      status: 'paid',
+      method: data.settings?.method || 'cash',
+      description: `${sessionsToConfirm} PT Session${sessionsToConfirm > 1 ? 's' : ''} Payment`,
+      paidAt: paymentDate + 'T12:00:00.000Z',
+    });
+    
+    // Increment client lifetime paid counter
+    const client = clients.find(c => c.clientId === clientId);
+    if (client) {
+      updateClient(clientId, {
+        totalPaid: (client.totalPaid ?? data.totalPaidSessions) + sessionsToConfirm,
       });
     }
     
-    // Also update the session package's paidSessions count if there's an active package
+    // Also update package's own internal counter if one exists (informational only)
     const clientPackages = sessionPackages.filter(p => p.clientId === clientId && p.trainerId === user?.id);
     const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
     if (activePackage) {
@@ -294,7 +322,16 @@ export default function PaymentsPage() {
       sessionsIncluded: sessionsCount,
     });
     
-    // Update session package paid count
+    // Increment client lifetime paid counter
+    const client = clients.find(c => c.clientId === editingSettings.clientId);
+    if (client) {
+      const currentPaid = client.totalPaid ?? getClientPaymentData(editingSettings.clientId).totalPaidSessions;
+      updateClient(editingSettings.clientId, {
+        totalPaid: currentPaid + sessionsCount,
+      });
+    }
+    
+    // Also update package's own internal counter if one exists (informational only)
     const clientPackages = sessionPackages.filter(p => p.clientId === editingSettings.clientId && p.trainerId === user?.id);
     const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
     if (activePackage) {
@@ -337,6 +374,37 @@ export default function PaymentsPage() {
     
     setShowSettingsDialog(false);
     setEditingSettings(null);
+  };
+
+  // Handle inline edit save for Sessions/Paid boxes
+  const handleInlineEditSave = () => {
+    if (!editingField) return;
+    const newValue = Math.max(0, parseInt(editValue) || 0);
+    if (editingField.field === 'sessions') {
+      updateClient(editingField.clientId, { totalSessions: newValue });
+    } else {
+      updateClient(editingField.clientId, { totalPaid: newValue });
+    }
+    setEditingField(null);
+    setEditValue('');
+  };
+
+  // Handle switching a client to continuous (remove active package)
+  const handleSetContinuous = (clientId: string) => {
+    const clientPackages = sessionPackages.filter(p => p.clientId === clientId && p.trainerId === user?.id && p.status === 'active');
+    // Archive any active packages
+    clientPackages.forEach(pkg => {
+      updateSessionPackage(pkg.id, { status: 'completed' });
+    });
+    // Ensure client has totalSessions/totalPaid initialized
+    const client = clients.find(c => c.clientId === clientId);
+    const data = getClientPaymentData(clientId);
+    if (client && client.totalSessions === undefined) {
+      updateClient(clientId, { totalSessions: data.totalSessionsEver });
+    }
+    if (client && client.totalPaid === undefined) {
+      updateClient(clientId, { totalPaid: data.totalPaidSessions });
+    }
   };
 
   // Open settings dialog for a client
@@ -388,6 +456,13 @@ export default function PaymentsPage() {
       .sort((a, b) => b.outstandingAmount - a.outstandingAmount);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainerClients, paymentSettings, sessions, payments, sessionPackages, clients, allUsers]);
+
+  // Filter clients by search query
+  const filteredClients = useMemo(() => {
+    if (!searchQuery.trim()) return sortedClients;
+    const q = searchQuery.toLowerCase();
+    return sortedClients.filter(c => c.info.name.toLowerCase().includes(q));
+  }, [sortedClients, searchQuery]);
 
   // Calculate totals
   const totalOutstanding = sortedClients.reduce((sum, c) => sum + c.outstandingAmount, 0);
@@ -445,16 +520,32 @@ export default function PaymentsPage() {
           </TabsList>
 
           <TabsContent value="clients">
-            {sortedClients.length === 0 ? (
+            {/* Search Bar */}
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Input
+                placeholder="Search clients..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 bg-gray-900 border-gray-800 text-white placeholder:text-gray-500"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {filteredClients.length === 0 ? (
               <Card className="bg-gray-900 border-gray-800">
                 <CardContent className="py-8 text-center">
                   <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                  <p className="text-gray-400">No clients yet</p>
+                  <p className="text-gray-400">{searchQuery ? 'No matching clients' : 'No clients yet'}</p>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-3">
-                {sortedClients.map((client) => (
+                {filteredClients.map((client) => (
                   <Card 
                     key={client.clientId}
                     className={`bg-gray-900 border-gray-800 ${client.hasOutstanding ? 'border-l-4 border-l-amber-500' : ''}`}
@@ -472,11 +563,6 @@ export default function PaymentsPage() {
                             <button className="font-medium text-white hover:text-sky-400 transition-colors text-left" onClick={(e) => { e.stopPropagation(); router.push(`/clients/${client.clientId}`); }}>{client.info.name}</button>
                             <p className="text-xs text-gray-400">
                               ${client.pricePerSession}/session • {client.settings?.frequency?.replace('_', ' ') || 'per session'}
-                              {client.packageInfo && !client.packageInfo.isContinuous && (
-                                <span className="ml-1 text-blue-400">
-                                  ({client.packageInfo.remainingSessions}/{client.packageInfo.totalSessions} left)
-                                </span>
-                              )}
                             </p>
                           </div>
                         </div>
@@ -490,16 +576,67 @@ export default function PaymentsPage() {
                         </Button>
                       </div>
                       
-                      {/* Stats Row */}
+                      {/* Stats Row — editable Sessions & Paid */}
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
-                        <div className="bg-gray-800 rounded-lg p-2">
+                        {/* Sessions — editable */}
+                        <div className="bg-gray-800 rounded-lg p-2 relative group">
                           <p className="text-xs text-gray-400">Sessions</p>
-                          <p className="font-bold text-white">{client.totalSessionsEver}</p>
+                          {editingField?.clientId === client.clientId && editingField.field === 'sessions' ? (
+                            <div className="flex items-center justify-center gap-1 mt-0.5">
+                              <input
+                                type="number"
+                                min={0}
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEditSave(); if (e.key === 'Escape') setEditingField(null); }}
+                                autoFocus
+                                className="w-14 text-center font-bold text-white bg-gray-700 border border-sky-500 rounded px-1 py-0.5 text-sm"
+                              />
+                              <button onClick={handleInlineEditSave} className="text-sky-400 hover:text-sky-300"><Check className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingField(null)} className="text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <p className="font-bold text-white">{client.totalSessionsEver}</p>
+                              <button
+                                onClick={() => { setEditingField({ clientId: client.clientId, field: 'sessions' }); setEditValue(String(client.totalSessionsEver)); }}
+                                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-sky-400 transition-opacity"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        <div className="bg-gray-800 rounded-lg p-2">
+                        {/* Paid — editable */}
+                        <div className="bg-gray-800 rounded-lg p-2 relative group">
                           <p className="text-xs text-gray-400">Paid</p>
-                          <p className="font-bold text-sky-400">{client.totalPaidSessions}</p>
+                          {editingField?.clientId === client.clientId && editingField.field === 'paid' ? (
+                            <div className="flex items-center justify-center gap-1 mt-0.5">
+                              <input
+                                type="number"
+                                min={0}
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEditSave(); if (e.key === 'Escape') setEditingField(null); }}
+                                autoFocus
+                                className="w-14 text-center font-bold text-sky-400 bg-gray-700 border border-sky-500 rounded px-1 py-0.5 text-sm"
+                              />
+                              <button onClick={handleInlineEditSave} className="text-sky-400 hover:text-sky-300"><Check className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => setEditingField(null)} className="text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1">
+                              <p className="font-bold text-sky-400">{client.totalPaidSessions}</p>
+                              <button
+                                onClick={() => { setEditingField({ clientId: client.clientId, field: 'paid' }); setEditValue(String(client.totalPaidSessions)); }}
+                                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-sky-400 transition-opacity"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
+                        {/* Outstanding — derived, not editable */}
                         <div className="bg-gray-800 rounded-lg p-2">
                           <p className="text-xs text-gray-400">Outstanding</p>
                           <p className={`font-bold ${client.outstandingSessions > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
@@ -507,6 +644,18 @@ export default function PaymentsPage() {
                           </p>
                         </div>
                       </div>
+                      
+                      {/* Package info line (optional — display only) */}
+                      {client.packageInfo && !client.packageInfo.isContinuous && client.packageInfo.totalSessions > 0 && (
+                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-1.5 mb-3 text-xs">
+                          <span className="text-gray-400">
+                            Package: {client.packageInfo.usedSessions || 0}/{client.packageInfo.totalSessions} used
+                            {client.packageInfo.remainingSessions > 0 && (
+                              <span className="text-blue-400 ml-1">({client.packageInfo.remainingSessions} left)</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                       
                       {/* Payment Plan Status */}
                       {client.paymentFrequency !== 'per_session' && (
@@ -595,7 +744,7 @@ export default function PaymentsPage() {
                               <div>
                                 <button className="font-medium text-white text-sm hover:text-sky-400 transition-colors text-left" onClick={() => router.push(`/clients/${payment.clientId}`)}>{clientInfo.name}</button>
                                 <p className="text-xs text-gray-400">
-                                  {payment.paidAt ? format(parseISO(payment.paidAt), 'MMM d, yyyy') : 'No date'}
+                                  {(payment.paidAt || payment.createdAt) ? format(parseISO(payment.paidAt || payment.createdAt), 'MMM d, yyyy') : 'No date'}
                                 </p>
                               </div>
                             </div>
@@ -738,6 +887,28 @@ export default function PaymentsPage() {
                 </div>
               )}
               
+              {/* Switch to Continuous (no package) */}
+              {(() => {
+                const hasActivePackage = sessionPackages.some(p => p.clientId === editingSettings.clientId && p.trainerId === user?.id && p.status === 'active');
+                return hasActivePackage ? (
+                  <button
+                    onClick={() => {
+                      handleSetContinuous(editingSettings.clientId);
+                      setShowSettingsDialog(false);
+                      setEditingSettings(null);
+                    }}
+                    className="w-full text-left p-3 rounded-lg bg-gray-800 hover:bg-gray-750 transition-colors border border-gray-700"
+                  >
+                    <p className="text-sm text-white font-medium">Switch to Continuous</p>
+                    <p className="text-xs text-gray-400 mt-0.5">Remove package limit — just track total sessions & payments</p>
+                  </button>
+                ) : (
+                  <div className="w-full p-3 rounded-lg bg-gray-800/50 border border-gray-700/50">
+                    <p className="text-xs text-gray-500">Continuous mode — no active package. Sessions & payments tracked as running totals.</p>
+                  </div>
+                );
+              })()}
+
               <div className="flex flex-col gap-2 pt-2">
                 <Button
                   className="w-full bg-sky-500 hover:bg-sky-600"
@@ -869,6 +1040,15 @@ export default function PaymentsPage() {
         onConfirm={() => {
           if (paymentToDelete) {
             const sessionsToRemove = paymentToDelete.sessionsIncluded || 1;
+            // Decrement client lifetime paid counter
+            const client = clients.find(c => c.clientId === paymentToDelete.clientId);
+            if (client) {
+              const currentPaid = client.totalPaid ?? getClientPaymentData(paymentToDelete.clientId).totalPaidSessions;
+              updateClient(paymentToDelete.clientId, {
+                totalPaid: Math.max(0, currentPaid - sessionsToRemove),
+              });
+            }
+            // Also update package's internal counter if exists
             const clientPackages = sessionPackages.filter(p => p.clientId === paymentToDelete.clientId && p.trainerId === user?.id);
             const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
             if (activePackage && (activePackage.paidSessions || 0) > 0) {

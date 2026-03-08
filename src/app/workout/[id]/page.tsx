@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Workout } from '@/types';
 import { getMuscleDisplayName, calculate1RM } from '@/lib/exercises';
+import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { cn } from '@/lib/utils';
 import { 
   Clock, 
@@ -63,7 +64,7 @@ export default function WorkoutDetailPage() {
       return;
     }
 
-    const found = workoutHistory.find(w => w.id === params.id);
+    const found = workoutHistory.find(w => w.id === params.id && !w.deletedAt);
     if (found) {
       setWorkout(found);
       setNotes(found.notes || '');
@@ -457,11 +458,23 @@ export default function WorkoutDetailPage() {
                   <Card key={ex.id} className="bg-gray-900 border-gray-800">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="font-semibold text-white">{ex.exercise?.name || 'Unknown Exercise'}</h3>
-                          <p className="text-xs text-gray-500">
-                            {ex.exercise?.primaryMuscles?.map(m => getMuscleDisplayName(m)).join(', ') || ''}
-                          </p>
+                        <div className="flex items-center gap-3">
+                          {getExerciseAnimationUrl(ex.exerciseId) && (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
+                              <img
+                                src={getExerciseAnimationUrl(ex.exerciseId)}
+                                alt={ex.exercise?.name || ''}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            </div>
+                          )}
+                          <div>
+                            <h3 className="font-semibold text-white">{ex.exercise?.name || 'Unknown Exercise'}</h3>
+                            <p className="text-xs text-gray-500">
+                              {ex.exercise?.primaryMuscles?.map(m => getMuscleDisplayName(m)).join(', ') || ''}
+                            </p>
+                          </div>
                         </div>
                         {bestSet && (
                           <Badge className="bg-amber-500/20 text-amber-400">
@@ -530,13 +543,27 @@ export default function WorkoutDetailPage() {
           </section>
 
           {/* Actions */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <Button
               onClick={handleRepeat}
               className="bg-sky-500 hover:bg-sky-600"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
-              Repeat Workout
+              Repeat
+            </Button>
+            <Button
+              variant="outline"
+              className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+              onClick={() => {
+                if (workout) {
+                  const { saveCompletedWorkoutAsTemplate } = useWorkoutStore.getState();
+                  saveCompletedWorkoutAsTemplate(workout);
+                  toast.success(`Saved "${workout.name}" as template`);
+                }
+              }}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Save
             </Button>
             <Button
               variant="outline"

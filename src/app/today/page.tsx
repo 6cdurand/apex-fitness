@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useMedalStore, checkAllMedalsRetroactive } from '@/lib/store';
 import { milestoneMedals, evolvingMedals, isCloseToEvolving, getEvolutionGlowClass, getEvolutionFrameClass, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
+import { calculateFullStrengthRating, getTierColor, getTierBgColor, getTierName } from '@/lib/strengthRating';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +55,9 @@ export default function TodayPage() {
   const [showBookDialog, setShowBookDialog] = useState(false);
   const [dailySteps, setDailySteps] = useState<number>(0);
   const [stepsGoal] = useState(10000);
+  const [showDateConfirm, setShowDateConfirm] = useState(false);
+  const [pendingStartEvent, setPendingStartEvent] = useState<any>(null);
+  const { updateCalendarEvent } = useTrainerStore();
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -192,14 +196,17 @@ export default function TodayPage() {
             current = 0;
             progressLabel = '';
           }
-          const pct = Math.min(Math.round((current / target) * 100), 99);
+          const pct = Math.round((current / target) * 100);
           const remaining = Math.max(target - current, 0);
           return { ...def, current, pct, remaining, progressLabel };
         })
         .filter(m => m.pct > 0 && m.pct < 100)
         .sort((a, b) => b.pct - a.pct)
-        .slice(0, 5)
+        .slice(0, 3)
     : [];
+
+  // Strength rating — pure strength score from free weight PRs
+  const strengthRating = personalBests.length > 0 ? calculateFullStrengthRating(personalBests) : null;
 
   const allTemplates = [...defaultTemplates, ...templates];
 
@@ -487,11 +494,11 @@ export default function TodayPage() {
           const allEvents = trainerEvents
             .sort((a, b) => {
               const aDone = workoutHistory.some(w => 
-                w.userId === a.clientId && 
+                w.userId === a.clientId && !w.deletedAt &&
                 format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
               );
               const bDone = workoutHistory.some(w => 
-                w.userId === b.clientId && 
+                w.userId === b.clientId && !w.deletedAt &&
                 format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
               );
               // Upcoming first, completed below
@@ -584,10 +591,12 @@ export default function TodayPage() {
                       const clientInfo = event.clientId ? getClientDisplayInfo(event.clientId) : null;
                       const displayName = clientInfo?.displayName || (event as any).contactName || event.title || 'New Client';
                       const initial = displayName[0] || '?';
-                      const sessionDone = eventType === 'session' && workoutHistory.some(w => 
+                      const completedWorkout = eventType === 'session' ? workoutHistory.find(w => 
                         w.userId === event.clientId && 
+                        !w.deletedAt &&
                         format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
-                      );
+                      ) : null;
+                      const sessionDone = !!completedWorkout;
                       // Check if a workout has been assigned/created for this session
                       const matchedWorkout = eventType === 'session' ? sessionWorkouts.find(
                         (sw: any) => sw.eventId === event.id
@@ -648,7 +657,15 @@ export default function TodayPage() {
                                     </div>
                                   </div>
                                   {sessionDone ? (
-                                    <Badge className="bg-green-500/20 text-green-400 text-xs">
+                                    <Badge 
+                                      className="bg-green-500/20 text-green-400 text-xs cursor-pointer hover:bg-green-500/30 transition-colors"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (completedWorkout) {
+                                          router.push(`/workout/${completedWorkout.id}`);
+                                        }
+                                      }}
+                                    >
                                       <Check className="w-3 h-3 mr-1" /> Done
                                     </Badge>
                                   ) : eventType === 'consultation' ? (
@@ -676,6 +693,15 @@ export default function TodayPage() {
                                       }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        
+                                        // If not today, ask confirmation and update date
+                                        const todayDate = new Date();
+                                        if (!isDateToday(selectedDate)) {
+                                          setPendingStartEvent({ event, eventType, displayName });
+                                          setShowDateConfirm(true);
+                                          return;
+                                        }
+                                        
                                         // Try to start from assigned workout or program
                                         const sw = sessionWorkouts.find((w: any) => w.eventId === event.id);
                                         const program = event.clientId 
@@ -1028,6 +1054,8 @@ export default function TodayPage() {
           </section>
         )}
 
+        {/* Pure Strength Rating removed — available on Profile page only */}
+
         {/* Recent Workouts — user mode only */}
         {user.mode !== 'trainer' && recentWorkouts.length > 0 && (
           <section>
@@ -1129,6 +1157,106 @@ export default function TodayPage() {
             <Play className="w-4 h-4 mr-2" />
             Start Workout
           </Button>
+        </DialogContent>
+      </Dialog>
+      {/* Date Confirmation Dialog — when starting a workout on a non-today date */}
+      <Dialog open={showDateConfirm} onOpenChange={setShowDateConfirm}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Start Workout Today?</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              This session is scheduled for {pendingStartEvent ? format(selectedDate, 'EEEE, MMM d') : ''}. 
+              Start the workout now? The session date will be updated to today.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setShowDateConfirm(false);
+                setPendingStartEvent(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-sky-500 hover:bg-sky-600"
+              onClick={() => {
+                if (!pendingStartEvent) return;
+                const { event, eventType, displayName } = pendingStartEvent;
+                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                
+                // Update the calendar event date to today
+                updateCalendarEvent(event.id, { date: todayStr });
+                
+                // Also move selectedDate to today
+                setSelectedDate(new Date());
+                
+                // Now start the workout (same logic as the Start button)
+                const sw = sessionWorkouts.find((w: any) => w.eventId === event.id);
+                const program = event.clientId 
+                  ? clientPrograms.find(p => p.clientId === event.clientId && p.status === 'active')
+                  : null;
+                
+                if (sw && sw.blocks) {
+                  const exercises = sw.blocks.flatMap((block: any) =>
+                    (block.exercises || []).map((ex: any) => {
+                      const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
+                      const targetReps = typeof ex.reps === 'string' ? (parseInt(ex.reps) || 10) : (ex.reps || 10);
+                      const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
+                        id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                        setNumber: si + 1,
+                        type: 'normal',
+                        targetReps,
+                        reps: targetReps,
+                        weight: 0,
+                        completed: false,
+                      }));
+                      return {
+                        id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        exerciseId: ex.exerciseId || ex.id,
+                        exercise: {
+                          id: ex.exerciseId || ex.id,
+                          name: ex.exerciseName || ex.name || 'Exercise',
+                          category: 'strength',
+                          muscleGroups: [],
+                        },
+                        sets: setsArray,
+                        restTimerSeconds: parseInt(ex.rest) || 90,
+                        notes: ex.notes || '',
+                      };
+                    })
+                  );
+                  startFromTemplate({
+                    id: `session-${event.id}`,
+                    name: sw.name || `Session - ${displayName}`,
+                    description: `PT Session`,
+                    exercises,
+                    blocks: sw.blocks,
+                    category: 'strength',
+                    estimatedDuration: 60,
+                    isClientSession: true,
+                    clientId: event.clientId,
+                    trainerId: user?.id,
+                  } as any, event.clientId || undefined);
+                  router.push('/workout/active');
+                } else if (eventType === 'workout') {
+                  startWorkout('Solo Training');
+                  router.push('/workout/active');
+                } else {
+                  startWorkout(`Session - ${displayName}`, undefined, event.clientId || undefined);
+                  router.push('/workout/active');
+                }
+                
+                setShowDateConfirm(false);
+                setPendingStartEvent(null);
+              }}
+            >
+              <Play className="w-4 h-4 mr-2" />
+              Start Now
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </MainLayout>

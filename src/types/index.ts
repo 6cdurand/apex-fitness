@@ -425,6 +425,9 @@ export interface TrainerClient {
   exercisePreferences?: string;
   notes?: string;
   onboardingComplete: boolean;
+  // Decoupled lifetime counters — editable, not controlled by packages
+  totalSessions?: number;  // Lifetime completed sessions (manually editable)
+  totalPaid?: number;       // Lifetime paid session count (manually editable)
 }
 
 // Client Group (for group fitness classes)
@@ -542,7 +545,7 @@ export interface WeeklyReport {
 // Notifications
 export type NotificationType = 
   | 'weekly_report' | 'workout_assigned' | 'friend_request' 
-  | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like';
+  | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system';
 
 export interface Notification {
   id: string;
@@ -552,6 +555,7 @@ export interface Notification {
   message: string;
   read: boolean;
   actionUrl?: string;
+  link?: string;
   createdAt: string;
 }
 

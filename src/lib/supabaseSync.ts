@@ -1499,6 +1499,8 @@ export async function syncTrainerClientToSupabase(client: {
   onboardingComplete?: boolean;
   notes?: string;
   goals?: string[];
+  totalSessions?: number;
+  totalPaid?: number;
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) {
     console.log('[Client Sync] Supabase not configured');
@@ -1512,7 +1514,7 @@ export async function syncTrainerClientToSupabase(client: {
   });
   
   try {
-    const dbClient = {
+    const dbClient: Record<string, unknown> = {
       id: client.id,
       trainer_id: client.trainerId,
       client_id: client.clientId,
@@ -1522,6 +1524,9 @@ export async function syncTrainerClientToSupabase(client: {
       notes: client.notes || null,
       goals: client.goals || null,
     };
+    // Include lifetime counters if provided
+    if (client.totalSessions !== undefined) dbClient.total_sessions = client.totalSessions;
+    if (client.totalPaid !== undefined) dbClient.total_paid = client.totalPaid;
     
     console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
     

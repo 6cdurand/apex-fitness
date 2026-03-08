@@ -272,23 +272,22 @@ function PostCard({
       <CardContent className="p-4">
         {/* Post Header */}
         <div className="flex items-start gap-3 mb-3">
-          <Link href={post.user?.id ? `/profile/${post.user.id}` : '#'} onClick={(e) => e.stopPropagation()} className="group">
+          <button onClick={(e) => { e.stopPropagation(); onAvatarClick?.(); }} className="group">
             <Avatar className="w-11 h-11 ring-2 ring-slate-700 group-hover:ring-sky-500 transition-all duration-200">
               <AvatarImage src={post.user?.profilePhoto} />
               <AvatarFallback className="bg-slate-800 text-white font-semibold">
                 {post.user?.displayName?.[0] || post.user?.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
-          </Link>
+          </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <Link
-                href={post.user?.id ? `/profile/${post.user.id}` : '#'}
-                onClick={(e) => e.stopPropagation()}
-                className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors"
+              <button
+                onClick={(e) => { e.stopPropagation(); onAvatarClick?.(); }}
+                className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors text-left"
               >
                 {post.user?.displayName || post.user?.username}
-              </Link>
+              </button>
               {post.user?.isVerifiedTrainer && (
                 <BadgeCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
               )}

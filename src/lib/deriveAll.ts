@@ -12,6 +12,7 @@
 
 import { Workout, PersonalBest } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
+import { isAssistedExercise } from './exercises';
 
 // ============ TYPES ============
 
@@ -58,20 +59,29 @@ export function recomputePBs(
         const exerciseId = normalizeExerciseId(rawId);
         if (!exerciseId) return;
 
-        // Best set by 1RM
+        const isAssisted = isAssistedExercise(exerciseId, ex.exercise?.name);
+
+        // Best set by 1RM (or lowest weight for assisted exercises)
         ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(set => {
           const oneRepMax = calculate1RM(set.weight!, set.reps!);
           if (oneRepMax === null) return;
 
           const existing = pbMap[exerciseId];
-          if (!existing || oneRepMax > existing.oneRepMax) {
+          
+          // For assisted: lower weight = better (less assistance needed)
+          // For normal: higher 1RM = better
+          const isBetter = isAssisted
+            ? (!existing || set.weight! < existing.bestWeight)
+            : (!existing || oneRepMax > existing.oneRepMax);
+
+          if (isBetter) {
             pbMap[exerciseId] = {
               id: existing?.id || uuidv4(),
               exerciseId,
               userId,
               bestWeight: set.weight!,
               bestReps: set.reps!,
-              oneRepMax,
+              oneRepMax: isAssisted ? set.weight! : oneRepMax,
               bestVolume: 0,
               achievedAt: workout.endTime || workout.startTime || new Date().toISOString(),
               workoutId: workout.id,
@@ -79,14 +89,16 @@ export function recomputePBs(
           }
         });
 
-        // Best single-exercise volume
-        const exerciseVolume = (ex.sets || [])
-          .filter(s => s.completed && s.weight && s.reps)
-          .reduce((sum, s) => sum + (s.weight! * s.reps!), 0);
+        // Best single-exercise volume (skip for assisted — counterbalance isn't work)
+        if (!isAssisted) {
+          const exerciseVolume = (ex.sets || [])
+            .filter(s => s.completed && s.weight && s.reps)
+            .reduce((sum, s) => sum + (s.weight! * s.reps!), 0);
 
-        if (exerciseVolume > 0 && pbMap[exerciseId]) {
-          if (exerciseVolume > pbMap[exerciseId].bestVolume) {
-            pbMap[exerciseId].bestVolume = exerciseVolume;
+          if (exerciseVolume > 0 && pbMap[exerciseId]) {
+            if (exerciseVolume > pbMap[exerciseId].bestVolume) {
+              pbMap[exerciseId].bestVolume = exerciseVolume;
+            }
           }
         }
       });

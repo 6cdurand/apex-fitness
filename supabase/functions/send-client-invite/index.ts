@@ -34,7 +34,7 @@ serve(async (req) => {
       )
     }
 
-    const inviteLink = `${appUrl}/invite?token=${inviteToken}`
+    const inviteLink = `${appUrl}/auth?invite=${inviteToken}&email=${encodeURIComponent(to)}`
 
     // Build email HTML template
     const emailHtml = `

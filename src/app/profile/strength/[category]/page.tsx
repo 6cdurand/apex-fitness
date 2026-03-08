@@ -72,7 +72,7 @@ export default function StrengthCategoryPage() {
       case 'advanced': return 'bg-purple-500';
       case 'intermediate': return 'bg-blue-500';
       case 'novice': return 'bg-sky-500';
-      default: return 'bg-gray-500';
+      default: return 'bg-green-500';
     }
   };
 
@@ -80,7 +80,7 @@ export default function StrengthCategoryPage() {
     <MainLayout>
       <PageHeader 
         title={`${category.name} Strength`}
-        subtitle={`${category.icon} Enhanced View`}
+        subtitle="Enhanced View"
         showBack 
       />
 
@@ -100,7 +100,7 @@ export default function StrengthCategoryPage() {
                   </Badge>
                 </div>
               </div>
-              <div className="text-6xl">{category.icon}</div>
+              <Dumbbell className="w-10 h-10 text-gray-600" />
             </div>
             
             {/* Overall progress bar */}
@@ -189,7 +189,7 @@ export default function StrengthCategoryPage() {
                           const [min, max] = ranges[tier];
                           const isCurrentTier = tier === slice.tier;
                           const tierBgStyles: Record<StrengthTier, string> = {
-                            beginner: 'bg-slate-600',
+                            beginner: 'bg-green-600',
                             novice: 'bg-sky-600',
                             intermediate: 'bg-blue-600',
                             advanced: 'bg-purple-600',

@@ -651,96 +651,7 @@ export default function ProfilePage() {
       </div>
 
       <div className="px-5 -mt-16 pb-6 space-y-5">
-        {/* Strength Rating Card - Progress Hero (hidden in trainer mode) */}
-        {!isTrainerMode && (
-        <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-xl">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                  <Zap className="w-4 h-4 text-white" />
-                </div>
-                Strength Rating
-              </CardTitle>
-              {strengthRating && (
-                <Badge className={`${getTierBg(strengthRating.tier)} ${getTierColor(strengthRating.tier)} font-semibold px-3`}>
-                  {strengthRating.tier.charAt(0).toUpperCase() + strengthRating.tier.slice(1)}
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {strengthRating ? (
-              <div className="space-y-5">
-                {/* Overall Score - Hero moment */}
-                <div className="text-center py-6 relative">
-                  <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 to-transparent rounded-2xl" />
-                  <p className={`text-6xl font-bold ${getTierColor(strengthRating.tier)} relative`}>
-                    {strengthRating.overall}%
-                  </p>
-                  <p className="text-slate-500 text-sm mt-2 font-medium">Overall Score</p>
-                </div>
-
-                {/* Category Cards - All Active */}
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { id: 'chest', name: 'Chest', icon: '💪', score: strengthRating.categories?.chest?.totalPoints || strengthRating.push, tier: strengthRating.categories?.chest?.tier || strengthRating.tier },
-                    { id: 'back', name: 'Back', icon: '🔙', score: strengthRating.categories?.back?.totalPoints || strengthRating.pull, tier: strengthRating.categories?.back?.tier || strengthRating.tier },
-                    { id: 'shoulders', name: 'Shoulders', icon: '🎯', score: strengthRating.categories?.shoulders?.totalPoints || 0, tier: strengthRating.categories?.shoulders?.tier || 'beginner' },
-                    { id: 'legs', name: 'Legs', icon: '🦵', score: strengthRating.categories?.legs?.totalPoints || strengthRating.legs, tier: strengthRating.categories?.legs?.tier || strengthRating.tier },
-                  ].map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => router.push(`/profile/strength/${cat.id}`)}
-                      className="p-4 bg-slate-800/70 rounded-2xl text-left hover:bg-slate-800 transition-all duration-200 group border border-slate-700/50 hover:border-slate-600"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-2xl">{cat.icon}</span>
-                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-sky-400 group-hover:translate-x-0.5 transition-all" />
-                      </div>
-                      <p className="text-sm text-slate-400 font-medium">{cat.name}</p>
-                      <div className="flex items-baseline gap-2 mt-1">
-                        <span className={`text-xl font-bold ${getTierColor(cat.tier)}`}>
-                          {typeof cat.score === 'number' ? cat.score.toFixed(1) : '0'}%
-                        </span>
-                        <span className={`text-xs font-medium ${getTierColor(cat.tier)}`}>
-                          {cat.tier?.charAt(0).toUpperCase() + cat.tier?.slice(1)}
-                        </span>
-                      </div>
-                      <Progress value={Math.min(cat.score || 0, 100)} tier={cat.tier} className="h-1.5 mt-3" />
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-500 font-medium">
-                    Updated {format(new Date(strengthRating.lastUpdated), 'MMM d')}
-                  </p>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-slate-400 hover:text-sky-400 -mr-2"
-                    onClick={() => router.push('/exercises')}
-                  >
-                    <Search className="w-4 h-4 mr-1" />
-                    All Exercises
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-10">
-                <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-8 h-8 text-slate-600" />
-                </div>
-                <p className="text-slate-300 font-medium mb-1">No strength data yet</p>
-                <p className="text-sm text-slate-500">Complete workouts with key lifts to build your rating</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        )}
-
-        {/* Medals Card */}
+        {/* Achievements Card — shown ABOVE strength rating */}
         <Card className="bg-slate-900/90 border-slate-800/50 backdrop-blur-sm shadow-xl">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -810,6 +721,116 @@ export default function ProfilePage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Pure Strength Rating Card - Circular Progress (hidden in trainer mode) */}
+        {!isTrainerMode && (
+        <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-xl">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
+                Pure Strength Rating
+              </CardTitle>
+              {strengthRating && (
+                <Badge className={`${getTierBg(strengthRating.tier)} ${getTierColor(strengthRating.tier)} font-semibold px-3`}>
+                  {strengthRating.tier.charAt(0).toUpperCase() + strengthRating.tier.slice(1)}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {strengthRating ? (
+              <div className="space-y-5">
+                {/* Overall Score - Circular Ring */}
+                <div className="flex justify-center py-4">
+                  <div className="relative w-32 h-32">
+                    <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
+                      <circle cx="18" cy="18" r="15.5" fill="none" stroke="#22c55e" strokeWidth="2.5" opacity="0.2" />
+                      <circle
+                        cx="18" cy="18" r="15.5" fill="none"
+                        stroke="#22c55e"
+                        strokeWidth="2.5"
+                        strokeDasharray={`${(strengthRating.overall / 100) * 97.4} 97.4`}
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className={`text-3xl font-bold ${getTierColor(strengthRating.tier)}`}>{strengthRating.overall}%</span>
+                      <span className="text-[10px] text-slate-500 font-medium">Overall</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Category Cards - Circular Progress */}
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'chest', name: 'Chest', score: strengthRating.categories?.chest?.totalPoints || strengthRating.push, tier: strengthRating.categories?.chest?.tier || strengthRating.tier },
+                    { id: 'back', name: 'Back', score: strengthRating.categories?.back?.totalPoints || strengthRating.pull, tier: strengthRating.categories?.back?.tier || strengthRating.tier },
+                    { id: 'shoulders', name: 'Shoulders', score: strengthRating.categories?.shoulders?.totalPoints || 0, tier: strengthRating.categories?.shoulders?.tier || 'beginner' },
+                    { id: 'legs', name: 'Legs', score: strengthRating.categories?.legs?.totalPoints || strengthRating.legs, tier: strengthRating.categories?.legs?.tier || strengthRating.tier },
+                  ].map((cat) => {
+                    const strokeColor = cat.tier === 'elite' ? '#f59e0b' : cat.tier === 'advanced' ? '#a855f7' : cat.tier === 'intermediate' ? '#3b82f6' : '#0ea5e9';
+                    const scoreVal = typeof cat.score === 'number' ? cat.score : 0;
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => router.push(`/profile/strength/${cat.id}`)}
+                        className="p-4 bg-slate-800/70 rounded-2xl hover:bg-slate-800 transition-all duration-200 group border border-slate-700/50 hover:border-slate-600 flex flex-col items-center"
+                      >
+                        <div className="relative w-20 h-20 mb-2">
+                          <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#22c55e" strokeWidth="2.5" opacity="0.15" />
+                            <circle
+                              cx="18" cy="18" r="15.5" fill="none"
+                              stroke={strokeColor}
+                              strokeWidth="2.5"
+                              strokeDasharray={`${(Math.min(scoreVal, 100) / 100) * 97.4} 97.4`}
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                          <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <span className={`text-lg font-bold ${getTierColor(cat.tier)}`}>{scoreVal.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-slate-300 font-medium">{cat.name}</p>
+                        <span className={`text-[10px] font-medium ${getTierColor(cat.tier)}`}>
+                          {cat.tier?.charAt(0).toUpperCase() + cat.tier?.slice(1)}
+                        </span>
+                        <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-sky-400 mt-1 transition-colors" />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Updated {format(new Date(strengthRating.lastUpdated), 'MMM d')}
+                  </p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-slate-400 hover:text-sky-400 -mr-2"
+                    onClick={() => router.push('/exercises')}
+                  >
+                    <Search className="w-4 h-4 mr-1" />
+                    All Exercises
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-8 h-8 text-slate-600" />
+                </div>
+                <p className="text-slate-300 font-medium mb-1">No strength data yet</p>
+                <p className="text-sm text-slate-500">Complete workouts with key lifts to build your rating</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        )}
 
         {/* Personal Bests - hidden in trainer mode */}
         {!isTrainerMode && (

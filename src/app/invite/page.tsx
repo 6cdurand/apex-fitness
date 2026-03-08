@@ -24,19 +24,31 @@ function InvitePageContent() {
         return;
       }
 
-      const result = await checkInvitationByToken(token);
-      
-      if (!result.valid) {
-        setStatus(result.expired ? 'expired' : 'invalid');
-        return;
+      try {
+        const result = await checkInvitationByToken(token);
+        
+        if (result.valid && result.email) {
+          setInviteData({ trainerId: result.trainerId, email: result.email });
+          setStatus('valid');
+          return;
+        }
+      } catch (e) {
+        console.error('[Invite] Token check failed:', e);
       }
-
-      setInviteData({ trainerId: result.trainerId, email: result.email });
-      setStatus('valid');
+      
+      // If Supabase check failed or returned invalid, redirect to auth with token
+      // The auth page will show the password setup flow if email param is present
+      const emailFromUrl = searchParams.get('email');
+      if (emailFromUrl) {
+        router.replace(`/auth?invite=${token}&email=${encodeURIComponent(emailFromUrl)}`);
+      } else {
+        // No email available — redirect to auth anyway with just the token
+        router.replace(`/auth?invite=${token}`);
+      }
     };
 
     verifyToken();
-  }, [token]);
+  }, [token, router, searchParams]);
 
   const handleAcceptInvite = async () => {
     if (!token) return;
@@ -46,11 +58,12 @@ function InvitePageContent() {
       const success = await acceptInvitation(token, user.id);
       if (success) {
         setStatus('accepted');
-        setTimeout(() => router.push('/workout'), 2000);
+        setTimeout(() => router.push('/today'), 2000);
       }
     } else {
-      // User needs to sign up/login first - redirect to auth with invite token
-      router.push(`/auth?invite=${token}`);
+      // User needs to sign up/login first - redirect to auth with invite token + email
+      const emailParam = inviteData?.email ? `&email=${encodeURIComponent(inviteData.email)}` : '';
+      router.push(`/auth?invite=${token}${emailParam}`);
     }
   };
 

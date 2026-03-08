@@ -40,6 +40,8 @@ import {
   Edit,
   Package,
   Settings,
+  RotateCcw,
+  Save,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isToday, isFuture, isPast, startOfWeek, endOfWeek, isWithinInterval, addDays, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay } from 'date-fns';
 import { toast } from 'sonner';
@@ -188,6 +190,7 @@ export default function ClientDetailPage() {
   const [editPackageUsed, setEditPackageUsed] = useState('');
   const [editPackagePaid, setEditPackagePaid] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
+  const [editPackageIsContinuous, setEditPackageIsContinuous] = useState(false);
   
   // Edit payment state
   const [showEditPayment, setShowEditPayment] = useState(false);
@@ -270,6 +273,10 @@ export default function ClientDetailPage() {
   const upcomingSessions = scheduledPTSessions + calendarEvents.filter(e => 
     new Date(e.date) >= new Date() && e.type === 'session'
   ).length;
+
+  // NOTE: Auto-sync of package.usedSessions removed — client.totalSessions is now the
+  // source of truth for lifetime session counts (decoupled from packages).
+  // Package counters are only incremented when markSessionComplete/addSession runs.
 
   // Program compliance
   const compliance = useMemo(() => 
@@ -398,6 +405,14 @@ export default function ClientDetailPage() {
     
     // Update local state
     setAllUsers(updatedUsers);
+    
+    // Also persist to Supabase
+    try {
+      const { updateUserInSupabase } = await import('@/lib/supabaseSync');
+      await updateUserInSupabase(clientId, { email: editEmail } as any);
+    } catch (e) {
+      console.error('[ClientDetail] Failed to update email in Supabase:', e);
+    }
     
     // Send invitation to new email
     await handleSendInvitation(editEmail);
@@ -562,8 +577,16 @@ export default function ClientDetailPage() {
             <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
             <p className="text-sm text-gray-400">@{clientUser.username}</p>
           </div>
-          <Badge variant={clientRelation.status === 'active' ? 'default' : 'secondary'}>
-            {clientRelation.status}
+          <Badge 
+            variant={clientRelation.status === 'active' ? 'default' : 'secondary'}
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => {
+              const newStatus = clientRelation.status === 'active' ? 'paused' : 'active';
+              updateClient(clientId, { status: newStatus });
+              toast.success(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
+            }}
+          >
+            {clientRelation.status === 'active' ? 'Active' : clientRelation.status === 'paused' ? 'Paused' : clientRelation.status}
           </Badge>
           <Button 
             variant="ghost" 
@@ -646,6 +669,7 @@ export default function ClientDetailPage() {
                         setEditPackageUsed((activePackage.usedSessions || 0).toString());
                         setEditPackagePaid((activePackage.paidSessions || 0).toString());
                         setEditPackagePrice(activePackage.pricePerSession.toString());
+                        setEditPackageIsContinuous(!!activePackage.isContinuous);
                         setShowEditPackage(true);
                       }}
                     >
@@ -895,12 +919,32 @@ export default function ClientDetailPage() {
               <DialogContent className="bg-gray-900 border-gray-800">
                 <DialogHeader>
                   <DialogTitle className="text-white">
-                    {activePackage?.isContinuous ? 'Edit Continuous Training' : 'Edit Session Package'}
+                    {editPackageIsContinuous ? 'Edit Continuous Training' : 'Edit Session Package'}
                   </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
+                  {/* Package Type Toggle */}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={!editPackageIsContinuous ? 'default' : 'outline'}
+                      className={!editPackageIsContinuous ? 'flex-1 bg-sky-500 hover:bg-sky-600' : 'flex-1 border-gray-700 text-gray-400'}
+                      onClick={() => setEditPackageIsContinuous(false)}
+                    >
+                      Fixed Sessions
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editPackageIsContinuous ? 'default' : 'outline'}
+                      className={editPackageIsContinuous ? 'flex-1 bg-blue-500 hover:bg-blue-600' : 'flex-1 border-gray-700 text-gray-400'}
+                      onClick={() => setEditPackageIsContinuous(true)}
+                    >
+                      Continuous
+                    </Button>
+                  </div>
+                  
                   {/* For fixed packages: show total sessions */}
-                  {!activePackage?.isContinuous && (
+                  {!editPackageIsContinuous && (
                     <div>
                       <Label className="text-gray-300">Total Sessions in Package</Label>
                       <Input
@@ -969,7 +1013,7 @@ export default function ClientDetailPage() {
                         </span>
                       </div>
                     )}
-                    {!activePackage?.isContinuous && (
+                    {!editPackageIsContinuous && (
                       <div className="flex justify-between text-sm border-t border-gray-700 pt-2 mt-2">
                         <span className="text-gray-400">Sessions Remaining:</span>
                         <span className="text-white font-bold">
@@ -983,23 +1027,25 @@ export default function ClientDetailPage() {
                     className="w-full bg-sky-500 hover:bg-sky-600"
                     onClick={() => {
                       if (activePackage && editPackagePrice) {
-                        const newTotal = activePackage.isContinuous ? -1 : parseInt(editPackageTotal || '0');
+                        const newTotal = editPackageIsContinuous ? -1 : parseInt(editPackageTotal || '0');
                         const newUsed = parseInt(editPackageUsed || '0');
                         const newPaid = parseInt(editPackagePaid || '0');
                         const newPrice = parseFloat(editPackagePrice);
-                        const newRemaining = activePackage.isContinuous ? -1 : Math.max(0, newTotal - newUsed);
+                        const newRemaining = editPackageIsContinuous ? -1 : Math.max(0, newTotal - newUsed);
                         
                         updateSessionPackage(activePackage.id, {
                           totalSessions: newTotal,
                           usedSessions: newUsed,
                           paidSessions: newPaid,
                           pricePerSession: newPrice,
-                          priceTotal: newUsed * newPrice,
+                          priceTotal: editPackageIsContinuous ? 0 : newTotal * newPrice,
                           remainingSessions: newRemaining,
-                          status: activePackage.isContinuous ? 'active' : (newRemaining > 0 ? 'active' : 'completed'),
+                          isContinuous: editPackageIsContinuous,
+                          name: editPackageIsContinuous ? 'Continuous Training' : `${newTotal} Session Package`,
+                          status: editPackageIsContinuous ? 'active' : (newRemaining > 0 ? 'active' : 'completed'),
                         });
                         setShowEditPackage(false);
-                        toast.success('Package updated');
+                        toast.success(editPackageIsContinuous ? 'Switched to continuous training' : 'Package updated');
                       }
                     }}
                   >
@@ -1725,7 +1771,44 @@ export default function ClientDetailPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20"
+                                title="Repeat Workout"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const { startFromTemplate } = useWorkoutStore.getState();
+                                  startFromTemplate({
+                                    id: `repeat-${workout.id}-${Date.now()}`,
+                                    name: workout.name,
+                                    description: `Repeat of ${format(new Date(workout.startTime), 'MMM d')} session`,
+                                    exercises: JSON.parse(JSON.stringify(workout.exercises)),
+                                    blocks: workout.blocks ? JSON.parse(JSON.stringify(workout.blocks)) : undefined,
+                                    category: 'strength',
+                                    estimatedDuration: workout.duration ? Math.floor(workout.duration / 60) : 60,
+                                  } as any, clientId);
+                                  router.push('/workout/active');
+                                }}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                                title="Save as Template"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const { saveCompletedWorkoutAsTemplate } = useWorkoutStore.getState();
+                                  saveCompletedWorkoutAsTemplate(workout);
+                                  toast.success(`Saved "${workout.name}" as template`);
+                                }}
+                              >
+                                <Save className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-gray-400 hover:text-white"
+                                title="Edit Workout"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setEditingWorkout(workout);
@@ -1928,7 +2011,44 @@ export default function ClientDetailPage() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20"
+                              title="Repeat Workout"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const { startFromTemplate } = useWorkoutStore.getState();
+                                startFromTemplate({
+                                  id: `repeat-${workout.id}-${Date.now()}`,
+                                  name: workout.name,
+                                  description: `Repeat of ${format(new Date(workout.startTime), 'MMM d')} session`,
+                                  exercises: JSON.parse(JSON.stringify(workout.exercises)),
+                                  blocks: workout.blocks ? JSON.parse(JSON.stringify(workout.blocks)) : undefined,
+                                  category: 'strength',
+                                  estimatedDuration: workout.duration ? Math.floor(workout.duration / 60) : 60,
+                                } as any, clientId);
+                                router.push('/workout/active');
+                              }}
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20"
+                              title="Save as Template"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const { saveCompletedWorkoutAsTemplate } = useWorkoutStore.getState();
+                                saveCompletedWorkoutAsTemplate(workout);
+                                toast.success(`Saved "${workout.name}" as template`);
+                              }}
+                            >
+                              <Save className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               className="h-8 w-8 text-gray-400 hover:text-white"
+                              title="Edit Workout"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setEditingWorkout(workout);

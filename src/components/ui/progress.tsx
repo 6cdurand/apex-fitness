@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 type StrengthTier = 'beginner' | 'novice' | 'intermediate' | 'advanced' | 'elite';
 
 const tierGradients: Record<StrengthTier, string> = {
-  beginner: 'linear-gradient(to right, #64748b, #94a3b8)',       // Gray
+  beginner: 'linear-gradient(to right, #22c55e, #4ade80)',       // Green
   novice: 'linear-gradient(to right, #0ea5e9, #38bdf8)',         // Sky blue
   intermediate: 'linear-gradient(to right, #10b981, #34d399)',   // Emerald/green
   advanced: 'linear-gradient(to right, #a855f7, #c084fc)',       // Purple

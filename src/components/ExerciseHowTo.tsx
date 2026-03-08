@@ -11,6 +11,7 @@ import { normalizeExerciseId, calculateExerciseStats } from '@/lib/exerciseStats
 import { maleTierRanges, femaleTierRanges, getTierFor1RM, getProgressInTier, getTierBgColor, getTierColor } from '@/lib/strengthRating';
 import { useWorkoutStore, useAuthStore } from '@/lib/store';
 import { getExerciseVideoUrl } from '@/lib/exerciseVideos';
+import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { Info, Dumbbell, Target, AlertTriangle, Trophy, TrendingUp, Calendar, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -47,7 +48,8 @@ export function ExerciseHowTo({
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
 
-  // Video URL for this exercise
+  // Animation GIF and video URL for this exercise
+  const animationUrl = getExerciseAnimationUrl(normalizedId) || getExerciseAnimationUrl(exerciseId);
   const videoUrl = getExerciseVideoUrl(normalizedId);
 
   // Exercise stats (only computed when dialog is open)
@@ -146,8 +148,17 @@ export function ExerciseHowTo({
           </DialogHeader>
 
           <div className="space-y-5 pb-2">
-            {/* Video Clip or Image */}
-            {videoUrl ? (
+            {/* Animation GIF, Video Clip, or Image */}
+            {animationUrl ? (
+              <div className="rounded-xl overflow-hidden bg-black aspect-video">
+                <img
+                  src={animationUrl}
+                  alt={`${name} animation`}
+                  className="w-full h-full object-contain"
+                  loading="lazy"
+                />
+              </div>
+            ) : videoUrl ? (
               <div className="rounded-xl overflow-hidden bg-black aspect-video">
                 <img
                   src={videoUrl}

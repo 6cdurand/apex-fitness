@@ -2,7 +2,7 @@
 
 import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore, useSocialStore } from '@/lib/store';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { calculateFullStrengthRating } from '@/lib/strengthRating';
@@ -327,6 +327,15 @@ function ClientsPageContent() {
     setNewClientPhone('');
     setNewClientGender('other');
     setNewClientPassword('client123');
+    // Create notification to set up session package
+    useSocialStore.getState().addNotification({
+      userId: user?.id || '',
+      type: 'system',
+      title: 'Set up session package',
+      message: `Set up a session package for ${newClientName}`,
+      link: `/clients/${newClientId}`,
+    });
+    
     toast.success(newClientEmail.trim() 
       ? `Added ${newClientName} as a client. Login: ${clientEmail} / ${newClientPassword}`
       : `Added ${newClientName} as a client (no email — add later)`);
@@ -1285,6 +1294,7 @@ function ClientsPageContent() {
       <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
         <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
           {profileClientId && (() => {
+            try {
             const clientUser = allUsers.find(u => u.id === profileClientId);
             const client = clients.find(c => c.clientId === profileClientId);
             const sessions = getSessionsForClient(profileClientId);
@@ -1300,9 +1310,14 @@ function ClientsPageContent() {
             
             // Calculate REAL strength rating from client's actual PBs
             const isMale = clientUser?.gender === 'male';
-            const realStrengthRating = clientPBs.length > 0 
-              ? calculateFullStrengthRating(clientPBs, isMale)
-              : null;
+            let realStrengthRating = null;
+            try {
+              realStrengthRating = clientPBs.length > 0 
+                ? calculateFullStrengthRating(clientPBs, isMale)
+                : null;
+            } catch (e) {
+              console.error('Error calculating strength rating:', e);
+            }
             
             // Get actual lift scores or show 0 if no data
             const benchPB = clientPBs.find(pb => 
@@ -1460,6 +1475,23 @@ function ClientsPageContent() {
                 </Button>
               </div>
             );
+            } catch (err) {
+              console.error('Error rendering profile card:', err);
+              return (
+                <div className="text-center py-8">
+                  <p className="text-gray-400 text-sm">Unable to load profile</p>
+                  <Button 
+                    className="mt-3 bg-rose-500 hover:bg-rose-600"
+                    onClick={() => {
+                      setShowProfileCard(false);
+                      router.push(`/clients/${profileClientId}`);
+                    }}
+                  >
+                    View Full Profile
+                  </Button>
+                </div>
+              );
+            }
           })()}
         </DialogContent>
       </Dialog>

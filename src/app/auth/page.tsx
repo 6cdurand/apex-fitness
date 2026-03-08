@@ -26,24 +26,51 @@ function AuthPageContent() {
   const inviteToken = searchParams.get('invite');
   const modeParam = searchParams.get('mode');
   
-  const { login, register, isLoading, user } = useAuthStore();
+  const { login, register, isLoading, user, updatePassword } = useAuthStore();
   const { loadFromSupabase } = useTrainerStore();
   
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(modeParam === 'login' ? 'login' : 'login');
   const [step, setStep] = useState<Step>('credentials');
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  const [showSetupPassword, setShowSetupPassword] = useState(false);
+  const [setupNewPassword, setSetupNewPassword] = useState('');
+  const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
+  const [isSettingUp, setIsSettingUp] = useState(false);
   
   // Check invite token and pre-fill email
+  const emailParam = searchParams.get('email');
   useEffect(() => {
     if (inviteToken) {
+      // Try Supabase lookup first
       checkInvitationByToken(inviteToken).then((result) => {
         if (result.valid && result.email) {
           setInviteEmail(result.email);
           setLoginEmail(result.email);
+          setShowSetupPassword(true);
+        } else if (emailParam) {
+          // Fallback: use email from URL param (always works, even without Supabase table)
+          const decodedEmail = decodeURIComponent(emailParam);
+          setInviteEmail(decodedEmail);
+          setLoginEmail(decodedEmail);
+          setShowSetupPassword(true);
+        }
+      }).catch(() => {
+        // If Supabase check fails entirely, use email param
+        if (emailParam) {
+          const decodedEmail = decodeURIComponent(emailParam);
+          setInviteEmail(decodedEmail);
+          setLoginEmail(decodedEmail);
+          setShowSetupPassword(true);
         }
       });
+    } else if (emailParam) {
+      // No invite token but email param present — still show setup
+      const decodedEmail = decodeURIComponent(emailParam);
+      setInviteEmail(decodedEmail);
+      setLoginEmail(decodedEmail);
+      setShowSetupPassword(true);
     }
-  }, [inviteToken]);
+  }, [inviteToken, emailParam]);
   
   // Login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -68,6 +95,51 @@ function AuthPageContent() {
     calendar: false,
     stripe: false,
   });
+
+  // Handle client password setup from invite link
+  const handleSetupPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteEmail) return;
+    
+    if (setupNewPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    if (setupNewPassword !== setupConfirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    setIsSettingUp(true);
+    
+    // First try to login with the default password (client123)
+    const defaultPassword = 'client123';
+    const loginSuccess = await login(inviteEmail, defaultPassword);
+    
+    if (loginSuccess) {
+      // Update the password to the new one
+      const updated = updatePassword(inviteEmail, defaultPassword, setupNewPassword);
+      if (updated) {
+        // Accept the invite
+        if (inviteToken) {
+          const loggedInUser = useAuthStore.getState().user;
+          if (loggedInUser) {
+            await acceptInvitation(inviteToken, loggedInUser.id);
+          }
+        }
+        toast.success('Password set! Welcome to Catalift!');
+        router.push('/today');
+        setIsSettingUp(false);
+        return;
+      }
+    }
+    
+    // If default password didn't work, maybe they already set a password
+    // Show the regular login form with pre-filled email
+    setShowSetupPassword(false);
+    toast.info('Please sign in with your existing password');
+    setIsSettingUp(false);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -229,6 +301,74 @@ function AuthPageContent() {
       {/* Auth Card */}
       <div className="flex-1 px-5 py-8 -mt-6">
         <Card className="max-w-md mx-auto bg-slate-900/95 border-slate-800/50 shadow-2xl shadow-black/50 backdrop-blur-sm rounded-2xl">
+          {/* Password Setup Flow — shown when client follows invite link */}
+          {showSetupPassword && inviteEmail ? (
+            <>
+              <CardHeader>
+                <div className="mb-4 p-3 bg-sky-500/10 border border-sky-500/30 rounded-lg">
+                  <p className="text-sky-400 text-sm font-medium">🎉 Welcome to Catalift!</p>
+                  <p className="text-gray-400 text-xs mt-1">Your trainer has invited you. Set up your password to get started.</p>
+                </div>
+                <CardTitle className="text-white">Set Up Your Account</CardTitle>
+                <CardDescription>Create a password to access your training</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSetupPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Email</Label>
+                    <Input
+                      type="email"
+                      value={inviteEmail}
+                      disabled
+                      className="bg-gray-800 border-gray-700 text-gray-400"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Create Password</Label>
+                    <Input
+                      type="password"
+                      placeholder="At least 6 characters"
+                      value={setupNewPassword}
+                      onChange={(e) => setSetupNewPassword(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Confirm Password</Label>
+                    <Input
+                      type="password"
+                      placeholder="Re-enter your password"
+                      value={setupConfirmPassword}
+                      onChange={(e) => setSetupConfirmPassword(e.target.value)}
+                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      required
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                    disabled={isSettingUp}
+                  >
+                    {isSettingUp ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Setting up...</>
+                    ) : (
+                      'Create Account & Sign In'
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-gray-500 hover:text-gray-300 text-xs"
+                    onClick={() => setShowSetupPassword(false)}
+                  >
+                    Already have a password? Sign in instead
+                  </Button>
+                </form>
+              </CardContent>
+            </>
+          ) : (
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'login' | 'register'); setStep('credentials'); }}>
             <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 rounded-xl p-1">
               <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
@@ -662,6 +802,7 @@ function AuthPageContent() {
               </CardContent>
             </TabsContent>
           </Tabs>
+          )}
         </Card>
       </div>
     </div>

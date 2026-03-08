@@ -16,6 +16,7 @@ import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition } from '@/lib/medals';
 import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
+import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { Exercise, WorkoutSet } from '@/types';
 import { 
   Plus, 
@@ -2226,6 +2227,14 @@ export default function ActiveWorkoutPage() {
                                   )}
                                 </div>
                               </div>
+                              {/* Per-set volume display */}
+                              {set.completed && set.weight && set.reps && !isTimedSet && (
+                                <div className="flex items-center gap-2 ml-10 mt-0.5">
+                                  <span className="text-[10px] text-gray-500">
+                                    vol: {(set.weight * set.reps).toFixed(0)}kg
+                                  </span>
+                                </div>
+                              )}
                               {/* Drop set additional weights */}
                               {set.type === 'dropset' && set.drops?.map((drop: any, dropIdx: number) => (
                                 <div key={drop.id} className="flex items-center gap-2 text-sm ml-10 pl-2 border-l-2 border-purple-500/30">
@@ -2716,6 +2725,16 @@ export default function ActiveWorkoutPage() {
                         isSelected ? "bg-orange-500 border-orange-500" : "border-gray-600"
                       )}>
                         {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </div>
+                    )}
+                    {getExerciseAnimationUrl(exercise.id) && (
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0 mr-2">
+                        <img
+                          src={getExerciseAnimationUrl(exercise.id)}
+                          alt={exercise.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
                       </div>
                     )}
                     <div className="text-left flex-1">
