@@ -1,17 +1,6 @@
 [build]
-  command = "npm run build"
+  command = "echo GROQ_API_KEY=$GROQ_API_KEY > .env.production && echo NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL >> .env.production && echo NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY >> .env.production && npm run build"
   publish = ".next"
-
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"
-
-# Force AI endpoint to standalone function (Next.js plugin doesn't pass env vars)
-[[redirects]]
-  from = "/api/generate-workout"
-  to = "/.netlify/functions/generate-workout"
-  status = 200
-  force = true
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
