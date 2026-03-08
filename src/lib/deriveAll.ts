@@ -311,6 +311,9 @@ export function checkAllMedals(
     });
 
     const checkWeight = (ids: string[], thresholds: [number, string][]) => {
+      // Only check if the user has actually done at least one of these exercises
+      const hasExercise = ids.some(id => id in maxWeights);
+      if (!hasExercise) return;
       const maxW = Math.max(...ids.map(id => maxWeights[id] || 0));
       thresholds.forEach(([threshold, medalId]) => {
         if (maxW >= threshold) award(medalId);

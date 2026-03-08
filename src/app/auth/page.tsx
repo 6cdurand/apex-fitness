@@ -15,7 +15,7 @@ import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail, Heart, S
 import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
-import { acceptInvitation, checkInvitationByToken } from '@/lib/supabaseSync';
+import { acceptInvitation, checkInvitationByToken, updatePasswordInSupabase } from '@/lib/supabaseSync';
 import { Loader2 } from 'lucide-react';
 
 type Step = 'credentials' | 'profile' | 'goals' | 'connections';
@@ -120,6 +120,8 @@ function AuthPageContent() {
       // Update the password to the new one
       const updated = updatePassword(inviteEmail, defaultPassword, setupNewPassword);
       if (updated) {
+        // Also sync new password to Supabase for cross-device login
+        await updatePasswordInSupabase(inviteEmail, setupNewPassword);
         // Accept the invite
         if (inviteToken) {
           const loggedInUser = useAuthStore.getState().user;
@@ -134,10 +136,41 @@ function AuthPageContent() {
       }
     }
     
-    // If default password didn't work, maybe they already set a password
-    // Show the regular login form with pre-filled email
+    // Default password didn't work — try login with the new password (maybe already changed)
+    const retrySuccess = await login(inviteEmail, setupNewPassword);
+    if (retrySuccess) {
+      if (inviteToken) {
+        const loggedInUser = useAuthStore.getState().user;
+        if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
+      }
+      toast.success('Welcome back to Catalift!');
+      router.push('/today');
+      setIsSettingUp(false);
+      return;
+    }
+    
+    // Account doesn't exist at all — register as new user with their chosen password
+    const registered = await register({
+      email: inviteEmail,
+      password: setupNewPassword,
+      username: inviteEmail.split('@')[0],
+      displayName: inviteEmail.split('@')[0],
+    });
+    
+    if (registered) {
+      if (inviteToken) {
+        const loggedInUser = useAuthStore.getState().user;
+        if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
+      }
+      toast.success('Account created! Welcome to Catalift!');
+      router.push('/today');
+      setIsSettingUp(false);
+      return;
+    }
+    
+    // All else failed — show login form
     setShowSetupPassword(false);
-    toast.info('Please sign in with your existing password');
+    toast.info('Please sign in or create an account');
     setIsSettingUp(false);
   };
 

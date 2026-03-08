@@ -136,6 +136,32 @@ export async function registerUserToSupabase(user: User, password: string): Prom
   }
 }
 
+// Update password hash in Supabase (for cross-device login after password change)
+export async function updatePasswordInSupabase(email: string, newPassword: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  const emailLower = email.toLowerCase().trim();
+  const newHash = simpleHash(newPassword);
+  
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ password_hash: newHash })
+      .eq('email', emailLower);
+    
+    if (error) {
+      console.error('[Supabase] ❌ Password update failed:', error.message);
+      return false;
+    }
+    
+    console.log('[Supabase] ✅ Password updated for:', emailLower);
+    return true;
+  } catch (e: any) {
+    console.error('[Supabase] ❌ Password update exception:', e?.message);
+    return false;
+  }
+}
+
 // Login user from Supabase (cross-device)
 export async function loginFromSupabase(email: string, password: string): Promise<User | null> {
   if (!isSupabaseConfigured()) {
