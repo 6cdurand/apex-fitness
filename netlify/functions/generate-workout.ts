@@ -293,7 +293,4 @@ export default async (req: Request) => {
   }
 };
 
-// This config maps the function to the same path the Next.js route used
-export const config = {
-  path: "/api/generate-workout",
-};
+// Route mapping is handled via netlify.toml redirects to bypass Next.js plugin catch-all
