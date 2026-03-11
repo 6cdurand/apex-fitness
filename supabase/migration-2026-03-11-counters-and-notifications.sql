@@ -11,7 +11,10 @@ ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS total_paid INTEGER DEFAULT 
 ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS total_sessions_offset INTEGER DEFAULT 0;
 ALTER TABLE trainer_clients ADD COLUMN IF NOT EXISTS total_paid_offset INTEGER DEFAULT 0;
 
--- 2. NOTIFICATIONS TABLE
+-- 2. WORKOUTS: Ensure deleted_at column exists for soft deletes
+ALTER TABLE workouts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- 3. NOTIFICATIONS TABLE
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id TEXT NOT NULL,

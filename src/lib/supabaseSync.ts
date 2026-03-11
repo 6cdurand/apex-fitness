@@ -458,7 +458,7 @@ export function isSupabaseConfigured(): boolean {
 
 // Convert local workout format to Supabase format
 function toDbWorkout(workout: Workout): any {
-  return {
+  const dbWorkout: any = {
     id: workout.id,
     user_id: workout.userId,
     name: workout.name,
@@ -471,8 +471,12 @@ function toDbWorkout(workout: Workout): any {
     status: workout.status || 'completed',
     assigned_by: workout.assignedBy || null,  // Trainer ID for PT sessions
     template_id: workout.templateId || null,
-    deleted_at: workout.deletedAt || null,
   };
+  // Only include deleted_at when set — avoids upsert failure if column doesn't exist yet
+  if (workout.deletedAt) {
+    dbWorkout.deleted_at = workout.deletedAt;
+  }
+  return dbWorkout;
 }
 
 // Convert Supabase workout format to local format
