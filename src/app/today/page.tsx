@@ -32,7 +32,6 @@ import {
   Users,
   DollarSign,
   Check,
-  AlertCircle,
   CalendarRange,
   Edit
 } from 'lucide-react';
@@ -230,10 +229,12 @@ export default function TodayPage() {
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
     .slice(0, 3);
 
-  // Check if day had workouts (for calendar dots)
+  // Check if day had workouts or trainer events (for calendar dots)
   const dayHasWorkout = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
-    return userWorkouts.some(w => format(new Date(w.startTime), 'yyyy-MM-dd') === dateStr);
+    const hasPersonalWorkout = userWorkouts.some(w => format(new Date(w.startTime), 'yyyy-MM-dd') === dateStr);
+    const hasTrainerEvent = user.isTrainer && getEventsForDate(dateStr).some(e => e.trainerId === user.id && e.status !== 'cancelled');
+    return hasPersonalWorkout || hasTrainerEvent;
   };
 
   return (
@@ -374,33 +375,7 @@ export default function TodayPage() {
           </section>
         )}
 
-        {/* Medals Earned Today */}
-        {user.mode !== 'trainer' && isToday && (() => {
-          const todayMedals = medals.filter(m => 
-            m.userId === user.id && m.earned && m.earnedAt && 
-            format(new Date(m.earnedAt), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')
-          );
-          if (todayMedals.length === 0) return null;
-          return (
-            <section>
-              <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-amber-400" />
-                Earned Today
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {todayMedals.map(medal => (
-                  <Badge 
-                    key={medal.id} 
-                    className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs cursor-pointer"
-                    onClick={() => router.push('/medals')}
-                  >
-                    {medal.icon} {medal.name}
-                  </Badge>
-                ))}
-              </div>
-            </section>
-          );
-        })()}
+        {/* Medals Earned Today — removed per user request */}
 
         {/* Quick Start */}
         {user.mode !== 'trainer' && (
@@ -457,35 +432,8 @@ export default function TodayPage() {
           </div>
         )}
 
-        {/* Scheduled Sessions (Client Mode) — positioned below Start Workout */}
-        {user.mode !== 'trainer' && clientScheduledSessions.length > 0 && (
-          <section>
-            <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              Upcoming Sessions
-            </h2>
-            <div className="space-y-2">
-              {clientScheduledSessions.slice(0, 3).map((session) => (
-                <Card key={session.id} className="bg-gray-900 border-gray-800">
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div>
-                      <p className="font-medium text-white text-sm">{session.title || 'Training Session'}</p>
-                      <p className="text-xs text-gray-500">
-                        {format(new Date(session.date), 'EEE, MMM d')} • {session.startTime}
-                      </p>
-                    </div>
-                    {session.date === today && (
-                      <Badge className="bg-rose-500/20 text-rose-400 text-xs">Today</Badge>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Trainer Mode: Unified Timeline — all events sorted by time */}
-        {user.mode === 'trainer' && (() => {
+        {/* Unified Timeline — shows in BOTH user and trainer mode for trainer users */}
+        {user.isTrainer && (() => {
           const trainerEvents = getEventsForDate(selectedDateStr).filter(e => 
             e.trainerId === user.id && e.status !== 'cancelled'
           );
@@ -507,11 +455,6 @@ export default function TodayPage() {
               return (a.startTime || '').localeCompare(b.startTime || '');
             });
           
-          // Outstanding unpaid sessions
-          const unpaidSessions = sessions.filter(s => 
-            s.trainerId === user.id && s.status === 'completed' && !s.paid
-          );
-          
           // Recent client completions
           const recentClientWorkouts = workoutHistory
             .filter(w => w.assignedBy === user.id && w.status === 'completed')
@@ -530,47 +473,6 @@ export default function TodayPage() {
           
           return (
             <>
-              {/* Unpaid Sessions Alert */}
-              {unpaidSessions.length > 0 && (
-                <section className="mb-4">
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-amber-400" />
-                        <span className="text-sm font-medium text-amber-400">
-                          {unpaidSessions.length} unpaid session{unpaidSessions.length > 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <span className="text-xs text-amber-400/70">
-                        ${unpaidSessions.reduce((sum, s) => {
-                          const pkg = payments.find(p => p.clientId === s.clientId && p.status === 'pending');
-                          return sum + (pkg?.amount || 0);
-                        }, 0)} outstanding
-                      </span>
-                    </div>
-                    <div className="mt-2 space-y-1">
-                      {unpaidSessions.slice(0, 3).map(s => {
-                        const clientInfo = s.clientId ? getClientDisplayInfo(s.clientId) : null;
-                        return (
-                          <div key={s.id} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-300">{clientInfo?.displayName || 'Client'} — {s.date}</span>
-                            <button 
-                              onClick={() => router.push(`/clients/${s.clientId}`)}
-                              className="text-sky-400 hover:text-sky-300"
-                            >
-                              View
-                            </button>
-                          </div>
-                        );
-                      })}
-                      {unpaidSessions.length > 3 && (
-                        <p className="text-[10px] text-gray-500">+{unpaidSessions.length - 3} more</p>
-                      )}
-                    </div>
-                  </div>
-                </section>
-              )}
-
               {/* Unified Session Timeline */}
               <section>
                 <div className="flex items-center justify-between mb-3">
@@ -790,7 +692,7 @@ export default function TodayPage() {
                                     </Button>
                                   )}
                                 </div>
-                                {/* Bottom row for sessions: workout status + create workout */}
+                                {/* Bottom row for sessions: workout status + create workout (trainer mode only) */}
                                 {eventType === 'session' && !sessionDone && (
                                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-800">
                                     <p className="text-xs text-gray-500 flex items-center gap-1">
@@ -826,7 +728,7 @@ export default function TodayPage() {
                                     )}
                                   </div>
                                 )}
-                                {/* Consultation: link to onboarding */}
+                                {/* Consultation: link to onboarding (trainer mode only) */}
                                 {eventType === 'consultation' && (
                                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-800">
                                     <p className="text-xs text-emerald-400/70 flex items-center gap-1">
@@ -869,37 +771,8 @@ export default function TodayPage() {
                 )}
               </section>
 
-              {/* Outstanding Payments */}
-              {unpaidSessions.length > 0 && (
-                <section>
-                  <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
-                    <DollarSign className="w-4 h-4 text-amber-400" />
-                    Outstanding Payments
-                    <Badge className="bg-amber-500/20 text-amber-400 text-xs">{unpaidSessions.length}</Badge>
-                  </h2>
-                  <Card className="bg-amber-500/5 border-amber-500/20">
-                    <CardContent className="p-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 text-amber-400" />
-                          <span className="text-sm text-amber-300">{unpaidSessions.length} unpaid session{unpaidSessions.length !== 1 ? 's' : ''}</span>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
-                          onClick={() => router.push('/payments')}
-                        >
-                          View
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </section>
-              )}
-
-              {/* Quick Actions */}
-              <div className="grid grid-cols-2 gap-3">
+              {/* Quick Actions — trainer mode only */}
+              {user.mode === 'trainer' && <div className="grid grid-cols-2 gap-3">
                 <Button
                   className="h-auto py-5 bg-gradient-to-br from-rose-500 to-rose-600 hover:from-rose-400 hover:to-rose-500 flex flex-col items-center gap-2 rounded-2xl shadow-lg shadow-rose-500/20"
                   onClick={() => router.push('/clients')}
@@ -947,7 +820,7 @@ export default function TodayPage() {
                     </div>
                   </DialogContent>
                 </Dialog>
-              </div>
+              </div>}
               
               {/* Recent Client Completions */}
               {recentClientWorkouts.length > 0 && (

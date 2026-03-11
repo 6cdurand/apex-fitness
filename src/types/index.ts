@@ -194,6 +194,7 @@ export interface SavedBlock {
   circuitRounds?: number;
   circuitDuration?: number; // seconds for AMRAP/For Time
   circuitRestBetween?: number; // seconds between rounds
+  folder?: string; // Custom folder for organizing blocks (e.g. "Jason's workouts")
   createdAt: string;
   updatedAt: string;
 }
@@ -426,8 +427,11 @@ export interface TrainerClient {
   notes?: string;
   onboardingComplete: boolean;
   // Decoupled lifetime counters — editable, not controlled by packages
-  totalSessions?: number;  // Lifetime completed sessions (manually editable)
-  totalPaid?: number;       // Lifetime paid session count (manually editable)
+  totalSessions?: number;  // DEPRECATED — sessions now derived from completed workouts + offset
+  totalPaid?: number;       // Stored counter — only changes on explicit user action (log payment, inline edit, paid toggle)
+  // Manual adjustment offset for sessions (derived from workouts)
+  totalSessionsOffset?: number;
+  totalPaidOffset?: number; // DEPRECATED — no longer used, kept for backwards compat
 }
 
 // Client Group (for group fitness classes)

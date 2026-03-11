@@ -333,7 +333,7 @@ function ClientsPageContent() {
       type: 'system',
       title: 'Set up session package',
       message: `Set up a session package for ${newClientName}`,
-      link: `/clients/${newClientId}`,
+      actionUrl: `/clients/${newClientId}`,
     });
     
     toast.success(newClientEmail.trim() 
@@ -791,7 +791,7 @@ function ClientsPageContent() {
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
-                        <Link href={`/profile/${client.clientId}`} onClick={(e) => e.stopPropagation()}>
+                        <button onClick={(e) => { e.stopPropagation(); setProfileClientId(client.clientId); setShowProfileCard(true); }}>
                           <Avatar 
                             className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all"
                           >
@@ -800,7 +800,7 @@ function ClientsPageContent() {
                               {clientUser?.displayName?.[0] || clientUser?.username?.[0] || '?'}
                             </AvatarFallback>
                           </Avatar>
-                        </Link>
+                        </button>
                         
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">

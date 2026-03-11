@@ -235,7 +235,7 @@ export const useAuthStore = create<AuthState>()(
         }
 
         const newUser: User = {
-          id: uuidv4(),
+          id: userData.id || uuidv4(),
           email: userData.email || '',
           username: userData.username || '',
           displayName: userData.displayName || userData.username || '',
@@ -1355,6 +1355,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           }
           
           // Also mark corresponding session record as cancelled
+          // totalSessions is now DERIVED — cancelling the session record automatically reduces the count
           const matchingSession = trainerStore.sessions.find(
             s => s.clientId === userId && s.trainerId === assignedBy && s.status === 'completed' &&
             workoutToDelete?.startTime && s.date === workoutToDelete.startTime.split('T')[0]
@@ -1366,6 +1367,12 @@ export const useWorkoutStore = create<WorkoutState>()(
               ),
             }));
           }
+        }
+        
+        // Sync soft delete to Supabase
+        const deletedWorkout = get().workoutHistory.find(w => w.id === workoutId);
+        if (deletedWorkout) {
+          syncWorkoutToSupabase(deletedWorkout);
         }
         
         // Silently remove associated feed post
@@ -1477,24 +1484,41 @@ export const useWorkoutStore = create<WorkoutState>()(
         }
       },
 
-      // Exercise notes - persist across workouts, keyed by userId:exerciseId
+      // Exercise notes - persist across workouts
+      // PT sessions: keyed by trainerId:clientId:exerciseId (private to trainer per client)
+      // Personal workouts: keyed by userId:exerciseId
       getExerciseNotes: (exerciseId: string) => {
-        const userId = get().currentClientId || useAuthStore.getState().user?.id || '';
-        const key = `${userId}:${exerciseId}`;
+        const authUser = useAuthStore.getState().user;
+        const userId = authUser?.id || '';
+        const clientId = get().currentClientId;
+        // PT session: trainer is logged in, working with a client
+        if (clientId && clientId !== userId) {
+          const trainerKey = `${userId}:${clientId}:${exerciseId}`;
+          return get().exerciseNotes[trainerKey] || '';
+        }
+        // Personal workout or client's own session
+        const personalKey = `${clientId || userId}:${exerciseId}`;
         // Check new keyed format first, fall back to legacy key
-        return get().exerciseNotes[key] || get().exerciseNotes[exerciseId] || '';
+        return get().exerciseNotes[personalKey] || get().exerciseNotes[exerciseId] || '';
       },
 
       setExerciseNotes: (exerciseId: string, notes: string) => {
-        const userId = get().currentClientId || useAuthStore.getState().user?.id || '';
-        const key = `${userId}:${exerciseId}`;
+        const authUser = useAuthStore.getState().user;
+        const userId = authUser?.id || '';
+        const clientId = get().currentClientId;
+        // PT session: trainer is logged in, working with a client
+        let key: string;
+        if (clientId && clientId !== userId) {
+          key = `${userId}:${clientId}:${exerciseId}`;
+        } else {
+          key = `${clientId || userId}:${exerciseId}`;
+        }
         set(state => ({
           exerciseNotes: {
             ...state.exerciseNotes,
             [key]: notes,
           },
         }));
-        // TODO: Sync to Supabase when exercise_notes table is ready
       },
 
       recalculatePBsForUser: (userId: string) => {
@@ -1758,13 +1782,14 @@ export const useSocialStore = create<SocialState>()(
       },
 
       addNotification: (notification) => {
-        const userId = useAuthStore.getState().user?.id;
-        if (!userId) return;
+        const currentUserId = useAuthStore.getState().user?.id;
+        const targetUserId = notification.userId || currentUserId;
+        if (!targetUserId) return;
 
         const newNotification: Notification = {
           id: uuidv4(),
           ...notification,
-          userId,
+          userId: targetUserId,
           read: false,
           createdAt: new Date().toISOString(),
         };
@@ -2136,6 +2161,8 @@ export const useTrainerStore = create<TrainerState>()(
               goals: updatedClient.goals,
               totalSessions: updatedClient.totalSessions,
               totalPaid: updatedClient.totalPaid,
+              totalSessionsOffset: updatedClient.totalSessionsOffset,
+              totalPaidOffset: updatedClient.totalPaidOffset,
             });
           });
         }
@@ -2520,15 +2547,7 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         // Sync to Supabase for cross-device access
         syncTrainerSessionToSupabase(newSession);
-        // If added as already completed, increment client lifetime counter
-        if (session.status === 'completed' && session.type === 'pt_session') {
-          const client = get().clients.find(c => c.clientId === session.clientId);
-          if (client) {
-            get().updateClient(session.clientId, {
-              totalSessions: (client.totalSessions ?? 0) + 1,
-            });
-          }
-        }
+        // totalSessions is now DERIVED from session records — no manual increment needed
       },
 
       updateSession: (sessionId, updates) => {
@@ -2547,6 +2566,10 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       markSessionComplete: (sessionId, notes) => {
+        // Check previous status BEFORE updating — only increment counter if transitioning to completed
+        const prevSession = get().sessions.find(s => s.id === sessionId);
+        const wasAlreadyCompleted = prevSession?.status === 'completed';
+        
         set(state => ({
           sessions: state.sessions.map(s =>
             s.id === sessionId 
@@ -2558,15 +2581,9 @@ export const useTrainerStore = create<TrainerState>()(
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
           syncTrainerSessionToSupabase(session);
-          // Increment client lifetime session counter (decoupled from packages)
-          if (session.type === 'pt_session') {
-            const client = get().clients.find(c => c.clientId === session.clientId);
-            if (client) {
-              get().updateClient(session.clientId, {
-                totalSessions: (client.totalSessions ?? 0) + 1,
-              });
-            }
-            // Also update package's own internal counter if one exists (informational only)
+          // totalSessions is now DERIVED from session records — no manual increment needed
+          // Still update package internal counter if one exists (informational only)
+          if (session.type === 'pt_session' && !wasAlreadyCompleted) {
             const activePackage = get().sessionPackages.find(
               p => p.clientId === session.clientId && p.status === 'active'
             );
@@ -2620,6 +2637,10 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       markSessionNoShow: (sessionId) => {
+        // Check previous status BEFORE updating — only increment counter if transitioning
+        const prevSession = get().sessions.find(s => s.id === sessionId);
+        const wasAlreadyCounted = prevSession?.status === 'no_show' || prevSession?.status === 'completed';
+        
         set(state => ({
           sessions: state.sessions.map(s =>
             s.id === sessionId 
@@ -2631,15 +2652,9 @@ export const useTrainerStore = create<TrainerState>()(
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
           syncTrainerSessionToSupabase(session);
-          if (session.type === 'pt_session') {
-            // Increment client lifetime counter
-            const client = get().clients.find(c => c.clientId === session.clientId);
-            if (client) {
-              get().updateClient(session.clientId, {
-                totalSessions: (client.totalSessions ?? 0) + 1,
-              });
-            }
-            // Also update package's own internal counter if one exists
+          // totalSessions is now DERIVED from session records — no manual increment needed
+          // Still update package internal counter if one exists (informational only)
+          if (session.type === 'pt_session' && !wasAlreadyCounted) {
             const activePackage = get().sessionPackages.find(
               p => p.clientId === session.clientId && p.status === 'active'
             );
@@ -3421,6 +3436,10 @@ export const useTrainerStore = create<TrainerState>()(
           onboardingComplete: sb.onboardingComplete,
           notes: sb.notes,
           goals: sb.goals,
+          totalSessions: sb.totalSessions,
+          totalPaid: sb.totalPaid,
+          totalSessionsOffset: sb.totalSessionsOffset,
+          totalPaidOffset: sb.totalPaidOffset,
         }));
         
         // Preserve local-only clients not yet synced to Supabase (prevents disappearing after add)
@@ -3474,6 +3493,7 @@ export const useTrainerStore = create<TrainerState>()(
           circuitRounds: sb.circuitRounds,
           circuitDuration: sb.circuitDuration,
           circuitRestBetween: sb.circuitRestBetween,
+          folder: sb.folder,
           createdAt: sb.createdAt,
           updatedAt: sb.updatedAt,
         }));

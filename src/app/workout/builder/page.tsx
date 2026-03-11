@@ -411,8 +411,10 @@ function WorkoutBuilderContent() {
   const [isSyncingBlocks, setIsSyncingBlocks] = useState(false);
   const [showSaveBlockDialog, setShowSaveBlockDialog] = useState(false);
   const [blockLibraryName, setBlockLibraryName] = useState('');
+  const [blockLibraryFolder, setBlockLibraryFolder] = useState('');
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
+  const [blockFolderFilter, setBlockFolderFilter] = useState<string>('all');
   const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
   const [blockToDelete, setBlockToDelete] = useState<any>(null);
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
@@ -921,6 +923,7 @@ function WorkoutBuilderContent() {
     saveBlock({
       name: blockLibraryName,
       type: block.type,
+      folder: blockLibraryFolder.trim() || undefined,
       exercises: block.exercises.map(ex => ({
         id: ex.id,
         exerciseId: ex.exerciseId,
@@ -943,6 +946,7 @@ function WorkoutBuilderContent() {
     setShowSaveBlockDialog(false);
     setShowReplaceBlockDialog(false);
     setBlockLibraryName('');
+    setBlockLibraryFolder('');
     setActiveBlockId(null);
     setExistingBlockToReplace(null);
   };
@@ -2552,6 +2556,21 @@ function WorkoutBuilderContent() {
                 className="mt-2"
               />
             </div>
+            <div>
+              <Label>Folder <span className="text-gray-500 font-normal">(optional)</span></Label>
+              <Input
+                value={blockLibraryFolder}
+                onChange={(e) => setBlockLibraryFolder(e.target.value)}
+                placeholder="e.g., Jason's workouts, Push Day"
+                className="mt-2"
+                list="folder-suggestions"
+              />
+              <datalist id="folder-suggestions">
+                {[...new Set(savedBlocks.map(b => b.folder).filter(Boolean))].map(f => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+            </div>
             <p className="text-sm text-muted-foreground">
               Save this block to reuse it in future workouts. Client performance will be tracked.
             </p>
@@ -2607,7 +2626,7 @@ function WorkoutBuilderContent() {
       {/* Block Library Dialog */}
       <Dialog open={showBlockLibraryDialog} onOpenChange={(open) => {
         setShowBlockLibraryDialog(open);
-        if (!open) setBlockLibraryFilter('all');
+        if (!open) { setBlockLibraryFilter('all'); setBlockFolderFilter('all'); }
       }}>
         <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
           <DialogHeader>
@@ -2629,6 +2648,42 @@ function WorkoutBuilderContent() {
               </Button>
             </div>
           </DialogHeader>
+          {/* Folder filter */}
+          {(() => {
+            const folders = [...new Set(savedBlocks.map(b => b.folder).filter(Boolean))] as string[];
+            return folders.length > 0 ? (
+              <div className="flex gap-1.5 mb-2 flex-wrap">
+                <Button
+                  variant={blockFolderFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBlockFolderFilter('all')}
+                  className="h-7 text-xs"
+                >
+                  All Folders
+                </Button>
+                <Button
+                  variant={blockFolderFilter === '' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBlockFolderFilter('')}
+                  className="h-7 text-xs"
+                >
+                  Unfiled
+                </Button>
+                {folders.map(f => (
+                  <Button
+                    key={f}
+                    variant={blockFolderFilter === f ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBlockFolderFilter(f)}
+                    className="h-7 text-xs gap-1"
+                  >
+                    📁 {f}
+                  </Button>
+                ))}
+              </div>
+            ) : null;
+          })()}
+          {/* Type filter */}
           <div className="flex gap-2 mb-4 flex-wrap">
             <Button
               variant={blockLibraryFilter === 'all' ? 'default' : 'outline'}
@@ -2651,7 +2706,10 @@ function WorkoutBuilderContent() {
             ))}
           </div>
           <ScrollArea className="h-[400px] pr-4">
-            {savedBlocks.filter(b => blockLibraryFilter === 'all' || b.type === blockLibraryFilter).length === 0 ? (
+            {savedBlocks.filter(b => 
+              (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
+              (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter))
+            ).length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No saved blocks yet.</p>
                 <p className="text-sm mt-2">Save blocks from your workouts to reuse them!</p>
@@ -2659,7 +2717,10 @@ function WorkoutBuilderContent() {
             ) : (
               <div className="space-y-3">
                 {savedBlocks
-                  .filter(b => blockLibraryFilter === 'all' || b.type === blockLibraryFilter)
+                  .filter(b => 
+                    (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
+                    (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter))
+                  )
                   .map((block) => {
                     const blockStyle = getBlockStyles(block.type);
                     // Get client's performance history for this block
@@ -2678,6 +2739,9 @@ function WorkoutBuilderContent() {
                               <div className="flex items-center gap-2">
                                 {BLOCK_TYPES.find(t => t.value === block.type)?.icon}
                                 <h4 className="font-semibold text-white">{block.name}</h4>
+                                {block.folder && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">📁 {block.folder}</span>
+                                )}
                               </div>
                               <p className="text-sm text-muted-foreground mt-1">
                                 {block.exercises?.length || 0} exercises

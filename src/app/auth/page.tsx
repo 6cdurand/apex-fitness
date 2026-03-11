@@ -32,6 +32,7 @@ function AuthPageContent() {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(modeParam === 'login' ? 'login' : 'login');
   const [step, setStep] = useState<Step>('credentials');
   const [inviteEmail, setInviteEmail] = useState<string | null>(null);
+  const [inviteClientId, setInviteClientId] = useState<string | null>(null);
   const [showSetupPassword, setShowSetupPassword] = useState(false);
   const [setupNewPassword, setSetupNewPassword] = useState('');
   const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
@@ -46,6 +47,7 @@ function AuthPageContent() {
         if (result.valid && result.email) {
           setInviteEmail(result.email);
           setLoginEmail(result.email);
+          if (result.clientId) setInviteClientId(result.clientId);
           setShowSetupPassword(true);
         } else if (emailParam) {
           // Fallback: use email from URL param (always works, even without Supabase table)
@@ -150,12 +152,14 @@ function AuthPageContent() {
     }
     
     // Account doesn't exist at all — register as new user with their chosen password
+    // Use the existing clientId from the invite so the account is linked to the trainer's client record
     const registered = await register({
+      id: inviteClientId || undefined,
       email: inviteEmail,
       password: setupNewPassword,
       username: inviteEmail.split('@')[0],
       displayName: inviteEmail.split('@')[0],
-    });
+    } as any);
     
     if (registered) {
       if (inviteToken) {

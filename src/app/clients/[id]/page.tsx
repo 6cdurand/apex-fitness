@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -48,6 +48,7 @@ import { toast } from 'sonner';
 import { User as UserType, ClientSession, ClientPayment, SessionPackage } from '@/types';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
 import { calculateCompliance, getAdherenceColor, getAdherenceBgColor, getAdherenceLabel } from '@/lib/compliance';
+import { calculateFullStrengthRating } from '@/lib/strengthRating';
 import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase, sendClientInvitation } from '@/lib/supabaseSync';
 import { Workout, PersonalBest } from '@/types';
 
@@ -191,6 +192,7 @@ export default function ClientDetailPage() {
   const [editPackagePaid, setEditPackagePaid] = useState('');
   const [editPackagePrice, setEditPackagePrice] = useState('');
   const [editPackageIsContinuous, setEditPackageIsContinuous] = useState(false);
+  const [showProfileCard, setShowProfileCard] = useState(false);
   
   // Edit payment state
   const [showEditPayment, setShowEditPayment] = useState(false);
@@ -569,10 +571,12 @@ export default function ClientDetailPage() {
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <Avatar className="w-12 h-12">
-            <AvatarImage src={clientUser.profilePhoto} />
-            <AvatarFallback>{clientUser.displayName?.charAt(0)}</AvatarFallback>
-          </Avatar>
+          <button onClick={() => setShowProfileCard(true)}>
+            <Avatar className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all">
+              <AvatarImage src={clientUser.profilePhoto} />
+              <AvatarFallback>{clientUser.displayName?.charAt(0)}</AvatarFallback>
+            </Avatar>
+          </button>
           <div className="flex-1">
             <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
             <p className="text-sm text-gray-400">@{clientUser.username}</p>
@@ -761,31 +765,23 @@ export default function ClientDetailPage() {
                 </CardContent>
               </Card>
             ) : (
-              /* No active package - show alert and create button */
-              <Card className="bg-amber-900/20 border-amber-500/50 border-2">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-amber-400 font-medium">No Session Package</p>
-                      <p className="text-amber-400/70 text-sm">
-                        Create a package to track sessions and payments. Completed workouts will be linked to the package once created.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    className="w-full bg-amber-500 hover:bg-amber-600 text-black"
-                    onClick={() => {
-                      setNewPackageTotal('');
-                      setNewPackagePrice('');
-                      setShowCreatePackage(true);
-                    }}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Package
-                  </Button>
-                </CardContent>
-              </Card>
+              /* No active package - compact hint */
+              <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
+                <span className="text-xs text-gray-500">No session package</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 text-xs text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                  onClick={() => {
+                    setNewPackageTotal('');
+                    setNewPackagePrice('');
+                    setShowCreatePackage(true);
+                  }}
+                >
+                  <Plus className="w-3 h-3 mr-1" />
+                  Create Package
+                </Button>
+              </div>
             )}
 
             {/* Create Package Dialog */}
@@ -3105,6 +3101,68 @@ export default function ClientDetailPage() {
         onConfirm={handleDeleteClient}
         icon={<Trash2 className="w-5 h-5 text-red-400" />}
       />
+
+      {/* Client Profile Card Popup */}
+      <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+          {(() => {
+            const { personalBests } = useWorkoutStore.getState();
+            const clientPBs = personalBests.filter(pb => pb.userId === clientId);
+            const { medals } = useMedalStore.getState();
+            const clientMedals = medals.filter(m => m.userId === clientId && m.earned);
+            const isMale = clientUser?.gender === 'male';
+            let rating = null;
+            try { rating = clientPBs.length > 0 ? calculateFullStrengthRating(clientPBs, isMale) : null; } catch {}
+            const clientWorkouts = workoutHistory.filter(w => w.userId === clientId && w.status === 'completed' && !w.deletedAt);
+            const completedSessions = sessions.filter(s => s.status === 'completed').length;
+            
+            return (
+              <>
+                <DialogHeader className="pb-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="w-16 h-16 border-2 border-rose-500">
+                      <AvatarImage src={clientUser?.profilePhoto} />
+                      <AvatarFallback className="bg-gray-800 text-white text-xl">
+                        {clientUser?.displayName?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <DialogTitle className="text-white">{clientUser?.displayName}</DialogTitle>
+                      <p className="text-sm text-gray-400">@{clientUser?.username}</p>
+                      {clientUser?.gymName && <p className="text-xs text-sky-400 mt-0.5">{clientUser.gymName}</p>}
+                    </div>
+                  </div>
+                </DialogHeader>
+                <div className="grid grid-cols-3 gap-3 mt-3">
+                  <div className="bg-gray-800 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-white">{clientWorkouts.length}</p>
+                    <p className="text-xs text-gray-400">Workouts</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-amber-400">{clientMedals.length}</p>
+                    <p className="text-xs text-gray-400">Medals</p>
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-sky-400">{clientPBs.length}</p>
+                    <p className="text-xs text-gray-400">PBs</p>
+                  </div>
+                </div>
+                {rating && (
+                  <div className="bg-gray-800 rounded-lg p-3 mt-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-400">Strength Rating</span>
+                      <span className="text-lg font-bold text-white">{rating.overall?.toFixed(0) || '—'}</span>
+                    </div>
+                  </div>
+                )}
+                {clientUser?.bio && (
+                  <p className="text-sm text-gray-400 mt-2">{clientUser.bio}</p>
+                )}
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }

@@ -471,6 +471,7 @@ function toDbWorkout(workout: Workout): any {
     status: workout.status || 'completed',
     assigned_by: workout.assignedBy || null,  // Trainer ID for PT sessions
     template_id: workout.templateId || null,
+    deleted_at: workout.deletedAt || null,
   };
 }
 
@@ -489,6 +490,7 @@ function fromDbWorkout(dbWorkout: any): Workout {
     status: dbWorkout.status || 'completed',
     assignedBy: dbWorkout.assigned_by,
     templateId: dbWorkout.template_id,
+    deletedAt: dbWorkout.deleted_at || undefined,
   };
 }
 
@@ -1527,6 +1529,8 @@ export async function syncTrainerClientToSupabase(client: {
   goals?: string[];
   totalSessions?: number;
   totalPaid?: number;
+  totalSessionsOffset?: number;
+  totalPaidOffset?: number;
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) {
     console.log('[Client Sync] Supabase not configured');
@@ -1553,6 +1557,8 @@ export async function syncTrainerClientToSupabase(client: {
     // Include lifetime counters if provided
     if (client.totalSessions !== undefined) dbClient.total_sessions = client.totalSessions;
     if (client.totalPaid !== undefined) dbClient.total_paid = client.totalPaid;
+    if (client.totalSessionsOffset !== undefined) dbClient.total_sessions_offset = client.totalSessionsOffset;
+    if (client.totalPaidOffset !== undefined) dbClient.total_paid_offset = client.totalPaidOffset;
     
     console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
     
@@ -1604,6 +1610,10 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       onboardingComplete: c.onboarding_complete,
       notes: c.notes,
       goals: c.goals,
+      totalSessions: c.total_sessions ?? undefined,
+      totalPaid: c.total_paid ?? undefined,
+      totalSessionsOffset: c.total_sessions_offset ?? undefined,
+      totalPaidOffset: c.total_paid_offset ?? undefined,
     }));
     
     console.log(`[Client Fetch] Found ${clients.length} clients for trainer`);
@@ -2443,6 +2453,7 @@ interface SavedBlockData {
   circuitRounds?: number;
   circuitDuration?: number;
   circuitRestBetween?: number;
+  folder?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -2467,6 +2478,7 @@ export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<b
       circuit_rounds: block.circuitRounds || null,
       circuit_duration: block.circuitDuration || null,
       circuit_rest_between: block.circuitRestBetween || null,
+      folder: block.folder || null,
       created_at: block.createdAt || new Date().toISOString(),
       updated_at: block.updatedAt || new Date().toISOString(),
     };
@@ -2518,6 +2530,7 @@ export async function fetchSavedBlocksFromSupabase(trainerId: string): Promise<S
       circuitRounds: block.circuit_rounds,
       circuitDuration: block.circuit_duration,
       circuitRestBetween: block.circuit_rest_between,
+      folder: block.folder || undefined,
       createdAt: block.created_at,
       updatedAt: block.updated_at,
     }));

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useWorkoutStore, useSocialStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -239,6 +239,20 @@ export default function CalendarPage() {
         if (result.success) {
           console.log('[Calendar] Synced to Google Calendar:', result.googleEventId);
         }
+      });
+    }
+
+    // Notify client about the booked session
+    if (newEventClient && (newEventType === 'session' || newEventType === 'assessment')) {
+      const trainerName = user?.displayName || 'Your trainer';
+      const eventDate = new Date(newEventDate);
+      const dateLabel = format(eventDate, 'EEEE, MMM d');
+      useSocialStore.getState().addNotification({
+        userId: newEventClient,
+        type: 'workout_assigned',
+        title: 'Session Booked',
+        message: `${trainerName} booked a ${newEventType === 'assessment' ? 'assessment' : 'training session'} for ${dateLabel} at ${newEventStartTime}`,
+        actionUrl: '/today',
       });
     }
 

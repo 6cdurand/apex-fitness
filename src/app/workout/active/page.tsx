@@ -84,7 +84,7 @@ export default function ActiveWorkoutPage() {
   const _medalStore = useMedalStore();
   const { lastDeriveResult } = useWorkoutStore();
   const { createPost } = useSocialStore();
-  const { clients, saveToWorkoutLibrary, saveCircuitTemplate } = useTrainerStore();
+  const { clients, saveToWorkoutLibrary, saveCircuitTemplate, getBestBlockPerformance, getBlockPerformances } = useTrainerStore();
   
   // Get client name if this is a PT session — centralized resolution
   const resolvedClientId = currentClientId || (activeWorkout?.assignedBy ? activeWorkout.userId : null);
@@ -709,36 +709,8 @@ export default function ActiveWorkoutPage() {
     if (completed) {
       // Feed post is now opt-in — created in handleCloseSummary if shareToFeed is checked
 
-      // Create session record for PT sessions to track session count
-      if (isPT && clientId && trainerId) {
-        const { addSession, useSessionFromPackage, getPackagesForClient } = useTrainerStore.getState();
-        const today = new Date().toISOString().split('T')[0];
-        
-        // Add completed session
-        addSession({
-          trainerId,
-          clientId,
-          date: today,
-          startTime: new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-          endTime: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-          duration: Math.round(duration / 60),
-          type: 'pt_session',
-          status: 'completed',
-          paid: false,
-          notes: workoutName,
-          workoutId: completed.id,
-        });
-        
-        // Use session from active package if exists (handle both continuous and regular packages)
-        const packages = getPackagesForClient(clientId);
-        const activePackage = packages.find(p => 
-          p.status === 'active' && 
-          (p.remainingSessions === -1 || p.remainingSessions > 0)
-        );
-        if (activePackage) {
-          useSessionFromPackage(activePackage.id);
-        }
-      }
+      // Session record creation + totalSessions increment is handled by completeWorkout (endWorkout) in store.ts
+      // Do NOT duplicate it here — that causes double counting
 
       // Sync exercise history to Supabase for client tracking
       const currentUser = useAuthStore.getState().user;
@@ -847,6 +819,14 @@ export default function ActiveWorkoutPage() {
         s.workoutId === completedWorkoutData.id
       );
       
+      // Always increment package usedSessions when a PT workout completes
+      if (activePackage) {
+        updateSessionPackage(activePackage.id, {
+          usedSessions: (activePackage.usedSessions || 0) + 1,
+          ...(sessionPaid ? { paidSessions: (activePackage.paidSessions || 0) + 1 } : {}),
+        });
+      }
+      
       if (sessionPaid) {
         // Mark session as paid
         if (sessionRecord && !sessionRecord.paid) {
@@ -866,24 +846,11 @@ export default function ActiveWorkoutPage() {
             paidAt: new Date().toISOString(),
           });
         }
-        if (activePackage) {
-          updateSessionPackage(activePackage.id, {
-            paidSessions: (activePackage.paidSessions || 0) + 1,
-          });
-        }
-      } else {
-        // Always create a pending payment so unpaid sessions are tracked
-        if (pricePerSession > 0) {
-          addPayment({
-            clientId: completedWorkoutData.clientId,
-            trainerId: useAuthStore.getState().user?.id || '',
-            amount: pricePerSession,
-            currency: 'NZD',
-            type: 'single_session',
-            status: 'pending',
-            method: 'cash',
-            description: `PT Session - ${completedWorkoutData.name} (unpaid)`,
-          });
+        // Increment totalPaid stored counter on client record
+        const { clients, updateClient } = useTrainerStore.getState();
+        const clientRecord = clients.find(c => c.clientId === completedWorkoutData.clientId);
+        if (clientRecord) {
+          updateClient(completedWorkoutData.clientId, { totalPaid: (clientRecord.totalPaid ?? 0) + 1 });
         }
       }
     }
@@ -1624,32 +1591,49 @@ export default function ActiveWorkoutPage() {
                     </DropdownMenu>
                     
                     {/* Circuit Timer */}
-                    {block.type === 'circuit' && (
-                    <div className="flex items-center gap-2">
-                      <div className={cn(
-                        "text-2xl font-mono font-bold",
-                        block.completed ? "text-green-400" : style.text
-                      )}>
-                        {formatTime(block.timerSeconds || 0)}
+                    {block.type === 'circuit' && (() => {
+                      const clientId = workout?.userId || '';
+                      // Match by savedBlockId if available, otherwise find best performance by block name
+                      const blockRef = (block as any).savedBlockId;
+                      const bestPerf = blockRef 
+                        ? getBestBlockPerformance(blockRef, clientId)
+                        : useTrainerStore.getState().blockPerformances
+                            .filter(p => p.clientId === clientId && p.blockName === block.name && p.completionTime)
+                            .sort((a, b) => (a.completionTime || Infinity) - (b.completionTime || Infinity))[0];
+                      const bestTime = bestPerf?.completionTime;
+                      return (
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "text-2xl font-mono font-bold",
+                          block.completed ? "text-green-400" : style.text
+                        )}>
+                          {formatTime(block.timerSeconds || 0)}
+                        </div>
+                        {bestTime && bestTime > 0 && (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-gray-500 leading-tight">BEST</span>
+                            <span className="text-xs font-mono text-amber-400">{formatTime(bestTime)}</span>
+                          </div>
+                        )}
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => toggleCircuitTimer(block.id)}
+                          className={cn("h-8 w-8", style.text)}
+                        >
+                          {block.timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => resetCircuitTimer(block.id)}
+                          className="h-8 w-8 text-gray-400"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </Button>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => toggleCircuitTimer(block.id)}
-                        className={cn("h-8 w-8", style.text)}
-                      >
-                        {block.timerRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => resetCircuitTimer(block.id)}
-                        className="h-8 w-8 text-gray-400"
-                      >
-                        <RotateCcw className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
                 
@@ -1927,14 +1911,19 @@ export default function ActiveWorkoutPage() {
                       const lastWorkout = clientWorkoutHistory.find((w: any) => 
                         w.exercises?.some((e: any) => e.exerciseId === workoutExercise.exerciseId)
                       );
-                      const lastSets = lastWorkout?.exercises?.find((e: any) => 
+                      const lastExerciseData = lastWorkout?.exercises?.find((e: any) => 
                         e.exerciseId === workoutExercise.exerciseId
-                      )?.sets?.filter((s: any) => s.completed);
+                      );
+                      const lastSets = lastExerciseData?.sets?.filter((s: any) => s.completed);
+                      // Volume comparison
+                      const lastVolume = lastSets?.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
+                      const currentCompletedSets = (workoutExercise.sets || []).filter((s: any) => s.completed);
+                      const currentVolume = currentCompletedSets.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
                       
                       return (
                       <div key={workoutExercise.id} className="bg-gray-900/30">
                         <div className="px-4 py-3">
-                          <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center justify-between mb-1">
                             <div>
                               <div className="flex items-center gap-1.5">
                                 <p className="font-medium text-white">
@@ -2038,8 +2027,25 @@ export default function ActiveWorkoutPage() {
                             )}
                           </div>
                         </div>
+                        {/* Volume Comparison Bar */}
+                        {lastVolume > 0 && (
+                          <div className="px-4 py-1.5 bg-gray-800/30 flex items-center justify-between text-[11px]">
+                            <span className="text-gray-500">Last: {lastVolume.toLocaleString()}kg</span>
+                            <span className={cn(
+                              "font-medium",
+                              currentVolume > lastVolume ? "text-green-400" : currentVolume < lastVolume ? "text-orange-400" : "text-gray-400"
+                            )}>
+                              Today: {currentVolume.toLocaleString()}kg
+                              {currentVolume > 0 && lastVolume > 0 && (
+                                <span className="ml-1">
+                                  ({currentVolume >= lastVolume ? '+' : ''}{Math.round(((currentVolume - lastVolume) / lastVolume) * 100)}%)
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        )}
                         {/* Sets Header */}
-                        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium">
+                        <div className="grid grid-cols-12 gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-800/50 text-[10px] sm:text-xs text-gray-500 font-medium">
                           <div className="col-span-1">SET</div>
                           {(workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio') ? (
                             <>
@@ -2056,7 +2062,7 @@ export default function ActiveWorkoutPage() {
                           <div className="col-span-2"></div>
                         </div>
                         {/* Sets */}
-                        <div className="px-4 pb-3 divide-y divide-gray-800/50">
+                        <div className="px-2 sm:px-4 pb-2 sm:pb-3 divide-y divide-gray-800/50">
                           {(workoutExercise.sets || []).map((set: any, idx: number) => {
                             const isAssisted = isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name);
                             const previousDisplay = (set.previousWeight != null && set.previousReps) 
@@ -2065,8 +2071,8 @@ export default function ActiveWorkoutPage() {
                             const isTimedSet = set.isTimed || workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio';
                             const setTimer = activeSetTimers[set.id];
                             return (
-                            <div key={set.id} className={cn("py-2 space-y-1", set.completed && "bg-sky-500/10")}>
-                              <div className="grid grid-cols-12 gap-2 items-center text-sm">
+                            <div key={set.id} className={cn("py-1.5 sm:py-2 space-y-1", set.completed && "bg-sky-500/10")}>
+                              <div className="grid grid-cols-12 gap-1 sm:gap-2 items-center text-xs sm:text-sm">
                                 {/* Set Number/Type */}
                                 <div className="col-span-1">
                                   <button className={cn(
@@ -2151,7 +2157,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-800 border-gray-700 px-1", set.completed && "opacity-50")}
                                       />
                                     </div>
                                     {/* Reps Input */}
@@ -2170,7 +2176,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-800 border-gray-700 px-1", set.completed && "opacity-50")}
                                       />
                                     </div>
                                   </>
