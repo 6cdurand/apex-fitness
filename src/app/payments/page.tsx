@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +51,6 @@ export default function PaymentsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { sessions, payments, clients, sessionPackages, addPayment, deletePayment, updateSessionPackage, addSessionPackage, updateClient, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
-  const { workoutHistory } = useWorkoutStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('clients');
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
@@ -102,34 +101,9 @@ export default function PaymentsPage() {
     return { name: info.displayName, photo: info.profilePhoto };
   };
 
-  // Calculate sessions in date range
-  const getSessionsInRange = (clientId: string, startDate: Date, endDate: Date) => {
-    return sessions.filter(s => 
-      s.clientId === clientId && 
-      s.trainerId === user?.id &&
-      s.status === 'completed' &&
-      parseISO(s.date) >= startDate && 
-      parseISO(s.date) <= endDate
-    );
-  };
 
-  // Calculate payments in date range
-  const getPaymentsInRange = (clientId: string, startDate: Date, endDate: Date) => {
-    return payments.filter(p => 
-      p.clientId === clientId && 
-      p.trainerId === user?.id &&
-      p.paidAt &&
-      parseISO(p.paidAt) >= startDate && 
-      parseISO(p.paidAt) <= endDate
-    );
-  };
-
-  // Get client payment data — DERIVES totals from session/payment records (bulletproof)
+  // Get client payment data — uses stored counters only (no scanning history)
   const getClientPaymentData = (clientId: string) => {
-    const now = new Date();
-    const monthStart = startOfMonth(now);
-    const monthEnd = endOfMonth(now);
-    
     const settings = paymentSettings[clientId];
     const client = clients.find(c => c.clientId === clientId);
     // Get active package (optional — for display only, NOT source of truth for totals)
@@ -139,21 +113,10 @@ export default function PaymentsPage() {
     // Price per session: user settings > package > default
     const pricePerSession = settings?.pricePerSession || activePackage?.pricePerSession || 0;
     
-    // Sessions this month — count from completed workouts
-    const totalSessionsThisMonth = workoutHistory.filter(w => 
-      w.userId === clientId && w.assignedBy === user?.id && 
-      w.status === 'completed' && !w.deletedAt &&
-      w.startTime && parseISO(w.startTime) >= monthStart && parseISO(w.startTime) <= monthEnd
-    ).length;
+    // SESSIONS — stored counter. +1 on workout complete, or manual inline edit.
+    const totalSessionsEver = client?.totalSessions ?? 0;
     
-    // SESSIONS — derived from completed workouts (every finished workout = 1 session)
-    const derivedSessionCount = workoutHistory.filter(w => 
-      w.userId === clientId && w.assignedBy === user?.id && 
-      w.status === 'completed' && !w.deletedAt
-    ).length;
-    const totalSessionsEver = derivedSessionCount + (client?.totalSessionsOffset ?? 0);
-    
-    // PAID — simple stored counter. Only changes on explicit user action.
+    // PAID — stored counter. Only changes on explicit user action.
     const totalPaidSessions = client?.totalPaid ?? 0;
     
     const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
@@ -186,7 +149,6 @@ export default function PaymentsPage() {
     return {
       settings,
       pricePerSession,
-      totalSessionsThisMonth,
       totalSessionsEver,
       totalPaidSessions,
       outstandingSessions,
@@ -339,12 +301,8 @@ export default function PaymentsPage() {
     if (!editingField) return;
     const newValue = Math.max(0, parseInt(editValue) || 0);
     if (editingField.field === 'sessions') {
-      // Sessions: offset adjustment (derived from workouts)
-      const derivedCount = workoutHistory.filter(w => 
-        w.userId === editingField.clientId && w.assignedBy === user?.id && 
-        w.status === 'completed' && !w.deletedAt
-      ).length;
-      updateClient(editingField.clientId, { totalSessionsOffset: newValue - derivedCount });
+      // Sessions: direct stored value — set exactly what the user typed
+      updateClient(editingField.clientId, { totalSessions: newValue });
     } else {
       // Paid: direct stored value — set exactly what the user typed
       updateClient(editingField.clientId, { totalPaid: newValue });
@@ -422,7 +380,7 @@ export default function PaymentsPage() {
 
   // Calculate totals
   const totalOutstanding = sortedClients.reduce((sum, c) => sum + c.outstandingAmount, 0);
-  const totalThisMonth = sortedClients.reduce((sum, c) => sum + (c.totalSessionsThisMonth * c.pricePerSession), 0);
+  const totalThisMonth = 0; // Monthly stats removed — counters are stored values only
   const clientsWithOutstanding = sortedClients.filter(c => c.hasOutstanding).length;
 
   if (!isAuthenticated || !user) return null;
@@ -450,7 +408,7 @@ export default function PaymentsPage() {
             <CardContent className="p-3 text-center">
               <p className="text-xs text-gray-400 mb-1">This Month</p>
               <p className="text-xl font-bold text-blue-400">${totalThisMonth}</p>
-              <p className="text-xs text-gray-500">{sortedClients.reduce((sum, c) => sum + c.totalSessionsThisMonth, 0)} sessions</p>
+              <p className="text-xs text-gray-500">this month</p>
             </CardContent>
           </Card>
           <Card className="bg-gray-900 border-gray-800">

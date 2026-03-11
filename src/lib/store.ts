@@ -1333,9 +1333,17 @@ export const useWorkoutStore = create<WorkoutState>()(
           ),
         }));
         
-        // If this was a trainer-assigned workout, decrement session package counts
+        // If this was a trainer-assigned workout, decrement counters
         if (userId && assignedBy) {
           const trainerStore = useTrainerStore.getState();
+          
+          // Decrement totalSessions stored counter on client record
+          const clientRecord = trainerStore.clients.find(c => c.clientId === userId);
+          if (clientRecord && (clientRecord.totalSessions ?? 0) > 0) {
+            trainerStore.updateClient(userId, { totalSessions: Math.max(0, (clientRecord.totalSessions ?? 0) - 1) });
+          }
+          
+          // Decrement package usedSessions
           const activePackage = trainerStore.sessionPackages.find(
             p => p.clientId === userId && p.trainerId === assignedBy && p.status === 'active'
           );
@@ -1355,7 +1363,6 @@ export const useWorkoutStore = create<WorkoutState>()(
           }
           
           // Also mark corresponding session record as cancelled
-          // totalSessions is now DERIVED — cancelling the session record automatically reduces the count
           const matchingSession = trainerStore.sessions.find(
             s => s.clientId === userId && s.trainerId === assignedBy && s.status === 'completed' &&
             workoutToDelete?.startTime && s.date === workoutToDelete.startTime.split('T')[0]

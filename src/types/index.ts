@@ -427,11 +427,11 @@ export interface TrainerClient {
   notes?: string;
   onboardingComplete: boolean;
   // Decoupled lifetime counters — editable, not controlled by packages
-  totalSessions?: number;  // DEPRECATED — sessions now derived from completed workouts + offset
+  totalSessions?: number;  // Stored counter — +1 on workout complete, or manual inline edit
   totalPaid?: number;       // Stored counter — only changes on explicit user action (log payment, inline edit, paid toggle)
-  // Manual adjustment offset for sessions (derived from workouts)
+  // DEPRECATED — no longer used, kept for backwards compat
   totalSessionsOffset?: number;
-  totalPaidOffset?: number; // DEPRECATED — no longer used, kept for backwards compat
+  totalPaidOffset?: number;
 }
 
 // Client Group (for group fitness classes)

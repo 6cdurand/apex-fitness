@@ -827,6 +827,13 @@ export default function ActiveWorkoutPage() {
         });
       }
       
+      // Increment totalSessions stored counter on client record (+1 per completed workout)
+      const { clients, updateClient } = useTrainerStore.getState();
+      const clientRecord = clients.find(c => c.clientId === completedWorkoutData.clientId);
+      if (clientRecord) {
+        updateClient(completedWorkoutData.clientId, { totalSessions: (clientRecord.totalSessions ?? 0) + 1 });
+      }
+      
       if (sessionPaid) {
         // Mark session as paid
         if (sessionRecord && !sessionRecord.paid) {
@@ -847,10 +854,9 @@ export default function ActiveWorkoutPage() {
           });
         }
         // Increment totalPaid stored counter on client record
-        const { clients, updateClient } = useTrainerStore.getState();
-        const clientRecord = clients.find(c => c.clientId === completedWorkoutData.clientId);
-        if (clientRecord) {
-          updateClient(completedWorkoutData.clientId, { totalPaid: (clientRecord.totalPaid ?? 0) + 1 });
+        const freshClient = useTrainerStore.getState().clients.find(c => c.clientId === completedWorkoutData.clientId);
+        if (freshClient) {
+          updateClient(completedWorkoutData.clientId, { totalPaid: (freshClient.totalPaid ?? 0) + 1 });
         }
       }
     }
