@@ -1770,6 +1770,15 @@ export const useSocialStore = create<SocialState>()(
           following: [...user.following, userId],
         });
         
+        // Notify the followed user
+        get().addNotification({
+          userId: userId,
+          type: 'friend_request',
+          title: 'New Follower',
+          message: `${user.displayName || user.username || 'Someone'} started following you`,
+          actionUrl: `/profile/${user.id}`,
+        });
+        
         // Sync to Supabase
         const { syncFollowToSupabase } = await import('./supabaseSync');
         await syncFollowToSupabase(user.id, userId);
@@ -3087,6 +3096,12 @@ export const useTrainerStore = create<TrainerState>()(
           }));
         }
         
+        // Set stored counters directly on client record
+        get().updateClient(clientId, {
+          totalSessions: sessionsDone,
+          totalPaid: sessionsLeft > 0 ? sessionsLeft : 0, // sessionsLeft assumed already paid
+        });
+        
         // Create payment record for total paid
         if (totalPaid > 0) {
           const payment: ClientPayment = {
@@ -3433,24 +3448,26 @@ export const useTrainerStore = create<TrainerState>()(
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
-        // Map Supabase data to local format
-        const clients: TrainerClient[] = supabaseClients.map((sb: any) => ({
-          id: sb.id,
-          trainerId: sb.trainerId,
-          clientId: sb.clientId,
-          status: sb.status || 'active',
-          startDate: sb.startDate,
-          onboardingComplete: sb.onboardingComplete,
-          notes: sb.notes,
-          goals: sb.goals,
-          totalSessions: sb.totalSessions,
-          totalPaid: sb.totalPaid,
-          totalSessionsOffset: sb.totalSessionsOffset,
-          totalPaidOffset: sb.totalPaidOffset,
-        }));
-        
-        // Preserve local-only clients not yet synced to Supabase (prevents disappearing after add)
+        // Map Supabase data to local format, preserving local counters if Supabase has null
         const currentClients = get().clients;
+        const clients: TrainerClient[] = supabaseClients.map((sb: any) => {
+          const localClient = currentClients.find(c => c.clientId === sb.clientId);
+          return {
+            id: sb.id,
+            trainerId: sb.trainerId,
+            clientId: sb.clientId,
+            status: sb.status || 'active',
+            startDate: sb.startDate,
+            onboardingComplete: sb.onboardingComplete,
+            notes: sb.notes,
+            goals: sb.goals,
+            // Stored counters: use Supabase value if it exists, otherwise preserve local value
+            totalSessions: sb.totalSessions ?? localClient?.totalSessions ?? 0,
+            totalPaid: sb.totalPaid ?? localClient?.totalPaid ?? 0,
+            totalSessionsOffset: sb.totalSessionsOffset,
+            totalPaidOffset: sb.totalPaidOffset,
+          };
+        });
         const localOnlyClients = currentClients.filter(
           localClient => !clients.find(sbClient => sbClient.clientId === localClient.clientId)
         );

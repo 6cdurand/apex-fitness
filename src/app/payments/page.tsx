@@ -23,7 +23,6 @@ import {
   Users,
   ChevronRight,
   AlertTriangle,
-  Settings,
   Check,
   X,
   Plus,
@@ -482,11 +481,12 @@ export default function PaymentsPage() {
                         </div>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-gray-400 hover:text-white"
+                          size="sm"
+                          className="h-8 text-gray-400 hover:text-emerald-400 gap-1 px-2"
                           onClick={() => openSettingsDialog(client.clientId)}
                         >
-                          <Settings className="w-4 h-4" />
+                          <DollarSign className="w-4 h-4" />
+                          <span className="text-xs">Log Payment</span>
                         </Button>
                       </div>
                       
@@ -679,7 +679,7 @@ export default function PaymentsPage() {
                                 onClick={() => openSettingsDialog(payment.clientId)}
                                 title="Edit package settings"
                               >
-                                <Settings className="w-4 h-4" />
+                                <Pencil className="w-4 h-4" />
                               </Button>
                               <Button
                                 variant="ghost"
