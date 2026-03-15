@@ -26,7 +26,7 @@ function AuthPageContent() {
   const inviteToken = searchParams.get('invite');
   const modeParam = searchParams.get('mode');
   
-  const { login, register, isLoading, user, updatePassword } = useAuthStore();
+  const { login, register, isLoading, user, updatePassword, resetPassword } = useAuthStore();
   const { loadFromSupabase } = useTrainerStore();
   
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(modeParam === 'login' ? 'login' : 'login');
@@ -37,6 +37,12 @@ function AuthPageContent() {
   const [setupNewPassword, setSetupNewPassword] = useState('');
   const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
+  
+  // Forgot password state
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   
   // Check invite token and pre-fill email
   const emailParam = searchParams.get('email');
@@ -176,6 +182,41 @@ function AuthPageContent() {
     setShowSetupPassword(false);
     toast.info('Please sign in or create an account');
     setIsSettingUp(false);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) {
+      toast.error('Please enter your email');
+      return;
+    }
+    if (forgotNewPassword.length < 4) {
+      toast.error('Password must be at least 4 characters');
+      return;
+    }
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    
+    const success = resetPassword(forgotEmail.trim(), forgotNewPassword);
+    if (success) {
+      // Also sync to Supabase if configured
+      try {
+        await updatePasswordInSupabase(forgotEmail.trim(), forgotNewPassword);
+      } catch (e) {
+        // Local reset still succeeded
+      }
+      toast.success('Password reset! You can now sign in.');
+      setShowForgotPassword(false);
+      setLoginEmail(forgotEmail.trim());
+      setLoginPassword('');
+      setForgotEmail('');
+      setForgotNewPassword('');
+      setForgotConfirmPassword('');
+    } else {
+      toast.error('No account found with that email');
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -460,6 +501,14 @@ function AuthPageContent() {
                   >
                     {isLoading ? 'Signing in...' : 'Sign In'}
                   </Button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotPassword(true); setForgotEmail(loginEmail); }}
+                    className="w-full text-center text-xs text-gray-500 hover:text-sky-400 transition-colors mt-1"
+                  >
+                    Forgot password?
+                  </button>
                   
                   <div className="relative my-4">
                     <div className="absolute inset-0 flex items-center">
@@ -842,6 +891,70 @@ function AuthPageContent() {
           )}
         </Card>
       </div>
+
+      {/* Forgot Password Modal */}
+      {showForgotPassword && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-5">
+          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl rounded-2xl">
+            <CardHeader>
+              <CardTitle className="text-white">Reset Password</CardTitle>
+              <CardDescription>Enter your email and choose a new password</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleForgotPassword} className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="your@email.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-gray-300">New Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="Enter new password"
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    required
+                    minLength={4}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-gray-300">Confirm Password</Label>
+                  <Input
+                    type="password"
+                    placeholder="Re-enter new password"
+                    value={forgotConfirmPassword}
+                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    required
+                  />
+                </div>
+                <Button 
+                  type="submit"
+                  className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                >
+                  Reset Password
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-gray-500 hover:text-gray-300 text-sm"
+                  onClick={() => { setShowForgotPassword(false); setForgotEmail(''); setForgotNewPassword(''); setForgotConfirmPassword(''); }}
+                >
+                  Cancel
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

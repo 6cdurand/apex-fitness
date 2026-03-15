@@ -52,8 +52,8 @@ export default function BuilderPage() {
                   <Plus className="w-6 h-6 text-sky-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">Build New Workout</h3>
-                  <p className="text-sm text-gray-400">Create with blocks, exercises & circuits</p>
+                  <h3 className="font-semibold text-gray-900">Build New Workout</h3>
+                  <p className="text-sm text-gray-500">Create with blocks, exercises & circuits</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -70,8 +70,8 @@ export default function BuilderPage() {
                   <CalendarDays className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-white">Create Program</h3>
-                  <p className="text-sm text-gray-400">Multi-day plan with weekly schedule for a client</p>
+                  <h3 className="font-semibold text-gray-900">Create Program</h3>
+                  <p className="text-sm text-gray-500">Multi-day plan with weekly schedule for a client</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -97,7 +97,7 @@ export default function BuilderPage() {
                 return (
                   <Card
                     key={program.id}
-                    className="bg-gray-900 border-gray-800 cursor-pointer hover:border-emerald-500/30 transition-colors"
+                    className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-emerald-500/30 transition-colors"
                     onClick={() => router.push(`/clients/${program.clientId}/program/builder?programId=${program.id}`)}
                   >
                     <CardContent className="p-3 flex items-center justify-between">
@@ -106,7 +106,7 @@ export default function BuilderPage() {
                           <Users className="w-4 h-4 text-emerald-400" />
                         </div>
                         <div>
-                          <p className="font-medium text-white text-sm">{program.templateName}</p>
+                          <p className="font-medium text-gray-900 text-sm">{program.templateName}</p>
                           <p className="text-xs text-gray-500">
                             {clientInfo?.displayName || 'Client'} • {program.weeklyPlan?.length || 0} days/week • {program.phase}
                           </p>
@@ -134,11 +134,11 @@ export default function BuilderPage() {
           </div>
 
           {workoutLibrary.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-8 text-center">
-                <Dumbbell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No saved workouts yet</p>
-                <p className="text-xs text-gray-500 mt-1">Build a workout and save it to your library</p>
+                <Dumbbell className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No saved workouts yet</p>
+                <p className="text-xs text-gray-400 mt-1">Build a workout and save it to your library</p>
               </CardContent>
             </Card>
           ) : (
@@ -147,12 +147,12 @@ export default function BuilderPage() {
                 {workoutLibrary.map((workout) => (
                   <Card
                     key={workout.id}
-                    className="bg-gray-900 border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
+                    className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-gray-300 transition-colors"
                     onClick={() => router.push(`/workout/builder?workoutId=${workout.id}`)}
                   >
                     <CardContent className="p-3 flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-white text-sm">{workout.name}</p>
+                        <p className="font-medium text-gray-900 text-sm">{workout.name}</p>
                         <p className="text-xs text-gray-500">
                           {workout.blocks?.length || 0} blocks
                           {workout.estimatedMinutes ? ` • ~${workout.estimatedMinutes} min` : ''}
@@ -180,17 +180,17 @@ export default function BuilderPage() {
           </div>
 
           {savedBlocks.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-6 text-center">
-                <Layers className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                <p className="text-sm text-gray-400">No saved blocks</p>
-                <p className="text-xs text-gray-500 mt-1">Save blocks from the workout builder</p>
+                <Layers className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">No saved blocks</p>
+                <p className="text-xs text-gray-400 mt-1">Save blocks from the workout builder</p>
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-2">
               {savedBlocks.slice(0, 5).map((block) => (
-                <Card key={block.id} className="bg-gray-900 border-gray-800">
+                <Card key={block.id} className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-3 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
@@ -207,7 +207,7 @@ export default function BuilderPage() {
                         }`} />
                       </div>
                       <div>
-                        <p className="font-medium text-white text-sm">{block.name}</p>
+                        <p className="font-medium text-gray-900 text-sm">{block.name}</p>
                         <p className="text-xs text-gray-500 capitalize">{block.type} • {block.exercises?.length || 0} exercises</p>
                       </div>
                     </div>
@@ -235,10 +235,10 @@ export default function BuilderPage() {
             </div>
             <div className="space-y-2">
               {circuitLibrary.slice(0, 5).map((circuit) => (
-                <Card key={circuit.id} className="bg-gray-900 border-gray-800">
+                <Card key={circuit.id} className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-3 flex items-center justify-between">
                     <div>
-                      <p className="font-medium text-white text-sm">{circuit.name}</p>
+                      <p className="font-medium text-gray-900 text-sm">{circuit.name}</p>
                       <p className="text-xs text-gray-500 capitalize">
                         {circuit.circuitStyle} • {circuit.exercises?.length || 0} exercises
                         {circuit.rounds ? ` • ${circuit.rounds} rounds` : ''}

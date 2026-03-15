@@ -12,7 +12,7 @@
 
 import { Workout, PersonalBest } from '@/types';
 import { v4 as uuidv4 } from 'uuid';
-import { isAssistedExercise } from './exercises';
+import { isAssistedExercise, getSetVolume, getUserBodyweight } from './exercises';
 
 // ============ TYPES ============
 
@@ -89,16 +89,17 @@ export function recomputePBs(
           }
         });
 
-        // Best single-exercise volume (skip for assisted — counterbalance isn't work)
-        if (!isAssisted) {
-          const exerciseVolume = (ex.sets || [])
-            .filter(s => s.completed && s.weight && s.reps)
-            .reduce((sum, s) => sum + (s.weight! * s.reps!), 0);
+        // Best single-exercise volume — uses bodyweight-based formula for assisted
+        const userBW = getUserBodyweight(userId);
+        const exerciseVolume = (ex.sets || [])
+          .filter(s => s.completed && s.reps)
+          .reduce((sum, s) => {
+            return sum + getSetVolume(s.weight, s.reps || 0, s.isAssisted || isAssisted, userBW);
+          }, 0);
 
-          if (exerciseVolume > 0 && pbMap[exerciseId]) {
-            if (exerciseVolume > pbMap[exerciseId].bestVolume) {
-              pbMap[exerciseId].bestVolume = exerciseVolume;
-            }
+        if (exerciseVolume > 0 && pbMap[exerciseId]) {
+          if (exerciseVolume > pbMap[exerciseId].bestVolume) {
+            pbMap[exerciseId].bestVolume = exerciseVolume;
           }
         }
       });
@@ -136,12 +137,16 @@ export function computeVolumeRollup(
     const month = new Date(workout.startTime).toISOString().slice(0, 7);
     monthlyMap[month] = (monthlyMap[month] || 0) + sessionVolume;
 
-    // Per-exercise and per-muscle-group volume
+    // Per-exercise and per-muscle-group volume — bodyweight-based for assisted
+    const rollupBW = getUserBodyweight(userId);
     workout.exercises?.forEach(ex => {
       const exId = ex.exerciseId || '';
+      const isAssisted = isAssistedExercise(exId, ex.exercise?.name);
       const vol = (ex.sets || [])
-        .filter(s => s.completed && s.weight && s.reps)
-        .reduce((sum, s) => sum + (s.weight! * s.reps!), 0);
+        .filter(s => s.completed && s.reps)
+        .reduce((sum, s) => {
+          return sum + getSetVolume(s.weight, s.reps || 0, s.isAssisted || isAssisted, rollupBW);
+        }, 0);
 
       if (vol > 0) {
         perExercise[exId] = (perExercise[exId] || 0) + vol;

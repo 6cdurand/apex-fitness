@@ -75,11 +75,11 @@ import {
   BlockPerformance,
   BlockType,
 } from '@/types';
-import { calculate1RM, exerciseLibrary, exerciseLibraryMap } from './exercises';
+import { calculate1RM, exerciseLibrary, exerciseLibraryMap, getSetVolume, getUserBodyweight } from './exercises';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from './deriveAll';
 
 // Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
-function hashPassword(password: string): string {
+export function hashPassword(password: string): string {
   let hash = 0;
   for (let i = 0; i < password.length; i++) {
     const char = password.charCodeAt(i);
@@ -100,6 +100,7 @@ interface AuthState {
   deleteAccount: () => void;
   updateUser: (updates: Partial<User>) => void;
   updatePassword: (email: string, oldPassword: string, newPassword: string) => boolean;
+  resetPassword: (email: string, newPassword: string) => boolean;
   switchMode: (mode: UserMode) => void;
 }
 
@@ -120,6 +121,14 @@ export const useAuthStore = create<AuthState>()(
         console.log('[Auth] Found', storedUsers.length, 'users in localStorage');
         
         const hashed = hashPassword(password);
+        // Repair: fix users with missing/undefined passwords (from Supabase merge stripping them)
+        storedUsers.forEach((u: any) => {
+          if (!u.password && u.email && !u.isTrainer) {
+            u.password = hashPassword('client123');
+          }
+        });
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        
         const localUser = storedUsers.find((u: User & { password: string }) => {
           if (u.email?.toLowerCase() !== email.toLowerCase()) return false;
           // Match hashed or legacy plaintext passwords
@@ -299,6 +308,17 @@ export const useAuthStore = create<AuthState>()(
         const userIdx = storedUsers.findIndex((u: any) => 
           u.email?.toLowerCase() === email.toLowerCase() && 
           (u.password === hashedOld || u.password === oldPassword)
+        );
+        if (userIdx === -1) return false;
+        storedUsers[userIdx].password = hashPassword(newPassword);
+        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        return true;
+      },
+
+      resetPassword: (email, newPassword) => {
+        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+        const userIdx = storedUsers.findIndex((u: any) => 
+          u.email?.toLowerCase() === email.toLowerCase()
         );
         if (userIdx === -1) return false;
         storedUsers[userIdx].password = hashPassword(newPassword);
@@ -601,12 +621,15 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { activeWorkout, workoutTimer } = get();
         if (!activeWorkout) return null;
 
-        // Calculate total volume (exclude assisted sets)
+        // Calculate total volume using bodyweight-based formula for assisted exercises
+        const targetBW = getUserBodyweight(activeWorkout.userId);
         let totalVolume = 0;
         activeWorkout.exercises.forEach(ex => {
+          const { isAssistedExercise } = require('./exercises');
+          const exAssisted = isAssistedExercise(ex.exerciseId, ex.exercise?.name);
           ex.sets.forEach(s => {
-            if (s.completed && s.weight && s.reps && !s.isAssisted) {
-              totalVolume += s.weight * s.reps;
+            if (s.completed && s.reps) {
+              totalVolume += getSetVolume(s.weight, s.reps, s.isAssisted || exAssisted, targetBW);
             }
           });
         });
@@ -716,6 +739,11 @@ export const useWorkoutStore = create<WorkoutState>()(
         // Extract block metadata if present
         const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
         
+        // Auto-detect assisted exercises by name
+        const { isAssistedExercise } = require('./exercises');
+        const exerciseName = exercise.name || (exerciseData as any)?.name || '';
+        const autoAssisted = isAssistedExercise(exercise.id, exerciseName);
+        
         // Check if this is a stretching exercise - default to timed with 2 rounds
         const isStretching = exercise.category === 'stretching';
         const defaultDuration = 30; // 30 seconds per stretch
@@ -732,6 +760,7 @@ export const useWorkoutStore = create<WorkoutState>()(
               completed: false,
               previousWeight: lastSetData?.weight || pb?.bestWeight,
               previousReps: lastSetData?.reps || pb?.bestReps,
+              ...(autoAssisted && { isAssisted: true }),
             }];
         
         const workoutExercise: WorkoutExercise = {
@@ -806,6 +835,11 @@ export const useWorkoutStore = create<WorkoutState>()(
           }
         }
 
+        // Auto-detect assisted exercises by name
+        const { isAssistedExercise } = require('./exercises');
+        const exerciseName = exercise.exercise?.name || '';
+        const autoAssisted = isAssistedExercise(exercise.exerciseId, exerciseName) || lastSet?.isAssisted;
+
         const newSet: WorkoutSet = {
           id: uuidv4(),
           setNumber: exercise.sets.length + 1,
@@ -815,6 +849,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           completed: false,
           previousWeight: lastSetData?.weight || pb?.bestWeight,
           previousReps: lastSetData?.reps || pb?.bestReps,
+          ...(autoAssisted && { isAssisted: true }),
         };
 
         set({
@@ -1085,7 +1120,9 @@ export const useWorkoutStore = create<WorkoutState>()(
         
         // calculate1RM returns null if reps > 20 (doesn't count toward strength rating)
         const calculatedRM = calculate1RM(weight, reps);
-        const volume = weight * reps;
+        // Assisted: (bodyweight - assistedWeight) × reps, fallback reps×1
+        const userBW = getUserBodyweight(targetUserId);
+        const volume = getSetVolume(weight, reps, isAssisted, userBW);
 
         // Skip PB update if reps > 20 (null 1RM)
         if (calculatedRM === null) {
@@ -1106,7 +1143,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             oneRepMax: isAssisted ? weight : calculatedRM, // For assisted, store weight directly (not 1RM)
             bestWeight: weight,
             bestReps: reps,
-            bestVolume: isAssisted ? 0 : Math.max(volume, existingPB?.bestVolume || 0),
+            bestVolume: Math.max(volume, existingPB?.bestVolume || 0),
             achievedAt: new Date().toISOString(),
             workoutId,
           };
@@ -1546,9 +1583,13 @@ export const useWorkoutStore = create<WorkoutState>()(
             
             const isAssisted = isAssistedExercise(exerciseId, ex.exercise?.name);
             
+            const userBW = getUserBodyweight(userId);
             ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(set => {
               const oneRepMax = calculate1RM(set.weight!, set.reps!);
               if (oneRepMax === null) return; // Skip if reps > 20
+              
+              // Assisted: (bodyweight - assistedWeight) × reps, fallback reps×1
+              const setVolume = getSetVolume(set.weight, set.reps!, isAssisted, userBW);
               
               const existing = newPBs[exerciseId];
               // For assisted: lower weight = better. For normal: higher 1RM = better.
@@ -1564,7 +1605,7 @@ export const useWorkoutStore = create<WorkoutState>()(
                   bestWeight: set.weight!,
                   bestReps: set.reps!,
                   oneRepMax: isAssisted ? set.weight! : oneRepMax,
-                  bestVolume: isAssisted ? 0 : (existing?.bestVolume || 0),
+                  bestVolume: Math.max(setVolume, existing?.bestVolume || 0),
                   achievedAt: workout.endTime || workout.startTime || new Date().toISOString(),
                   workoutId: workout.id,
                 };

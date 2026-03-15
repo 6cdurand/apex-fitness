@@ -61,7 +61,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col">
       {/* Main Content */}
       <main className="flex-1 pb-24 overflow-auto">
         {children}
@@ -93,8 +93,8 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
       {/* Bottom Navigation - Refined, calmer */}
       <nav className={cn(
         "fixed bottom-0 left-0 right-0 z-50",
-        "bg-slate-900/98 backdrop-blur-xl border-t border-slate-800/50",
-        "safe-area-inset-bottom shadow-2xl shadow-black/50"
+        "bg-white/98 backdrop-blur-xl border-t border-gray-200",
+        "safe-area-inset-bottom shadow-[0_-2px_10px_rgba(0,0,0,0.06)]"
       )}>
         <div className="max-w-lg mx-auto px-4">
           <div className="flex items-center justify-around py-3">
@@ -112,7 +112,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                     "min-w-[68px] relative",
                     isActive 
                       ? `${primaryColorLight} shadow-lg ${isTrainerMode ? 'shadow-rose-500/20' : 'shadow-sky-500/20'}` 
-                      : "hover:bg-slate-800/50"
+                      : "hover:bg-gray-100"
                   )}
                 >
                   {isActive && (
@@ -124,13 +124,13 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
                   <Icon
                     className={cn(
                       "h-5 w-5 mb-1 transition-all duration-300",
-                      isActive ? `${textColor} scale-110` : "text-slate-500"
+                      isActive ? `${textColor} scale-110` : "text-gray-400"
                     )}
                   />
                   <span
                     className={cn(
                       "text-[11px] font-medium transition-colors",
-                      isActive ? textColor : "text-slate-500"
+                      isActive ? textColor : "text-gray-400"
                     )}
                   >
                     {item.label}
@@ -164,7 +164,7 @@ export function PageHeader({
     <header className={cn(
       "sticky top-0 z-40",
       "bg-gradient-to-b",
-      isTrainerMode ? "from-rose-500 via-rose-600 to-orange-500" : "from-sky-500 via-sky-600 to-orange-500",
+      isTrainerMode ? "from-rose-500 via-rose-600 to-rose-700" : "from-sky-500 via-sky-600 to-sky-700",
       "px-5 pt-14 pb-8 shadow-xl",
       isTrainerMode ? "shadow-rose-500/10" : "shadow-sky-500/10"
     )}>

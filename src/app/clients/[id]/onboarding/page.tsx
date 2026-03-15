@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useTrainerStore, useAuthStore, useSocialStore, useWorkoutStore } from '@/lib/store';
+import { useTrainerStore, useAuthStore, useSocialStore, useWorkoutStore, hashPassword } from '@/lib/store';
 import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { exerciseLibrary, searchExercises, getExerciseUsageCounts, getExerciseById } from '@/lib/exercises';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -201,7 +201,7 @@ export default function ClientOnboardingPage() {
       followers: [],
       following: [],
       trainerId: user?.id,
-      password,
+      password: hashPassword(password),
     };
     
     // Save to localStorage

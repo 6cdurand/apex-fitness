@@ -356,7 +356,7 @@ export default function ProgramPage() {
             </h2>
             <div className="space-y-2">
               {savedPrograms.map((prog) => (
-                <Card key={prog.id} className="bg-gray-900 border-gray-800">
+                <Card key={prog.id} className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-3">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
@@ -365,7 +365,7 @@ export default function ProgramPage() {
                         {prog.source === 'ai' ? <Brain className="w-5 h-5 text-violet-400" /> : <LayoutGrid className="w-5 h-5 text-emerald-400" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-white text-sm truncate">{prog.name}</h3>
+                        <h3 className="font-semibold text-gray-900 text-sm truncate">{prog.name}</h3>
                         <div className="flex items-center gap-2 mt-0.5">
                           <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">
                             {prog.daysPerWeek}×/wk • {prog.weeks} weeks
@@ -410,8 +410,8 @@ export default function ProgramPage() {
                     <Sparkles className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Create Workout</h3>
-                    <p className="text-xs text-gray-300">AI generates a single workout for you</p>
+                    <h3 className="font-semibold text-gray-900">Create Workout</h3>
+                    <p className="text-xs text-gray-500">AI generates a single workout for you</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-violet-400" />
@@ -419,7 +419,7 @@ export default function ProgramPage() {
             </Card>
 
             <Card 
-              className="bg-gray-900 border-gray-800 cursor-pointer hover:border-blue-500/50 transition-colors"
+              className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-blue-500/50 transition-colors"
               onClick={() => setShowCreateChoice(true)}
             >
               <CardContent className="p-4 flex items-center justify-between">
@@ -428,8 +428,8 @@ export default function ProgramPage() {
                     <Calendar className="w-6 h-6 text-blue-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-white">Create Program</h3>
-                    <p className="text-xs text-gray-400">AI-generated or pick from templates</p>
+                    <h3 className="font-semibold text-gray-900">Create Program</h3>
+                    <p className="text-xs text-gray-500">AI-generated or pick from templates</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-500" />
@@ -451,8 +451,8 @@ export default function ProgramPage() {
                   <Target className="w-6 h-6 text-rose-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">Find a Trainer</h3>
-                  <p className="text-xs text-gray-300">Get a personalized program from a certified trainer</p>
+                  <h3 className="font-semibold text-gray-900">Find a Trainer</h3>
+                    <p className="text-xs text-gray-500">Get a personalized program from a certified trainer</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-400" />
               </div>
@@ -463,19 +463,19 @@ export default function ProgramPage() {
 
       {/* Create Program Choice Dialog */}
       <Dialog open={showCreateChoice} onOpenChange={setShowCreateChoice}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+        <DialogContent className="bg-white border-gray-200 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-blue-400" />
               Create Program
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-gray-500">
               Choose how you want to build your program
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-2">
             <Card 
-              className="bg-gray-800/50 border-gray-700 cursor-pointer hover:border-violet-500/50 transition-colors"
+              className="bg-gray-50 border-gray-200 cursor-pointer hover:border-violet-500/50 transition-colors"
               onClick={() => { setShowCreateChoice(false); resetGenerator(); setProgramMode(true); setShowGenerator(true); }}
             >
               <CardContent className="p-4 flex items-center gap-3">
@@ -483,15 +483,15 @@ export default function ProgramPage() {
                   <Brain className="w-6 h-6 text-white" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">AI Generate</h3>
-                  <p className="text-xs text-gray-400">Tell us your goals — AI creates a custom program</p>
+                  <h3 className="font-semibold text-gray-900">AI Generate</h3>
+                  <p className="text-xs text-gray-500">Tell us your goals — AI creates a custom program</p>
                 </div>
                 <Sparkles className="w-5 h-5 text-violet-400" />
               </CardContent>
             </Card>
 
             <Card 
-              className="bg-gray-800/50 border-gray-700 cursor-pointer hover:border-emerald-500/50 transition-colors"
+              className="bg-gray-50 border-gray-200 cursor-pointer hover:border-emerald-500/50 transition-colors"
               onClick={() => { setShowCreateChoice(false); setShowBrowseTemplates(true); }}
             >
               <CardContent className="p-4 flex items-center gap-3">
@@ -499,15 +499,15 @@ export default function ProgramPage() {
                   <BookOpen className="w-6 h-6 text-emerald-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">Browse Templates</h3>
-                  <p className="text-xs text-gray-400">{suggestedPrograms.length} curated programs to choose from</p>
+                  <h3 className="font-semibold text-gray-900">Browse Templates</h3>
+                  <p className="text-xs text-gray-500">{suggestedPrograms.length} curated programs to choose from</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-emerald-400" />
               </CardContent>
             </Card>
 
             <Card 
-              className="bg-gray-800/50 border-gray-700 cursor-pointer hover:border-sky-500/50 transition-colors"
+              className="bg-gray-50 border-gray-200 cursor-pointer hover:border-sky-500/50 transition-colors"
               onClick={() => { setShowCreateChoice(false); router.push('/program/builder'); }}
             >
               <CardContent className="p-4 flex items-center gap-3">
@@ -515,8 +515,8 @@ export default function ProgramPage() {
                   <Dumbbell className="w-6 h-6 text-sky-400" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">Build Custom</h3>
-                  <p className="text-xs text-gray-400">Create your own multi-day program from scratch</p>
+                  <h3 className="font-semibold text-gray-900">Build Custom</h3>
+                  <p className="text-xs text-gray-500">Create your own multi-day program from scratch</p>
                 </div>
                 <ChevronRight className="w-5 h-5 text-sky-400" />
               </CardContent>

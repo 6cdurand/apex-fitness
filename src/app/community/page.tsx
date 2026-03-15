@@ -100,7 +100,7 @@ export default function CommunityPage() {
             placeholder="Search people..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-800 border-gray-700 text-white"
+            className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
           />
         </div>
 
@@ -127,7 +127,7 @@ export default function CommunityPage() {
         {/* Main Content */}
         {!searchQuery && (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-gray-800 border-gray-700 w-full">
+            <TabsList className="bg-gray-100 border-gray-200 w-full">
               <TabsTrigger value="discover" className="flex-1 text-xs">Discover</TabsTrigger>
               <TabsTrigger value="following" className="flex-1 text-xs">Following ({friends.length})</TabsTrigger>
               <TabsTrigger value="groups" className="flex-1 text-xs">Groups</TabsTrigger>
@@ -238,7 +238,7 @@ export default function CommunityPage() {
             <TabsContent value="following" className="mt-4">
               <ScrollArea className="h-[calc(100vh-320px)]">
                 {friends.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="py-12 text-center">
                       <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
                       <p className="text-gray-400">Not following anyone yet</p>
@@ -265,7 +265,7 @@ export default function CommunityPage() {
             </TabsContent>
 
             <TabsContent value="groups" className="mt-4">
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-12 text-center">
                   <Globe className="w-10 h-10 text-gray-600 mx-auto mb-2" />
                   <h3 className="font-semibold text-gray-400 mb-2">Groups Coming Soon</h3>
@@ -288,17 +288,17 @@ function UserRow({ user, isFollowing, onFollow, onUnfollow, onClick }: {
   onClick: () => void;
 }) {
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-white border-gray-200 shadow-sm">
       <CardContent className="p-3 flex items-center justify-between">
         <div className="flex items-center gap-3 cursor-pointer" onClick={onClick}>
           <Avatar className="w-10 h-10">
             <AvatarImage src={user.profilePhoto} />
-            <AvatarFallback className="bg-gray-700 text-white">
+            <AvatarFallback className="bg-white text-gray-900">
               {user.displayName?.[0] || '?'}
             </AvatarFallback>
           </Avatar>
           <div>
-            <p className="font-medium text-white text-sm">{user.displayName || user.username}</p>
+            <h3 className="font-semibold text-gray-900">{user.displayName}</h3>
             {user.username && <p className="text-xs text-gray-500">@{user.username}</p>}
           </div>
         </div>

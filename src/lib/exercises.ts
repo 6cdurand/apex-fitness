@@ -2128,6 +2128,38 @@ export function formatAssistedWeight(weight: number, isAssisted: boolean): strin
   return `−${Math.abs(weight)}`;
 }
 
+// Calculate volume for a single set, handling assisted and bodyweight exercises
+// Assisted: (bodyweight - assistedWeight) × reps, fallback to reps×1 if no bodyweight
+// Bodyweight (0 weight): reps×1
+// Normal: weight × reps
+export function getSetVolume(
+  weight: number | undefined,
+  reps: number,
+  isAssisted: boolean,
+  userBodyweight?: number,
+): number {
+  if (isAssisted) {
+    if (userBodyweight && userBodyweight > 0 && weight && weight > 0) {
+      const effectiveLoad = Math.max(userBodyweight - weight, 0);
+      return effectiveLoad * reps;
+    }
+    return 1 * reps; // Fallback: no bodyweight set
+  }
+  const effectiveWeight = (weight && weight > 0) ? weight : 1;
+  return effectiveWeight * reps;
+}
+
+// Look up a user's bodyweight from localStorage users array
+export function getUserBodyweight(userId: string): number | undefined {
+  try {
+    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const user = storedUsers.find((u: any) => u.id === userId);
+    return user?.weight || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Count how many times each exercise has been completed across workout history
 // Pass userId for self-mode, or clientId for trainer mode
 export function getExerciseUsageCounts(

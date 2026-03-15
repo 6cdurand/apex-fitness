@@ -43,7 +43,7 @@ import { toast } from 'sonner';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isAuthenticated, logout, switchMode, updateUser } = useAuthStore();
+  const { user, isAuthenticated, logout, updateUser, switchMode } = useAuthStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
   const { medals, strengthRating, calculateStrengthRating } = useMedalStore();
   const { posts } = useSocialStore();
@@ -117,10 +117,7 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSwitchMode = () => {
-    const newMode = user?.mode === 'trainer' ? 'user' : 'trainer';
-    switchMode(newMode);
-  };
+  // Mode switch moved to Today page
 
   // Get trainer info if user has a trainer
   const [trainerInfo, setTrainerInfo] = useState<any>(null);
@@ -185,7 +182,7 @@ export default function ProfilePage() {
   // For trainers: count sessions they've conducted (where assignedBy === their id)
   // For regular users: count their own workouts (userId === their id, no assignedBy)
   const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user.id && !w.deletedAt);
-  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.assignedBy && !w.deletedAt);
+  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.deletedAt);
   
   // Total workouts: trainer sees sessions conducted, user sees own workouts
   const userWorkouts = isTrainerMode ? trainerConductedWorkouts : userOwnWorkouts;
@@ -392,7 +389,7 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      <div className="bg-gradient-to-b from-sky-500 via-sky-600 to-orange-500 pt-14 pb-24 px-5 relative overflow-hidden">
+      <div className={`bg-gradient-to-b ${isTrainerMode ? 'from-rose-500 via-rose-600 to-rose-700' : 'from-sky-500 via-sky-600 to-sky-700'} pt-14 pb-12 px-5 relative overflow-hidden`}>
         {/* Subtle background pattern */}
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:32px_32px] pointer-events-none" />
         
@@ -461,24 +458,27 @@ export default function ProfilePage() {
             onClick={() => setShowFollowersModal(true)}
           >
             <p className="text-2xl font-bold text-white">{actualFollowers.length}</p>
-            <p className="text-[11px] text-white/60 font-medium">Followers</p>
+            <p className="text-[11px] text-white/60 font-medium">{isTrainerMode ? 'Clients' : 'Followers'}</p>
           </div>
           <div 
             className="text-center cursor-pointer hover:bg-white/10 rounded-xl p-2 -m-2 transition-all duration-200"
             onClick={() => setShowFollowingModal(true)}
           >
             <p className="text-2xl font-bold text-white">{actualFollowing.length}</p>
-            <p className="text-[11px] text-white/60 font-medium">Following</p>
+            <p className="text-[11px] text-white/60 font-medium">{isTrainerMode ? 'Athletes' : 'Following'}</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-white">{userMedals.length}</p>
             <p className="text-[11px] text-white/60 font-medium">Medals</p>
           </div>
         </div>
+      </div>
 
+      {/* Content below gradient - white background */}
+      <div className="px-5 pt-4 pb-2 space-y-4 relative z-10">
         {/* Trainer Connection - shown for clients */}
         {trainerInfo && !user.isTrainer && (
-          <Card className="bg-white/10 border-white/20 mb-4">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <Avatar className="w-12 h-12">
@@ -488,10 +488,10 @@ export default function ProfilePage() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
-                  <p className="text-white/60 text-xs">Your Trainer</p>
-                  <p className="text-white font-medium">{trainerInfo.displayName || trainerInfo.username}</p>
+                  <p className="text-gray-500 text-xs">Your Trainer</p>
+                  <p className="text-gray-900 font-medium">{trainerInfo.displayName || trainerInfo.username}</p>
                 </div>
-                <Badge className="bg-rose-500/20 text-rose-300 border-rose-500/30">
+                <Badge className="bg-rose-500/10 text-rose-500 border-rose-500/30">
                   Connected
                 </Badge>
               </div>
@@ -499,138 +499,138 @@ export default function ProfilePage() {
           </Card>
         )}
 
-        {/* Membership & Mode Switch */}
-        <div className="flex items-center gap-2 mb-4">
+        {/* User/Trainer Mode Toggle — only shown for trainers */}
+        {user.isTrainer && (
+          <div className="flex items-center justify-center gap-1 p-1 bg-gray-100 rounded-xl border border-gray-200">
+            <button
+              onClick={() => switchMode('user')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                user.mode !== 'trainer'
+                  ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+              }`}
+            >
+              <Dumbbell className="w-4 h-4" />
+              Athlete
+            </button>
+            <button
+              onClick={() => switchMode('trainer')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                user.mode === 'trainer'
+                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Trainer
+            </button>
+          </div>
+        )}
+
+        {/* Membership Badge */}
+        <div className="flex items-center gap-2">
           <Badge className={
             (user.membershipTier || 'pro') === 'pro' || (user.membershipTier || 'pro') === 'trainer'
-              ? 'bg-sky-500/20 text-sky-400 border-sky-500/30'
-              : 'bg-gray-700/50 text-gray-400 border-gray-600'
+              ? 'bg-sky-500/10 text-sky-600 border-sky-500/30'
+              : 'bg-gray-100 text-gray-500 border-gray-200'
           }>
             <Crown className="w-3 h-3 mr-1" />
             {(user.membershipTier || 'pro') === 'trainer' ? 'Trainer Pro' : (user.membershipTier || 'pro') === 'pro' ? 'Pro Member' : 'Free'}
           </Badge>
-          {isTrainerMode && (
-            <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/30">
-              Trainer Mode
-            </Badge>
-          )}
         </div>
-        {user.isTrainer && (
-          <Button
-            onClick={handleSwitchMode}
-            variant="outline"
-            className={`w-full mb-4 ${
-              isTrainerMode 
-                ? 'bg-sky-500/10 border-sky-500/30 text-sky-400 hover:bg-sky-500/20' 
-                : 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20'
-            }`}
-          >
-            {isTrainerMode ? (
-              <>
-                <Dumbbell className="w-4 h-4 mr-2" />
-                Switch to User Mode
-              </>
-            ) : (
-              <>
-                <Users className="w-4 h-4 mr-2" />
-                Switch to Trainer Mode
-              </>
-            )}
-          </Button>
-        )}
 
         {/* Trainer Stats - shown in trainer mode */}
         {isTrainerMode && trainerStats && (
-          <Card className="bg-white/10 border-white/20">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-4">
               {/* Earnings Row */}
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-white">${Math.round(trainerStats.weekEarnings)}</p>
-                  <p className="text-xs text-white/60">This Week</p>
+                  <p className="text-2xl font-bold text-gray-900">${Math.round(trainerStats.weekEarnings)}</p>
+                  <p className="text-xs text-gray-500">This Week</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-white">${Math.round(trainerStats.monthEarnings)}</p>
-                  <p className="text-xs text-white/60">This Month</p>
+                  <p className="text-2xl font-bold text-gray-900">${Math.round(trainerStats.monthEarnings)}</p>
+                  <p className="text-xs text-gray-500">This Month</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold text-sky-400">${Math.round(trainerStats.totalEarnings)}</p>
-                  <p className="text-xs text-white/60">Total Paid</p>
+                  <p className="text-2xl font-bold text-rose-500">${Math.round(trainerStats.totalEarnings)}</p>
+                  <p className="text-xs text-gray-500">Total Paid</p>
                 </div>
               </div>
               
               {/* Outstanding Warning */}
               {trainerStats.outstandingAmount > 0 && (
-                <div className="mb-3 p-2 bg-amber-500/20 rounded-lg flex justify-between items-center">
-                  <span className="text-xs text-amber-300">
+                <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded-lg flex justify-between items-center">
+                  <span className="text-xs text-amber-600">
                     {trainerStats.totalUnpaidSessions} unpaid session{trainerStats.totalUnpaidSessions !== 1 ? 's' : ''}
                   </span>
-                  <span className="text-sm font-bold text-amber-400">
+                  <span className="text-sm font-bold text-amber-600">
                     ${Math.round(trainerStats.outstandingAmount)} outstanding
                   </span>
                 </div>
               )}
               
               {/* Stats Grid - Clickable for medal progress */}
-              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-white/10">
+              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-gray-100">
                 <button 
                   onClick={() => setShowTrainerStatModal('sessions')}
-                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <p className="text-lg font-semibold text-white">{trainerStats.totalSessions}</p>
-                  <p className="text-[10px] text-white/50">Sessions</p>
+                  <p className="text-lg font-semibold text-gray-900">{trainerStats.totalSessions}</p>
+                  <p className="text-[10px] text-gray-500">Sessions</p>
                 </button>
                 <button 
                   onClick={() => setShowTrainerStatModal('clients')}
-                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <p className="text-lg font-semibold text-white">{trainerStats.activeClients}</p>
-                  <p className="text-[10px] text-white/50">Clients</p>
+                  <p className="text-lg font-semibold text-gray-900">{trainerStats.activeClients}</p>
+                  <p className="text-[10px] text-gray-500">Clients</p>
                 </button>
                 <div className="text-center">
-                  <p className="text-lg font-semibold text-white">{trainerStats.avgSessionsPerWeek}</p>
-                  <p className="text-[10px] text-white/50">Avg/wk</p>
+                  <p className="text-lg font-semibold text-gray-900">{trainerStats.avgSessionsPerWeek}</p>
+                  <p className="text-[10px] text-gray-500">Avg/wk</p>
                 </div>
                 <button 
                   onClick={() => setShowTrainerStatModal('revenue')}
-                  className="text-center p-2 -m-1 rounded-lg hover:bg-white/10 transition-colors"
+                  className="text-center p-2 -m-1 rounded-lg hover:bg-gray-50 transition-colors"
                 >
-                  <p className="text-lg font-semibold text-white">${trainerStats.avgPerSession}</p>
-                  <p className="text-[10px] text-white/50">Avg/session</p>
+                  <p className="text-lg font-semibold text-gray-900">${trainerStats.avgPerSession}</p>
+                  <p className="text-[10px] text-gray-500">Avg/session</p>
                 </button>
               </div>
               
               {/* Enhanced Insights */}
-              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-white/10 mt-3">
-                <div className="text-center p-1.5 bg-white/5 rounded-lg">
-                  <p className="text-sm font-semibold text-white">{trainerStats.collectionRate}%</p>
-                  <p className="text-[9px] text-white/50">Collection Rate</p>
+              <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100 mt-3">
+                <div className="text-center p-1.5 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-semibold text-gray-900">{trainerStats.collectionRate}%</p>
+                  <p className="text-[9px] text-gray-500">Collection Rate</p>
                 </div>
-                <div className="text-center p-1.5 bg-white/5 rounded-lg">
-                  <p className="text-sm font-semibold text-white">${trainerStats.revenuePerClient}</p>
-                  <p className="text-[9px] text-white/50">Rev/Client</p>
+                <div className="text-center p-1.5 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-semibold text-gray-900">${trainerStats.revenuePerClient}</p>
+                  <p className="text-[9px] text-gray-500">Rev/Client</p>
                 </div>
-                <div className="text-center p-1.5 bg-white/5 rounded-lg">
-                  <p className={`text-sm font-semibold ${trainerStats.monthlyGrowth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                <div className="text-center p-1.5 bg-gray-50 rounded-lg">
+                  <p className={`text-sm font-semibold ${trainerStats.monthlyGrowth >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                     {trainerStats.monthlyGrowth > 0 ? '+' : ''}{trainerStats.monthlyGrowth}%
                   </p>
-                  <p className="text-[9px] text-white/50">Monthly Growth</p>
+                  <p className="text-[9px] text-gray-500">Monthly Growth</p>
                 </div>
               </div>
               {(trainerStats.bestClient.revenue > 0 || trainerStats.busiestDay) && (
                 <div className="grid grid-cols-2 gap-2 mt-2">
                   {trainerStats.bestClient.revenue > 0 && (
-                    <div className="p-2 bg-white/5 rounded-lg">
-                      <p className="text-[9px] text-white/40 uppercase tracking-wide">Top Client</p>
-                      <p className="text-xs font-semibold text-white truncate">{trainerStats.bestClient.name}</p>
-                      <p className="text-[10px] text-sky-400">${trainerStats.bestClient.revenue} • {trainerStats.bestClient.sessions} sessions</p>
+                    <div className="p-2 bg-gray-50 rounded-lg">
+                      <p className="text-[9px] text-gray-400 uppercase tracking-wide">Top Client</p>
+                      <p className="text-xs font-semibold text-gray-900 truncate">{trainerStats.bestClient.name}</p>
+                      <p className="text-[10px] text-rose-500">${trainerStats.bestClient.revenue} • {trainerStats.bestClient.sessions} sessions</p>
                     </div>
                   )}
                   {trainerStats.busiestDay && (
-                    <div className="p-2 bg-white/5 rounded-lg">
-                      <p className="text-[9px] text-white/40 uppercase tracking-wide">Busiest Day</p>
-                      <p className="text-xs font-semibold text-white">{trainerStats.busiestDay.day}</p>
-                      <p className="text-[10px] text-sky-400">{trainerStats.busiestDay.count} sessions total</p>
+                    <div className="p-2 bg-gray-50 rounded-lg">
+                      <p className="text-[9px] text-gray-400 uppercase tracking-wide">Busiest Day</p>
+                      <p className="text-xs font-semibold text-gray-900">{trainerStats.busiestDay.day}</p>
+                      <p className="text-[10px] text-rose-500">{trainerStats.busiestDay.count} sessions total</p>
                     </div>
                   )}
                 </div>
@@ -639,7 +639,7 @@ export default function ProfilePage() {
               {/* Payment History Link */}
               <Button 
                 variant="outline" 
-                className="w-full mt-3 border-white/20 text-white hover:bg-white/10"
+                className="w-full mt-3 border-gray-200 text-gray-700 hover:bg-gray-50"
                 onClick={() => router.push('/payments')}
               >
                 <DollarSign className="w-4 h-4 mr-2" />
@@ -650,18 +650,18 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <div className="px-5 -mt-16 pb-6 space-y-5">
+      <div className="px-5 pb-6 space-y-5">
         {/* Achievements Card — shown ABOVE strength rating */}
-        <Card className="bg-slate-900/90 border-slate-800/50 backdrop-blur-sm shadow-xl">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
+              <CardTitle className="text-gray-900 flex items-center gap-2.5 text-lg">
                 <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${isTrainerMode ? 'from-emerald-500 to-teal-600 shadow-emerald-500/20' : 'from-purple-500 to-pink-600 shadow-purple-500/20'} flex items-center justify-center shadow-lg`}>
                   {isTrainerMode ? <Crown className="w-4 h-4 text-white" /> : <Medal className="w-4 h-4 text-white" />}
                 </div>
                 {isTrainerMode ? 'Trainer Achievements' : 'Achievements'}
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-slate-400 hover:text-sky-400" onClick={() => router.push('/medals')}>
+              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-sky-500" onClick={() => router.push('/medals')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -724,10 +724,10 @@ export default function ProfilePage() {
 
         {/* Pure Strength Rating Card - Circular Progress (hidden in trainer mode) */}
         {!isTrainerMode && (
-        <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-xl">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2.5 text-lg">
+              <CardTitle className="text-gray-900 flex items-center gap-2.5 text-lg">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
                   <Zap className="w-4 h-4 text-white" />
                 </div>
@@ -936,35 +936,51 @@ export default function ProfilePage() {
                 </div>
               )
             ) : (
-              // User mode: show personal workouts
+              // User mode: show personal workouts (both solo and trainer-led)
               userWorkouts.length > 0 ? (
                 <div className="space-y-2">
                   {userWorkouts
                     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
                     .slice(0, 5)
-                    .map((workout) => (
-                      <div
-                        key={workout.id}
-                        className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
-                        onClick={() => router.push(`/workout/${workout.id}`)}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-white text-sm truncate">{workout.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
-                            {workout.notes && ' • Has notes'}
-                          </p>
+                    .map((workout) => {
+                      const isTrainerWorkout = !!workout.assignedBy;
+                      return (
+                        <div
+                          key={workout.id}
+                          className={`flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors border-l-2 ${
+                            isTrainerWorkout ? 'border-l-rose-500' : 'border-l-sky-500'
+                          }`}
+                          onClick={() => router.push(`/workout/${workout.id}`)}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                              {isTrainerWorkout ? (
+                                <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/30 text-[10px] px-1.5 py-0">
+                                  Trainer
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-sky-500/20 text-sky-400 border-sky-500/30 text-[10px] px-1.5 py-0">
+                                  Solo
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
+                              {workout.notes && ' • Has notes'}
+                            </p>
+                          </div>
+                          <div className="text-right ml-3">
+                            <p className={`${isTrainerWorkout ? 'text-rose-400' : 'text-sky-400'} font-medium text-sm`}>
+                              {Math.round(workout.totalVolume).toLocaleString()} kg
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right ml-3">
-                          <p className="text-sky-400 font-medium text-sm">
-                            {Math.round(workout.totalVolume).toLocaleString()} kg
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               ) : (
                 <div className="text-center py-8">

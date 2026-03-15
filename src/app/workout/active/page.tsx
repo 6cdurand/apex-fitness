@@ -42,7 +42,10 @@ import {
   Edit,
   ArrowLeftRight,
   TrendingUp,
-  Dumbbell
+  Dumbbell,
+  Flame,
+  Zap,
+  Heart
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -967,11 +970,11 @@ export default function ActiveWorkoutPage() {
   // When workout is finished and summary is showing, render ONLY the summary screen
   if (!activeWorkout && completedWorkoutData) {
     return (
-      <div className="min-h-screen bg-gray-950 flex flex-col">
+      <div className="min-h-screen bg-white flex flex-col">
         {/* Sticky header with Done button */}
-        <header className="sticky top-0 z-50 bg-gray-950/95 backdrop-blur-sm border-b border-gray-800 px-4 pt-12 pb-3">
+        <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 pt-12 pb-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-lg font-bold text-white">Workout Complete</h1>
+            <h1 className="text-lg font-bold text-gray-900">Workout Complete</h1>
             <Button onClick={handleCloseSummary} className="bg-sky-500 hover:bg-sky-600 h-9 px-5">
               Done
             </Button>
@@ -986,7 +989,7 @@ export default function ActiveWorkoutPage() {
                 <Check className="w-6 h-6 text-white" />
               </div>
               <div>
-                <p className="font-semibold text-white">{completedWorkoutData?.name}</p>
+                <p className="font-semibold text-gray-900">{completedWorkoutData?.name}</p>
                 {completedWorkoutData?.isPTSession && (
                   <Badge className="bg-blue-500/20 text-blue-400 text-[10px] h-5">
                     <Users className="w-3 h-3 mr-1" />
@@ -997,45 +1000,45 @@ export default function ActiveWorkoutPage() {
             </div>
 
             {/* Session Time */}
-            <div className="p-2.5 bg-gray-800 rounded-xl">
+            <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-gray-400">Session Time</span>
-                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                <span className="text-[11px] text-gray-500">Session Time</span>
+                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-500 hover:text-sky-600 flex items-center gap-1">
                   <Edit className="w-3 h-3" />
                   {editingTimes ? 'Cancel' : 'Edit'}
                 </button>
               </div>
               {editingTimes ? (
                 <div className="flex items-center gap-2 justify-center mt-1">
-                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
-                  <span className="text-gray-500">→</span>
-                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center" />
+                  <span className="text-gray-400">→</span>
+                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center" />
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-3 text-sm mt-0.5">
-                  <span className="text-white font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
-                  <span className="text-gray-500">→</span>
-                  <span className="text-white font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-900 font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-gray-900 font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
                 </div>
               )}
             </div>
 
             {/* Compact Stats Row */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-white">{formatTime(completedWorkoutData?.duration || 0)}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-gray-900">{formatTime(completedWorkoutData?.duration || 0)}</p>
                 <p className="text-[10px] text-gray-500">Duration</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-white">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-gray-900">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-500">kg Vol</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-purple-400">{completedWorkoutData?.exercises || 0}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-purple-500">{completedWorkoutData?.exercises || 0}</p>
                 <p className="text-[10px] text-gray-500">Exercises</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-cyan-400">{completedWorkoutData?.sets || 0}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-cyan-500">{completedWorkoutData?.sets || 0}</p>
                 <p className="text-[10px] text-gray-500">Sets</p>
               </div>
             </div>
@@ -1151,38 +1154,38 @@ export default function ActiveWorkoutPage() {
 
             {/* Session Paid — PT sessions */}
             {completedWorkoutData?.isPTSession && (
-              <div className="p-3 bg-gray-800 rounded-lg">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500" />
                   <div className="text-left">
-                    <span className="text-white font-medium text-sm">Session Paid</span>
-                    <p className="text-[11px] text-gray-400">Check if client has paid for this session</p>
+                    <span className="text-gray-900 font-medium text-sm">Session Paid</span>
+                    <p className="text-[11px] text-gray-500">Check if client has paid for this session</p>
                   </div>
                 </label>
               </div>
             )}
 
             {/* Share to Feed */}
-            <div className="p-3 bg-gray-800 rounded-lg">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500" />
                 <div className="text-left">
-                  <span className="text-white font-medium text-sm">Share to Feed</span>
-                  <p className="text-[11px] text-gray-400">Post this workout to your activity feed</p>
+                  <span className="text-gray-900 font-medium text-sm">Share to Feed</span>
+                  <p className="text-[11px] text-gray-500">Post this workout to your activity feed</p>
                 </div>
               </label>
             </div>
 
             {/* Workout Notes */}
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block text-left">
+              <label className="text-xs text-gray-500 mb-1.5 block text-left">
                 {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
               </label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
                 placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
-                className={`w-full h-16 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'}`}
+                className={`w-full h-16 px-3 py-2 bg-gray-50 border rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-200 focus:ring-sky-500'}`}
               />
             </div>
             
@@ -1200,7 +1203,7 @@ export default function ActiveWorkoutPage() {
   const workout = activeWorkout!;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-gradient-to-r from-sky-500 to-sky-600 px-4 pt-12 pb-2">
         <div className="flex items-center justify-between mb-2">
@@ -1255,9 +1258,9 @@ export default function ActiveWorkoutPage() {
                   <Settings className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+              <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
                 <DropdownMenuItem
-                  className="text-sky-400 focus:text-sky-300"
+                  className="text-sky-500 focus:text-sky-600"
                   onClick={() => {
                     setSaveWorkoutName(workout.name || '');
                     setShowSaveWorkoutDialog(true);
@@ -1267,14 +1270,14 @@ export default function ActiveWorkoutPage() {
                   Save as Template
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-gray-300 focus:text-white"
+                  className="text-gray-700 focus:text-gray-900"
                   onClick={() => setShowRestSettings(true)}
                 >
                   <Timer className="w-4 h-4 mr-2" />
                   Rest Timer Settings
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-gray-300 focus:text-white"
+                  className="text-gray-700 focus:text-gray-900"
                   onClick={() => setShowNotesDialog(true)}
                 >
                   <StickyNote className="w-4 h-4 mr-2" />
@@ -1353,9 +1356,9 @@ export default function ActiveWorkoutPage() {
       </header>
 
       {/* Block Panel - Add blocks from here */}
-      <div className="sticky top-[168px] z-40 bg-gray-900/95 backdrop-blur border-b border-gray-800 px-4 py-2">
+      <div className="sticky top-[168px] z-40 bg-slate-800 backdrop-blur border-b border-slate-700 px-4 py-2">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 mr-2">Add:</span>
+          <span className="text-xs text-slate-400 mr-2">Add:</span>
           
           {/* Warmup Button */}
           <Button
@@ -1379,7 +1382,7 @@ export default function ActiveWorkoutPage() {
                 : "hover:bg-yellow-500/10 text-yellow-400/70 hover:text-yellow-400"
             )}
           >
-            🔥 <span className="hidden sm:inline">Warm-Up</span>
+            <span className="w-5 h-5 rounded-full bg-yellow-400 inline-flex items-center justify-center flex-shrink-0"><Flame className="w-3 h-3 text-white" /></span> <span className="hidden sm:inline">Warm-Up</span>
             {hasWarmup && <Check className="w-3 h-3" />}
           </Button>
           
@@ -1405,7 +1408,7 @@ export default function ActiveWorkoutPage() {
                 : "hover:bg-blue-500/10 text-blue-400/70 hover:text-blue-400"
             )}
           >
-            💪 <span className="hidden sm:inline">Strength</span>
+            <span className="w-5 h-5 rounded-full bg-blue-500 inline-flex items-center justify-center flex-shrink-0"><Dumbbell className="w-3 h-3 text-white" /></span> <span className="hidden sm:inline">Strength</span>
             {hasStrength && <Check className="w-3 h-3" />}
           </Button>
           
@@ -1416,7 +1419,7 @@ export default function ActiveWorkoutPage() {
             onClick={() => setShowCircuitDialog(true)}
             className="h-8 px-3 gap-1.5 hover:bg-orange-500/10 text-orange-400/70 hover:text-orange-400"
           >
-            ⚡ <span className="hidden sm:inline">Circuit</span>
+            <span className="w-5 h-5 rounded-full bg-orange-400 inline-flex items-center justify-center flex-shrink-0"><Zap className="w-3 h-3 text-white" /></span> <span className="hidden sm:inline">Circuit</span>
             <Plus className="w-3 h-3" />
           </Button>
           
@@ -1427,7 +1430,7 @@ export default function ActiveWorkoutPage() {
             onClick={() => setShowCardioDialog(true)}
             className="h-8 px-3 gap-1.5 hover:bg-green-500/10 text-green-400/70 hover:text-green-400"
           >
-            🏃 <span className="hidden sm:inline">Cardio</span>
+            <span className="w-5 h-5 rounded-full bg-rose-400 inline-flex items-center justify-center flex-shrink-0"><Heart className="w-3 h-3 text-white" /></span> <span className="hidden sm:inline">Cardio</span>
             <Plus className="w-3 h-3" />
           </Button>
           
@@ -1439,7 +1442,7 @@ export default function ActiveWorkoutPage() {
               setActiveBlockId(null);
               setShowExerciseModal(true);
             }}
-            className="h-8 px-3 gap-1.5 hover:bg-gray-700 text-gray-400 ml-auto"
+            className="h-8 px-3 gap-1.5 hover:bg-slate-700 text-slate-400 ml-auto"
           >
             <Plus className="w-3 h-3" />
             <span className="hidden sm:inline">Exercise</span>
@@ -1541,8 +1544,11 @@ export default function ActiveWorkoutPage() {
                 {/* Block Header */}
                 <div className={cn("flex items-center justify-between p-3 border-b", style.border)}>
                   <div className="flex items-center gap-2">
-                    <span className="text-lg">
-                      {block.type === 'warmup' ? '🔥' : block.type === 'circuit' ? '⚡' : block.type === 'cardio' ? '🏃' : '💪'}
+                    <span className={cn("w-5 h-5 rounded-full inline-flex items-center justify-center", block.type === 'warmup' ? 'bg-yellow-400' : block.type === 'circuit' ? 'bg-orange-400' : block.type === 'cardio' ? 'bg-rose-400' : 'bg-blue-500')}>
+                      {block.type === 'warmup' && <Flame className="w-3 h-3 text-white" />}
+                      {block.type === 'circuit' && <Zap className="w-3 h-3 text-white" />}
+                      {block.type === 'cardio' && <Heart className="w-3 h-3 text-white" />}
+                      {block.type === 'strength' && <Dumbbell className="w-3 h-3 text-white" />}
                     </span>
                     <div>
                       <h3 className={cn("font-semibold", style.text)}>{block.name}</h3>
@@ -1571,10 +1577,10 @@ export default function ActiveWorkoutPage() {
                           <MoreVertical className="w-4 h-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                      <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
                         {block.type === 'circuit' && (
                           <DropdownMenuItem 
-                            className="text-purple-400 focus:text-purple-300"
+                            className="text-purple-500 focus:text-purple-600"
                             onClick={() => {
                               setSaveCircuitName(block.name || 'Circuit');
                               setCircuitToSave(block);
@@ -1652,13 +1658,13 @@ export default function ActiveWorkoutPage() {
                       {blockExercises.map((workoutExercise: any, idx: number) => (
                         <div 
                           key={workoutExercise.id} 
-                          className="flex items-center gap-3 p-2 bg-gray-800/50 rounded-lg"
+                          className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
                         >
                           <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs flex items-center justify-center font-bold">
                             {idx + 1}
                           </span>
                           <div className="flex-1 flex items-center gap-1.5">
-                            <p className="text-white font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                            <p className="text-gray-900 font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
                             <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
                           </div>
                           <div className="flex items-center gap-1">
@@ -1672,7 +1678,7 @@ export default function ActiveWorkoutPage() {
                                   updateSet(workoutExercise.id, (workoutExercise.sets || [])[0].id, { reps });
                                 }
                               }}
-                              className="w-14 h-7 text-center text-sm bg-gray-900 border-gray-700"
+                              className="w-14 h-7 text-center text-sm bg-gray-50 border-gray-200"
                               placeholder="reps"
                             />
                             <span className="text-xs text-gray-500">reps</span>
@@ -1884,7 +1890,7 @@ export default function ActiveWorkoutPage() {
                         <p className="text-xs text-gray-500 mb-2">Splits:</p>
                         <div className="grid grid-cols-5 gap-1">
                           {block.splits.map((split, idx) => (
-                            <div key={idx} className="bg-gray-800 rounded p-1 text-center">
+                            <div key={idx} className="bg-gray-50 border border-gray-200 rounded p-1 text-center">
                               <p className="text-xs text-gray-400">{((split.distance) / 1000).toFixed(1)}km</p>
                               <p className="text-sm font-mono text-green-400">{formatTime(split.time)}</p>
                             </div>
@@ -1927,12 +1933,12 @@ export default function ActiveWorkoutPage() {
                       const currentVolume = currentCompletedSets.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
                       
                       return (
-                      <div key={workoutExercise.id} className="bg-gray-900/30">
+                      <div key={workoutExercise.id} className="bg-white border-b border-gray-100">
                         <div className="px-4 py-3">
                           <div className="flex items-center justify-between mb-1">
                             <div>
                               <div className="flex items-center gap-1.5">
-                                <p className="font-medium text-white">
+                                <p className="font-medium text-gray-900">
                                   {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) 
                                     ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise') 
                                     : (workoutExercise.exercise?.name || 'Exercise')}
@@ -1948,7 +1954,7 @@ export default function ActiveWorkoutPage() {
                               <p className="text-xs text-gray-500">{workoutExercise.exercise?.primaryMuscles?.join(', ')}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <Badge variant="secondary" className="bg-gray-800 text-gray-400">
+                              <Badge variant="secondary" className="bg-gray-100 text-gray-600">
                                 {(workoutExercise.sets || []).filter((s: any) => s.completed).length}/{(workoutExercise.sets || []).length}
                               </Badge>
                               <Button
@@ -1980,7 +1986,7 @@ export default function ActiveWorkoutPage() {
                                     <MoreVertical className="w-4 h-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                                <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
                                   <DropdownMenuItem
                                     className={workoutExercise.isUnilateral ? "text-emerald-400 focus:text-emerald-300" : "text-gray-300 focus:text-gray-200"}
                                     onClick={() => updateExercise(workoutExercise.id, { isUnilateral: !workoutExercise.isUnilateral })}
@@ -2026,7 +2032,7 @@ export default function ActiveWorkoutPage() {
                               </div>
                             )}
                             {lastSets && lastSets.length > 0 && (
-                              <div className="flex items-center gap-1 px-2 py-1 bg-gray-800 rounded">
+                              <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
                                 <History className="w-3 h-3 text-gray-400" />
                                 <span className="text-gray-400">Last: {lastSets.slice(0, 3).map((s: any) => `${s.weight}×${s.reps}`).join(', ')}</span>
                               </div>
@@ -2035,7 +2041,7 @@ export default function ActiveWorkoutPage() {
                         </div>
                         {/* Volume Comparison Bar */}
                         {lastVolume > 0 && (
-                          <div className="px-4 py-1.5 bg-gray-800/30 flex items-center justify-between text-[11px]">
+                          <div className="px-4 py-1.5 bg-gray-50 flex items-center justify-between text-[11px]">
                             <span className="text-gray-500">Last: {lastVolume.toLocaleString()}kg</span>
                             <span className={cn(
                               "font-medium",
@@ -2051,7 +2057,7 @@ export default function ActiveWorkoutPage() {
                           </div>
                         )}
                         {/* Sets Header */}
-                        <div className="grid grid-cols-12 gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-800/50 text-[10px] sm:text-xs text-gray-500 font-medium">
+                        <div className="grid grid-cols-12 gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-50 text-[10px] sm:text-xs text-gray-500 font-medium">
                           <div className="col-span-1">SET</div>
                           {(workoutExercise.exercise?.category === 'stretching' || workoutExercise.exercise?.category === 'cardio' || (workoutExercise as any).blockType === 'cardio') ? (
                             <>
@@ -2085,7 +2091,7 @@ export default function ActiveWorkoutPage() {
                                     "w-8 h-8 rounded-full flex items-center justify-center font-medium text-xs",
                                     set.completed && "bg-sky-500 text-white",
                                     !set.completed && workoutExercise.isUnilateral && "bg-emerald-900 text-emerald-400",
-                                    !set.completed && !workoutExercise.isUnilateral && "bg-gray-800 text-gray-400"
+                                    !set.completed && !workoutExercise.isUnilateral && "bg-gray-100 text-gray-500"
                                   )}>
                                     {set.completed ? <Check className="w-4 h-4" /> : workoutExercise.isUnilateral ? (idx % 2 === 0 ? 'L' : 'R') : idx + 1}
                                   </button>
@@ -2101,7 +2107,7 @@ export default function ActiveWorkoutPage() {
                                         value={set.duration || ''}
                                         onChange={(e) => updateSet(workoutExercise.id, set.id, { duration: parseInt(e.target.value) || 30 })}
                                         disabled={set.completed || setTimer?.isRunning}
-                                        className={cn("h-9 text-center bg-gray-800 border-gray-700", set.completed && "opacity-50")}
+                                        className={cn("h-9 text-center bg-gray-50 border-gray-200", set.completed && "opacity-50")}
                                       />
                                     </div>
                                     {/* Timer display and controls */}
@@ -2109,7 +2115,7 @@ export default function ActiveWorkoutPage() {
                                       {setTimer?.isRunning || (setTimer && setTimer.remaining > 0) ? (
                                         <div className={cn(
                                           "flex items-center gap-2 px-3 py-1.5 rounded-lg",
-                                          setTimer.isRunning ? "bg-orange-500/20" : "bg-gray-700"
+                                          setTimer.isRunning ? "bg-orange-500/20" : "bg-gray-100"
                                         )}>
                                           <span className={cn(
                                             "font-mono text-lg font-bold",
@@ -2163,7 +2169,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-800 border-gray-700 px-1", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50")}
                                       />
                                     </div>
                                     {/* Reps Input */}
@@ -2182,7 +2188,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-800 border-gray-700 px-1", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50")}
                                       />
                                     </div>
                                   </>
@@ -2218,9 +2224,9 @@ export default function ActiveWorkoutPage() {
                                           <ChevronDown className="w-4 h-4" />
                                         </Button>
                                       </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                                      <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
                                         <DropdownMenuItem 
-                                          className="text-orange-400 focus:text-orange-300"
+                                          className="text-orange-500 focus:text-orange-600"
                                           onClick={() => uncompleteSet(workoutExercise.id, set.id)}
                                         >
                                           <RotateCcw className="w-4 h-4 mr-2" />
@@ -2261,7 +2267,7 @@ export default function ActiveWorkoutPage() {
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
                                     disabled={drop.completed}
-                                    className={cn("w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm", drop.completed && "opacity-50")}
+                                    className={cn("w-16 h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
                                   />
                                   <span className="text-gray-600">×</span>
                                   <Input
@@ -2274,7 +2280,7 @@ export default function ActiveWorkoutPage() {
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
                                     disabled={drop.completed}
-                                    className={cn("w-16 h-8 text-center bg-gray-800 border-gray-700 text-sm", drop.completed && "opacity-50")}
+                                    className={cn("w-16 h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
                                   />
                                   {/* Drop set complete/undo button */}
                                   {!drop.completed ? (
@@ -2406,11 +2412,11 @@ export default function ActiveWorkoutPage() {
                       <div className="flex items-center gap-2">
                         <div className={`h-px flex-1 bg-gradient-to-r ${style.gradient} to-transparent`} />
                         <span className={`text-sm font-semibold ${style.text} px-2 flex items-center gap-2`}>
-                          {blockType === 'warmup' && '🔥'}
-                          {blockType === 'work' && '💪'}
-                          {blockType === 'circuit' && '⚡'}
-                          {blockType === 'cooldown' && '🧘'}
-                          {blockType === 'cardio' && '🏃'}
+                          {blockType === 'warmup' && <span className="w-4 h-4 rounded-full bg-yellow-400 inline-flex items-center justify-center"><Flame className="w-2.5 h-2.5 text-white" /></span>}
+                          {blockType === 'work' && <span className="w-4 h-4 rounded-full bg-blue-500 inline-flex items-center justify-center"><Dumbbell className="w-2.5 h-2.5 text-white" /></span>}
+                          {blockType === 'circuit' && <span className="w-4 h-4 rounded-full bg-orange-400 inline-flex items-center justify-center"><Zap className="w-2.5 h-2.5 text-white" /></span>}
+                          {blockType === 'cooldown' && <span className="w-4 h-4 rounded-full bg-teal-400 inline-flex items-center justify-center"><RotateCcw className="w-2.5 h-2.5 text-white" /></span>}
+                          {blockType === 'cardio' && <span className="w-4 h-4 rounded-full bg-rose-400 inline-flex items-center justify-center"><Heart className="w-2.5 h-2.5 text-white" /></span>}
                           {currentBlockName}
                         </span>
                         <div className={`h-px flex-1 bg-gradient-to-l ${style.gradient} to-transparent`} />
@@ -2430,7 +2436,7 @@ export default function ActiveWorkoutPage() {
                 })()}
                 <Card 
                   className={cn(
-                    "bg-gray-900 border-gray-800 overflow-hidden transition-all",
+                    "bg-white border-gray-200 shadow-sm overflow-hidden transition-all",
                     supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
                     isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-sky-500",
                     isInSuperset && "border-l-4 border-l-purple-500"
@@ -2493,9 +2499,9 @@ export default function ActiveWorkoutPage() {
                           <MoreVertical className="w-5 h-5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                      <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
                         <DropdownMenuItem
-                          className={workoutExercise.isUnilateral ? "text-emerald-400 focus:text-emerald-300" : "text-gray-300 focus:text-gray-200"}
+                          className={workoutExercise.isUnilateral ? "text-emerald-500 focus:text-emerald-600" : "text-gray-600 focus:text-gray-800"}
                           onClick={() => updateExercise(workoutExercise.id, { isUnilateral: !workoutExercise.isUnilateral })}
                         >
                           <ArrowLeftRight className="w-4 h-4 mr-2" />
@@ -2579,7 +2585,7 @@ export default function ActiveWorkoutPage() {
                   </div>
 
                   {/* Sets Header */}
-                  <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-800/50 text-xs text-gray-500 font-medium">
+                  <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 text-xs text-gray-500 font-medium">
                     <div className="col-span-2">SET</div>
                     <div className="col-span-3">PREVIOUS</div>
                     <div className="col-span-3 text-center">KG</div>
@@ -2641,7 +2647,7 @@ export default function ActiveWorkoutPage() {
           setCircuitExerciseSelection([]);
         }
       }}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[85vh]">
+        <DialogContent className="bg-white border-gray-200 max-w-lg max-h-[85vh]">
           <DialogHeader>
             {activeBlockId && (() => {
               const block = workoutBlocks.find(b => b.id === activeBlockId);
@@ -2656,10 +2662,10 @@ export default function ActiveWorkoutPage() {
               const style = colors[block.type] || defaultStyle;
               return (
                 <div className={cn("flex items-center gap-3 p-3 rounded-lg", style.bg, style.border, "border")}>
-                  <span className="text-xl">
-                    {block.type === 'warmup' && '🔥'}
-                    {block.type === 'strength' && '💪'}
-                    {block.type === 'circuit' && '⚡'}
+                  <span className={cn("w-6 h-6 rounded-full inline-flex items-center justify-center", block.type === 'warmup' ? 'bg-yellow-400' : block.type === 'circuit' ? 'bg-orange-400' : 'bg-blue-500')}>
+                    {block.type === 'warmup' && <Flame className="w-3.5 h-3.5 text-white" />}
+                    {block.type === 'circuit' && <Zap className="w-3.5 h-3.5 text-white" />}
+                    {block.type === 'strength' && <Dumbbell className="w-3.5 h-3.5 text-white" />}
                   </span>
                   <div className="flex-1">
                     <p className={cn("font-semibold", style.text)}>{block.name}</p>
@@ -2694,9 +2700,9 @@ export default function ActiveWorkoutPage() {
                 block.type === 'strength' && "bg-blue-500/10 text-blue-400",
                 block.type === 'circuit' && "bg-orange-500/10 text-orange-400",
               )}>
-                {block.type === 'warmup' && '🔥 Showing: Bands, stretches, bodyweight, mobility exercises'}
-                {block.type === 'strength' && '💪 Showing: Barbell, dumbbell, cable, machine exercises'}
-                {block.type === 'circuit' && '⚡ Showing: All exercises - tap to select multiple, then save'}
+                {block.type === 'warmup' && 'Showing: Bands, stretches, bodyweight, mobility exercises'}
+                {block.type === 'strength' && 'Showing: Barbell, dumbbell, cable, machine exercises'}
+                {block.type === 'circuit' && 'Showing: All exercises - tap to select multiple, then save'}
               </div>
             );
           })()}
@@ -2707,7 +2713,7 @@ export default function ActiveWorkoutPage() {
               placeholder="Search exercises..."
               value={exerciseSearch}
               onChange={(e) => setExerciseSearch(e.target.value)}
-              className="pl-10 bg-gray-800 border-gray-700 text-white"
+              className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
               autoFocus
             />
           </div>
@@ -2727,7 +2733,7 @@ export default function ActiveWorkoutPage() {
                       block?.type === 'strength' && "hover:bg-blue-500/10",
                       block?.type === 'circuit' && "hover:bg-orange-500/10",
                       block?.type === 'circuit' && isSelected && "bg-orange-500/20 border border-orange-500/50",
-                      !block && "hover:bg-gray-800",
+                      !block && "hover:bg-gray-50",
                     )}
                     onClick={() => handleAddExercise(exercise)}
                   >
@@ -2740,7 +2746,7 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
                     {getExerciseAnimationUrl(exercise.id) && (
-                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0 mr-2">
+                      <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 mr-2">
                         <img
                           src={getExerciseAnimationUrl(exercise.id)}
                           alt={exercise.name}
@@ -2784,10 +2790,10 @@ export default function ActiveWorkoutPage() {
 
       {/* Circuit Config Dialog */}
       <Dialog open={showCircuitDialog} onOpenChange={setShowCircuitDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <span>⚡</span> Add Circuit Block
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-orange-400 inline-flex items-center justify-center"><Zap className="w-3 h-3 text-white" /></span> Add Circuit Block
             </DialogTitle>
             <DialogDescription>Configure your circuit settings</DialogDescription>
           </DialogHeader>
@@ -2832,7 +2838,7 @@ export default function ActiveWorkoutPage() {
                     type="number"
                     value={Math.floor(circuitConfig.duration / 60)}
                     onChange={(e) => setCircuitConfig({ ...circuitConfig, duration: (parseInt(e.target.value) || 1) * 60 })}
-                    className="bg-gray-800 border-gray-700"
+                    className="bg-gray-50 border-gray-200"
                     min={1}
                   />
                 </div>
@@ -2844,7 +2850,7 @@ export default function ActiveWorkoutPage() {
                     type="number"
                     value={circuitConfig.rounds}
                     onChange={(e) => setCircuitConfig({ ...circuitConfig, rounds: parseInt(e.target.value) || 1 })}
-                    className="bg-gray-800 border-gray-700"
+                    className="bg-gray-50 border-gray-200"
                     min={1}
                   />
                 </div>
@@ -2864,10 +2870,10 @@ export default function ActiveWorkoutPage() {
 
       {/* Cardio Config Dialog */}
       <Dialog open={showCardioDialog} onOpenChange={setShowCardioDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <span>🏃</span> Add Cardio Block
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-rose-400 inline-flex items-center justify-center"><Heart className="w-3 h-3 text-white" /></span> Add Cardio Block
             </DialogTitle>
             <DialogDescription>Track your run, swim, bike, or row</DialogDescription>
           </DialogHeader>
@@ -2940,7 +2946,7 @@ export default function ActiveWorkoutPage() {
                     type="number"
                     value={Math.floor(cardioConfig.duration / 60)}
                     onChange={(e) => setCardioConfig({ ...cardioConfig, duration: (parseInt(e.target.value) || 1) * 60 })}
-                    className="bg-gray-800 border-gray-700"
+                    className="bg-gray-50 border-gray-200"
                     min={1}
                   />
                 </div>
@@ -2960,7 +2966,7 @@ export default function ActiveWorkoutPage() {
                         ? parseInt(e.target.value) || 100 
                         : (parseFloat(e.target.value) || 1) * 1000 
                     })}
-                    className="bg-gray-800 border-gray-700"
+                    className="bg-gray-50 border-gray-200"
                     min={cardioConfig.type === 'swim' ? 25 : 0.1}
                     step={cardioConfig.type === 'swim' ? 25 : 0.5}
                   />
@@ -2976,7 +2982,7 @@ export default function ActiveWorkoutPage() {
                         type="number"
                         value={cardioConfig.intervalWork}
                         onChange={(e) => setCardioConfig({ ...cardioConfig, intervalWork: parseInt(e.target.value) || 30 })}
-                        className="bg-gray-800 border-gray-700"
+                        className="bg-gray-50 border-gray-200"
                         min={10}
                       />
                     </div>
@@ -2986,7 +2992,7 @@ export default function ActiveWorkoutPage() {
                         type="number"
                         value={cardioConfig.intervalRest}
                         onChange={(e) => setCardioConfig({ ...cardioConfig, intervalRest: parseInt(e.target.value) || 15 })}
-                        className="bg-gray-800 border-gray-700"
+                        className="bg-gray-50 border-gray-200"
                         min={5}
                       />
                     </div>
@@ -2996,7 +3002,7 @@ export default function ActiveWorkoutPage() {
                         type="number"
                         value={cardioConfig.intervalRounds}
                         onChange={(e) => setCardioConfig({ ...cardioConfig, intervalRounds: parseInt(e.target.value) || 1 })}
-                        className="bg-gray-800 border-gray-700"
+                        className="bg-gray-50 border-gray-200"
                         min={1}
                       />
                     </div>
@@ -3021,9 +3027,9 @@ export default function ActiveWorkoutPage() {
 
       {/* Finish Dialog */}
       <Dialog open={showFinishDialog} onOpenChange={setShowFinishDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white">Finish Workout?</DialogTitle>
+            <DialogTitle className="text-gray-900">Finish Workout?</DialogTitle>
             <DialogDescription>
               You&apos;ve completed {completedSets} of {totalSets} sets.
             </DialogDescription>
@@ -3031,12 +3037,12 @@ export default function ActiveWorkoutPage() {
           
           <div className="py-4 space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Duration</span>
-              <span className="text-white font-medium">{formatTime(workoutTimer.seconds)}</span>
+              <span className="text-gray-500">Duration</span>
+              <span className="text-gray-900 font-medium">{formatTime(workoutTimer.seconds)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Exercises</span>
-              <span className="text-white font-medium">{workout.exercises.length}</span>
+              <span className="text-gray-500">Exercises</span>
+              <span className="text-gray-900 font-medium">{workout.exercises.length}</span>
             </div>
             {newPBs.length > 0 && (
               <div className="flex justify-between text-sm">
@@ -3050,7 +3056,7 @@ export default function ActiveWorkoutPage() {
             <Button
               variant="outline"
               onClick={() => setShowFinishDialog(false)}
-              className="flex-1 border-gray-700"
+              className="flex-1 border-gray-200"
             >
               Keep Going
             </Button>
@@ -3066,9 +3072,9 @@ export default function ActiveWorkoutPage() {
 
       {/* Exit Dialog */}
       <Dialog open={showExitDialog} onOpenChange={setShowExitDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white">Discard Workout?</DialogTitle>
+            <DialogTitle className="text-gray-900">Discard Workout?</DialogTitle>
             <DialogDescription>
               This will cancel your current workout and all progress will be lost.
             </DialogDescription>
@@ -3077,7 +3083,7 @@ export default function ActiveWorkoutPage() {
             <Button
               variant="outline"
               onClick={() => setShowExitDialog(false)}
-              className="flex-1 border-gray-700"
+              className="flex-1 border-gray-200"
             >
               Continue Workout
             </Button>
@@ -3094,7 +3100,7 @@ export default function ActiveWorkoutPage() {
 
       {/* Workout Summary Dialog — compact version */}
       <Dialog open={showSummary} onOpenChange={(open) => !open && handleCloseSummary()}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 max-w-sm max-h-[85vh] overflow-y-auto">
           <div className="space-y-3 py-2">
             {/* Compact header */}
             <div className="flex items-center gap-3">
@@ -3102,8 +3108,8 @@ export default function ActiveWorkoutPage() {
                 <Check className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-bold text-white">Workout Complete!</h2>
-                <p className="text-sm text-gray-400">{completedWorkoutData?.name}</p>
+                <h2 className="text-lg font-bold text-gray-900">Workout Complete!</h2>
+                <p className="text-sm text-gray-500">{completedWorkoutData?.name}</p>
               </div>
               {completedWorkoutData?.isPTSession && (
                 <Badge className="bg-blue-500/20 text-blue-400 text-[10px] h-5">
@@ -3113,44 +3119,44 @@ export default function ActiveWorkoutPage() {
             </div>
 
             {/* Session Time */}
-            <div className="p-2.5 bg-gray-800 rounded-xl">
+            <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-gray-400">Session Time</span>
-                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-400 hover:text-sky-300 flex items-center gap-1">
+                <span className="text-[11px] text-gray-500">Session Time</span>
+                <button onClick={() => setEditingTimes(!editingTimes)} className="text-[11px] text-sky-500 hover:text-sky-600 flex items-center gap-1">
                   <Edit className="w-3 h-3" /> {editingTimes ? 'Cancel' : 'Edit'}
                 </button>
               </div>
               {editingTimes ? (
                 <div className="flex items-center gap-2 justify-center mt-1">
-                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
-                  <span className="text-gray-500">→</span>
-                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center" />
+                  <input type="time" value={editStartTime} onChange={(e) => setEditStartTime(e.target.value)} className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center" />
+                  <span className="text-gray-400">→</span>
+                  <input type="time" value={editEndTime} onChange={(e) => setEditEndTime(e.target.value)} className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center" />
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-3 text-sm mt-0.5">
-                  <span className="text-white font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
-                  <span className="text-gray-500">→</span>
-                  <span className="text-white font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-900 font-medium">{completedWorkoutData?.startTime ? new Date(completedWorkoutData.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
+                  <span className="text-gray-400">→</span>
+                  <span className="text-gray-900 font-medium">{completedWorkoutData?.endTime ? new Date(completedWorkoutData.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : '--'}</span>
                 </div>
               )}
             </div>
 
             {/* Compact Stats */}
             <div className="grid grid-cols-4 gap-2">
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-white">{formatTime(completedWorkoutData?.duration || 0)}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-gray-900">{formatTime(completedWorkoutData?.duration || 0)}</p>
                 <p className="text-[10px] text-gray-500">Duration</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-white">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-gray-900">{Math.round(completedWorkoutData?.totalVolume || 0).toLocaleString()}</p>
                 <p className="text-[10px] text-gray-500">kg Vol</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-purple-400">{completedWorkoutData?.exercises || 0}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-purple-500">{completedWorkoutData?.exercises || 0}</p>
                 <p className="text-[10px] text-gray-500">Exercises</p>
               </div>
-              <div className="bg-gray-800 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-cyan-400">{completedWorkoutData?.sets || 0}</p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                <p className="text-lg font-bold text-cyan-500">{completedWorkoutData?.sets || 0}</p>
                 <p className="text-[10px] text-gray-500">Sets</p>
               </div>
             </div>
@@ -3259,38 +3265,38 @@ export default function ActiveWorkoutPage() {
 
             {/* Session Paid */}
             {completedWorkoutData?.isPTSession && (
-              <div className="p-3 bg-gray-800 rounded-lg">
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                  <input type="checkbox" checked={sessionPaid} onChange={(e) => setSessionPaid(e.target.checked)} className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500" />
                   <div className="text-left">
-                    <span className="text-white font-medium text-sm">Session Paid</span>
-                    <p className="text-[11px] text-gray-400">Check if client has paid for this session</p>
+                    <span className="text-gray-900 font-medium text-sm">Session Paid</span>
+                    <p className="text-[11px] text-gray-500">Check if client has paid for this session</p>
                   </div>
                 </label>
               </div>
             )}
 
             {/* Share to Feed */}
-            <div className="p-3 bg-gray-800 rounded-lg">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-sky-500 focus:ring-sky-500" />
+                <input type="checkbox" checked={shareToFeed} onChange={(e) => setShareToFeed(e.target.checked)} className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500" />
                 <div className="text-left">
-                  <span className="text-white font-medium text-sm">Share to Feed</span>
-                  <p className="text-[11px] text-gray-400">Post this workout to your activity feed</p>
+                  <span className="text-gray-900 font-medium text-sm">Share to Feed</span>
+                  <p className="text-[11px] text-gray-500">Post this workout to your activity feed</p>
                 </div>
               </label>
             </div>
 
             {/* Notes */}
             <div>
-              <label className="text-xs text-gray-400 mb-1.5 block text-left">
+              <label className="text-xs text-gray-500 mb-1.5 block text-left">
                 {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
               </label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
                 placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
-                className={`w-full h-16 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'}`}
+                className={`w-full h-16 px-3 py-2 bg-gray-50 border rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-200 focus:ring-sky-500'}`}
               />
             </div>
             
@@ -3303,9 +3309,9 @@ export default function ActiveWorkoutPage() {
 
       {/* Rest Timer Settings Dialog */}
       <Dialog open={showRestSettings} onOpenChange={setShowRestSettings}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white">Workout Settings</DialogTitle>
+            <DialogTitle className="text-gray-900">Workout Settings</DialogTitle>
             <DialogDescription>
               Configure your rest timer between sets
             </DialogDescription>
@@ -3313,10 +3319,10 @@ export default function ActiveWorkoutPage() {
           
           <div className="py-4 space-y-6">
             {/* Auto Rest Toggle */}
-            <div className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
-                <p className="font-medium text-white">Auto Rest Timer</p>
-                <p className="text-xs text-gray-400">Start timer automatically after completing a set</p>
+                <p className="font-medium text-gray-900">Auto Rest Timer</p>
+                <p className="text-xs text-gray-500">Start timer automatically after completing a set</p>
               </div>
               <button
                 onClick={() => setAutoRestEnabled(!autoRestEnabled)}
@@ -3336,8 +3342,8 @@ export default function ActiveWorkoutPage() {
 
             <div className={cn(!autoRestEnabled && "opacity-50 pointer-events-none")}>
               <div className="flex items-center justify-between mb-3">
-                <span className="text-sm text-gray-400">Default Rest Time</span>
-                <span className="text-lg font-semibold text-white">{defaultRestTime}s</span>
+                <span className="text-sm text-gray-500">Default Rest Time</span>
+                <span className="text-lg font-semibold text-gray-900">{defaultRestTime}s</span>
               </div>
               <Slider
                 value={[defaultRestTime]}
@@ -3360,7 +3366,7 @@ export default function ActiveWorkoutPage() {
                   variant={defaultRestTime === time ? "default" : "outline"}
                   size="sm"
                   onClick={() => setDefaultRestTime(time)}
-                  className={defaultRestTime === time ? "bg-sky-500" : "border-gray-700"}
+                  className={defaultRestTime === time ? "bg-sky-500" : "border-gray-200"}
                 >
                   {time}s
                 </Button>
@@ -3379,9 +3385,9 @@ export default function ActiveWorkoutPage() {
 
       {/* Workout Notes Dialog */}
       <Dialog open={showNotesDialog} onOpenChange={setShowNotesDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
               <StickyNote className={`w-5 h-5 ${isPT ? 'text-amber-400' : 'text-sky-400'}`} />
               {isPT ? 'Trainer Notes' : 'Workout Notes'}
             </DialogTitle>
@@ -3398,8 +3404,8 @@ export default function ActiveWorkoutPage() {
             placeholder={isPT 
               ? "Session observations, form cues, programming adjustments..." 
               : "How's the workout going? Track energy levels, form notes, things to remember..."}
-            className={`w-full h-32 px-3 py-2 bg-gray-800 border rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 ${
-              isPT ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-700 focus:ring-sky-500'
+            className={`w-full h-32 px-3 py-2 bg-gray-50 border rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 ${
+              isPT ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-200 focus:ring-sky-500'
             }`}
           />
           
@@ -3428,13 +3434,13 @@ export default function ActiveWorkoutPage() {
           }
         }}
       >
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
               <StickyNote className="w-5 h-5 text-amber-400" />
               {selectedExerciseForNotes?.exercise?.name || 'Exercise'} Notes
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription>
               View or add notes for this exercise (e.g., incline settings, form cues)
             </DialogDescription>
           </DialogHeader>
@@ -3442,8 +3448,8 @@ export default function ActiveWorkoutPage() {
           {/* Display existing trainer notes if any */}
           {selectedExerciseForNotes?.trainerNotes && (
             <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-              <p className="text-xs text-amber-400 font-medium mb-1">Trainer Notes:</p>
-              <p className="text-sm text-white">{selectedExerciseForNotes.trainerNotes}</p>
+              <p className="text-xs text-amber-500 font-medium mb-1">Trainer Notes:</p>
+              <p className="text-sm text-gray-900">{selectedExerciseForNotes.trainerNotes}</p>
             </div>
           )}
           
@@ -3451,7 +3457,7 @@ export default function ActiveWorkoutPage() {
             value={exerciseNotesText}
             onChange={(e) => setExerciseNotesText(e.target.value)}
             placeholder="Add your notes for this exercise..."
-            className="w-full h-24 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full h-24 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
           
           <Button
@@ -3481,13 +3487,13 @@ export default function ActiveWorkoutPage() {
           if (!open) setSupersetSourceExercise(null);
         }}
       >
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Link2 className="w-5 h-5 text-blue-400" />
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-blue-500" />
               Create Superset
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription>
               Select another exercise to pair with {supersetSourceExercise?.exercise?.name}
             </DialogDescription>
           </DialogHeader>
@@ -3500,9 +3506,9 @@ export default function ActiveWorkoutPage() {
                   <button
                     key={ex.id}
                     onClick={() => handleCreateSuperset(ex.id)}
-                    className="w-full p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors"
+                    className="w-full p-3 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg text-left transition-colors"
                   >
-                    <p className="font-medium text-white">{ex.exercise?.name}</p>
+                    <p className="font-medium text-gray-900">{ex.exercise?.name}</p>
                     <p className="text-xs text-gray-500">{ex.sets.length} sets</p>
                   </button>
                 ))}
@@ -3515,7 +3521,7 @@ export default function ActiveWorkoutPage() {
               setShowSupersetPicker(false);
               setSupersetSourceExercise(null);
             }}
-            className="w-full border-gray-700 text-gray-400"
+            className="w-full border-gray-200 text-gray-500"
           >
             Cancel
           </Button>
@@ -3524,34 +3530,34 @@ export default function ActiveWorkoutPage() {
 
       {/* Save Workout Dialog */}
       <Dialog open={showSaveWorkoutDialog} onOpenChange={setShowSaveWorkoutDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Copy className="w-5 h-5 text-sky-400" />
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <Copy className="w-5 h-5 text-sky-500" />
               Save Workout as Template
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription>
               Save this workout to your library for future use
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Workout Name</label>
+              <label className="text-sm text-gray-500 mb-1 block">Workout Name</label>
               <Input
                 value={saveWorkoutName}
                 onChange={(e) => setSaveWorkoutName(e.target.value)}
                 placeholder="e.g., Upper Body Push"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Description (optional)</label>
+              <label className="text-sm text-gray-500 mb-1 block">Description (optional)</label>
               <textarea
                 value={saveWorkoutDescription}
                 onChange={(e) => setSaveWorkoutDescription(e.target.value)}
                 placeholder="Brief description of this workout..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
           </div>
@@ -3560,7 +3566,7 @@ export default function ActiveWorkoutPage() {
             <Button
               variant="outline"
               onClick={() => setShowSaveWorkoutDialog(false)}
-              className="flex-1 border-gray-700 text-gray-400"
+              className="flex-1 border-gray-200 text-gray-500"
             >
               Cancel
             </Button>
@@ -3577,34 +3583,34 @@ export default function ActiveWorkoutPage() {
 
       {/* Save Circuit Dialog */}
       <Dialog open={showSaveCircuitDialog} onOpenChange={setShowSaveCircuitDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <RotateCcw className="w-5 h-5 text-purple-400" />
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-purple-500" />
               Save Circuit as Template
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription>
               Save this circuit to your library for future use
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4">
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Circuit Name</label>
+              <label className="text-sm text-gray-500 mb-1 block">Circuit Name</label>
               <Input
                 value={saveCircuitName}
                 onChange={(e) => setSaveCircuitName(e.target.value)}
                 placeholder="e.g., HIIT Finisher"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Description (optional)</label>
+              <label className="text-sm text-gray-500 mb-1 block">Description (optional)</label>
               <textarea
                 value={saveCircuitDescription}
                 onChange={(e) => setSaveCircuitDescription(e.target.value)}
                 placeholder="Brief description of this circuit..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
           </div>
@@ -3616,7 +3622,7 @@ export default function ActiveWorkoutPage() {
                 setShowSaveCircuitDialog(false);
                 setCircuitToSave(null);
               }}
-              className="flex-1 border-gray-700 text-gray-400"
+              className="flex-1 border-gray-200 text-gray-500"
             >
               Cancel
             </Button>
@@ -3765,7 +3771,7 @@ function SetRow({
                   <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+              <DropdownMenuContent align="end" className="bg-gray-50 border-gray-200">
                 <DropdownMenuItem 
                   className="text-orange-400 focus:text-orange-300"
                   onClick={onUncomplete}

@@ -42,7 +42,7 @@ import Link from 'next/link';
 
 export default function TodayPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, switchMode } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates, personalBests, volumeRollups } = useWorkoutStore();
   const { medals } = useMedalStore();
   const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms } = useTrainerStore();
@@ -245,12 +245,39 @@ export default function TodayPage() {
       />
 
       <div className="px-4 py-4 space-y-5">
+        {/* User/Trainer Mode Toggle — only shown for trainers */}
+        {user.isTrainer && (
+          <div className="flex items-center justify-center gap-1 p-1 bg-gray-100 rounded-xl border border-gray-200">
+            <button
+              onClick={() => switchMode('user')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                user.mode !== 'trainer'
+                  ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+              }`}
+            >
+              <Dumbbell className="w-4 h-4" />
+              Athlete
+            </button>
+            <button
+              onClick={() => switchMode('trainer')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                user.mode === 'trainer'
+                  ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              Trainer
+            </button>
+          </div>
+        )}
         {/* Calendar Day Strip */}
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-gray-400 hover:text-white flex-shrink-0"
+            className="h-8 w-8 text-gray-400 hover:text-gray-700 flex-shrink-0"
             onClick={() => setSelectedDate(subDays(selectedDate, 7))}
           >
             <ChevronLeft className="w-4 h-4" />
@@ -269,7 +296,7 @@ export default function TodayPage() {
                       ? 'bg-sky-500 text-white'
                       : isTodayDate
                       ? 'bg-sky-500/20 text-sky-400'
-                      : 'text-gray-400 hover:bg-gray-800'
+                      : 'text-gray-500 hover:bg-gray-100'
                   }`}
                 >
                   <span className="text-[10px] font-medium uppercase">{format(day, 'EEE')}</span>
@@ -290,7 +317,7 @@ export default function TodayPage() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-gray-400 hover:text-white flex-shrink-0"
+            className="h-8 w-8 text-gray-400 hover:text-gray-700 flex-shrink-0"
             onClick={() => setSelectedDate(addDays(selectedDate, 7))}
           >
             <ChevronRight className="w-4 h-4" />
@@ -308,31 +335,31 @@ export default function TodayPage() {
         {/* Today's Stats Row — user mode only */}
         {user.mode !== 'trainer' && (
         <div className="grid grid-cols-4 gap-2">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-gray-50 border-gray-200">
             <CardContent className="p-3 text-center">
               <Flame className="w-4 h-4 text-orange-400 mx-auto mb-1" />
-              <p className="text-lg font-bold text-white">{currentStreak}</p>
+              <p className="text-lg font-bold text-gray-900">{currentStreak}</p>
               <p className="text-[10px] text-gray-500">Week Streak</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-gray-50 border-gray-200">
             <CardContent className="p-3 text-center">
-              <Dumbbell className="w-4 h-4 text-sky-400 mx-auto mb-1" />
-              <p className="text-lg font-bold text-white">{weekWorkouts.length}</p>
+              <Dumbbell className="w-4 h-4 text-sky-500 mx-auto mb-1" />
+              <p className="text-lg font-bold text-gray-900">{weekWorkouts.length}</p>
               <p className="text-[10px] text-gray-500">This Week</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-gray-50 border-gray-200">
             <CardContent className="p-3 text-center">
               <Clock className="w-4 h-4 text-purple-400 mx-auto mb-1" />
-              <p className="text-lg font-bold text-white">{weekMinutes}</p>
+              <p className="text-lg font-bold text-gray-900">{weekMinutes}</p>
               <p className="text-[10px] text-gray-500">Minutes</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-gray-50 border-gray-200">
             <CardContent className="p-3 text-center">
               <TrendingUp className="w-4 h-4 text-green-400 mx-auto mb-1" />
-              <p className="text-lg font-bold text-white">{weekVolume > 1000 ? `${(weekVolume / 1000).toFixed(0)}k` : weekVolume}</p>
+              <p className="text-lg font-bold text-gray-900">{weekVolume > 1000 ? `${(weekVolume / 1000).toFixed(0)}k` : weekVolume}</p>
               <p className="text-[10px] text-gray-500">Volume</p>
             </CardContent>
           </Card>
@@ -352,7 +379,7 @@ export default function TodayPage() {
               {todayWorkouts.map((workout) => (
                 <Card
                   key={workout.id}
-                  className="bg-gray-900 border-green-500/30 cursor-pointer hover:bg-gray-850"
+                  className="bg-white border-green-500/30 cursor-pointer hover:bg-gray-50 shadow-sm"
                   onClick={() => router.push(`/workout/${workout.id}`)}
                 >
                   <CardContent className="p-3 flex items-center justify-between">
@@ -361,7 +388,7 @@ export default function TodayPage() {
                         <Dumbbell className="w-4 h-4 text-green-400" />
                       </div>
                       <div>
-                        <p className="font-medium text-white text-sm">{workout.name}</p>
+                        <p className="font-medium text-gray-900 text-sm">{workout.name}</p>
                         <p className="text-xs text-gray-500">
                           {workout.exercises.length} exercises • {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
                         </p>
@@ -389,32 +416,32 @@ export default function TodayPage() {
                   <span className="font-bold text-sm">Start Workout</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+              <DialogContent className="bg-white border-gray-200 max-w-md">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Start Workout</DialogTitle>
-                  <DialogDescription className="text-gray-400">Choose how to begin</DialogDescription>
+                  <DialogTitle className="text-gray-900">Start Workout</DialogTitle>
+                  <DialogDescription className="text-gray-500">Choose how to begin</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-3 pt-2">
                   <Button
                     variant="outline"
-                    className="w-full h-auto py-4 border-gray-700 hover:bg-gray-800 justify-start"
+                    className="w-full h-auto py-4 border-gray-200 hover:bg-gray-50 justify-start"
                     onClick={() => { handleStartEmpty(); setShowStartOptions(false); }}
                   >
-                    <Zap className="w-5 h-5 text-sky-400 mr-3" />
+                    <Zap className="w-5 h-5 text-sky-500 mr-3" />
                     <div className="text-left">
-                      <p className="font-medium text-white">Quick Start</p>
-                      <p className="text-xs text-gray-400">Empty workout, add exercises as you go</p>
+                      <p className="font-medium text-gray-900">Quick Start</p>
+                      <p className="text-xs text-gray-500">Empty workout, add exercises as you go</p>
                     </div>
                   </Button>
                   <Button
                     variant="outline"
-                    className="w-full h-auto py-4 border-gray-700 hover:bg-gray-800 justify-start"
+                    className="w-full h-auto py-4 border-gray-200 hover:bg-gray-50 justify-start"
                     onClick={() => { setShowStartOptions(false); setShowTemplates(true); }}
                   >
-                    <Dumbbell className="w-5 h-5 text-blue-400 mr-3" />
+                    <Dumbbell className="w-5 h-5 text-sky-500 mr-3" />
                     <div className="text-left">
-                      <p className="font-medium text-white">From Template</p>
-                      <p className="text-xs text-gray-400">Choose a pre-built workout</p>
+                      <p className="font-medium text-gray-900">From Template</p>
+                      <p className="text-xs text-gray-500">Choose a pre-built workout</p>
                     </div>
                   </Button>
                 </div>
@@ -423,11 +450,11 @@ export default function TodayPage() {
 
             <Button
               variant="outline"
-              className="h-auto py-6 bg-gray-800 border-gray-700 hover:bg-gray-700 flex flex-col items-center gap-2 rounded-2xl"
+              className="h-auto py-6 bg-gray-50 border-gray-200 hover:bg-gray-100 flex flex-col items-center gap-2 rounded-2xl"
               onClick={() => router.push('/workout/history')}
             >
               <History className="w-6 h-6 text-gray-400" />
-              <span className="font-semibold text-sm text-white">History</span>
+              <span className="font-semibold text-sm text-gray-700">History</span>
             </Button>
           </div>
         )}
@@ -942,25 +969,39 @@ export default function TodayPage() {
               </Button>
             </div>
             <div className="space-y-2">
-              {recentWorkouts.map((workout) => (
-                <Card
-                  key={workout.id}
-                  className="bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-850 transition-colors"
-                  onClick={() => router.push(`/workout/${workout.id}`)}
-                >
-                  <CardContent className="p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-medium text-white text-sm">{workout.name}</h3>
-                        <p className="text-xs text-gray-500">
-                          {format(new Date(workout.startTime), 'MMM d • h:mm a')} • {workout.exercises.length} exercises
-                        </p>
+              {recentWorkouts.map((workout) => {
+                const isTrainerWorkout = !!workout.assignedBy;
+                return (
+                  <Card
+                    key={workout.id}
+                    className={`bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-850 transition-colors border-l-2 ${
+                      isTrainerWorkout ? 'border-l-rose-500' : 'border-l-sky-500'
+                    }`}
+                    onClick={() => router.push(`/workout/${workout.id}`)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-medium text-white text-sm">{workout.name}</h3>
+                            <Badge className={`text-[10px] px-1.5 py-0 ${
+                              isTrainerWorkout 
+                                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
+                                : 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                            }`}>
+                              {isTrainerWorkout ? 'Trainer' : 'Solo'}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {format(new Date(workout.startTime), 'MMM d • h:mm a')} • {workout.exercises.length} exercises
+                          </p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-600" />
                       </div>
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </section>
         )}

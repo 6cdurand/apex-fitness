@@ -20,7 +20,11 @@ if (supabaseAnonKey && !supabaseAnonKey.startsWith('eyJ')) {
   console.warn('[Supabase Init] WARNING: Anon key does not look like a valid JWT. Supabase keys typically start with "eyJ"');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Use placeholder values if not configured — the app falls back to localStorage anyway
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder'
+);
 
 // Database types
 export interface DbUser {

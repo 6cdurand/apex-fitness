@@ -50,6 +50,7 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { evolvingMedals } from '@/lib/medals';
 import { registerUserToSupabase, fetchAllUsersFromSupabase, linkClientToTrainer } from '@/lib/supabaseSync';
+import { hashPassword } from '@/lib/store';
 import { ClientNameLink } from '@/components/ClientNameLink';
 import Link from 'next/link';
 
@@ -146,10 +147,17 @@ function ClientsPageContent() {
         if (supabaseUsersList && supabaseUsersList.length > 0) {
           console.log('[Clients] Loaded', supabaseUsersList.length, 'users from Supabase');
           
-          // Merge: Supabase users take precedence, add any local-only users
+          // Merge: Supabase data takes precedence BUT preserve local passwords
+          const localPasswordMap = new Map(stored.map((u: any) => [u.id, u.password]));
           const supabaseIds = new Set(supabaseUsersList.map((u: any) => u.id));
           const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
-          const mergedUsers = [...supabaseUsersList, ...localOnlyUsers];
+          const mergedUsers = [
+            ...supabaseUsersList.map((u: any) => ({
+              ...u,
+              password: u.password || localPasswordMap.get(u.id) || undefined,
+            })),
+            ...localOnlyUsers,
+          ];
           
           setAllUsers(mergedUsers);
           
@@ -294,7 +302,7 @@ function ClientsPageContent() {
       followers: [],
       following: [],
       trainerId: user?.id, // Link client to their trainer
-      password: newClientPassword, // Custom or default password for client login
+      password: hashPassword(newClientPassword), // Hash password for login matching
     };
     
     // Add to local storage users (for local login)
@@ -452,7 +460,7 @@ function ClientsPageContent() {
             <Button 
               size="sm" 
               variant="outline"
-              className="border-gray-700"
+              className="border-gray-200"
               disabled={isSyncing}
               onClick={async () => {
                 if (!user?.id) return;
@@ -477,9 +485,9 @@ function ClientsPageContent() {
                   Add Client
                 </Button>
               </DialogTrigger>
-            <DialogContent className="bg-gray-900 border-gray-800">
+            <DialogContent className="bg-white border-gray-200">
               <DialogHeader>
-                <DialogTitle className="text-white">Add Client</DialogTitle>
+                <DialogTitle className="text-gray-900">Add Client</DialogTitle>
                 <DialogDescription>
                   {clientMode === null ? 'Does this client already have an account?' : 
                    clientMode === 'create' ? 'Create a new account for your client' :
@@ -491,27 +499,27 @@ function ClientsPageContent() {
               {clientMode === null && (
                 <div className="grid grid-cols-2 gap-4 py-4">
                   <Card 
-                    className="cursor-pointer hover:border-sky-500 transition-colors bg-gray-800 border-gray-700"
+                    className="cursor-pointer hover:border-sky-500 transition-colors bg-gray-50 border-gray-200"
                     onClick={() => setClientMode('create')}
                   >
                     <CardContent className="p-4 text-center space-y-2">
                       <div className="w-12 h-12 bg-sky-500/20 rounded-full flex items-center justify-center mx-auto">
-                        <UserPlus className="h-6 w-6 text-sky-400" />
+                        <UserPlus className="h-6 w-6 text-sky-500" />
                       </div>
-                      <h3 className="font-semibold text-white">Create New</h3>
-                      <p className="text-xs text-gray-400">New client, no account yet</p>
+                      <h3 className="font-semibold text-gray-900">Create New</h3>
+                      <p className="text-xs text-gray-500">New client, no account yet</p>
                     </CardContent>
                   </Card>
                   <Card 
-                    className="cursor-pointer hover:border-blue-500 transition-colors bg-gray-800 border-gray-700"
+                    className="cursor-pointer hover:border-blue-500 transition-colors bg-gray-50 border-gray-200"
                     onClick={() => setClientMode('link')}
                   >
                     <CardContent className="p-4 text-center space-y-2">
                       <div className="w-12 h-12 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto">
-                        <Link2 className="h-6 w-6 text-blue-400" />
+                        <Link2 className="h-6 w-6 text-blue-500" />
                       </div>
-                      <h3 className="font-semibold text-white">Link Existing</h3>
-                      <p className="text-xs text-gray-400">Has account from another device</p>
+                      <h3 className="font-semibold text-gray-900">Link Existing</h3>
+                      <p className="text-xs text-gray-500">Has account from another device</p>
                     </CardContent>
                   </Card>
                 </div>
@@ -524,48 +532,48 @@ function ClientsPageContent() {
                     variant="ghost" 
                     size="sm" 
                     onClick={() => setClientMode(null)}
-                    className="text-gray-400"
+                    className="text-gray-500"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" /> Back
                   </Button>
                   
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Client Name *</Label>
+                    <Label className="text-gray-700">Client Name *</Label>
                     <Input
                       type="text"
                       placeholder="John Smith"
                       value={newClientName}
                       onChange={(e) => setNewClientName(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Email <span className="text-gray-500">(optional)</span></Label>
+                    <Label className="text-gray-700">Email <span className="text-gray-400">(optional)</span></Label>
                     <Input
                       type="email"
                       placeholder="client@example.com"
                       value={newClientEmail}
                       onChange={(e) => setNewClientEmail(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Phone (optional)</Label>
+                    <Label className="text-gray-700">Phone (optional)</Label>
                     <Input
                       type="tel"
                       placeholder="021 123 4567"
                       value={newClientPhone}
                       onChange={(e) => setNewClientPhone(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Gender *</Label>
+                    <Label className="text-gray-700">Gender *</Label>
                     <Select value={newClientGender} onValueChange={(v) => setNewClientGender(v as 'male' | 'female' | 'other')}>
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                      <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                         <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700">
+                      <SelectContent className="bg-white border-gray-200">
                         <SelectItem value="male">Male</SelectItem>
                         <SelectItem value="female">Female</SelectItem>
                         <SelectItem value="other">Other / Prefer not to say</SelectItem>
@@ -573,15 +581,15 @@ function ClientsPageContent() {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Login Password</Label>
+                    <Label className="text-gray-700">Login Password</Label>
                     <Input
                       type="text"
                       placeholder="client123"
                       value={newClientPassword}
                       onChange={(e) => setNewClientPassword(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
-                    <p className="text-xs text-gray-500">Password for client to log into their account</p>
+                    <p className="text-xs text-gray-400">Password for client to log into their account</p>
                   </div>
                   <div className="flex gap-2">
                     <Button 
@@ -614,13 +622,13 @@ function ClientsPageContent() {
                       setSelectedLinkUser(null);
                       setLinkSearchQuery('');
                     }}
-                    className="text-gray-400"
+                    className="text-gray-500"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" /> Back
                   </Button>
                   
                   <div className="space-y-2">
-                    <Label className="text-gray-300">Search Supabase accounts</Label>
+                    <Label className="text-gray-700">Search Supabase accounts</Label>
                     <Input
                       type="text"
                       placeholder="Search by name or email..."
@@ -629,7 +637,7 @@ function ClientsPageContent() {
                         setLinkSearchQuery(e.target.value);
                         setSelectedLinkUser(null);
                       }}
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                   </div>
                   
@@ -651,12 +659,12 @@ function ClientsPageContent() {
                             onClick={() => setSelectedLinkUser(u)}
                             className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                               selectedLinkUser?.id === u.id
-                                ? 'border-blue-500 bg-blue-500/10'
-                                : 'border-gray-700 hover:border-gray-600 bg-gray-800'
+                                ? 'border-blue-500 bg-blue-50'
+                                : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                             }`}
                           >
-                            <p className="font-medium text-white">{u.displayName || u.username}</p>
-                            <p className="text-sm text-gray-400">{u.email}</p>
+                            <p className="font-medium text-gray-900">{u.displayName || u.username}</p>
+                            <p className="text-sm text-gray-500">{u.email}</p>
                           </div>
                         ))}
                       </div>
@@ -693,7 +701,7 @@ function ClientsPageContent() {
         <div className="flex gap-2 mb-4">
           <Button
             variant={viewMode === 'clients' ? 'default' : 'outline'}
-            className={viewMode === 'clients' ? 'bg-rose-500 hover:bg-rose-600' : 'border-gray-700'}
+            className={viewMode === 'clients' ? 'bg-rose-500 hover:bg-rose-600' : 'border-gray-200'}
             onClick={() => setViewMode('clients')}
           >
             <Users className="w-4 h-4 mr-2" />
@@ -701,7 +709,7 @@ function ClientsPageContent() {
           </Button>
           <Button
             variant={viewMode === 'groups' ? 'default' : 'outline'}
-            className={viewMode === 'groups' ? 'bg-blue-500 hover:bg-blue-600' : 'border-gray-700'}
+            className={viewMode === 'groups' ? 'bg-blue-500 hover:bg-blue-600' : 'border-gray-200'}
             onClick={() => setViewMode('groups')}
           >
             <UsersRound className="w-4 h-4 mr-2" />
@@ -718,28 +726,28 @@ function ClientsPageContent() {
                 placeholder="Search clients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-gray-800 border-gray-700 text-white"
+                className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 
             {/* Stats Row */}
             <div className="grid grid-cols-3 gap-3 mb-6">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-rose-400">{activeClients.length}</p>
-              <p className="text-xs text-gray-400">Active</p>
+              <p className="text-2xl font-bold text-rose-500">{activeClients.length}</p>
+              <p className="text-xs text-gray-500">Active</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-amber-400">{pendingClients.length}</p>
-              <p className="text-xs text-gray-400">Pending</p>
+              <p className="text-2xl font-bold text-amber-500">{pendingClients.length}</p>
+              <p className="text-xs text-gray-500">Pending</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-sky-400">{trainerClients.length}</p>
-              <p className="text-xs text-gray-400">Total</p>
+              <p className="text-2xl font-bold text-sky-500">{trainerClients.length}</p>
+              <p className="text-xs text-gray-500">Total</p>
             </CardContent>
           </Card>
         </div>
@@ -747,13 +755,13 @@ function ClientsPageContent() {
         {/* Clients List */}
         <div>
           {filteredClients.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-16 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-                  <Users className="w-10 h-10 text-gray-600" />
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Users className="w-10 h-10 text-gray-400" />
                 </div>
-                <h3 className="font-semibold text-gray-400 mb-2">No clients found</h3>
-                <p className="text-sm text-gray-500 mb-4">
+                <h3 className="font-semibold text-gray-500 mb-2">No clients found</h3>
+                <p className="text-sm text-gray-400 mb-4">
                   Add your first client to get started
                 </p>
                 <Button 
@@ -786,7 +794,7 @@ function ClientsPageContent() {
                 return (
                   <Card 
                     key={client.id} 
-                    className="bg-gray-900 border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
+                    className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-gray-300 transition-colors"
                     onClick={() => router.push(`/clients/${client.clientId}`)}
                   >
                     <CardContent className="p-4">

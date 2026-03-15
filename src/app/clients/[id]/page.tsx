@@ -51,6 +51,7 @@ import { calculateCompliance, getAdherenceColor, getAdherenceBgColor, getAdheren
 import { calculateFullStrengthRating } from '@/lib/strengthRating';
 import { registerUserToSupabase, deleteUserFromSupabase, fetchAllUsersFromSupabase, fetchUserDataFromSupabase, isSupabaseConfigured, syncClientWorkoutsToSupabase, sendClientInvitation } from '@/lib/supabaseSync';
 import { Workout, PersonalBest } from '@/types';
+import { isAssistedExercise, getSetVolume, getUserBodyweight } from '@/lib/exercises';
 
 export default function ClientDetailPage() {
   const router = useRouter();
@@ -530,12 +531,14 @@ export default function ClientDetailPage() {
   const handleSaveWorkoutEdit = () => {
     if (!editingWorkout || !editedWorkoutExercises) return;
     
-    // Recalculate total volume
-    const newTotalVolume = editedWorkoutExercises.reduce((sum, ex) => 
-      sum + ex.sets.filter(s => s.completed).reduce((setSum, set) => 
-        setSum + ((set.weight || 0) * (set.reps || 0)), 0
-      ), 0
-    );
+    // Recalculate total volume — bodyweight-based for assisted exercises
+    const clientBW = getUserBodyweight(editingWorkout.userId);
+    const newTotalVolume = editedWorkoutExercises.reduce((sum, ex) => {
+      const exAssisted = isAssistedExercise(ex.exerciseId, ex.exercise?.name);
+      return sum + ex.sets.filter(s => s.completed).reduce((setSum, set) => {
+        return setSum + getSetVolume(set.weight, set.reps || 0, set.isAssisted || exAssisted, clientBW);
+      }, 0);
+    }, 0);
     
     // Update workout in store (this will also recalculate PBs and sync to Supabase)
     const { updateCompletedWorkout } = useWorkoutStore.getState();
@@ -1379,14 +1382,24 @@ export default function ClientDetailPage() {
                         ))}
                       </div>
                     </div>
-                    <Button 
-                      variant="outline"
-                      onClick={() => router.push(`/clients/${clientId}/program/select`)}
-                      className="w-full"
-                    >
-                      <Dumbbell className="w-4 h-4 mr-2" />
-                      Change Program
-                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        variant="outline"
+                        onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                        className="w-full"
+                      >
+                        <Edit className="w-4 h-4 mr-2" />
+                        Edit Program
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => router.push(`/clients/${clientId}/program/select`)}
+                        className="w-full"
+                      >
+                        <Dumbbell className="w-4 h-4 mr-2" />
+                        Change Program
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">

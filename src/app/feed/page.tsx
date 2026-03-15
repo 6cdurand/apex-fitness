@@ -125,16 +125,16 @@ export default function FeedPage() {
                 Post
               </Button>
             </DialogTrigger>
-            <DialogContent className="bg-gray-900 border-gray-800">
+            <DialogContent className="bg-white border-gray-200">
               <DialogHeader>
-                <DialogTitle className="text-white">Create Post</DialogTitle>
+                <DialogTitle className="text-gray-900">Create Post</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <Textarea
                   placeholder="Share your fitness journey..."
                   value={newPostContent}
                   onChange={(e) => setNewPostContent(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white min-h-[120px]"
+                  className="bg-gray-50 border-gray-200 text-gray-900 min-h-[120px]"
                 />
                 <div className="flex items-center justify-between">
                   <Button variant="ghost" size="sm" className="text-gray-400">
@@ -159,13 +159,13 @@ export default function FeedPage() {
       <ScrollArea className="flex-1">
         <div className="px-5 py-6 space-y-4">
           {feedPosts.length === 0 ? (
-            <Card className="bg-slate-900/90 border-slate-800/50 backdrop-blur-sm">
+            <Card className="bg-gray-50 border-gray-200">
               <CardContent className="py-16 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-slate-800 flex items-center justify-center">
-                  <Sparkles className="w-10 h-10 text-slate-600" />
+                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gray-100 flex items-center justify-center">
+                  <Sparkles className="w-10 h-10 text-gray-400" />
                 </div>
-                <h3 className="font-semibold text-slate-300 mb-2">Your feed is empty</h3>
-                <p className="text-sm text-slate-500 mb-6">
+                <h3 className="font-semibold text-gray-700 mb-2">Your feed is empty</h3>
+                <p className="text-sm text-gray-500 mb-6">
                   Click below to load sample posts and users
                 </p>
                 <Button 
@@ -268,14 +268,14 @@ function PostCard({
   };
 
   return (
-    <Card className="bg-slate-900/90 border-slate-800/50 overflow-hidden backdrop-blur-sm shadow-lg">
+    <Card className="bg-white border-gray-200 overflow-hidden shadow-sm">
       <CardContent className="p-4">
         {/* Post Header */}
         <div className="flex items-start gap-3 mb-3">
           <button onClick={(e) => { e.stopPropagation(); onAvatarClick?.(); }} className="group">
-            <Avatar className="w-11 h-11 ring-2 ring-slate-700 group-hover:ring-sky-500 transition-all duration-200">
+            <Avatar className="w-11 h-11 ring-2 ring-gray-200 group-hover:ring-sky-500 transition-all duration-200">
               <AvatarImage src={post.user?.profilePhoto} />
-              <AvatarFallback className="bg-slate-800 text-white font-semibold">
+              <AvatarFallback className="bg-gray-100 text-gray-700 font-semibold">
                 {post.user?.displayName?.[0] || post.user?.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
@@ -284,7 +284,7 @@ function PostCard({
             <div className="flex items-center gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); onAvatarClick?.(); }}
-                className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors text-left"
+                className="font-semibold text-gray-900 truncate hover:text-sky-500 hover:underline transition-colors text-left"
               >
                 {post.user?.displayName || post.user?.username}
               </button>
@@ -303,11 +303,11 @@ function PostCard({
         </div>
 
         {/* Post Content */}
-        <p className="text-gray-200 mb-4 whitespace-pre-wrap">{post.content}</p>
+        <p className="text-gray-700 mb-4 whitespace-pre-wrap">{post.content}</p>
 
         {/* Post Media */}
         {post.mediaUrls && post.mediaUrls.length > 0 && (
-          <div className="rounded-xl overflow-hidden mb-4 bg-gray-800">
+          <div className="rounded-xl overflow-hidden mb-4 bg-gray-100">
             <img 
               src={post.mediaUrls[0]} 
               alt="Post media" 
@@ -317,7 +317,7 @@ function PostCard({
         )}
 
         {/* Post Actions */}
-        <div className="flex items-center gap-6 pt-2 border-t border-gray-800">
+        <div className="flex items-center gap-6 pt-2 border-t border-gray-100">
           <button
             onClick={onLike}
             className="flex items-center gap-2 text-gray-400 hover:text-red-400 transition-colors"
@@ -339,24 +339,24 @@ function PostCard({
 
         {/* Comments Section */}
         {showComments && (
-          <div className="mt-4 pt-4 border-t border-gray-800 space-y-3">
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
             {post.comments.map((comment) => (
               <div key={comment.id} className="flex gap-2">
                 <Link href={comment.user?.id ? `/profile/${comment.user.id}` : '#'}>
                   <Avatar className="w-8 h-8 hover:ring-2 hover:ring-sky-500/50 transition-all cursor-pointer">
-                    <AvatarFallback className="bg-gray-800 text-white text-xs">
+                    <AvatarFallback className="bg-gray-100 text-gray-700 text-xs">
                       {comment.user?.displayName?.[0] || '?'}
                     </AvatarFallback>
                   </Avatar>
                 </Link>
-                <div className="flex-1 bg-gray-800 rounded-xl px-3 py-2">
+                <div className="flex-1 bg-gray-50 rounded-xl px-3 py-2">
                   <Link
                     href={comment.user?.id ? `/profile/${comment.user.id}` : '#'}
-                    className="text-sm font-medium text-white hover:text-sky-400 hover:underline transition-colors"
+                    className="text-sm font-medium text-gray-900 hover:text-sky-500 hover:underline transition-colors"
                   >
                     {comment.user?.displayName || comment.user?.username}
                   </Link>
-                  <p className="text-sm text-gray-300">{comment.content}</p>
+                  <p className="text-sm text-gray-600">{comment.content}</p>
                 </div>
               </div>
             ))}
@@ -369,7 +369,7 @@ function PostCard({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSubmitComment()}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-full px-4 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-sky-500"
+                className="flex-1 bg-gray-50 border border-gray-200 rounded-full px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-sky-500"
               />
               <Button
                 size="icon"

@@ -16,7 +16,7 @@ import { format, isThisWeek, isThisMonth, startOfMonth, endOfMonth, eachDayOfInt
 
 export default function WorkoutHistoryPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const { workoutHistory, personalBests, updateCompletedWorkout, updateWorkoutNotes } = useWorkoutStore();
   const { saveToWorkoutLibrary } = useTrainerStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,8 +38,15 @@ export default function WorkoutHistoryPage() {
 
   if (!isAuthenticated) return null;
 
-  // Exclude soft-deleted workouts
-  const activeWorkouts = workoutHistory.filter(w => !w.deletedAt);
+  // Only show the logged-in user's own workouts (privacy: exclude other clients' workouts)
+  // Trainers in trainer mode also see PT sessions they conducted (assignedBy)
+  const activeWorkouts = workoutHistory.filter(w => {
+    if (w.deletedAt) return false;
+    if (!user) return false;
+    if (w.userId === user.id) return true; // Own workouts
+    if (user.isTrainer && user.mode === 'trainer' && w.assignedBy === user.id) return true; // PT sessions trainer ran
+    return false;
+  });
 
   const filteredWorkouts = searchQuery
     ? activeWorkouts.filter(w => 
@@ -436,19 +443,21 @@ export default function WorkoutHistoryPage() {
                         <StickyNote className="w-3 h-3" />
                         Notes
                       </span>
-                      {editingNotes ? (
-                        <div className="flex gap-2">
-                          <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-500 hover:text-gray-300">Cancel</button>
-                          <button onClick={handleSaveNotes} className="text-xs text-sky-400 hover:text-sky-300 font-medium">Save</button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setEditNotes(selectedWorkout.notes || ''); setEditingNotes(true); }}
-                          className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
-                        >
-                          <Edit className="w-3 h-3" />
-                          {selectedWorkout.notes ? 'Edit' : 'Add'}
-                        </button>
+                      {(user && (selectedWorkout.userId === user.id || selectedWorkout.assignedBy === user.id)) && (
+                        editingNotes ? (
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-500 hover:text-gray-300">Cancel</button>
+                            <button onClick={handleSaveNotes} className="text-xs text-sky-400 hover:text-sky-300 font-medium">Save</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditNotes(selectedWorkout.notes || ''); setEditingNotes(true); }}
+                            className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                          >
+                            <Edit className="w-3 h-3" />
+                            {selectedWorkout.notes ? 'Edit' : 'Add'}
+                          </button>
+                        )
                       )}
                     </div>
                     {editingNotes ? (

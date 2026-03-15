@@ -66,13 +66,18 @@ export default function WorkoutDetailPage() {
 
     const found = workoutHistory.find(w => w.id === params.id && !w.deletedAt);
     if (found) {
+      // Privacy: only allow viewing if user owns the workout or is the trainer who ran it
+      if (user && found.userId !== user.id && found.assignedBy !== user.id) {
+        router.replace('/workout/history');
+        return;
+      }
       setWorkout(found);
       setNotes(found.notes || '');
       setTrainerNotesText(found.trainerNotes || '');
     } else {
       router.replace('/workout');
     }
-  }, [isAuthenticated, params.id, workoutHistory, router]);
+  }, [isAuthenticated, params.id, workoutHistory, router, user]);
 
   // Is the current user the trainer who conducted this PT session?
   const isSessionTrainer = workout?.assignedBy && workout.assignedBy === user?.id;
