@@ -777,7 +777,7 @@ export default function ProfilePage() {
                       <button
                         key={cat.id}
                         onClick={() => router.push(`/profile/strength/${cat.id}`)}
-                        className="p-4 bg-slate-800/70 rounded-2xl hover:bg-slate-800 transition-all duration-200 group border border-slate-700/50 hover:border-slate-600 flex flex-col items-center"
+                        className="p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-all duration-200 group border border-gray-200 hover:border-gray-300 flex flex-col items-center"
                       >
                         <div className="relative w-20 h-20 mb-2">
                           <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
@@ -794,24 +794,24 @@ export default function ProfilePage() {
                             <span className={`text-lg font-bold ${getTierColor(cat.tier)}`}>{scoreVal.toFixed(0)}%</span>
                           </div>
                         </div>
-                        <p className="text-sm text-slate-300 font-medium">{cat.name}</p>
+                        <p className="text-sm text-gray-700 font-medium">{cat.name}</p>
                         <span className={`text-[10px] font-medium ${getTierColor(cat.tier)}`}>
                           {cat.tier?.charAt(0).toUpperCase() + cat.tier?.slice(1)}
                         </span>
-                        <ChevronRight className="w-3 h-3 text-slate-600 group-hover:text-sky-400 mt-1 transition-colors" />
+                        <ChevronRight className="w-3 h-3 text-gray-400 group-hover:text-sky-500 mt-1 transition-colors" />
                       </button>
                     );
                   })}
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-500 font-medium">
+                  <p className="text-xs text-gray-500 font-medium">
                     Updated {format(new Date(strengthRating.lastUpdated), 'MMM d')}
                   </p>
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="text-slate-400 hover:text-sky-400 -mr-2"
+                    className="text-gray-400 hover:text-sky-500 -mr-2"
                     onClick={() => router.push('/exercises')}
                   >
                     <Search className="w-4 h-4 mr-1" />
@@ -821,11 +821,11 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="text-center py-10">
-                <div className="w-16 h-16 rounded-2xl bg-slate-800 flex items-center justify-center mx-auto mb-4">
-                  <Target className="w-8 h-8 text-slate-600" />
+                <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mx-auto mb-4">
+                  <Target className="w-8 h-8 text-gray-400" />
                 </div>
-                <p className="text-slate-300 font-medium mb-1">No strength data yet</p>
-                <p className="text-sm text-slate-500">Complete workouts with key lifts to build your rating</p>
+                <p className="text-gray-700 font-medium mb-1">No strength data yet</p>
+                <p className="text-sm text-gray-500">Complete workouts with key lifts to build your rating</p>
               </div>
             )}
           </CardContent>
@@ -834,10 +834,10 @@ export default function ProfilePage() {
 
         {/* Personal Bests - hidden in trainer mode */}
         {!isTrainerMode && (
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-gray-900 flex items-center gap-2">
                 <Trophy className="w-5 h-5 text-amber-400" />
                 Personal Bests
               </CardTitle>
@@ -853,10 +853,10 @@ export default function ProfilePage() {
                 {userPBs.slice(0, 5).map((pb) => (
                   <div
                     key={pb.id}
-                    className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
                   >
                     <div>
-                      <p className="font-medium text-white capitalize">
+                      <p className="font-medium text-gray-900 capitalize">
                         {pb.exerciseId.replace(/-/g, ' ')}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -864,7 +864,7 @@ export default function ProfilePage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-amber-400">{Math.round(pb.oneRepMax)}kg</p>
+                      <p className="font-bold text-amber-500">{Math.round(pb.oneRepMax)}kg</p>
                       <p className="text-xs text-gray-500">1RM</p>
                     </div>
                   </div>
@@ -872,8 +872,8 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">No personal bests yet</p>
+                <Trophy className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-700 mb-1">No personal bests yet</p>
                 <p className="text-sm text-gray-500">Start logging workouts to track your PRs</p>
               </div>
             )}
@@ -882,14 +882,14 @@ export default function ProfilePage() {
         )}
 
         {/* Recent Workouts - Personal workouts in user mode, Client sessions in trainer mode */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-gray-900 flex items-center gap-2">
                 <Dumbbell className="w-5 h-5 text-sky-400" />
                 {isTrainerMode ? 'Recent Client Sessions' : 'Recent Workouts'}
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-gray-400" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout')}>
+              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-sky-500" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
@@ -909,17 +909,17 @@ export default function ProfilePage() {
                       return (
                         <div
                           key={session.id}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors"
+                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors border border-gray-100"
                           onClick={() => router.push(`/clients/${session.clientId}`)}
                         >
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-white text-sm truncate">{(session as any).title || 'PT Session'}</p>
+                            <p className="font-medium text-gray-900 text-sm truncate">{(session as any).title || 'PT Session'}</p>
                             <p className="text-xs text-gray-500">
                               {format(new Date(session.date), 'MMM d')} • {clientName}
                             </p>
                           </div>
                           <div className="text-right ml-3">
-                            <p className="text-emerald-400 font-medium text-sm">Completed</p>
+                            <p className="text-emerald-500 font-medium text-sm">Completed</p>
                             <p className="text-xs text-gray-500">
                               {session.duration ? `${session.duration}m` : '--'}
                             </p>
@@ -930,8 +930,8 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Dumbbell className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 mb-1">No client sessions yet</p>
+                  <Dumbbell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-700 mb-1">No client sessions yet</p>
                   <p className="text-sm text-gray-500">Complete sessions with clients to see them here</p>
                 </div>
               )
@@ -947,14 +947,14 @@ export default function ProfilePage() {
                       return (
                         <div
                           key={workout.id}
-                          className={`flex items-center justify-between p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors border-l-2 ${
+                          className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors border border-gray-100 border-l-2 ${
                             isTrainerWorkout ? 'border-l-rose-500' : 'border-l-sky-500'
                           }`}
                           onClick={() => router.push(`/workout/${workout.id}`)}
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                              <p className="font-medium text-gray-900 text-sm truncate">{workout.name}</p>
                               {isTrainerWorkout ? (
                                 <Badge className="bg-rose-500/20 text-rose-400 border-rose-500/30 text-[10px] px-1.5 py-0">
                                   Trainer

@@ -47,7 +47,21 @@ export default function TodayPage() {
   const { medals } = useMedalStore();
   const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms } = useTrainerStore();
 
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('today-selected-date');
+      if (saved) {
+        const parsed = new Date(saved);
+        if (!isNaN(parsed.getTime())) return parsed;
+      }
+    }
+    return new Date();
+  });
+
+  // Persist selected date to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('today-selected-date', selectedDate.toISOString());
+  }, [selectedDate]);
   const [showTemplates, setShowTemplates] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<WorkoutTemplate | null>(null);
   const [showStartOptions, setShowStartOptions] = useState(false);
@@ -462,7 +476,7 @@ export default function TodayPage() {
         {/* Unified Timeline — shows in BOTH user and trainer mode for trainer users */}
         {user.isTrainer && (() => {
           const trainerEvents = getEventsForDate(selectedDateStr).filter(e => 
-            e.trainerId === user.id && e.status !== 'cancelled'
+            e.trainerId === user.id && e.status !== 'cancelled' && e.clientId !== user.id
           );
           
           // Merge all events: upcoming first, completed below, each sub-sorted by time
@@ -513,7 +527,7 @@ export default function TodayPage() {
                 </div>
                 
                 {allEvents.length > 0 ? (
-                  <div className="space-y-3">
+                  <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-1 rounded-xl border border-gray-200 bg-gray-50/50 p-3">
                     {allEvents.map((event) => {
                       const eventType = event.type || 'session';
                       const config = typeConfig[eventType] || typeConfig.session;

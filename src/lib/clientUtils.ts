@@ -30,13 +30,23 @@ export function getClientDisplayInfo(clientId: string | undefined | null): Clien
       };
     }
     // Direct displayName (from onboarding)
-    const storedName = (trainerClient as any).displayName;
+    const storedName = (trainerClient as any).displayName || (trainerClient as any).name;
     if (storedName) {
       return {
         displayName: storedName,
         profilePhoto: (trainerClient as any).profilePhoto,
         username: (trainerClient as any).username,
       };
+    }
+  }
+
+  // 1b. Check calendar events for this client's name
+  const { calendarEvents } = useTrainerStore.getState();
+  const clientEvent = calendarEvents.find((e: any) => e.clientId === clientId && (e.contactName || e.title));
+  if (clientEvent) {
+    const eventName = (clientEvent as any).contactName || clientEvent.title;
+    if (eventName && eventName !== clientId && eventName.length > 2) {
+      return { displayName: eventName };
     }
   }
 
