@@ -162,18 +162,18 @@ function getBodyShapeRules(bodyShape?: string, bodyGender?: string): string {
   const gender = bodyGender || 'male';
   const rules: Record<string, Record<string, string>> = {
     male: {
-      slim: 'BODY TYPE: Slim/ectomorph male — lean frame, narrow shoulders. Focus on compound movements to build overall mass. Prioritize progressive overload. Higher calorie expenditure exercises. Include both upper and lower body compounds.',
-      average: 'BODY TYPE: Average male build. Balanced program. Moderate volume across all muscle groups.',
-      athletic: 'BODY TYPE: Athletic/mesomorph male — muscular, V-taper. Can handle higher intensity and advanced variations. Include periodization concepts. Mix compound and isolation.',
-      stocky: 'BODY TYPE: Stocky/endomorph male — wide frame, solid build. Include mobility work in warm-up. Focus on compound strength. Do not assume low fitness — program for their frame.',
-      heavy: 'BODY TYPE: Heavier male build. Prioritize joint-friendly exercise variations (machines over free weights where possible). Include metabolic conditioning. Avoid high-impact plyometrics. Prefer seated/supported variations for beginners.',
+      lean: 'GOAL PHYSIQUE: Lean & toned male — low body fat, defined muscles. Focus on moderate weight with higher reps (10-15), supersets, and metabolic conditioning. Include compound lifts and isolation for definition. Add HIIT or cardio finishers.',
+      athletic: 'GOAL PHYSIQUE: Athletic male — balanced, functional build. Mix compound strength with explosive movements. Include unilateral work, core stability, and sport-specific patterns. Moderate volume.',
+      muscular: 'GOAL PHYSIQUE: Muscular/bodybuilder male — maximum hypertrophy. High volume training (4-5 sets, 8-12 reps). Progressive overload on compound lifts plus targeted isolation. Include mind-muscle connection cues.',
+      strong: 'GOAL PHYSIQUE: Strong/powerlifter male — raw strength focus. Heavy compound lifts (squat, bench, deadlift) with lower reps (3-6). Longer rest periods (3-5 min). Include accessory work for weak points.',
+      big: 'GOAL PHYSIQUE: Big & powerful male — size + strength combined. Blend of powerlifting and bodybuilding. Heavy compounds for strength base, high volume accessories for size. 5x5 on main lifts, 3-4x10-12 on accessories.',
     },
     female: {
-      slim: 'BODY TYPE: Slim/petite female. Focus on building base strength with compound lifts. Progressive overload is key. Include both upper and lower body work equally.',
-      pear: 'BODY TYPE: Pear-shaped female — wider hips, slimmer upper body. Balance upper and lower body programming — do NOT over-emphasize lower body. Include upper body pushing and pulling.',
-      hourglass: 'BODY TYPE: Hourglass female — balanced proportions. Well-rounded program to maintain proportions. Mix of compound and isolation work.',
-      athletic: 'BODY TYPE: Athletic female — toned, broader shoulders. Can handle higher intensity. Include advanced movement patterns and sport-specific elements.',
-      plus: 'BODY TYPE: Plus-size female. Prioritize joint-friendly exercises. Include progressive loading with machines. Add metabolic conditioning. Prefer supported/seated variations for stability.',
+      lean: 'GOAL PHYSIQUE: Lean & toned female — slim, defined physique. Moderate weight with higher reps (12-15), supersets, and circuit elements. Full body approach with emphasis on compound lifts. Include metabolic finishers.',
+      fit: 'GOAL PHYSIQUE: Fit & curvy female — toned with natural curves. Balanced upper and lower body work. Glute-focused lower body (hip thrusts, RDLs, lunges). Upper body pushing and pulling for posture.',
+      athletic: 'GOAL PHYSIQUE: Athletic female — sporty, strong build. Functional compound movements, explosive work, core stability. Mix of strength and conditioning. Include unilateral exercises.',
+      strong: 'GOAL PHYSIQUE: Strong female — powerful, lifting-focused. Heavier compound lifts (squat, deadlift, bench, OHP) with progressive overload. Lower reps (5-8) on main lifts, moderate accessories.',
+      muscular: 'GOAL PHYSIQUE: Muscular female — well-built, competitive physique. High volume hypertrophy training. 4-5 sets per exercise, 8-12 reps. Both compound and isolation work. Structured split approach.',
     },
   };
   return rules[gender]?.[bodyShape] || '';

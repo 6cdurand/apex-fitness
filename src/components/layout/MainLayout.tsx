@@ -160,14 +160,27 @@ export function PageHeader({
   const { user } = useAuthStore();
   const isTrainerMode = user?.mode === 'trainer';
 
+  const userBgImage = 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&h=300&fit=crop&crop=center';
+  const trainerBgImage = 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&h=300&fit=crop&crop=center';
+
   return (
     <header className={cn(
-      "sticky top-0 z-40",
-      "bg-gradient-to-b",
-      isTrainerMode ? "from-rose-500 to-rose-600" : "from-sky-500 to-sky-600",
+      "sticky top-0 z-40 relative overflow-hidden",
       "px-5 pt-14 pb-8 shadow-lg",
       isTrainerMode ? "shadow-rose-500/10" : "shadow-sky-500/10"
     )}>
+      {/* Background image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center"
+        style={{ backgroundImage: `url(${isTrainerMode ? trainerBgImage : userBgImage})` }}
+      />
+      {/* Gradient overlay for readability */}
+      <div className={cn(
+        "absolute inset-0",
+        isTrainerMode
+          ? "bg-gradient-to-b from-rose-600/85 via-rose-500/80 to-rose-600/90"
+          : "bg-gradient-to-b from-sky-600/85 via-sky-500/80 to-sky-600/90"
+      )} />
       {/* Subtle pattern overlay */}
       <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:24px_24px]" />
       

@@ -690,9 +690,9 @@ export default function ProgramPage() {
               )}
 
               <div className="space-y-5 pt-2">
-                {/* Body Shape */}
+                {/* Body Shape Goal */}
                 <div className="space-y-2">
-                  <Label className="text-gray-900 font-medium">Your body type</Label>
+                  <Label className="text-gray-900 font-medium">What body would you like to achieve?</Label>
                   <div className="flex items-center justify-center gap-1 p-1 bg-gray-100 rounded-lg mb-3">
                     <button
                       onClick={() => { setBodyGender('male'); setBodyShape(''); }}
@@ -711,22 +711,31 @@ export default function ProgramPage() {
                       <User className="w-3.5 h-3.5" /> Female
                     </button>
                   </div>
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-5 gap-1.5">
                     {(bodyGender === 'male' ? MALE_SHAPES : FEMALE_SHAPES).map((shape) => (
                       <button
                         key={shape.id}
                         onClick={() => setBodyShape(shape.id)}
-                        className={`flex flex-col items-center p-2 rounded-xl border transition-all ${
+                        className={`flex flex-col items-center rounded-xl border-2 transition-all overflow-hidden ${
                           bodyShape === shape.id
-                            ? 'border-violet-500 bg-violet-500/10 shadow-md shadow-violet-500/10'
-                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                            ? 'border-violet-500 shadow-lg shadow-violet-500/20 scale-[1.02]'
+                            : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <shape.Component
-                          className="w-10 h-16"
-                          fill={bodyShape === shape.id ? '#8B5CF6' : '#9CA3AF'}
-                        />
-                        <p className="text-[10px] font-medium text-gray-900 mt-1 text-center">{shape.label}</p>
+                        <div className="w-full aspect-[3/4] overflow-hidden bg-gray-100">
+                          <img
+                            src={shape.photo}
+                            alt={shape.label}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className={`w-full py-1.5 px-1 text-center ${
+                          bodyShape === shape.id ? 'bg-violet-500/10' : 'bg-gray-50'
+                        }`}>
+                          <p className={`text-[9px] font-semibold leading-tight ${
+                            bodyShape === shape.id ? 'text-violet-600' : 'text-gray-700'
+                          }`}>{shape.label}</p>
+                        </div>
                       </button>
                     ))}
                   </div>
