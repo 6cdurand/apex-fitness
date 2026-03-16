@@ -45,7 +45,8 @@ import {
   Dumbbell,
   Flame,
   Zap,
-  Heart
+  Heart,
+  Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -125,6 +126,8 @@ export default function ActiveWorkoutPage() {
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
+  const [aiFeedback, setAiFeedback] = useState<string | null>(null);
+  const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
   
   // Save workout state
@@ -759,6 +762,36 @@ export default function ActiveWorkoutPage() {
       setEditEndTime(new Date(endTimeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setShowFinishDialog(false);
       setShowSummary(true);
+
+      // Fetch AI feedback asynchronously
+      const isPro = currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer';
+      if (isPro) {
+        setAiFeedbackLoading(true);
+        setAiFeedback(null);
+        const exerciseNames = completed.exercises
+          ?.slice(0, 5)
+          .map((ex: any) => ex.exercise?.name)
+          .filter(Boolean)
+          .join(', ') || '';
+        fetch('/api/workout-feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workoutName,
+            duration,
+            totalVolume: completed.totalVolume,
+            exerciseCount,
+            setCount: completedSetsCount,
+            pbCount: newPBs.length,
+            medalCount: useWorkoutStore.getState().lastDeriveResult?.medalsAwarded?.length || 0,
+            exercises: exerciseNames,
+          }),
+        })
+          .then(r => r.json())
+          .then(data => { if (data.feedback) setAiFeedback(data.feedback); })
+          .catch(() => {})
+          .finally(() => setAiFeedbackLoading(false));
+      }
     }
   };
 
@@ -869,6 +902,8 @@ export default function ActiveWorkoutPage() {
     setWorkoutNotes('');
     setSessionPaid(false);
     setShareToFeed(false);
+    setAiFeedback(null);
+    setAiFeedbackLoading(false);
     // Clear derive result so medals don't persist to next workout
     useWorkoutStore.setState({ lastDeriveResult: null });
     router.push('/workout');
@@ -1096,42 +1131,29 @@ export default function ActiveWorkoutPage() {
             })()}
 
             {/* 🤖 AI Coach Feedback — Pro users only */}
-            {(currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer') && completedWorkoutData && (() => {
-              const duration = completedWorkoutData.duration;
-              const vol = Math.round(completedWorkoutData.totalVolume);
-              const exCount = completedWorkoutData.exercises;
-              const setCount = completedWorkoutData.sets;
-              const pbCount = completedWorkoutData.pbs?.length || 0;
-              const medalCount = lastDeriveResult?.medalsAwarded?.length || 0;
-              
-              const lines: string[] = [];
-              if (vol > 10000) lines.push(`Massive volume today — ${vol.toLocaleString()}kg moved. Your muscles are getting the stimulus they need for growth.`);
-              else if (vol > 5000) lines.push(`Solid volume at ${vol.toLocaleString()}kg. Great balance between intensity and workload.`);
-              else if (vol > 0) lines.push(`${vol.toLocaleString()}kg total volume. Consider progressively increasing weight or reps next session.`);
-              if (duration > 5400) lines.push(`90+ min session — that's serious dedication. Make sure you're fueling properly post-workout.`);
-              else if (duration > 3600) lines.push(`Over an hour of work. Efficient and focused — exactly what builds results.`);
-              else if (duration > 1800) lines.push(`Quick and effective session. Time-efficient training is smart training.`);
-              if (pbCount >= 3) lines.push(`🔥 ${pbCount} new PRs! You're on a serious streak. Progressive overload is working.`);
-              else if (pbCount > 0) lines.push(`New PR${pbCount > 1 ? 's' : ''} set today! Keep pushing those boundaries.`);
-              if (medalCount > 0) lines.push(`${medalCount} medal${medalCount > 1 ? 's' : ''} earned — your consistency is paying off.`);
-              if (exCount >= 6) lines.push(`${exCount} exercises across ${setCount} sets. Great workout variety for balanced development.`);
-              if (lines.length === 0) lines.push(`Every rep counts. Keep showing up and the results will follow.`);
-              
-              return (
-                <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 rounded-xl p-3.5">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xl">🤖</span>
-                    <span className="font-semibold text-indigo-400 text-sm">AI Coach</span>
-                    <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 text-[9px] h-4 ml-auto">PRO</Badge>
-                  </div>
-                  <div className="space-y-1.5">
-                    {lines.map((line, idx) => (
-                      <p key={idx} className="text-xs text-gray-600 leading-relaxed">{line}</p>
-                    ))}
-                  </div>
+            {(currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer') && completedWorkoutData && (
+              <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 rounded-xl p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">🤖</span>
+                  <span className="font-semibold text-indigo-400 text-sm">AI Coach</span>
+                  <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 text-[9px] h-4 ml-auto">PRO</Badge>
                 </div>
-              );
-            })()}
+                {aiFeedbackLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                    <p className="text-xs text-gray-500">Generating personalized feedback...</p>
+                  </div>
+                ) : aiFeedback ? (
+                  <p className="text-xs text-gray-600 leading-relaxed">{aiFeedback}</p>
+                ) : (
+                  <p className="text-xs text-gray-600 leading-relaxed">
+                    {completedWorkoutData.totalVolume > 5000
+                      ? `Solid session — ${Math.round(completedWorkoutData.totalVolume).toLocaleString()}kg total volume across ${completedWorkoutData.exercises} exercises. Keep pushing.`
+                      : `${completedWorkoutData.exercises} exercises, ${completedWorkoutData.sets} sets completed. Every rep counts — keep showing up.`}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Strength Rating — only show if a category improved by ≥10% */}
             {(() => {

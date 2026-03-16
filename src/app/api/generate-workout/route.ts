@@ -69,7 +69,7 @@ function getGoalRules(goal: string): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const { goal, expertise, equipment, duration, programMode, days, selectedDays } = await req.json();
+    const { goal, expertise, equipment, duration, programMode, days, selectedDays, bodyShape, bodyGender } = await req.json();
 
     if (!goal || !expertise || !equipment) {
       return NextResponse.json(
@@ -103,9 +103,10 @@ export async function POST(req: NextRequest) {
     const isProgram = programMode && days && days > 1;
 
     // Build the prompt
+    const bodyContext = getBodyShapeRules(bodyShape, bodyGender);
     const prompt = isProgram
-      ? buildProgramPrompt(goal, expertise, equipmentDesc, durationMinutes, days, selectedDays)
-      : buildWorkoutPrompt(goal, expertise, equipmentDesc, durationMinutes);
+      ? buildProgramPrompt(goal, expertise, equipmentDesc, durationMinutes, days, selectedDays, bodyContext)
+      : buildWorkoutPrompt(goal, expertise, equipmentDesc, durationMinutes, bodyContext);
 
     const { text } = await generateText({
       model: groq('llama-3.3-70b-versatile'),
@@ -154,9 +155,33 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// ============ BODY SHAPE RULES ============
+
+function getBodyShapeRules(bodyShape?: string, bodyGender?: string): string {
+  if (!bodyShape) return '';
+  const gender = bodyGender || 'male';
+  const rules: Record<string, Record<string, string>> = {
+    male: {
+      slim: 'BODY TYPE: Slim/ectomorph male — lean frame, narrow shoulders. Focus on compound movements to build overall mass. Prioritize progressive overload. Higher calorie expenditure exercises. Include both upper and lower body compounds.',
+      average: 'BODY TYPE: Average male build. Balanced program. Moderate volume across all muscle groups.',
+      athletic: 'BODY TYPE: Athletic/mesomorph male — muscular, V-taper. Can handle higher intensity and advanced variations. Include periodization concepts. Mix compound and isolation.',
+      stocky: 'BODY TYPE: Stocky/endomorph male — wide frame, solid build. Include mobility work in warm-up. Focus on compound strength. Do not assume low fitness — program for their frame.',
+      heavy: 'BODY TYPE: Heavier male build. Prioritize joint-friendly exercise variations (machines over free weights where possible). Include metabolic conditioning. Avoid high-impact plyometrics. Prefer seated/supported variations for beginners.',
+    },
+    female: {
+      slim: 'BODY TYPE: Slim/petite female. Focus on building base strength with compound lifts. Progressive overload is key. Include both upper and lower body work equally.',
+      pear: 'BODY TYPE: Pear-shaped female — wider hips, slimmer upper body. Balance upper and lower body programming — do NOT over-emphasize lower body. Include upper body pushing and pulling.',
+      hourglass: 'BODY TYPE: Hourglass female — balanced proportions. Well-rounded program to maintain proportions. Mix of compound and isolation work.',
+      athletic: 'BODY TYPE: Athletic female — toned, broader shoulders. Can handle higher intensity. Include advanced movement patterns and sport-specific elements.',
+      plus: 'BODY TYPE: Plus-size female. Prioritize joint-friendly exercises. Include progressive loading with machines. Add metabolic conditioning. Prefer supported/seated variations for stability.',
+    },
+  };
+  return rules[gender]?.[bodyShape] || '';
+}
+
 // ============ SINGLE WORKOUT PROMPT ============
 
-function buildWorkoutPrompt(goal: string, expertise: string, equipmentDesc: string, durationMinutes: number): string {
+function buildWorkoutPrompt(goal: string, expertise: string, equipmentDesc: string, durationMinutes: number, bodyContext?: string): string {
   return `You are a certified personal trainer. Generate a SINGLE workout session as JSON.
 
 CLIENT PROFILE:
@@ -164,6 +189,7 @@ CLIENT PROFILE:
 - Experience: ${expertise}
 - Equipment: ${equipmentDesc}
 - Duration: ~${durationMinutes} minutes
+${bodyContext ? `\n${bodyContext}\n` : ''}
 
 ${getExperienceRules(expertise)}
 
@@ -214,7 +240,7 @@ Generate now. Output ONLY valid JSON.`;
 
 // ============ MULTI-DAY PROGRAM PROMPT ============
 
-function buildProgramPrompt(goal: string, expertise: string, equipmentDesc: string, durationMinutes: number, days: number, selectedDays?: string[]): string {
+function buildProgramPrompt(goal: string, expertise: string, equipmentDesc: string, durationMinutes: number, days: number, selectedDays?: string[], bodyContext?: string): string {
   const dayLabels = selectedDays && selectedDays.length > 0
     ? selectedDays.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ')
     : `${days} training days per week`;
@@ -227,7 +253,7 @@ CLIENT PROFILE:
 - Equipment: ${equipmentDesc}
 - Session duration: ~${durationMinutes} minutes
 - Training days: ${dayLabels} (${days} days/week)
-
+${bodyContext ? `\n${bodyContext}\n` : ''}
 ${getExperienceRules(expertise)}
 
 ${getGoalRules(goal)}

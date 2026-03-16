@@ -33,8 +33,10 @@ import {
   BookOpen,
   ChevronDown,
   X,
-  LayoutGrid
+  LayoutGrid,
+  User
 } from 'lucide-react';
+import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
 interface AIBlock {
   name: string;
@@ -107,6 +109,8 @@ export default function ProgramPage() {
   // AI Generator state
   const [showGenerator, setShowGenerator] = useState(false);
   const [genStep, setGenStep] = useState<'form' | 'injury_check' | 'injury_block' | 'generating' | 'result'>('form');
+  const [bodyGender, setBodyGender] = useState<'male' | 'female'>((user?.gender === 'female') ? 'female' : 'male');
+  const [bodyShape, setBodyShape] = useState('');
   const [goal, setGoal] = useState('');
   const [expertise, setExpertise] = useState('');
   const [equipment, setEquipment] = useState('');
@@ -220,6 +224,7 @@ export default function ProgramPage() {
 
   const resetGenerator = () => {
     setGenStep('form');
+    setBodyShape('');
     setGoal('');
     setExpertise('');
     setEquipment('');
@@ -256,7 +261,7 @@ export default function ProgramPage() {
     setGenError('');
 
     try {
-      const body: any = { goal, expertise, equipment, duration: parseInt(duration) };
+      const body: any = { goal, expertise, equipment, duration: parseInt(duration), bodyShape, bodyGender };
       if (programMode) {
         body.programMode = true;
         body.days = trainingDays;
@@ -295,6 +300,26 @@ export default function ProgramPage() {
   const handleStartGenerated = () => {
     if (!generatedWorkout || !user) return;
 
+    // Build block metadata for active workout colored headers
+    const blocks = generatedWorkout.blocks.map((block, bIdx) => {
+      const blockId = `ai-block-${bIdx}-${Date.now()}`;
+      return {
+        id: blockId,
+        type: block.type || 'strength',
+        name: block.name || 'Block',
+        exercises: block.exercises.map(ex => ({
+          id: `gen-${ex.exerciseId}-${Math.random().toString(36).slice(2, 6)}`,
+          exerciseId: ex.exerciseId,
+          exerciseName: ex.name,
+          sets: ex.sets,
+          reps: String(ex.reps),
+          rest: `${ex.restSeconds}s`,
+          repType: 'reps' as const,
+          setStyle: 'fixed' as const,
+        })),
+      };
+    });
+
     // Convert AI workout into a WorkoutTemplate compatible format
     const exercises = generatedWorkout.blocks.flatMap(block =>
       block.exercises.map(ex => ({
@@ -326,6 +351,7 @@ export default function ProgramPage() {
       name: generatedWorkout.name,
       description: generatedWorkout.description,
       exercises,
+      blocks,
       createdBy: user.id,
       isPublic: false,
       estimatedDuration: generatedWorkout.estimatedMinutes,
@@ -664,6 +690,48 @@ export default function ProgramPage() {
               )}
 
               <div className="space-y-5 pt-2">
+                {/* Body Shape */}
+                <div className="space-y-2">
+                  <Label className="text-gray-900 font-medium">Your body type</Label>
+                  <div className="flex items-center justify-center gap-1 p-1 bg-gray-100 rounded-lg mb-3">
+                    <button
+                      onClick={() => { setBodyGender('male'); setBodyShape(''); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${
+                        bodyGender === 'male' ? 'bg-violet-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" /> Male
+                    </button>
+                    <button
+                      onClick={() => { setBodyGender('female'); setBodyShape(''); }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${
+                        bodyGender === 'female' ? 'bg-violet-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" /> Female
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {(bodyGender === 'male' ? MALE_SHAPES : FEMALE_SHAPES).map((shape) => (
+                      <button
+                        key={shape.id}
+                        onClick={() => setBodyShape(shape.id)}
+                        className={`flex flex-col items-center p-2 rounded-xl border transition-all ${
+                          bodyShape === shape.id
+                            ? 'border-violet-500 bg-violet-500/10 shadow-md shadow-violet-500/10'
+                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                        }`}
+                      >
+                        <shape.Component
+                          className="w-10 h-16"
+                          fill={bodyShape === shape.id ? '#8B5CF6' : '#9CA3AF'}
+                        />
+                        <p className="text-[10px] font-medium text-gray-900 mt-1 text-center">{shape.label}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Goal */}
                 <div className="space-y-2">
                   <Label className="text-gray-900 font-medium">What&apos;s your goal?</Label>

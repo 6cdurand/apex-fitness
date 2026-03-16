@@ -3,7 +3,7 @@ import { exerciseLibrary, calculate1RM } from './exercises';
 import { medalDefinitions } from './medals';
 
 const trainersData = [
-  { id: 'trainer-christo', email: 'christo@apexfitness.nz', username: 'christo_durand', displayName: 'Christo Durand', bio: 'Head Coach & Founder of Catalift. Specializing in strength training and powerlifting for all levels.', gender: 'male', height: 185, weight: 92, specs: ['Powerlifting', 'Strength & Conditioning'], photo: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&h=200&fit=crop&crop=face', location: 'Catalift Hamilton', rate: 75, availability: 'Mon-Sat 6am-8pm' },
+  { id: 'trainer-christo', email: 'christo@apexfitness.nz', username: 'christo_durand', displayName: 'Christo Durand', bio: 'Head Coach & Founder of Catalift. Specializing in strength training and powerlifting for all levels.', gender: 'male', height: 185, weight: 92, specs: ['Powerlifting', 'Strength & Conditioning'], photo: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=200&h=200&fit=crop&crop=face', location: 'Catalift Hamilton', rate: 75, availability: 'Mon-Sat 6am-8pm' },
   { id: 'trainer-sarah', email: 'sarah@lesmills.co.nz', username: 'sarah_fitness', displayName: 'Sarah Thompson', bio: 'Les Mills certified instructor with 8+ years experience. HIIT and group fitness specialist.', gender: 'female', height: 168, weight: 62, specs: ['Group Fitness', 'HIIT'], photo: 'https://images.unsplash.com/photo-1594381898411-846e7d193883?w=200&h=200&fit=crop&crop=face', location: 'Les Mills Hamilton', rate: 65, availability: 'Mon-Fri 5am-6pm' },
   { id: 'trainer-mike', email: 'mike@cityfitness.co.nz', username: 'mike_strength', displayName: 'Mike Roberts', bio: 'Former competitive powerlifter. Now helping others achieve their strength goals.', gender: 'male', height: 190, weight: 105, specs: ['Powerlifting', 'Strongman'], photo: 'https://images.unsplash.com/photo-1567013127542-490d757e51fc?w=200&h=200&fit=crop&crop=face', location: 'City Fitness Hamilton', rate: 70, availability: 'Tue-Sun 7am-9pm' },
   { id: 'trainer-emma', email: 'emma@snapfitness.co.nz', username: 'emma_wellness', displayName: 'Emma Wilson', bio: 'Holistic approach to fitness. Yoga, mindfulness, and strength training combined.', gender: 'female', height: 165, weight: 58, specs: ['Womens Fitness', 'Yoga'], photo: 'https://images.unsplash.com/photo-1518611012118-696072aa579a?w=200&h=200&fit=crop&crop=face', location: 'Snap Fitness Cambridge', rate: 60, availability: 'Mon-Sat 6am-4pm' },
@@ -397,7 +397,7 @@ export function initializeSeedData(): void {
   // Auth store format - auto login as Christo with explicit followers/following
   const christoUser = {
     ...trainers[0],
-    profilePhoto: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=200&h=200&fit=crop&crop=face',
+    profilePhoto: 'https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=200&h=200&fit=crop&crop=face',
     followers: users.filter(u => u.following.includes(trainers[0].id)).map(u => u.id),
     following: [...trainers.filter(t => t.id !== trainers[0].id).map(t => t.id), ...users.slice(0, 5).map(u => u.id)],
   };
