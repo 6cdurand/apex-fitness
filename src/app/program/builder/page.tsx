@@ -35,6 +35,8 @@ import {
   Zap,
   Check,
   RefreshCw,
+  Edit,
+  Eye,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase } from '@/types';
 import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
@@ -207,7 +209,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, addCalendarEvent, clientPrograms } = useTrainerStore();
+  const { clients, addClientProgram, addCalendarEvent, clientPrograms, savedBlocks, deleteBlock } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -229,6 +231,9 @@ function ProgramBuilderContent() {
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
+  const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
+  const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
+  const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>('fixed');
   
   // ── Schedule state ──
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -391,51 +396,45 @@ function ProgramBuilderContent() {
     return getExerciseUsageCounts(workoutHistory, targetUserId);
   }, [workoutHistory, targetUserId]);
   
-  // ── Block Library: collect all blocks from existing programs ──
-  const blockLibrary = useMemo(() => {
-    const seen = new Set<string>();
-    const blocks: ProgramBlock[] = [];
-    clientPrograms.forEach(prog => {
-      (prog.weeklyPlan || []).forEach((day: any) => {
-        (day.blocks || []).forEach((block: any) => {
-          const key = `${block.type}-${block.name}`;
-          if (!seen.has(key) && block.exercises?.length > 0) {
-            seen.add(key);
-            blocks.push({
-              id: block.id,
-              type: block.type,
-              name: block.name,
-              exercises: (block.exercises || []).map((e: any) => ({
-                id: uuidv4(),
-                exerciseId: e.exerciseId || e.id,
-                exerciseName: e.exerciseName || e.name || 'Exercise',
-                movementPattern: e.movementPattern || '',
-                sets: e.sets || 3,
-                reps: e.reps || '8-12',
-                rest: e.rest || '90s',
-              })),
-            });
-          }
-        });
-      });
-    });
+  // ── Block Library: use savedBlocks from store ──
+  const filteredLibraryBlocks = useMemo(() => {
+    let blocks = savedBlocks || [];
+    if (blockLibraryFilter !== 'all') {
+      blocks = blocks.filter(b => b.type === blockLibraryFilter);
+    }
+    if (blockLibrarySearch.trim()) {
+      const q = blockLibrarySearch.toLowerCase();
+      blocks = blocks.filter(b => 
+        b.name.toLowerCase().includes(q) || 
+        b.exercises.some(e => (e.exerciseName || '').toLowerCase().includes(q))
+      );
+    }
     return blocks;
-  }, [clientPrograms]);
+  }, [savedBlocks, blockLibraryFilter, blockLibrarySearch]);
 
-  const addBlockFromLibrary = (libraryBlock: ProgramBlock) => {
+  const addBlockFromLibrary = (savedBlock: any) => {
     setDays(prev => prev.map((day, i) => {
       if (i !== activeDayIndex) return day;
       return {
         ...day,
         blocks: [...day.blocks, {
-          ...libraryBlock,
           id: uuidv4(),
-          exercises: libraryBlock.exercises.map(e => ({ ...e, id: uuidv4() })),
+          type: savedBlock.type,
+          name: savedBlock.name,
+          exercises: (savedBlock.exercises || []).map((e: any) => ({
+            id: uuidv4(),
+            exerciseId: e.exerciseId || e.id,
+            exerciseName: e.exerciseName || e.name || 'Exercise',
+            movementPattern: e.movementPattern || '',
+            sets: e.sets || 3,
+            reps: typeof e.reps === 'string' ? e.reps : '8-12',
+            rest: e.rest || '90s',
+          })),
         }],
       };
     }));
     setShowBlockLibrary(false);
-    toast.success(`Added "${libraryBlock.name}" block`);
+    toast.success(`Added "${savedBlock.name}" block`);
   };
 
   // ── Stats ──
@@ -786,8 +785,9 @@ function ProgramBuilderContent() {
               </div>
             )}
             
-            {/* Block type buttons + library */}
-            <div className="flex gap-1 flex-wrap">
+            {/* Add Block: type buttons + library */}
+            <div className="flex gap-1 flex-wrap items-center">
+              <span className="text-xs text-gray-500 mr-1">Add Block:</span>
               {BLOCK_TYPES.map(bt => (
                 <Button
                   key={bt.value}
@@ -799,49 +799,15 @@ function ProgramBuilderContent() {
                   {bt.icon} {bt.label}
                 </Button>
               ))}
-              {blockLibrary.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={`h-8 text-xs gap-1 ${showBlockLibrary ? 'border-sky-500 text-sky-400 bg-sky-500/10' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
-                  onClick={() => setShowBlockLibrary(!showBlockLibrary)}
-                >
-                  <Copy className="h-3.5 w-3.5" /> Library ({blockLibrary.length})
-                </Button>
-              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className={`h-8 text-xs gap-1 ${showBlockLibrary ? 'border-sky-500 text-sky-400 bg-sky-500/10' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
+                onClick={() => { setShowBlockLibrary(true); setBlockLibraryFilter('all'); setBlockLibrarySearch(''); }}
+              >
+                <Dumbbell className="h-3.5 w-3.5" /> Block Library ({savedBlocks.length})
+              </Button>
             </div>
-            
-            {/* Block Library Panel */}
-            {showBlockLibrary && blockLibrary.length > 0 && (
-              <Card className="bg-gray-900/80 border-sky-500/30">
-                <CardContent className="p-3 space-y-2">
-                  <p className="text-xs text-gray-400 font-medium">Saved Blocks — tap to add</p>
-                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                    {blockLibrary.map((lb, idx) => {
-                      const styles = getBlockStyles(lb.type);
-                      return (
-                        <button
-                          key={idx}
-                          className={`w-full text-left px-3 py-2 rounded-lg border transition-all hover:ring-1 hover:ring-sky-500/50 ${styles.bg} ${styles.border}`}
-                          onClick={() => addBlockFromLibrary(lb)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge className={`text-[10px] ${styles.badge} border`}>{lb.type}</Badge>
-                              <span className="text-sm text-white font-medium">{lb.name}</span>
-                            </div>
-                            <span className="text-[10px] text-gray-400">{lb.exercises.length} ex</span>
-                          </div>
-                          <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                            {lb.exercises.map(e => e.exerciseName).join(', ')}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
             
             {/* Blocks & exercises */}
             {activeDay?.blocks.length === 0 && (
@@ -855,15 +821,14 @@ function ProgramBuilderContent() {
             
             {activeDay?.blocks.map((block) => {
               const styles = getBlockStyles(block.type);
+              const blockIcon = BLOCK_TYPES.find(bt => bt.value === block.type)?.icon;
               return (
-                <Card key={block.id} className={`${styles.bg} ${styles.border} border`}>
-                  <CardContent className="p-3 space-y-2">
+                <Card key={block.id} className={`${styles.bg} ${styles.border} border overflow-hidden`}>
+                  <CardContent className="p-0">
                     {/* Block header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge className={`text-[10px] ${styles.badge} border`}>
-                          {block.type}
-                        </Badge>
+                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <span className="flex-shrink-0">{blockIcon}</span>
                         <Input
                           value={block.name}
                           onChange={e => {
@@ -874,64 +839,105 @@ function ProgramBuilderContent() {
                           }}
                           className="bg-transparent border-none text-white text-sm font-medium h-7 p-0 focus-visible:ring-0"
                         />
+                        <Badge className={`text-[10px] ${styles.badge} border flex-shrink-0`}>
+                          {block.type}
+                        </Badge>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-gray-500 hover:text-red-400"
-                        onClick={() => removeBlock(block.id)}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    
-                    {/* Exercises */}
-                    {block.exercises.map((ex) => (
-                      <div key={ex.id} className="flex items-center gap-2 bg-black/20 rounded-lg p-2">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <input
-                              type="number"
-                              value={ex.sets}
-                              onChange={e => updateExercise(block.id, ex.id, { sets: parseInt(e.target.value) || 1 })}
-                              className="w-10 text-center text-xs bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-gray-300"
-                              min={1}
-                            />
-                            <span className="text-[10px] text-gray-500">×</span>
-                            <input
-                              value={ex.reps}
-                              onChange={e => updateExercise(block.id, ex.id, { reps: e.target.value })}
-                              className="w-14 text-center text-xs bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-gray-300"
-                            />
-                            <span className="text-[10px] text-gray-500">rest</span>
-                            <input
-                              value={ex.rest}
-                              onChange={e => updateExercise(block.id, ex.id, { rest: e.target.value })}
-                              className="w-12 text-center text-xs bg-gray-800/80 border border-gray-700 rounded px-1 py-0.5 text-gray-300"
-                            />
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-gray-500 hover:text-red-400 flex-shrink-0"
-                          onClick={() => removeExercise(block.id, ex.id)}
+                          className="h-7 w-7 text-gray-500 hover:text-sky-400"
+                          title="Save block to library"
+                          onClick={() => {
+                            const { saveBlock } = useTrainerStore.getState();
+                            saveBlock({
+                              name: block.name,
+                              type: block.type,
+                              exercises: block.exercises.map(e => ({
+                                id: e.id,
+                                exerciseId: e.exerciseId,
+                                exerciseName: e.exerciseName,
+                                sets: e.sets,
+                                reps: e.reps,
+                                rest: e.rest,
+                              })),
+                            });
+                            toast.success(`"${block.name}" saved to library`);
+                          }}
                         >
-                          <X className="w-3 h-3" />
+                          <Save className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-500 hover:text-red-400"
+                          onClick={() => removeBlock(block.id)}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
-                    ))}
+                    </div>
+                    
+                    {/* Numbered exercise list */}
+                    <div className="divide-y divide-white/5">
+                      {block.exercises.map((ex, exIdx) => (
+                        <div key={ex.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
+                          <GripVertical className="w-3.5 h-3.5 text-gray-600 flex-shrink-0 cursor-grab" />
+                          <span className="text-xs text-gray-500 w-5 flex-shrink-0">{exIdx + 1}.</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
+                              <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                            </div>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {ex.sets} × {ex.reps} reps · {ex.rest} rest
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-500 hover:text-sky-400"
+                              onClick={() => {
+                                const newSets = prompt('Sets:', String(ex.sets));
+                                const newReps = prompt('Reps:', ex.reps);
+                                const newRest = prompt('Rest:', ex.rest);
+                                if (newSets || newReps || newRest) {
+                                  updateExercise(block.id, ex.id, {
+                                    ...(newSets ? { sets: parseInt(newSets) || ex.sets } : {}),
+                                    ...(newReps ? { reps: newReps } : {}),
+                                    ...(newRest ? { rest: newRest } : {}),
+                                  });
+                                }
+                              }}
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-gray-500 hover:text-red-400"
+                              onClick={() => removeExercise(block.id, ex.id)}
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                     
                     {/* Add exercise button */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-gray-400 hover:text-white w-full"
-                      onClick={() => { setShowAddExercise(block.id); setExerciseSearch(''); }}
-                    >
-                      <Plus className="w-3 h-3 mr-1" /> Add Exercise
-                    </Button>
+                    <div className="px-3 py-2 border-t border-white/5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-gray-400 hover:text-white w-full"
+                        onClick={() => { setShowAddExercise(block.id); setExerciseSearch(''); }}
+                      >
+                        <Plus className="w-3 h-3 mr-1" /> Add Exercise
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               );
@@ -967,6 +973,27 @@ function ProgramBuilderContent() {
         {/* ══════════════════════════════════════════════════════ */}
         {builderStep === 'schedule' && (
           <div className="space-y-4">
+            {/* Schedule mode selector */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                className={`p-3 rounded-xl border text-left transition-all ${scheduleMode === 'fixed' ? 'border-sky-500 bg-sky-500/10' : 'border-gray-700 bg-gray-900 hover:border-gray-600'}`}
+                onClick={() => setScheduleMode('fixed')}
+              >
+                <Calendar className="w-5 h-5 text-sky-400 mb-1" />
+                <p className="text-sm text-white font-medium">Fixed Days</p>
+                <p className="text-[10px] text-gray-400">Repeat every week on set days</p>
+              </button>
+              <button
+                className={`p-3 rounded-xl border text-left transition-all ${scheduleMode === 'flexible' ? 'border-amber-500 bg-amber-500/10' : 'border-gray-700 bg-gray-900 hover:border-gray-600'}`}
+                onClick={() => setScheduleMode('flexible')}
+              >
+                <RefreshCw className="w-5 h-5 text-amber-400 mb-1" />
+                <p className="text-sm text-white font-medium">Flexible</p>
+                <p className="text-[10px] text-gray-400">Do workouts on any day — shows as &quot;Next Workout&quot;</p>
+              </button>
+            </div>
+
+            {scheduleMode === 'fixed' && (
             <Card className="bg-gray-900 border-gray-800">
               <CardHeader className="pb-2">
                 <CardTitle className="text-white text-sm">Assign Days to Weekdays</CardTitle>
@@ -995,6 +1022,30 @@ function ProgramBuilderContent() {
                 ))}
               </CardContent>
             </Card>
+            )}
+
+            {scheduleMode === 'flexible' && (
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                  <RefreshCw className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-white font-medium">Flexible Schedule</p>
+                    <p className="text-xs text-gray-400">Workouts will cycle in order. Client sees &quot;Next Workout&quot; and can do it on any day.</p>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {days.map((day, i) => (
+                    <div key={day.id} className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
+                      <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
+                      <span className="text-sm text-white flex-1">{day.label}</span>
+                      <span className="text-[10px] text-gray-500">{day.blocks.reduce((s, b) => s + b.exercises.length, 0)} exercises</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            )}
             
             <Card className="bg-gray-900 border-gray-800">
               <CardContent className="p-4 space-y-4">
@@ -1131,6 +1182,110 @@ function ProgramBuilderContent() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Block Library Dialog ── */}
+      <Dialog open={showBlockLibrary} onOpenChange={setShowBlockLibrary}>
+        <DialogContent className="bg-gray-900 border-gray-700 max-w-md max-h-[80vh] p-0">
+          <div className="p-4 border-b border-gray-800">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="w-5 h-5 text-sky-400" />
+                <DialogTitle className="text-white text-lg font-semibold">Block Library</DialogTitle>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-white text-xs gap-1"
+                onClick={() => { toast.success('Block library synced'); }}
+              >
+                <RefreshCw className="w-3 h-3" /> Sync
+              </Button>
+            </div>
+            
+            <div className="flex gap-1 flex-wrap mb-3">
+              <Button
+                size="sm"
+                className={`h-7 text-xs ${blockLibraryFilter === 'all' ? 'bg-sky-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                onClick={() => setBlockLibraryFilter('all')}
+              >
+                All
+              </Button>
+              {BLOCK_TYPES.map(bt => (
+                <Button
+                  key={bt.value}
+                  size="sm"
+                  className={`h-7 text-xs gap-1 ${blockLibraryFilter === bt.value ? 'bg-sky-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                  onClick={() => setBlockLibraryFilter(bt.value)}
+                >
+                  {bt.icon} {bt.label}
+                </Button>
+              ))}
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <Input
+                value={blockLibrarySearch}
+                onChange={e => setBlockLibrarySearch(e.target.value)}
+                placeholder="Search blocks or exercises..."
+                className="bg-gray-800 border-gray-700 text-white pl-10 text-sm"
+              />
+            </div>
+          </div>
+
+          <ScrollArea className="max-h-[50vh] p-4">
+            <div className="space-y-3">
+              {filteredLibraryBlocks.length === 0 && (
+                <div className="text-center py-8">
+                  <Dumbbell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No blocks found</p>
+                  <p className="text-xs text-gray-600 mt-1">Create blocks in the workout builder to see them here</p>
+                </div>
+              )}
+              {filteredLibraryBlocks.map((sb) => {
+                const styles = getBlockStyles(sb.type);
+                const blockIcon = BLOCK_TYPES.find(bt => bt.value === sb.type)?.icon;
+                return (
+                  <Card
+                    key={sb.id}
+                    className={`${styles.bg} ${styles.border} border cursor-pointer hover:ring-1 hover:ring-sky-500/50 transition-all`}
+                    onClick={() => addBlockFromLibrary(sb)}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="flex-shrink-0">{blockIcon}</span>
+                          <span className="text-sm text-white font-medium truncate">{sb.name}</span>
+                          <Badge className={`text-[10px] ${styles.badge} border flex-shrink-0`}>{sb.type}</Badge>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-400 hover:text-sky-400"
+                            onClick={(e) => { e.stopPropagation(); }}
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-400 hover:text-red-400"
+                            onClick={(e) => { e.stopPropagation(); deleteBlock(sb.id); toast.success('Block deleted'); }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-1">{sb.exercises.length} exercises</p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
