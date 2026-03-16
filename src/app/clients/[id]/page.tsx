@@ -1156,7 +1156,7 @@ export default function ClientDetailPage() {
                           fill="none"
                           stroke="currentColor"
                           strokeWidth="3"
-                          className="text-gray-800"
+                          className="text-gray-200"
                         />
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -1204,7 +1204,7 @@ export default function ClientDetailPage() {
                       size="sm" 
                       variant="outline" 
                       className="border-red-500 text-red-400 hover:bg-red-500/20"
-                      onClick={() => setActiveTab('sessions')}
+                      onClick={() => setActiveTab('payments')}
                     >
                       View
                     </Button>
@@ -1662,7 +1662,7 @@ export default function ClientDetailPage() {
                       <p className="text-[11px] text-gray-500 uppercase tracking-wider mb-1.5">Movement Confidence</p>
                       <div className="grid grid-cols-5 gap-1.5">
                         {Object.entries(profile.movementConfidence).map(([movement, score]) => (
-                          <div key={movement} className="text-center p-1.5 bg-gray-800 rounded-lg">
+                          <div key={movement} className="text-center p-1.5 bg-gray-50 border border-gray-200 rounded-lg">
                             <p className="text-xs text-gray-400 capitalize">{movement}</p>
                             <p className={`text-sm font-bold ${(score as number) >= 4 ? 'text-emerald-400' : (score as number) >= 3 ? 'text-sky-400' : 'text-amber-400'}`}>{score as number}/5</p>
                           </div>
@@ -1891,7 +1891,7 @@ export default function ClientDetailPage() {
                           </div>
                           {/* Show blocks performed with type-specific templates */}
                           {(workout.blocks && workout.blocks.length > 0) || workoutBlockPerfs.length > 0 ? (
-                            <div className="mt-2 pt-2 border-t border-gray-700 space-y-1">
+                            <div className="mt-2 pt-2 border-t border-gray-200 space-y-1">
                               {workoutBlockPerfs.length > 0 ? (
                                 workoutBlockPerfs.map((bp) => {
                                   const blockTypeStyles: Record<string, string> = {
@@ -1901,7 +1901,7 @@ export default function ClientDetailPage() {
                                     cardio: 'bg-red-500/20 text-red-300 border-red-500/30',
                                     work: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
                                   };
-                                  const style = blockTypeStyles[bp.blockType] || 'bg-gray-700 text-gray-300';
+                                  const style = blockTypeStyles[bp.blockType] || 'bg-gray-100 text-gray-600 border-gray-200';
                                   return (
                                     <div 
                                       key={bp.id}
@@ -1939,7 +1939,7 @@ export default function ClientDetailPage() {
                                     cardio: 'bg-red-500/20 text-red-300 border-red-500/30',
                                     work: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
                                   };
-                                  const style = blockTypeStyles[block.type] || 'bg-gray-700 text-gray-300';
+                                  const style = blockTypeStyles[block.type] || 'bg-gray-100 text-gray-600 border-gray-200';
                                   return (
                                     <div 
                                       key={block.id}
@@ -1955,7 +1955,7 @@ export default function ClientDetailPage() {
                           ) : null}
                           {/* Show top exercises with weights */}
                           {workout.exercises.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-gray-700">
+                            <div className="mt-2 pt-2 border-t border-gray-200">
                               <div className="text-xs text-gray-400 space-y-0.5">
                                 {workout.exercises.slice(0, 3).map((ex) => {
                                   const bestSet = ex.sets?.reduce((best, set) => 
@@ -1987,7 +1987,7 @@ export default function ClientDetailPage() {
                           )}
                           {/* Client's own notes (from personal workouts) */}
                           {workout.notes && (
-                            <div className="mt-2 pt-2 border-t border-gray-700">
+                            <div className="mt-2 pt-2 border-t border-gray-200">
                               <p className="text-xs text-gray-400 line-clamp-2">
                                 📝 {workout.notes}
                               </p>
@@ -2197,7 +2197,7 @@ export default function ClientDetailPage() {
                           {perf.roundTimes && perf.roundTimes.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               {perf.roundTimes.map((time, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs bg-gray-700/50">
+                                <Badge key={idx} variant="outline" className="text-xs bg-gray-100">
                                   R{idx + 1}: {formatTime(time)}
                                 </Badge>
                               ))}
@@ -2263,14 +2263,14 @@ export default function ClientDetailPage() {
                 </div>
                 
                 {/* Message Input */}
-                <div className="border-t border-gray-800 p-4">
+                <div className="border-t border-gray-200 p-4">
                   <div className="flex gap-2">
                     <Input
                       placeholder="Type a message..."
                       value={messageInput}
                       onChange={(e) => setMessageInput(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                      className="bg-gray-800 border-gray-700"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                     />
                     <Button onClick={handleSendMessage} className="bg-sky-500 hover:bg-sky-600">
                       <Send className="w-4 h-4" />
@@ -2281,363 +2281,395 @@ export default function ClientDetailPage() {
             </Card>
           </TabsContent>
 
-          {/* Sessions Tab */}
-          <TabsContent value="sessions" className="mt-4 space-y-4">
-            {/* Active Package */}
-            {activePackage && (
-              <Card className="bg-gradient-to-r from-sky-500/20 to-blue-500/20 border-sky-500/30">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sky-400 font-medium">{activePackage.name}</p>
-                      <p className="text-gray-900 text-2xl font-bold">
-                        {activePackage.remainingSessions}/{activePackage.totalSessions} sessions
-                      </p>
+          {/* Program Tab — Combines program management + client calendar */}
+          <TabsContent value="program" className="mt-4 space-y-4">
+            {/* Active Program */}
+            {activeProgram ? (
+              <>
+                <Card className="bg-gradient-to-r from-rose-500/10 to-red-500/10 border-rose-500/30">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="p-2 bg-rose-500/20 rounded-lg">
+                          <ClipboardList className="w-5 h-5 text-rose-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{activeProgram.templateName}</h3>
+                          <p className="text-xs text-gray-500">{activeProgram.weeklyPlan.length} days/week</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Badge className="bg-rose-500/20 text-rose-600 border-rose-500/30">{activeProgram.phase}</Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 w-7 p-0"
+                          onClick={() => {
+                            if (confirm(`Delete program "${activeProgram.templateName}"? This cannot be undone.`)) {
+                              deleteClientProgram(activeProgram.id);
+                              toast.success('Program deleted');
+                            }
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-gray-400 text-sm">Expires</p>
-                      <p className="text-gray-900 text-sm">
-                        {activePackage.expiryDate ? format(new Date(activePackage.expiryDate), 'MMM d, yyyy') : 'Never'}
-                      </p>
+
+                    {/* Quick Start Session Buttons */}
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500 font-medium">Quick Start Session:</p>
+                      {activeProgram.weeklyPlan.map((day: any, i: number) => (
+                        <Button 
+                          key={i}
+                          variant="outline"
+                          size="sm"
+                          className="w-full justify-between text-left border-rose-200 hover:bg-rose-50"
+                          onClick={() => {
+                            const exercises = day.blocks?.flatMap((block: any) => 
+                              block.exercises?.map((ex: any) => ({
+                                id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                exerciseId: ex.exerciseId || ex.id,
+                                exercise: {
+                                  id: ex.exerciseId || ex.id,
+                                  name: ex.exerciseName || ex.name || 'Exercise',
+                                  category: 'strength',
+                                  muscleGroups: [],
+                                },
+                                sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+                                  id: `set-${Date.now()}-${si}`,
+                                  setNumber: si + 1,
+                                  targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                                  reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                                  weight: 0,
+                                  completed: false,
+                                })),
+                                restTimerSeconds: parseInt(ex.rest) || 90,
+                                notes: ex.notes || '',
+                              })) || []
+                            ) || [];
+                            
+                            if (exercises.length > 0) {
+                              const { startFromTemplate } = useWorkoutStore.getState();
+                              startFromTemplate({
+                                id: `session-${Date.now()}`,
+                                name: `${day.dayLabel} - ${clientUser.displayName}`,
+                                description: `Session from ${activeProgram.templateName}`,
+                                exercises,
+                                category: 'strength',
+                                estimatedDuration: 60,
+                                createdAt: new Date().toISOString(),
+                                createdBy: user?.id || '',
+                                isPublic: false,
+                                updatedAt: new Date().toISOString(),
+                              } as any, clientId);
+                              router.push('/workout/active');
+                            }
+                          }}
+                        >
+                          <span className="flex items-center gap-2">
+                            <Dumbbell className="w-4 h-4 text-rose-500" />
+                            {day.dayLabel}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Program Actions */}
+                <div className="grid grid-cols-3 gap-2">
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                    className="w-full border-gray-200"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push(`/clients/${clientId}/program/select`)}
+                    className="w-full border-gray-200"
+                  >
+                    <Dumbbell className="w-4 h-4 mr-1" />
+                    Change
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => router.push(`/clients/${clientId}/program/preview`)}
+                    className="w-full border-gray-200"
+                  >
+                    <ClipboardList className="w-4 h-4 mr-1" />
+                    View
+                  </Button>
+                </div>
+
+                {/* Assign Program to Client Calendar */}
+                <Card className="bg-white border-gray-200 shadow-sm">
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+                      <Calendar className="w-5 h-5 text-rose-500" />
+                      Schedule to Client Calendar
+                    </h3>
+                    <p className="text-xs text-gray-500 mb-3">
+                      Push this program to {clientUser.displayName}&apos;s calendar. Workouts appear on <strong>their</strong> calendar — use &quot;Book&quot; for PT sessions on both calendars.
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="text-sm text-gray-600 w-24">Start date</label>
+                        <Input
+                          type="date"
+                          defaultValue={new Date().toISOString().split('T')[0]}
+                          id={`schedule-start-${clientId}`}
+                          className="bg-gray-50 border-gray-200 text-gray-900 flex-1"
+                        />
+                      </div>
+                      <Button
+                        className="w-full bg-rose-500 hover:bg-rose-600 text-white"
+                        onClick={() => {
+                          const startInput = document.getElementById(`schedule-start-${clientId}`) as HTMLInputElement;
+                          const startDate = startInput?.value ? new Date(startInput.value) : new Date();
+                          
+                          // Map day labels to day-of-week offsets (Mon=0 ... Sun=6)
+                          const dayMap: Record<string, number> = {
+                            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
+                            'friday': 4, 'saturday': 5, 'sunday': 6,
+                            'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6,
+                            'day 1': 0, 'day 2': 1, 'day 3': 2, 'day 4': 3, 'day 5': 4, 'day 6': 5, 'day 7': 6,
+                          };
+                          
+                          let eventsCreated = 0;
+                          const weekStart = startOfWeek(startDate, { weekStartsOn: 1 });
+                          
+                          activeProgram.weeklyPlan.forEach((day: any, idx: number) => {
+                            const label = (day.dayLabel || '').toLowerCase();
+                            // Try to match day name, otherwise use index
+                            const dayOffset = dayMap[label] ?? idx;
+                            const eventDate = addDays(weekStart, dayOffset);
+                            
+                            // Only schedule if date is today or future
+                            if (eventDate >= new Date(new Date().toDateString())) {
+                              const exerciseCount = day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0;
+                              addCalendarEvent({
+                                title: `${day.dayLabel} - ${activeProgram.templateName}`,
+                                type: 'workout',
+                                date: format(eventDate, 'yyyy-MM-dd'),
+                                clientId: clientId,
+                                trainerId: user?.id || '',
+                                notes: `${exerciseCount} exercises • Assigned by trainer`,
+                                status: 'scheduled',
+                              });
+                              eventsCreated++;
+                            }
+                          });
+                          
+                          if (eventsCreated > 0) {
+                            toast.success(`Scheduled ${eventsCreated} workouts to ${clientUser.displayName}'s calendar`);
+                          } else {
+                            toast.error('No workouts scheduled — start date may be in the past');
+                          }
+                        }}
+                      >
+                        <Calendar className="w-4 h-4 mr-2" />
+                        Schedule {activeProgram.weeklyPlan.length} Workouts This Week
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Past Programs */}
+                {allClientPrograms.filter(p => p.id !== activeProgram.id).length > 0 && (
+                  <Card className="bg-white border-gray-200 shadow-sm">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-gray-900 text-sm">Past Programs</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-1.5">
+                        {allClientPrograms.filter(p => p.id !== activeProgram.id).map(prog => (
+                          <div key={prog.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                            <div>
+                              <p className="text-sm text-gray-700">{prog.templateName}</p>
+                              <p className="text-[10px] text-gray-500">{prog.status} • {prog.weeklyPlan?.length || 0} days/week</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-6 w-6 p-0"
+                              onClick={() => {
+                                if (confirm(`Delete past program "${prog.templateName}"?`)) {
+                                  deleteClientProgram(prog.id);
+                                  toast.success('Program deleted');
+                                }
+                              }}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              /* No Active Program */
+              <Card className="bg-white border-gray-200 shadow-sm">
+                <CardContent className="p-6 text-center space-y-4">
+                  <div className="flex justify-center">
+                    <div className="p-4 bg-rose-500/10 rounded-full">
+                      <ClipboardList className="w-10 h-10 text-rose-400" />
                     </div>
                   </div>
-                  <div className="mt-3 bg-gray-50 rounded-full h-2">
-                    <div 
-                      className="bg-sky-500 h-2 rounded-full transition-all"
-                      style={{ width: `${(activePackage.usedSessions / activePackage.totalSessions) * 100}%` }}
-                    />
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-1">No Program Assigned</h3>
+                    <p className="text-sm text-gray-500">Create or assign a training program for {clientUser.displayName}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button 
+                      onClick={() => router.push(`/clients/${clientId}/program/select`)}
+                      className="bg-rose-500 hover:bg-rose-600"
+                    >
+                      <ClipboardList className="w-4 h-4 mr-1" />
+                      Select Template
+                    </Button>
+                    <Button 
+                      variant="outline"
+                      onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                      className="border-gray-200"
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Build Custom
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Sessions List */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="text-gray-900 font-medium">Session History</h3>
-                <Button size="sm" variant="outline" onClick={() => setShowAddSession(true)}>
-                  <Plus className="w-4 h-4 mr-1" />
-                  Add Session
-                </Button>
-              </div>
-              
-              {sessions.length === 0 ? (
-                <Card className="bg-white border-gray-200 shadow-sm">
-                  <CardContent className="p-8 text-center">
-                    <ClipboardList className="w-12 h-12 text-gray-600 mx-auto mb-2" />
-                    <p className="text-gray-400">No sessions recorded</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                sessions
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((session) => (
-                    <Card 
-                      key={session.id} 
-                      className={`border ${
-                        session.status === 'completed' && !session.paid 
-                          ? 'bg-red-950/30 border-red-500/50' 
-                          : session.status === 'scheduled' && session.paid 
-                            ? 'bg-amber-950/30 border-amber-500/50'
-                            : 'bg-white border-gray-200 shadow-sm'
-                      }`}
-                    >
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${
-                              session.status === 'completed' ? 'bg-sky-500/20' :
-                              session.status === 'scheduled' ? 'bg-blue-500/20' :
-                              session.status === 'no_show' ? 'bg-amber-500/20' :
-                              session.status === 'cancelled' ? 'bg-red-500/20' :
-                              'bg-gray-700'
-                            }`}>
-                              {session.status === 'completed' ? (
-                                <CheckCircle2 className="w-5 h-5 text-sky-400" />
-                              ) : session.status === 'scheduled' ? (
-                                <Clock className="w-5 h-5 text-blue-400" />
-                              ) : session.status === 'no_show' ? (
-                                <AlertCircle className="w-5 h-5 text-amber-400" />
-                              ) : (
-                                <X className="w-5 h-5 text-red-400" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-gray-900 font-medium">
-                                {format(new Date(session.date), 'EEE, MMM d')}
-                              </p>
-                              <p className="text-gray-400 text-sm">
-                                {session.startTime} - {session.endTime}
-                                {session.status === 'no_show' && (
-                                  <span className="ml-2 text-amber-400">• No Show</span>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {/* Paid/Unpaid Toggle Button */}
-                            <Button
-                              size="sm"
-                              variant={session.paid ? 'default' : 'destructive'}
-                              className={`text-xs h-7 ${
-                                session.paid 
-                                  ? 'bg-sky-500 hover:bg-sky-600' 
-                                  : 'bg-red-500 hover:bg-red-600'
-                              }`}
-                              onClick={() => handleTogglePaid(session.id, session.paid)}
-                            >
-                              <DollarSign className="w-3 h-3 mr-1" />
-                              {session.paid ? 'Paid' : 'Unpaid'}
-                            </Button>
-                            
-                            {/* Action buttons for scheduled sessions */}
-                            {session.status === 'scheduled' && (
-                              <div className="flex gap-1">
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  className="h-7 px-2 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20"
-                                  onClick={() => handleMarkSessionComplete(session.id)}
-                                  title="Mark Complete"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </Button>
-                                <Button 
-                                  size="sm" 
-                                  variant="ghost"
-                                  className="h-7 px-2 text-amber-400 hover:text-amber-300 hover:bg-amber-500/20"
-                                  onClick={() => handleMarkSessionNoShow(session.id)}
-                                  title="No Show"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Status indicators */}
-                        {session.status === 'completed' && !session.paid && (
-                          <p className="text-red-400 text-xs mt-2 pl-11 flex items-center gap-1">
-                            <AlertCircle className="w-3 h-3" />
-                            Session completed but not paid
-                          </p>
-                        )}
-                        {session.status === 'scheduled' && session.paid && (
-                          <p className="text-amber-400 text-xs mt-2 pl-11 flex items-center gap-1">
-                            <DollarSign className="w-3 h-3" />
-                            Paid in advance - session pending
-                          </p>
-                        )}
-                        
-                        {session.notes && (
-                          <p className="text-gray-400 text-sm mt-2 pl-11">{session.notes}</p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  ))
-              )}
-            </div>
-          </TabsContent>
+            {/* Client's Calendar Overview — mini calendar + upcoming */}
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-gray-900 flex items-center gap-2 text-sm">
+                    <Calendar className="w-4 h-4 text-rose-500" />
+                    {clientUser.displayName}&apos;s Schedule
+                  </CardTitle>
+                  <Button size="sm" variant="outline" className="h-7 text-xs border-gray-200" onClick={() => router.push(`/clients/${clientId}/book`)}>
+                    <Plus className="w-3 h-3 mr-1" />
+                    Book PT
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Mini Calendar */}
+                {(() => {
+                  const now = new Date();
+                  const monthStart = startOfMonth(now);
+                  const monthEnd = endOfMonth(now);
+                  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+                  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+                  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+                  const monthSessions = sessions.filter(s => {
+                    const sessionDate = new Date(s.date);
+                    return isWithinInterval(sessionDate, { start: monthStart, end: monthEnd });
+                  });
+                  const monthEvents = calendarEvents.filter(e => {
+                    const eventDate = new Date(e.date);
+                    return isWithinInterval(eventDate, { start: monthStart, end: monthEnd });
+                  });
 
-          {/* Calendar Tab */}
-          <TabsContent value="calendar" className="mt-4 space-y-4">
-            {(() => {
-              const now = new Date();
-              const monthStart = startOfMonth(now);
-              const monthEnd = endOfMonth(now);
-              const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
-              const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
-              const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-              
-              // Get sessions for this month
-              const monthSessions = sessions.filter(s => {
-                const sessionDate = new Date(s.date);
-                return isWithinInterval(sessionDate, { start: monthStart, end: monthEnd });
-              });
-              
-              // Get events/calendar items
-              const monthEvents = calendarEvents.filter(e => {
-                const eventDate = new Date(e.date);
-                return isWithinInterval(eventDate, { start: monthStart, end: monthEnd });
-              });
-              
-              return (
-                <>
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-gray-900 font-medium">{format(now, 'MMMM yyyy')}</h3>
-                    <Button size="sm" onClick={() => router.push(`/clients/${clientId}/book`)}>
-                      <Plus className="w-4 h-4 mr-1" />
-                      Book Session
-                    </Button>
-                  </div>
-                  
-                  {/* Legend */}
-                  <div className="flex gap-4 text-xs">
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded-full bg-sky-500" />
-                      <span className="text-gray-400">PT Session</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <div className="w-3 h-3 rounded-full bg-blue-500" />
-                      <span className="text-gray-400">Solo Workout</span>
-                    </div>
-                  </div>
-
-                  {/* Calendar Grid */}
-                  <Card className="bg-white border-gray-200 shadow-sm">
-                    <CardContent className="p-2">
-                      {/* Day Headers */}
+                  return (
+                    <>
+                      <p className="text-xs text-gray-500 mb-2 font-medium">{format(now, 'MMMM yyyy')}</p>
                       <div className="grid grid-cols-7 gap-1 mb-1">
-                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                          <div key={day} className="text-center text-xs text-gray-500 py-1">
-                            {day}
-                          </div>
+                        {['M','T','W','T','F','S','S'].map((d, i) => (
+                          <div key={i} className="text-center text-[10px] text-gray-400 py-0.5">{d}</div>
                         ))}
                       </div>
-                      
-                      {/* Calendar Days */}
-                      <div className="grid grid-cols-7 gap-1">
+                      <div className="grid grid-cols-7 gap-1 mb-3">
                         {calendarDays.map((day, i) => {
                           const isCurrentMonth = day.getMonth() === now.getMonth();
-                          
-                          // Find sessions/events on this day
-                          const daySessions = monthSessions.filter(s => 
-                            isSameDay(new Date(s.date), day)
-                          );
-                          const dayEvents = monthEvents.filter(e => 
-                            isSameDay(new Date(e.date), day)
-                          );
-                          
-                          const hasPTSession = daySessions.some(s => s.type === 'pt_session') || 
-                                               dayEvents.some(e => e.type === 'session');
-                          const hasSoloWorkout = clientWorkoutHistory.some(w => 
-                            isSameDay(new Date(w.startTime), day) && !w.assignedBy
-                          );
-                          
+                          const daySessions = monthSessions.filter(s => isSameDay(new Date(s.date), day));
+                          const dayEvents = monthEvents.filter(e => isSameDay(new Date(e.date), day));
+                          const hasPTSession = daySessions.some(s => s.type === 'pt_session') || dayEvents.some(e => e.type === 'session');
+                          const hasWorkout = dayEvents.some(e => e.type === 'workout') || clientWorkoutHistory.some(w => isSameDay(new Date(w.startTime), day));
+
                           return (
                             <div
                               key={i}
-                              className={`
-                                relative aspect-square p-1 rounded-lg text-center text-sm
-                                ${!isCurrentMonth ? 'text-gray-700' : 'text-gray-300'}
-                                ${isToday(day) ? 'bg-sky-500/20 ring-1 ring-sky-500' : ''}
+                              className={`relative aspect-square flex items-center justify-center rounded text-xs
+                                ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-600'}
+                                ${isToday(day) ? 'bg-rose-500/20 ring-1 ring-rose-500 font-bold text-rose-600' : ''}
                               `}
                             >
-                              <span className={`${isToday(day) ? 'text-sky-400 font-bold' : ''}`}>
-                                {format(day, 'd')}
-                              </span>
-                              
-                              {/* Session indicators */}
-                              <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                                {hasPTSession && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />
-                                )}
-                                {hasSoloWorkout && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                )}
+                              {format(day, 'd')}
+                              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex gap-0.5">
+                                {hasPTSession && <div className="w-1 h-1 rounded-full bg-rose-500" />}
+                                {hasWorkout && <div className="w-1 h-1 rounded-full bg-blue-500" />}
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Upcoming Sessions List */}
-                  <h3 className="text-gray-900 font-medium mt-4">Upcoming Sessions</h3>
-                  {(() => {
-                    // Get all completed workouts for this client
-                    const completedWorkoutDates = clientWorkoutHistory
-                      .filter(w => w.status === 'completed')
-                      .map(w => {
-                        const date = new Date(w.endTime || w.startTime);
-                        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-                      });
-                    
-                    // Filter sessions: only show scheduled ones, not completed
-                    const scheduledSessions = sessions.filter(s => s.status === 'scheduled');
-                    
-                    const allUpcoming = [...scheduledSessions, ...calendarEvents]
-                      .filter(e => {
-                        const eventDate = new Date('date' in e ? e.date : '');
-                        const dateKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
-                        
-                        // Filter out sessions on dates where a workout was completed
-                        if (completedWorkoutDates.includes(dateKey)) {
-                          return false;
-                        }
-                        
-                        // Only show future or today's sessions
-                        return isFuture(eventDate) || isToday(eventDate);
-                      })
-                      .sort((a, b) => {
-                        const dateA = new Date('date' in a ? a.date : '');
-                        const dateB = new Date('date' in b ? b.date : '');
-                        return dateA.getTime() - dateB.getTime();
-                      })
-                      .slice(0, 5);
-                    
-                    if (allUpcoming.length === 0) {
-                      return (
-                        <Card className="bg-white border-gray-200 shadow-sm">
-                          <CardContent className="p-6 text-center">
-                            <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                            <p className="text-gray-400 text-sm">No upcoming sessions</p>
-                            <Button 
-                              size="sm" 
-                              className="mt-3 bg-sky-500 hover:bg-sky-600"
-                              onClick={() => router.push(`/clients/${clientId}/book`)}
-                            >
-                              Book First Session
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      );
-                    }
-                    
-                    return (
-                      <div className="space-y-2">
-                        {allUpcoming.map((event: any, i) => {
-                          const isPT = event.type === 'pt_session' || event.type === 'session';
-                          const eventDate = new Date(event.date);
-                          const title = event.title || `PT Session`;
-                          const time = event.startTime || '';
-                          
-                          return (
-                            <Card key={i} className={`border ${isPT ? 'bg-sky-500/10 border-sky-500/30' : 'bg-blue-500/10 border-blue-500/30'}`}>
-                              <CardContent className="p-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                    <div className={`p-2 rounded-lg ${isPT ? 'bg-sky-500/20' : 'bg-blue-500/20'}`}>
-                                      {isPT ? (
-                                        <User className={`w-4 h-4 text-sky-400`} />
-                                      ) : (
-                                        <Dumbbell className={`w-4 h-4 text-blue-400`} />
-                                      )}
-                                    </div>
-                                    <div>
-                                      <p className="text-gray-900 font-medium text-sm">{title}</p>
-                                      <p className="text-gray-400 text-xs">
-                                        {format(eventDate, 'EEE, MMM d')} {time && `• ${time}`}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  {isToday(eventDate) && (
-                                    <Badge className="bg-sky-500 text-xs">Today</Badge>
-                                  )}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
+                      {/* Legend */}
+                      <div className="flex gap-3 text-[10px] mb-3">
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-rose-500" /><span className="text-gray-400">PT Session</span></div>
+                        <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /><span className="text-gray-400">Workout</span></div>
                       </div>
-                    );
-                  })()}
-                </>
-              );
-            })()}
+                    </>
+                  );
+                })()}
+
+                {/* Upcoming Sessions */}
+                <p className="text-xs text-gray-500 font-medium mb-2">Upcoming</p>
+                {(() => {
+                  const completedWorkoutDates = clientWorkoutHistory
+                    .filter(w => w.status === 'completed')
+                    .map(w => {
+                      const date = new Date(w.endTime || w.startTime);
+                      return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                    });
+                  const scheduledSessions = sessions.filter(s => s.status === 'scheduled');
+                  const allUpcoming = [...scheduledSessions, ...calendarEvents]
+                    .filter(e => {
+                      const eventDate = new Date('date' in e ? e.date : '');
+                      const dateKey = `${eventDate.getFullYear()}-${eventDate.getMonth()}-${eventDate.getDate()}`;
+                      if (completedWorkoutDates.includes(dateKey)) return false;
+                      return isFuture(eventDate) || isToday(eventDate);
+                    })
+                    .sort((a, b) => new Date('date' in a ? a.date : '').getTime() - new Date('date' in b ? b.date : '').getTime())
+                    .slice(0, 5);
+
+                  if (allUpcoming.length === 0) {
+                    return <p className="text-gray-400 text-xs text-center py-3">No upcoming sessions</p>;
+                  }
+
+                  return (
+                    <div className="space-y-1.5">
+                      {allUpcoming.map((event: any, i) => {
+                        const isPT = event.type === 'pt_session' || event.type === 'session';
+                        const eventDate = new Date(event.date);
+                        return (
+                          <div key={i} className={`flex items-center gap-2 p-2 rounded-lg text-xs ${isPT ? 'bg-rose-50 border border-rose-200' : 'bg-blue-50 border border-blue-200'}`}>
+                            <div className={`p-1.5 rounded ${isPT ? 'bg-rose-500/20' : 'bg-blue-500/20'}`}>
+                              {isPT ? <User className="w-3 h-3 text-rose-500" /> : <Dumbbell className="w-3 h-3 text-blue-500" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">{event.title || 'PT Session'}</p>
+                              <p className="text-gray-500">{format(eventDate, 'EEE, MMM d')} {event.startTime && `• ${event.startTime}`}</p>
+                            </div>
+                            {isToday(eventDate) && <Badge className="bg-rose-500 text-[10px] h-5">Today</Badge>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* Payments Tab */}
@@ -2672,7 +2704,7 @@ export default function ClientDetailPage() {
                   </div>
                   {/* Per Session Cost */}
                   {packages.length > 0 && packages[0].pricePerSession > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700">
+                    <div className="mt-3 pt-3 border-t border-gray-200">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Avg. Per Session</span>
                         <span className="text-gray-900 font-medium">
@@ -3059,8 +3091,8 @@ export default function ClientDetailPage() {
               </div>
               
               {editedWorkoutExercises.map(ex => (
-                <div key={ex.id} className="bg-gray-800 rounded-lg p-3">
-                  <h4 className="font-medium text-white mb-2">{ex.exercise?.name || 'Exercise'}</h4>
+                <div key={ex.id} className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <h4 className="font-medium text-gray-900 mb-2">{ex.exercise?.name || 'Exercise'}</h4>
                   <div className="space-y-2">
                     <div className="grid grid-cols-4 gap-2 text-xs text-gray-500 px-1">
                       <div>SET</div>
@@ -3075,13 +3107,13 @@ export default function ClientDetailPage() {
                           type="number"
                           value={set.weight || 0}
                           onChange={(e) => handleUpdateWorkoutSet(ex.id, set.id, 'weight', parseFloat(e.target.value) || 0)}
-                          className="w-full text-center bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                          className="w-full text-center bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm"
                         />
                         <input
                           type="number"
                           value={set.reps || 0}
                           onChange={(e) => handleUpdateWorkoutSet(ex.id, set.id, 'reps', parseInt(e.target.value) || 0)}
-                          className="w-full text-center bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm"
+                          className="w-full text-center bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm"
                         />
                         <div className="text-right text-gray-400 text-sm">
                           {((set.weight || 0) * (set.reps || 0)).toLocaleString()}
@@ -3095,7 +3127,7 @@ export default function ClientDetailPage() {
               <div className="flex gap-2 pt-2">
                 <Button
                   variant="outline"
-                  className="flex-1 border-gray-700"
+                  className="flex-1 border-gray-200"
                   onClick={() => {
                     setEditingWorkout(null);
                     setEditedWorkoutExercises(null);
@@ -3143,7 +3175,7 @@ export default function ClientDetailPage() {
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1 border-gray-700"
+                className="flex-1 border-gray-200"
                 onClick={() => setShowEditEmail(false)}
               >
                 Cancel
