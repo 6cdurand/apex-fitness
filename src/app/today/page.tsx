@@ -70,6 +70,7 @@ export default function TodayPage() {
   const [stepsGoal] = useState(10000);
   const [showDateConfirm, setShowDateConfirm] = useState(false);
   const [pendingStartEvent, setPendingStartEvent] = useState<any>(null);
+  const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
   const { updateCalendarEvent } = useTrainerStore();
 
   useEffect(() => {
@@ -571,23 +572,22 @@ export default function TodayPage() {
                                 {/* Top row: avatar, name, time, Start button */}
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-3">
-                                    <Link href={event.clientId ? `/profile/${event.clientId}` : '#'} onClick={(e) => e.stopPropagation()}>
+                                    <button onClick={(e) => { e.stopPropagation(); if (event.clientId) setProfileCardClientId(event.clientId); }}>
                                       <Avatar className="w-9 h-9 cursor-pointer hover:ring-2 hover:ring-sky-500/50 transition-all">
                                         <AvatarImage src={clientInfo?.profilePhoto} />
                                         <AvatarFallback className={`${config.avatarBg} ${config.avatarText} text-sm`}>
                                           {initial}
                                         </AvatarFallback>
                                       </Avatar>
-                                    </Link>
+                                    </button>
                                     <div>
                                       {event.clientId ? (
-                                        <Link
-                                          href={user?.mode === 'trainer' ? `/clients/${event.clientId}` : `/profile/${event.clientId}`}
-                                          onClick={(e) => e.stopPropagation()}
-                                          className="font-medium text-gray-900 text-sm hover:text-sky-500 hover:underline transition-colors"
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); setProfileCardClientId(event.clientId!); }}
+                                          className="font-medium text-gray-900 text-sm hover:text-sky-500 hover:underline transition-colors text-left"
                                         >
                                           {displayName}
-                                        </Link>
+                                        </button>
                                       ) : (
                                         <p className="font-medium text-gray-900 text-sm">{displayName}</p>
                                       )}
@@ -1185,6 +1185,89 @@ export default function TodayPage() {
               Start Now
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+      {/* Client Profile Card Dialog */}
+      <Dialog open={!!profileCardClientId} onOpenChange={(open) => { if (!open) setProfileCardClientId(null); }}>
+        <DialogContent className="bg-white border-gray-200 max-w-xs mx-auto rounded-2xl">
+          {(() => {
+            if (!profileCardClientId) return null;
+            const pcInfo = getClientDisplayInfo(profileCardClientId);
+            const pcClient = clients.find(c => c.clientId === profileCardClientId);
+            const pcProgram = clientPrograms.find(p => p.clientId === profileCardClientId && p.status === 'active');
+            const pcSessions = sessions.filter(s => s.clientId === profileCardClientId);
+            const completedCount = pcSessions.filter(s => s.status === 'completed').length;
+            return (
+              <div className="text-center space-y-4">
+                <DialogHeader>
+                  <DialogTitle className="sr-only">Client Profile</DialogTitle>
+                </DialogHeader>
+                <Avatar className="w-16 h-16 mx-auto ring-2 ring-sky-500/30">
+                  <AvatarImage src={pcInfo.profilePhoto} />
+                  <AvatarFallback className="bg-sky-500/20 text-sky-600 text-xl font-bold">
+                    {pcInfo.displayName?.[0] || '?'}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{pcInfo.displayName}</h3>
+                  {pcInfo.username && <p className="text-sm text-gray-500">@{pcInfo.username}</p>}
+                </div>
+                <div className="flex justify-center gap-6 text-center">
+                  <div>
+                    <p className="text-lg font-bold text-gray-900">{completedCount}</p>
+                    <p className="text-[10px] text-gray-500">Sessions</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900">{pcProgram ? '1' : '0'}</p>
+                    <p className="text-[10px] text-gray-500">Program</p>
+                  </div>
+                  <div>
+                    <p className="text-lg font-bold text-gray-900">{pcClient?.status === 'active' ? '✓' : '—'}</p>
+                    <p className="text-[10px] text-gray-500">Status</p>
+                  </div>
+                </div>
+                {pcProgram && (
+                  <div className="bg-sky-50 border border-sky-200 rounded-lg p-2">
+                    <p className="text-xs text-sky-600 font-medium">{pcProgram.templateName}</p>
+                    <p className="text-[10px] text-gray-500">{pcProgram.weeklyPlan?.length || 0} days/week • {pcProgram.phase}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    className="bg-sky-500 hover:bg-sky-600 text-white"
+                    onClick={() => { setProfileCardClientId(null); router.push(`/clients/${profileCardClientId}?tab=messages`); }}
+                  >
+                    <Edit className="w-3.5 h-3.5 mr-1" /> Message
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-gray-200"
+                    onClick={() => { setProfileCardClientId(null); router.push(`/clients/${profileCardClientId}`); }}
+                  >
+                    <Users className="w-3.5 h-3.5 mr-1" /> Profile
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-gray-200"
+                    onClick={() => { setProfileCardClientId(null); router.push(`/program/builder?clientId=${profileCardClientId}`); }}
+                  >
+                    <Dumbbell className="w-3.5 h-3.5 mr-1" /> Program
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-gray-200"
+                    onClick={() => { setProfileCardClientId(null); router.push(`/clients/${profileCardClientId}/book`); }}
+                  >
+                    <Calendar className="w-3.5 h-3.5 mr-1" /> Book
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </MainLayout>

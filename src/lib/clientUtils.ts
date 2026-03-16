@@ -40,11 +40,11 @@ export function getClientDisplayInfo(clientId: string | undefined | null): Clien
     }
   }
 
-  // 1b. Check calendar events for this client's name
+  // 1b. Check calendar events for this client's name (only use contactName, not title)
   const { calendarEvents } = useTrainerStore.getState();
-  const clientEvent = calendarEvents.find((e: any) => e.clientId === clientId && (e.contactName || e.title));
+  const clientEvent = calendarEvents.find((e: any) => e.clientId === clientId && (e.contactName));
   if (clientEvent) {
-    const eventName = (clientEvent as any).contactName || clientEvent.title;
+    const eventName = (clientEvent as any).contactName;
     if (eventName && eventName !== clientId && eventName.length > 2) {
       return { displayName: eventName };
     }

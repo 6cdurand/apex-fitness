@@ -207,7 +207,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, addCalendarEvent } = useTrainerStore();
+  const { clients, addClientProgram, addCalendarEvent, clientPrograms } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -228,6 +228,7 @@ function ProgramBuilderContent() {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   
   // ── Schedule state ──
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -390,6 +391,53 @@ function ProgramBuilderContent() {
     return getExerciseUsageCounts(workoutHistory, targetUserId);
   }, [workoutHistory, targetUserId]);
   
+  // ── Block Library: collect all blocks from existing programs ──
+  const blockLibrary = useMemo(() => {
+    const seen = new Set<string>();
+    const blocks: ProgramBlock[] = [];
+    clientPrograms.forEach(prog => {
+      (prog.weeklyPlan || []).forEach((day: any) => {
+        (day.blocks || []).forEach((block: any) => {
+          const key = `${block.type}-${block.name}`;
+          if (!seen.has(key) && block.exercises?.length > 0) {
+            seen.add(key);
+            blocks.push({
+              id: block.id,
+              type: block.type,
+              name: block.name,
+              exercises: (block.exercises || []).map((e: any) => ({
+                id: uuidv4(),
+                exerciseId: e.exerciseId || e.id,
+                exerciseName: e.exerciseName || e.name || 'Exercise',
+                movementPattern: e.movementPattern || '',
+                sets: e.sets || 3,
+                reps: e.reps || '8-12',
+                rest: e.rest || '90s',
+              })),
+            });
+          }
+        });
+      });
+    });
+    return blocks;
+  }, [clientPrograms]);
+
+  const addBlockFromLibrary = (libraryBlock: ProgramBlock) => {
+    setDays(prev => prev.map((day, i) => {
+      if (i !== activeDayIndex) return day;
+      return {
+        ...day,
+        blocks: [...day.blocks, {
+          ...libraryBlock,
+          id: uuidv4(),
+          exercises: libraryBlock.exercises.map(e => ({ ...e, id: uuidv4() })),
+        }],
+      };
+    }));
+    setShowBlockLibrary(false);
+    toast.success(`Added "${libraryBlock.name}" block`);
+  };
+
   // ── Stats ──
   const activeDay = days[activeDayIndex];
   const totalBlocks = activeDay?.blocks.length || 0;
@@ -738,7 +786,7 @@ function ProgramBuilderContent() {
               </div>
             )}
             
-            {/* Block type buttons */}
+            {/* Block type buttons + library */}
             <div className="flex gap-1 flex-wrap">
               {BLOCK_TYPES.map(bt => (
                 <Button
@@ -751,7 +799,49 @@ function ProgramBuilderContent() {
                   {bt.icon} {bt.label}
                 </Button>
               ))}
+              {blockLibrary.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-8 text-xs gap-1 ${showBlockLibrary ? 'border-sky-500 text-sky-400 bg-sky-500/10' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
+                  onClick={() => setShowBlockLibrary(!showBlockLibrary)}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Library ({blockLibrary.length})
+                </Button>
+              )}
             </div>
+            
+            {/* Block Library Panel */}
+            {showBlockLibrary && blockLibrary.length > 0 && (
+              <Card className="bg-gray-900/80 border-sky-500/30">
+                <CardContent className="p-3 space-y-2">
+                  <p className="text-xs text-gray-400 font-medium">Saved Blocks — tap to add</p>
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {blockLibrary.map((lb, idx) => {
+                      const styles = getBlockStyles(lb.type);
+                      return (
+                        <button
+                          key={idx}
+                          className={`w-full text-left px-3 py-2 rounded-lg border transition-all hover:ring-1 hover:ring-sky-500/50 ${styles.bg} ${styles.border}`}
+                          onClick={() => addBlockFromLibrary(lb)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge className={`text-[10px] ${styles.badge} border`}>{lb.type}</Badge>
+                              <span className="text-sm text-white font-medium">{lb.name}</span>
+                            </div>
+                            <span className="text-[10px] text-gray-400">{lb.exercises.length} ex</span>
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+                            {lb.exercises.map(e => e.exerciseName).join(', ')}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             
             {/* Blocks & exercises */}
             {activeDay?.blocks.length === 0 && (

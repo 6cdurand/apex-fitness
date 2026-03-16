@@ -616,7 +616,13 @@ export default function ClientDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
+      <Tabs value={activeTab} onValueChange={(val) => {
+        if (val === 'program') {
+          router.push(`/program/builder?clientId=${clientId}`);
+          return;
+        }
+        setActiveTab(val);
+      }} className="flex-1">
         <TabsList className="grid grid-cols-5 mx-4 mt-4 bg-gray-100">
           <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
           <TabsTrigger value="program" className="text-xs data-[state=active]:bg-rose-500">Program</TabsTrigger>
