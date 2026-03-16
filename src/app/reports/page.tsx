@@ -174,9 +174,9 @@ export default function ReportsPage() {
           </div>
 
           {/* Volume by Muscle Group */}
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-gray-900 flex items-center gap-2">
                 <Target className="w-5 h-5 text-sky-400" />
                 Volume by Muscle Group
               </CardTitle>
@@ -208,9 +208,9 @@ export default function ReportsPage() {
           </Card>
 
           {/* Consistency Score */}
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-gray-900 flex items-center gap-2">
                 <Flame className="w-5 h-5 text-orange-400" />
                 Consistency Score
               </CardTitle>
@@ -263,10 +263,10 @@ export default function ReportsPage() {
           </Card>
 
           {/* Recent PBs */}
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
                   <Trophy className="w-5 h-5 text-amber-400" />
                   Recent Personal Bests
                 </CardTitle>
@@ -284,7 +284,7 @@ export default function ReportsPage() {
                   {personalBests.slice(0, 5).map((pb) => (
                     <div
                       key={pb.id}
-                      className="flex items-center justify-between p-3 bg-gray-800 rounded-lg"
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
@@ -312,9 +312,9 @@ export default function ReportsPage() {
 
           {/* Past Reports */}
           {weeklyReports.length > 0 && (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-blue-400" />
                   Past Reports
                 </CardTitle>
@@ -324,7 +324,7 @@ export default function ReportsPage() {
                   <Button
                     key={report.id}
                     variant="ghost"
-                    className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+                    className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
                   >
                     <div className="flex-1 text-left">
                       <p className="font-medium">

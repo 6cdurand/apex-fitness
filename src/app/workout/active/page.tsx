@@ -58,7 +58,7 @@ function formatTime(seconds: number): string {
 
 export default function ActiveWorkoutPage() {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user: currentUser } = useAuthStore();
   const { 
     activeWorkout,
     workoutTimer,
@@ -1091,6 +1091,44 @@ export default function ActiveWorkoutPage() {
                       Show less
                     </button>
                   )}
+                </div>
+              );
+            })()}
+
+            {/* 🤖 AI Coach Feedback — Pro users only */}
+            {(currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer') && completedWorkoutData && (() => {
+              const duration = completedWorkoutData.duration;
+              const vol = Math.round(completedWorkoutData.totalVolume);
+              const exCount = completedWorkoutData.exercises;
+              const setCount = completedWorkoutData.sets;
+              const pbCount = completedWorkoutData.pbs?.length || 0;
+              const medalCount = lastDeriveResult?.medalsAwarded?.length || 0;
+              
+              const lines: string[] = [];
+              if (vol > 10000) lines.push(`Massive volume today — ${vol.toLocaleString()}kg moved. Your muscles are getting the stimulus they need for growth.`);
+              else if (vol > 5000) lines.push(`Solid volume at ${vol.toLocaleString()}kg. Great balance between intensity and workload.`);
+              else if (vol > 0) lines.push(`${vol.toLocaleString()}kg total volume. Consider progressively increasing weight or reps next session.`);
+              if (duration > 5400) lines.push(`90+ min session — that's serious dedication. Make sure you're fueling properly post-workout.`);
+              else if (duration > 3600) lines.push(`Over an hour of work. Efficient and focused — exactly what builds results.`);
+              else if (duration > 1800) lines.push(`Quick and effective session. Time-efficient training is smart training.`);
+              if (pbCount >= 3) lines.push(`🔥 ${pbCount} new PRs! You're on a serious streak. Progressive overload is working.`);
+              else if (pbCount > 0) lines.push(`New PR${pbCount > 1 ? 's' : ''} set today! Keep pushing those boundaries.`);
+              if (medalCount > 0) lines.push(`${medalCount} medal${medalCount > 1 ? 's' : ''} earned — your consistency is paying off.`);
+              if (exCount >= 6) lines.push(`${exCount} exercises across ${setCount} sets. Great workout variety for balanced development.`);
+              if (lines.length === 0) lines.push(`Every rep counts. Keep showing up and the results will follow.`);
+              
+              return (
+                <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 rounded-xl p-3.5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xl">🤖</span>
+                    <span className="font-semibold text-indigo-400 text-sm">AI Coach</span>
+                    <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 text-[9px] h-4 ml-auto">PRO</Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {lines.map((line, idx) => (
+                      <p key={idx} className="text-xs text-gray-600 leading-relaxed">{line}</p>
+                    ))}
+                  </div>
                 </div>
               );
             })()}
@@ -3686,7 +3724,7 @@ function SetRow({
             "w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium",
             set.completed 
               ? "bg-sky-500 text-white" 
-              : "bg-gray-800 text-gray-400"
+              : "bg-gray-100 text-gray-500"
           )}>
             {set.completed ? <Check className="w-4 h-4" /> : set.setNumber}
           </span>
@@ -3708,7 +3746,7 @@ function SetRow({
                 "h-7 w-7 shrink-0",
                 set.isAssisted 
                   ? "text-blue-400 bg-blue-500/20 hover:bg-blue-500/30" 
-                  : "text-gray-500 hover:text-gray-400 hover:bg-gray-800"
+                  : "text-gray-500 hover:text-gray-400 hover:bg-gray-100"
               )}
               title={set.isAssisted ? "Assisted (weight helps you)" : "Normal weight"}
             >
@@ -3726,7 +3764,7 @@ function SetRow({
               }}
               disabled={set.completed}
               className={cn(
-                "h-9 text-center bg-gray-800 border-gray-700 text-white flex-1",
+                "h-9 text-center bg-white border-gray-200 text-gray-900 flex-1",
                 set.completed && "opacity-50",
                 set.isAssisted && "border-blue-500/50"
               )}
@@ -3747,7 +3785,7 @@ function SetRow({
             }}
             disabled={set.completed}
             className={cn(
-              "h-9 text-center bg-gray-800 border-gray-700 text-white",
+              "h-9 text-center bg-white border-gray-200 text-gray-900",
               set.completed && "opacity-50"
             )}
           />
@@ -3820,7 +3858,7 @@ function SetRow({
                     newDrops[idx] = { ...drop, weight: parseFloat(e.target.value) || 0 };
                     onUpdate({ drops: newDrops });
                   }}
-                  className="h-8 text-center bg-gray-800/50 border-gray-700 text-white text-sm"
+                  className="h-8 text-center bg-white border-gray-200 text-gray-900 text-sm"
                 />
               </div>
               <div className="col-span-3">
@@ -3834,7 +3872,7 @@ function SetRow({
                     newDrops[idx] = { ...drop, reps: parseInt(e.target.value) || 0 };
                     onUpdate({ drops: newDrops });
                   }}
-                  className="h-8 text-center bg-gray-800/50 border-gray-700 text-white text-sm"
+                  className="h-8 text-center bg-white border-gray-200 text-gray-900 text-sm"
                 />
               </div>
               <div className="col-span-1"></div>

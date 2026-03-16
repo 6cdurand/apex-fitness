@@ -282,7 +282,7 @@ export default function CalendarPage() {
             <Button 
               size="sm" 
               variant="outline"
-              className="border-gray-700"
+              className="border-gray-200"
               disabled={isSyncing}
               onClick={async () => {
                 if (!user?.id) return;
@@ -307,7 +307,7 @@ export default function CalendarPage() {
       <div className="px-4 py-4 space-y-4">
         {/* View Toggle & Navigation */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-gray-800 rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
             <Button
               size="sm"
               variant={viewMode === 'month' ? 'default' : 'ghost'}
@@ -343,11 +343,11 @@ export default function CalendarPage() {
                 else if (viewMode === 'week') setSelectedDate(subWeeks(selectedDate, 1));
                 else setSelectedDate(addDays(selectedDate, -1));
               }}
-              className="text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-gray-900"
             >
               <ChevronLeft className="w-5 h-5" />
             </Button>
-            <h2 className="text-lg font-semibold text-white min-w-[140px] text-center">
+            <h2 className="text-lg font-semibold text-gray-900 min-w-[140px] text-center">
               {viewMode === 'month' && format(currentMonth, 'MMMM yyyy')}
               {viewMode === 'week' && `${format(startOfWeek(selectedDate), 'MMM d')} - ${format(endOfWeek(selectedDate), 'MMM d')}`}
               {viewMode === 'day' && format(selectedDate, 'EEE, MMM d')}
@@ -360,7 +360,7 @@ export default function CalendarPage() {
                 else if (viewMode === 'week') setSelectedDate(addWeeks(selectedDate, 1));
                 else setSelectedDate(addDays(selectedDate, 1));
               }}
-              className="text-gray-400 hover:text-white"
+              className="text-gray-400 hover:text-gray-900"
             >
               <ChevronRight className="w-5 h-5" />
             </Button>
@@ -369,10 +369,10 @@ export default function CalendarPage() {
 
         {/* Month View */}
         {viewMode === 'month' && (
-          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {/* Day Headers */}
-              <div className="grid grid-cols-7 border-b border-gray-800">
+              <div className="grid grid-cols-7 border-b border-gray-200">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                   <div key={day} className="py-3 text-center text-xs font-medium text-gray-500">
                     {day}
@@ -393,8 +393,8 @@ export default function CalendarPage() {
                       key={idx}
                       onClick={() => setSelectedDate(day)}
                       className={cn(
-                        "relative h-14 p-1 border-b border-r border-gray-800 transition-colors",
-                        "hover:bg-gray-800",
+                        "relative h-14 p-1 border-b border-r border-gray-200 transition-colors",
+                        "hover:bg-gray-50",
                         isSelected && "bg-rose-500/20",
                         !isCurrentMonth && "opacity-40"
                       )}
@@ -402,8 +402,8 @@ export default function CalendarPage() {
                       <span className={cn(
                         "absolute top-1 left-1/2 -translate-x-1/2 w-7 h-7 flex items-center justify-center rounded-full text-sm",
                         isDayToday && "bg-rose-500 text-white font-semibold",
-                        isSelected && !isDayToday && "bg-gray-700 text-white",
-                        !isDayToday && !isSelected && "text-gray-300"
+                        isSelected && !isDayToday && "bg-gray-200 text-gray-900",
+                        !isDayToday && !isSelected && "text-gray-700"
                       )}>
                         {format(day, 'd')}
                       </span>
@@ -435,23 +435,23 @@ export default function CalendarPage() {
 
         {/* Week View */}
         {viewMode === 'week' && (
-          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               {/* Week Day Headers */}
-              <div className="grid grid-cols-7 border-b border-gray-800">
+              <div className="grid grid-cols-7 border-b border-gray-200">
                 {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) }).map((day) => (
                   <button
                     key={day.toISOString()}
                     onClick={() => setSelectedDate(day)}
                     className={cn(
-                      "py-3 text-center transition-colors hover:bg-gray-800",
+                      "py-3 text-center transition-colors hover:bg-gray-50",
                       isSameDay(day, selectedDate) && "bg-rose-500/20"
                     )}
                   >
                     <p className="text-xs text-gray-500">{format(day, 'EEE')}</p>
                     <p className={cn(
                       "text-lg font-semibold",
-                      isToday(day) ? "text-rose-500" : "text-white"
+                      isToday(day) ? "text-rose-500" : "text-gray-900"
                     )}>
                       {format(day, 'd')}
                     </p>
@@ -464,8 +464,8 @@ export default function CalendarPage() {
                 <div className="relative">
                   {/* Hour lines */}
                   {Array.from({ length: 14 }, (_, i) => i + 6).map((hour) => (
-                    <div key={hour} className="flex border-b border-gray-800/50 h-12">
-                      <div className="w-12 text-xs text-gray-500 py-1 px-2 border-r border-gray-800">
+                    <div key={hour} className="flex border-b border-gray-200 h-12">
+                      <div className="w-12 text-xs text-gray-500 py-1 px-2 border-r border-gray-200">
                         {hour}:00
                       </div>
                       <div className="flex-1 grid grid-cols-7">
@@ -484,7 +484,7 @@ export default function CalendarPage() {
                                 setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
                                 setShowAddEvent(true);
                               }}
-                              className="border-r border-gray-800/30 hover:bg-gray-800/50 relative"
+                              className="border-r border-gray-100 hover:bg-gray-50 relative"
                             >
                               {dayEvents.map((event, i) => {
                                 const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
@@ -528,7 +528,7 @@ export default function CalendarPage() {
 
         {/* Day View */}
         {viewMode === 'day' && (
-          <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
             <CardContent className="p-0">
               <ScrollArea className="h-[450px]">
                 <div className="relative">
@@ -547,9 +547,9 @@ export default function CalendarPage() {
                           setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
                           setShowAddEvent(true);
                         }}
-                        className="flex w-full border-b border-gray-800/50 min-h-[60px] hover:bg-gray-800/30 transition-colors"
+                        className="flex w-full border-b border-gray-200 min-h-[60px] hover:bg-gray-50 transition-colors"
                       >
-                        <div className="w-16 text-sm text-gray-500 py-2 px-3 border-r border-gray-800 flex-shrink-0">
+                        <div className="w-16 text-sm text-gray-500 py-2 px-3 border-r border-gray-200 flex-shrink-0">
                           {hour.toString().padStart(2, '0')}:00
                         </div>
                         <div className="flex-1 p-1 space-y-1">
@@ -565,14 +565,14 @@ export default function CalendarPage() {
                               )}
                             >
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-white text-sm">{event.title}</p>
+                                <p className="font-medium text-gray-900 text-sm">{event.title}</p>
                                 {hasWorkout && (
                                   <Badge className="text-xs bg-sky-500/20 text-sky-400 px-1 py-0">
                                     <Dumbbell className="w-3 h-3" />
                                   </Badge>
                                 )}
                               </div>
-                              <p className="text-xs text-white/80">
+                              <p className="text-xs text-gray-600">
                                 {event.startTime} - {event.endTime} • {getClientName(event.clientId)}
                               </p>
                             </div>
@@ -595,10 +595,10 @@ export default function CalendarPage() {
           </h3>
 
           {selectedDateEvents.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-8 text-center">
-                <CalendarIcon className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">No events scheduled</p>
+                <CalendarIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500 mb-1">No events scheduled</p>
                 <p className="text-sm text-gray-500">
                   Click the + button to add an event
                 </p>
@@ -608,7 +608,7 @@ export default function CalendarPage() {
             <ScrollArea className="max-h-64">
               <div className="space-y-2">
                 {selectedDateEvents.map((event) => (
-                  <Card key={event.id} className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-colors">
+                  <Card key={event.id} className="bg-white border-gray-200 shadow-sm hover:border-gray-300 transition-colors">
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <div className={cn(
@@ -617,8 +617,8 @@ export default function CalendarPage() {
                         )} />
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium text-white">{event.title}</h4>
-                            <Badge variant="outline" className="text-xs border-gray-700 text-gray-400 capitalize">
+                            <h4 className="font-medium text-gray-900">{event.title}</h4>
+                            <Badge variant="outline" className="text-xs border-gray-200 text-gray-500 capitalize">
                               {event.type}
                             </Badge>
                             {event.workoutId || sessionWorkouts.find(w => w.eventId === event.id) ? (
@@ -658,7 +658,7 @@ export default function CalendarPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-gray-400 hover:text-white"
+                          className="text-gray-400 hover:text-gray-900"
                           onClick={() => handleEditEvent(event)}
                         >
                           <Edit className="w-4 h-4" />
@@ -674,32 +674,32 @@ export default function CalendarPage() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
                   <Dumbbell className="w-5 h-5 text-sky-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">
+                  <p className="text-2xl font-bold text-gray-900">
                     {calendarEvents.filter(e => e.type === 'workout').length}
                   </p>
-                  <p className="text-xs text-gray-400">Workouts This Month</p>
+                  <p className="text-xs text-gray-500">Workouts This Month</p>
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <Users className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">
+                  <p className="text-2xl font-bold text-gray-900">
                     {clients.filter(c => c.status === 'active').length}
                   </p>
-                  <p className="text-xs text-gray-400">Active Clients</p>
+                  <p className="text-xs text-gray-500">Active Clients</p>
                 </div>
               </div>
             </CardContent>
@@ -709,13 +709,13 @@ export default function CalendarPage() {
 
       {/* Edit Session Dialog */}
       <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Session</DialogTitle>
+            <DialogTitle className="text-gray-900">Edit Session</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-400 mb-2">
+              <p className="text-sm text-gray-500 mb-2">
                 {editingEvent?.title}
               </p>
               {editingEvent?.clientId && (
@@ -726,22 +726,22 @@ export default function CalendarPage() {
             </div>
             
             <div>
-              <Label className="text-gray-400">Date</Label>
+              <Label className="text-gray-600">Date</Label>
               <Input
                 type="date"
                 value={editDate}
                 onChange={(e) => setEditDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-400">Start Time</Label>
+                <Label className="text-gray-600">Start Time</Label>
                 <select
                   value={editTime}
                   onChange={(e) => setEditTime(e.target.value)}
-                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                  className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
                 >
                   {Array.from({ length: 24 * 4 }, (_, i) => {
                     const hour = Math.floor(i / 4) ;
@@ -753,11 +753,11 @@ export default function CalendarPage() {
                 </select>
               </div>
               <div>
-                <Label className="text-gray-400">End Time</Label>
+                <Label className="text-gray-600">End Time</Label>
                 <select
                   value={editEndTime}
                   onChange={(e) => setEditEndTime(e.target.value)}
-                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                  className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
                 >
                   {Array.from({ length: 24 * 4 }, (_, i) => {
                     const hour = Math.floor(i / 4);
@@ -772,8 +772,8 @@ export default function CalendarPage() {
 
             {/* Workout Customization - only for session type events */}
             {editingEvent?.type === 'session' && (
-              <div className="border-t border-gray-700 pt-4">
-                <Label className="text-gray-400 mb-2 block">Session Workout</Label>
+              <div className="border-t border-gray-200 pt-4">
+                <Label className="text-gray-600 mb-2 block">Session Workout</Label>
                 {editingEvent?.workoutId ? (
                   <div className="bg-sky-500/10 border border-sky-500/30 rounded-lg p-3">
                     <div className="flex items-center gap-2 text-sky-400">
@@ -783,7 +783,7 @@ export default function CalendarPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-2 w-full border-gray-600"
+                      className="mt-2 w-full border-gray-200"
                       onClick={() => setShowWorkoutPicker(true)}
                     >
                       <Edit className="w-3 h-3 mr-2" />
@@ -791,13 +791,13 @@ export default function CalendarPage() {
                     </Button>
                   </div>
                 ) : (
-                  <div className="bg-gray-800 rounded-lg p-3">
-                    <p className="text-sm text-gray-400 mb-3">No workout assigned yet</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-sm text-gray-500 mb-3">No workout assigned yet</p>
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-gray-600"
+                        className="border-gray-200"
                         onClick={() => setShowWorkoutPicker(true)}
                       >
                         <FileText className="w-3 h-3 mr-2" />
@@ -840,7 +840,7 @@ export default function CalendarPage() {
             {confirmDelete && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 space-y-3">
                 <p className="text-sm text-red-400 font-medium">Delete this event?</p>
-                <p className="text-xs text-gray-400">This cannot be undone.</p>
+                <p className="text-xs text-gray-500">This cannot be undone.</p>
                 <div className="flex flex-col gap-2">
                   <Button
                     size="sm"
@@ -873,7 +873,7 @@ export default function CalendarPage() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full border-gray-600"
+                    className="w-full border-gray-200"
                     onClick={() => setConfirmDelete(false)}
                   >
                     Cancel
@@ -887,9 +887,9 @@ export default function CalendarPage() {
 
       {/* Workout Picker Dialog */}
       <Dialog open={showWorkoutPicker} onOpenChange={setShowWorkoutPicker}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">Select Workout Template</DialogTitle>
+            <DialogTitle className="text-gray-900">Select Workout Template</DialogTitle>
           </DialogHeader>
           <ScrollArea className="max-h-[400px]">
             <div className="space-y-2">
@@ -900,12 +900,12 @@ export default function CalendarPage() {
                     "p-3 rounded-lg border cursor-pointer transition-colors",
                     selectedTemplateId === template.id
                       ? "border-sky-500 bg-sky-500/10"
-                      : "border-gray-700 hover:border-gray-600"
+                      : "border-gray-200 hover:border-gray-300"
                   )}
                   onClick={() => setSelectedTemplateId(template.id)}
                 >
-                  <h4 className="font-medium text-white">{template.name}</h4>
-                  <p className="text-xs text-gray-400 mt-1">
+                  <h4 className="font-medium text-gray-900">{template.name}</h4>
+                  <p className="text-xs text-gray-500 mt-1">
                     {template.exercises.length} exercises
                   </p>
                 </div>
@@ -940,17 +940,17 @@ export default function CalendarPage() {
 
       {/* Add Event Dialog */}
       <Dialog open={showAddEvent} onOpenChange={setShowAddEvent}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Book Session</DialogTitle>
+            <DialogTitle className="text-gray-900">Book Session</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label className="text-gray-400">Session Type</Label>
+              <Label className="text-gray-600">Session Type</Label>
               <select
                 value={newEventType}
                 onChange={(e) => setNewEventType(e.target.value as any)}
-                className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
               >
                 <option value="session">Training Session</option>
                 <option value="consultation">Consultation</option>
@@ -959,13 +959,13 @@ export default function CalendarPage() {
             </div>
 
             <div>
-              <Label className="text-gray-400">
+              <Label className="text-gray-600">
                 Client {newEventType === 'consultation' && <span className="text-gray-500">(optional)</span>}
               </Label>
               <select
                 value={newEventClient}
                 onChange={(e) => setNewEventClient(e.target.value)}
-                className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
               >
                 <option value="">{newEventType === 'consultation' ? 'No client (new lead)' : 'Select a client...'}</option>
                 {clients.filter(c => c.trainerId === user?.id).map((client) => {
@@ -981,33 +981,33 @@ export default function CalendarPage() {
             {/* Consultation name field when no client selected */}
             {newEventType === 'consultation' && !newEventClient && (
               <div>
-                <Label className="text-gray-400">Contact Name</Label>
+                <Label className="text-gray-600">Contact Name</Label>
                 <Input
                   placeholder="e.g., John Smith"
                   value={newEventTitle}
                   onChange={(e) => setNewEventTitle(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
             )}
 
             <div>
-              <Label className="text-gray-400">Date</Label>
+              <Label className="text-gray-600">Date</Label>
               <Input
                 type="date"
                 value={newEventDate}
                 onChange={(e) => setNewEventDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-gray-400">Start Time</Label>
+                <Label className="text-gray-600">Start Time</Label>
                 <select
                   value={newEventStartTime}
                   onChange={(e) => setNewEventStartTime(e.target.value)}
-                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                  className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
                 >
                   {Array.from({ length: 24 * 4 }, (_, i) => {
                     const hour = Math.floor(i / 4);
@@ -1019,11 +1019,11 @@ export default function CalendarPage() {
                 </select>
               </div>
               <div>
-                <Label className="text-gray-400">End Time</Label>
+                <Label className="text-gray-600">End Time</Label>
                 <select
                   value={newEventEndTime}
                   onChange={(e) => setNewEventEndTime(e.target.value)}
-                  className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                  className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
                 >
                   {Array.from({ length: 24 * 4 }, (_, i) => {
                     const hour = Math.floor(i / 4);
@@ -1037,11 +1037,11 @@ export default function CalendarPage() {
             </div>
 
             <div>
-              <Label className="text-gray-400">Repeat</Label>
+              <Label className="text-gray-600">Repeat</Label>
               <select
                 value={newEventRecurrence}
                 onChange={(e) => setNewEventRecurrence(e.target.value as any)}
-                className="w-full mt-1 p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                className="w-full mt-1 p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
               >
                 <option value="none">Does not repeat</option>
                 <option value="weekly">Weekly</option>
@@ -1056,12 +1056,12 @@ export default function CalendarPage() {
             </div>
 
             <div>
-              <Label className="text-gray-400">Title (optional)</Label>
+              <Label className="text-gray-600">Title (optional)</Label>
               <Input
                 placeholder="Session with [Client Name]"
                 value={newEventTitle}
                 onChange={(e) => setNewEventTitle(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 

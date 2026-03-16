@@ -170,7 +170,7 @@ export function ProfileCardV2({
                   strengthRating.tier === 'novice' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
                   'bg-gray-500/20 text-gray-400 border-gray-500/30'
                 } border text-xs`}>
-                  {strengthRating.tier?.charAt(0).toUpperCase() + strengthRating.tier?.slice(1)} Tier
+                  {strengthRating.tier ? strengthRating.tier.charAt(0).toUpperCase() + strengthRating.tier.slice(1) : 'Unranked'} Tier
                 </Badge>
               )}
             </div>

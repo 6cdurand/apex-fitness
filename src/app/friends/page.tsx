@@ -139,7 +139,7 @@ export default function FriendsPage() {
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-800 border-gray-700 text-white"
+            className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
           />
         </div>
 
@@ -147,9 +147,9 @@ export default function FriendsPage() {
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-gray-400 mb-3">Search Results</h3>
             {filteredUsers.length === 0 ? (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-8 text-center">
-                  <p className="text-gray-400">No users found</p>
+                  <p className="text-gray-500">No users found</p>
                 </CardContent>
               </Card>
             ) : (
@@ -167,7 +167,7 @@ export default function FriendsPage() {
           </div>
         ) : (
           <Tabs defaultValue="following" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 bg-gray-800 mb-4">
+            <TabsList className="grid w-full grid-cols-4 bg-gray-100 mb-4">
               <TabsTrigger value="following" className="data-[state=active]:bg-sky-500 text-xs">
                 Following
               </TabsTrigger>
@@ -185,7 +185,7 @@ export default function FriendsPage() {
             <TabsContent value="following">
               <ScrollArea className="h-[calc(100vh-320px)]">
                 {following.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="py-12 text-center">
                       <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-400 mb-1">Not following anyone yet</p>
@@ -212,7 +212,7 @@ export default function FriendsPage() {
             <TabsContent value="followers">
               <ScrollArea className="h-[calc(100vh-320px)]">
                 {followers.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="py-12 text-center">
                       <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-400 mb-1">No followers yet</p>
@@ -241,7 +241,7 @@ export default function FriendsPage() {
                 {(() => {
                   const trainers = allUsers.filter(u => u.isTrainer);
                   return trainers.length === 0 ? (
-                    <Card className="bg-gray-900 border-gray-800">
+                    <Card className="bg-white border-gray-200 shadow-sm">
                       <CardContent className="py-12 text-center">
                         <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                         <p className="text-gray-400">No trainers found</p>
@@ -271,7 +271,7 @@ export default function FriendsPage() {
             <TabsContent value="discover">
               <ScrollArea className="h-[calc(100vh-320px)]">
                 {suggestions.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="py-12 text-center">
                       <Users className="w-12 h-12 text-gray-600 mx-auto mb-3" />
                       <p className="text-gray-400">No suggestions available</p>
@@ -346,7 +346,7 @@ export default function FriendsPage() {
 
       {/* Book Consultation Dialog */}
       <Dialog open={showBookConsultation} onOpenChange={setShowBookConsultation}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
           <div className="space-y-4">
             <div className="text-center">
               <Avatar className="w-16 h-16 mx-auto mb-3">
@@ -355,27 +355,27 @@ export default function FriendsPage() {
                   {selectedTrainer?.displayName?.[0] || '?'}
                 </AvatarFallback>
               </Avatar>
-              <h2 className="text-xl font-bold text-white">Book Consultation</h2>
-              <p className="text-gray-400">with {selectedTrainer?.displayName || selectedTrainer?.username}</p>
+              <h2 className="text-xl font-bold text-gray-900">Book Consultation</h2>
+              <p className="text-gray-500">with {selectedTrainer?.displayName || selectedTrainer?.username}</p>
             </div>
 
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Preferred Date</label>
+              <label className="text-sm text-gray-500 mb-1 block">Preferred Date</label>
               <Input
                 type="date"
                 value={consultationDate}
                 onChange={(e) => setConsultationDate(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Preferred Time</label>
+              <label className="text-sm text-gray-500 mb-1 block">Preferred Time</label>
               <select
                 value={consultationTime}
                 onChange={(e) => setConsultationTime(e.target.value)}
-                className="w-full p-2 bg-gray-800 border border-gray-700 rounded-md text-white"
+                className="w-full p-2 bg-gray-50 border border-gray-200 rounded-md text-gray-900"
               >
                 {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'].map(time => (
                   <option key={time} value={time}>{time}</option>
@@ -384,19 +384,19 @@ export default function FriendsPage() {
             </div>
 
             <div>
-              <label className="text-sm text-gray-400 mb-1 block">Notes (optional)</label>
+              <label className="text-sm text-gray-500 mb-1 block">Notes (optional)</label>
               <textarea
                 value={consultationNotes}
                 onChange={(e) => setConsultationNotes(e.target.value)}
                 placeholder="Tell the trainer about your goals..."
-                className="w-full h-20 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm resize-none"
+                className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none"
               />
             </div>
 
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="flex-1 border-gray-700"
+                className="flex-1 border-gray-200"
                 onClick={() => setShowBookConsultation(false)}
               >
                 Cancel
@@ -433,20 +433,20 @@ function TrainerCard({
   onBookConsultation: () => void;
 }) {
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-white border-gray-200 shadow-sm">
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <button onClick={onAvatarClick} className="group relative">
             <Avatar className="w-12 h-12 ring-2 ring-transparent group-hover:ring-rose-500 transition-all">
               <AvatarImage src={userData.profilePhoto} />
-              <AvatarFallback className="bg-rose-500 text-white">
+              <AvatarFallback className="bg-rose-100 text-rose-600">
                 {userData.displayName?.[0] || userData.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="font-semibold text-white truncate">
+              <p className="font-semibold text-gray-900 truncate">
                 {userData.displayName || userData.username}
               </p>
               {userData.isVerifiedTrainer && (
@@ -473,7 +473,7 @@ function TrainerCard({
               variant={isFollowing ? "outline" : "default"}
               onClick={isFollowing ? onUnfollow : onFollow}
               className={isFollowing 
-                ? "border-gray-700 text-gray-300" 
+                ? "border-gray-200 text-gray-500" 
                 : "bg-sky-500 hover:bg-sky-600"
               }
             >
@@ -500,20 +500,20 @@ function UserCard({
   onAvatarClick?: () => void;
 }) {
   return (
-    <Card className="bg-gray-900 border-gray-800">
+    <Card className="bg-white border-gray-200 shadow-sm">
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <button onClick={onAvatarClick} className="group relative">
             <Avatar className="w-12 h-12 ring-2 ring-transparent group-hover:ring-sky-500 transition-all">
               <AvatarImage src={userData.profilePhoto} />
-              <AvatarFallback className="bg-gray-800 text-white">
+              <AvatarFallback className="bg-gray-100 text-gray-900">
                 {userData.displayName?.[0] || userData.username?.[0] || '?'}
               </AvatarFallback>
             </Avatar>
           </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="font-semibold text-white truncate">
+              <p className="font-semibold text-gray-900 truncate">
                 {userData.displayName || userData.username}
               </p>
               {userData.isVerifiedTrainer && (
@@ -532,7 +532,7 @@ function UserCard({
             variant={isFollowing ? "outline" : "default"}
             onClick={isFollowing ? onUnfollow : onFollow}
             className={isFollowing 
-              ? "border-gray-700 text-gray-300" 
+              ? "border-gray-200 text-gray-500" 
               : "bg-sky-500 hover:bg-sky-600"
             }
           >

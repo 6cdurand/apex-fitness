@@ -398,7 +398,7 @@ function AuthPageContent() {
                       type="email"
                       value={inviteEmail}
                       disabled
-                      className="bg-gray-800 border-gray-700 text-gray-400"
+                      className="bg-gray-50 border-gray-200 text-gray-500"
                     />
                   </div>
                   <div className="space-y-2">
@@ -408,7 +408,7 @@ function AuthPageContent() {
                       placeholder="At least 6 characters"
                       value={setupNewPassword}
                       onChange={(e) => setSetupNewPassword(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                       required
                       minLength={6}
                     />
@@ -420,7 +420,7 @@ function AuthPageContent() {
                       placeholder="Re-enter your password"
                       value={setupConfirmPassword}
                       onChange={(e) => setSetupConfirmPassword(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                       required
                     />
                   </div>
@@ -478,7 +478,7 @@ function AuthPageContent() {
                       placeholder="your@email.com"
                       value={loginEmail}
                       onChange={(e) => setLoginEmail(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                       required
                     />
                   </div>
@@ -490,7 +490,7 @@ function AuthPageContent() {
                       placeholder="••••••••"
                       value={loginPassword}
                       onChange={(e) => setLoginPassword(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                       required
                     />
                   </div>
@@ -512,10 +512,10 @@ function AuthPageContent() {
                   
                   <div className="relative my-4">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-gray-700"></div>
+                      <div className="w-full border-t border-gray-200"></div>
                     </div>
                     <div className="relative flex justify-center text-xs">
-                      <span className="bg-gray-900 px-2 text-gray-500">or continue with</span>
+                      <span className="bg-white px-2 text-gray-500">or continue with</span>
                     </div>
                   </div>
                   
@@ -523,7 +523,7 @@ function AuthPageContent() {
                     type="button"
                     variant="outline"
                     onClick={handleGoogleSignIn}
-                    className="w-full border-gray-700 text-white hover:bg-gray-800 flex items-center justify-center gap-2"
+                    className="w-full border-gray-200 text-gray-700 hover:bg-gray-50 flex items-center justify-center gap-2"
                   >
                     <svg className="w-5 h-5" viewBox="0 0 24 24">
                       <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -600,7 +600,7 @@ function AuthPageContent() {
                           placeholder="your@email.com"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                          className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                           required
                         />
                       </div>
@@ -612,7 +612,7 @@ function AuthPageContent() {
                           placeholder="fitnessfan123"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                          className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                           required
                         />
                       </div>
@@ -624,7 +624,7 @@ function AuthPageContent() {
                           placeholder="••••••••"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                          className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                           required
                         />
                       </div>
@@ -636,7 +636,7 @@ function AuthPageContent() {
                           placeholder="••••••••"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
-                          className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                          className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                           required
                         />
                       </div>
@@ -655,17 +655,17 @@ function AuthPageContent() {
                             placeholder="John Doe"
                             value={displayName}
                             onChange={(e) => setDisplayName(e.target.value)}
-                            className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pl-10"
+                            className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 pl-10"
                           />
                         </div>
                       </div>
                       <div className="space-y-2">
                         <Label className="text-gray-300">Gender</Label>
                         <Select value={gender} onValueChange={(v) => setGender(v as Gender)}>
-                          <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                          <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="bg-gray-800 border-gray-700">
+                          <SelectContent className="bg-white border-gray-200">
                             <SelectItem value="male">Male</SelectItem>
                             <SelectItem value="female">Female</SelectItem>
                             <SelectItem value="other">Other</SelectItem>
@@ -681,7 +681,7 @@ function AuthPageContent() {
                             type="date"
                             value={dateOfBirth}
                             onChange={(e) => setDateOfBirth(e.target.value)}
-                            className="bg-gray-800 border-gray-700 text-white pl-10"
+                            className="bg-gray-50 border-gray-200 text-gray-900 pl-10"
                           />
                         </div>
                       </div>
@@ -696,7 +696,7 @@ function AuthPageContent() {
                               placeholder="175"
                               value={height}
                               onChange={(e) => setHeight(e.target.value)}
-                              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pl-10"
+                              className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 pl-10"
                             />
                           </div>
                         </div>
@@ -710,7 +710,7 @@ function AuthPageContent() {
                               placeholder="70"
                               value={weight}
                               onChange={(e) => setWeight(e.target.value)}
-                              className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 pl-10"
+                              className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400 pl-10"
                             />
                           </div>
                         </div>
@@ -720,7 +720,7 @@ function AuthPageContent() {
 
                   {step === 'goals' && (
                     <div className="space-y-6">
-                      <div className="p-4 rounded-xl bg-gray-800 border border-gray-700">
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-semibold text-white">Are you a Personal Trainer?</h3>
@@ -782,7 +782,7 @@ function AuthPageContent() {
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
                           onboardConnections.appleHealth
                             ? 'bg-red-500/10 border-red-500/40'
-                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                            : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                         }`}
                       >
                         <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center flex-shrink-0">
@@ -802,7 +802,7 @@ function AuthPageContent() {
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
                           onboardConnections.googleHealth
                             ? 'bg-green-500/10 border-green-500/40'
-                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                            : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                         }`}
                       >
                         <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center flex-shrink-0">
@@ -822,7 +822,7 @@ function AuthPageContent() {
                         className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
                           onboardConnections.calendar
                             ? 'bg-blue-500/10 border-blue-500/40'
-                            : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                            : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                         }`}
                       >
                         <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center flex-shrink-0">
@@ -843,7 +843,7 @@ function AuthPageContent() {
                           className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all ${
                             onboardConnections.stripe
                               ? 'bg-purple-500/10 border-purple-500/40'
-                              : 'bg-gray-800/50 border-gray-700 hover:border-gray-600'
+                              : 'bg-gray-50 border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center flex-shrink-0">
@@ -869,7 +869,7 @@ function AuthPageContent() {
                         type="button"
                         variant="outline"
                         onClick={handlePrevStep}
-                        className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
+                        className="flex-1 border-gray-200 text-gray-500 hover:bg-gray-50"
                       >
                         <ChevronLeft className="w-4 h-4 mr-1" />
                         Back
@@ -909,7 +909,7 @@ function AuthPageContent() {
                     placeholder="your@email.com"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                     required
                   />
                 </div>
@@ -920,7 +920,7 @@ function AuthPageContent() {
                     placeholder="Enter new password"
                     value={forgotNewPassword}
                     onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                     required
                     minLength={4}
                   />
@@ -932,7 +932,7 @@ function AuthPageContent() {
                     placeholder="Re-enter new password"
                     value={forgotConfirmPassword}
                     onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                    className="bg-gray-800 border-gray-700 text-white placeholder:text-gray-500"
+                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
                     required
                   />
                 </div>

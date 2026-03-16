@@ -394,25 +394,25 @@ export default function PaymentsPage() {
       <div className="px-4 pb-24">
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Outstanding</p>
+              <p className="text-xs text-gray-500 mb-1">Outstanding</p>
               <p className={`text-xl font-bold ${totalOutstanding > 0 ? 'text-amber-400' : 'text-sky-400'}`}>
                 ${totalOutstanding}
               </p>
               <p className="text-xs text-gray-500">{clientsWithOutstanding} clients</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">This Month</p>
+              <p className="text-xs text-gray-500 mb-1">This Month</p>
               <p className="text-xl font-bold text-blue-400">${totalThisMonth}</p>
               <p className="text-xs text-gray-500">this month</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-xs text-gray-400 mb-1">Clients</p>
+              <p className="text-xs text-gray-500 mb-1">Clients</p>
               <p className="text-xl font-bold text-purple-400">{trainerClients.length}</p>
               <p className="text-xs text-gray-500">active</p>
             </CardContent>
@@ -421,7 +421,7 @@ export default function PaymentsPage() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-900 mb-4">
+          <TabsList className="grid w-full grid-cols-2 bg-gray-100 mb-4">
             <TabsTrigger value="clients" className="data-[state=active]:bg-sky-500">
               <Users className="w-4 h-4 mr-2" />
               Clients
@@ -440,7 +440,7 @@ export default function PaymentsPage() {
                 placeholder="Search clients..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-gray-900 border-gray-800 text-white placeholder:text-gray-500"
+                className="pl-9 bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
               />
               {searchQuery && (
                 <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
@@ -450,10 +450,10 @@ export default function PaymentsPage() {
             </div>
 
             {filteredClients.length === 0 ? (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-8 text-center">
-                  <Users className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                  <p className="text-gray-400">{searchQuery ? 'No matching clients' : 'No clients yet'}</p>
+                  <Users className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">{searchQuery ? 'No matching clients' : 'No clients yet'}</p>
                 </CardContent>
               </Card>
             ) : (
@@ -461,20 +461,20 @@ export default function PaymentsPage() {
                 {filteredClients.map((client) => (
                   <Card 
                     key={client.clientId}
-                    className={`bg-gray-900 border-gray-800 ${client.hasOutstanding ? 'border-l-4 border-l-amber-500' : ''}`}
+                    className={`bg-white border-gray-200 shadow-sm ${client.hasOutstanding ? 'border-l-4 border-l-amber-500' : ''}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-10 h-10">
                             <AvatarImage src={client.info.photo} />
-                            <AvatarFallback className="bg-gray-800 text-white">
+                            <AvatarFallback className="bg-gray-100 text-gray-900">
                               {client.info.name[0]?.toUpperCase() || '?'}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <button className="font-medium text-white hover:text-sky-400 transition-colors text-left" onClick={(e) => { e.stopPropagation(); router.push(`/clients/${client.clientId}`); }}>{client.info.name}</button>
-                            <p className="text-xs text-gray-400">
+                            <button className="font-medium text-gray-900 hover:text-sky-400 transition-colors text-left" onClick={(e) => { e.stopPropagation(); router.push(`/clients/${client.clientId}`); }}>{client.info.name}</button>
+                            <p className="text-xs text-gray-500">
                               ${client.pricePerSession}/session • {client.settings?.frequency?.replace('_', ' ') || 'per session'}
                             </p>
                           </div>
@@ -493,8 +493,8 @@ export default function PaymentsPage() {
                       {/* Stats Row — editable Sessions & Paid */}
                       <div className="grid grid-cols-3 gap-2 mb-3 text-center">
                         {/* Sessions — editable */}
-                        <div className="bg-gray-800 rounded-lg p-2 relative group">
-                          <p className="text-xs text-gray-400">Sessions</p>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 relative group">
+                          <p className="text-xs text-gray-500">Sessions</p>
                           {editingField?.clientId === client.clientId && editingField.field === 'sessions' ? (
                             <div className="flex items-center justify-center gap-1 mt-0.5">
                               <input
@@ -504,14 +504,14 @@ export default function PaymentsPage() {
                                 onChange={(e) => setEditValue(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleInlineEditSave(); if (e.key === 'Escape') setEditingField(null); }}
                                 autoFocus
-                                className="w-14 text-center font-bold text-white bg-gray-700 border border-sky-500 rounded px-1 py-0.5 text-sm"
+                                className="w-14 text-center font-bold text-gray-900 bg-white border border-sky-500 rounded px-1 py-0.5 text-sm"
                               />
                               <button onClick={handleInlineEditSave} className="text-sky-400 hover:text-sky-300"><Check className="w-3.5 h-3.5" /></button>
                               <button onClick={() => setEditingField(null)} className="text-gray-500 hover:text-gray-300"><X className="w-3.5 h-3.5" /></button>
                             </div>
                           ) : (
                             <div className="flex items-center justify-center gap-1">
-                              <p className="font-bold text-white">{client.totalSessionsEver}</p>
+                              <p className="font-bold text-gray-900">{client.totalSessionsEver}</p>
                               <button
                                 onClick={() => { setEditingField({ clientId: client.clientId, field: 'sessions' }); setEditValue(String(client.totalSessionsEver)); }}
                                 className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-sky-400 transition-opacity"
@@ -522,8 +522,8 @@ export default function PaymentsPage() {
                           )}
                         </div>
                         {/* Paid — editable */}
-                        <div className="bg-gray-800 rounded-lg p-2 relative group">
-                          <p className="text-xs text-gray-400">Paid</p>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 relative group">
+                          <p className="text-xs text-gray-500">Paid</p>
                           {editingField?.clientId === client.clientId && editingField.field === 'paid' ? (
                             <div className="flex items-center justify-center gap-1 mt-0.5">
                               <input
@@ -551,8 +551,8 @@ export default function PaymentsPage() {
                           )}
                         </div>
                         {/* Outstanding — derived, not editable */}
-                        <div className="bg-gray-800 rounded-lg p-2">
-                          <p className="text-xs text-gray-400">Outstanding</p>
+                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                          <p className="text-xs text-gray-500">Outstanding</p>
                           <p className={`font-bold ${client.outstandingSessions > 0 ? 'text-amber-400' : 'text-gray-400'}`}>
                             {client.outstandingSessions}
                           </p>
@@ -561,8 +561,8 @@ export default function PaymentsPage() {
                       
                       {/* Package info line (optional — display only) */}
                       {client.packageInfo && !client.packageInfo.isContinuous && client.packageInfo.totalSessions > 0 && (
-                        <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-1.5 mb-3 text-xs">
-                          <span className="text-gray-400">
+                        <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 mb-3 text-xs">
+                          <span className="text-gray-500">
                             Package: {client.packageInfo.usedSessions || 0}/{client.packageInfo.totalSessions} used
                             {client.packageInfo.remainingSessions > 0 && (
                               <span className="text-blue-400 ml-1">({client.packageInfo.remainingSessions} left)</span>
@@ -574,7 +574,7 @@ export default function PaymentsPage() {
                       {/* Payment Plan Status */}
                       {client.paymentFrequency !== 'per_session' && (
                         <div className={`flex items-center justify-between rounded-lg p-2 mb-2 ${
-                          client.paymentDue ? 'bg-red-500/10' : 'bg-gray-800'
+                          client.paymentDue ? 'bg-red-500/10' : 'bg-gray-50 border border-gray-200'
                         }`}>
                           <div className="flex items-center gap-2">
                             <Clock className={`w-4 h-4 ${client.paymentDue ? 'text-red-400' : 'text-gray-400'}`} />
@@ -633,10 +633,10 @@ export default function PaymentsPage() {
 
           <TabsContent value="history">
             {payments.filter(p => p.trainerId === user?.id).length === 0 ? (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-8 text-center">
-                  <DollarSign className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                  <p className="text-gray-400">No payment history yet</p>
+                  <DollarSign className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                  <p className="text-gray-500">No payment history yet</p>
                 </CardContent>
               </Card>
             ) : (
@@ -648,19 +648,19 @@ export default function PaymentsPage() {
                   .map((payment) => {
                     const clientInfo = getClientInfo(payment.clientId);
                     return (
-                      <Card key={payment.id} className="bg-gray-900 border-gray-800">
+                      <Card key={payment.id} className="bg-white border-gray-200 shadow-sm">
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <Avatar className="w-8 h-8">
                                 <AvatarImage src={clientInfo.photo} />
-                                <AvatarFallback className="bg-gray-800 text-white text-xs">
+                                <AvatarFallback className="bg-gray-100 text-gray-900 text-xs">
                                   {clientInfo.name[0]?.toUpperCase() || '?'}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <button className="font-medium text-white text-sm hover:text-sky-400 transition-colors text-left" onClick={() => router.push(`/clients/${payment.clientId}`)}>{clientInfo.name}</button>
-                                <p className="text-xs text-gray-400">
+                                <button className="font-medium text-gray-900 text-sm hover:text-sky-400 transition-colors text-left" onClick={() => router.push(`/clients/${payment.clientId}`)}>{clientInfo.name}</button>
+                                <p className="text-xs text-gray-500">
                                   {(payment.paidAt || payment.createdAt) ? format(parseISO(payment.paidAt || payment.createdAt), 'MMM d, yyyy') : 'No date'}
                                 </p>
                               </div>
@@ -703,10 +703,10 @@ export default function PaymentsPage() {
 
       {/* Settings Dialog */}
       <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle>Payment Settings</DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogTitle className="text-gray-900">Payment Settings</DialogTitle>
+            <DialogDescription className="text-gray-500">
               Configure payment details for {editingSettings ? getClientInfo(editingSettings.clientId).name : 'client'}
             </DialogDescription>
           </DialogHeader>
@@ -714,15 +714,15 @@ export default function PaymentsPage() {
           {editingSettings && (
             <div className="space-y-4 mt-4">
               <div>
-                <Label className="text-gray-300">Payment Method</Label>
+                <Label className="text-gray-600">Payment Method</Label>
                 <Select 
                   value={editingSettings.method} 
                   onValueChange={(v) => setEditingSettings({...editingSettings, method: v as PaymentMethod})}
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white mt-1">
+                  <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900 mt-1">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-white border-gray-200">
                     <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="card">Card</SelectItem>
@@ -732,15 +732,15 @@ export default function PaymentsPage() {
               </div>
               
               <div>
-                <Label className="text-gray-300">Payment Frequency</Label>
+                <Label className="text-gray-600">Payment Frequency</Label>
                 <Select 
                   value={editingSettings.frequency} 
                   onValueChange={(v) => setEditingSettings({...editingSettings, frequency: v as PaymentFrequency})}
                 >
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white mt-1">
+                  <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900 mt-1">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-gray-800 border-gray-700">
+                  <SelectContent className="bg-white border-gray-200">
                     <SelectItem value="per_session">Per Session</SelectItem>
                     <SelectItem value="weekly">Weekly</SelectItem>
                     <SelectItem value="fortnightly">Fortnightly</SelectItem>
@@ -752,43 +752,43 @@ export default function PaymentsPage() {
               
               {editingSettings.frequency === 'upfront' ? (
                 <div>
-                  <Label className="text-gray-300">Total Sessions in Package</Label>
+                  <Label className="text-gray-600">Total Sessions in Package</Label>
                   <Input
                     type="number"
                     min={1}
                     value={editingSettings.totalSessions || 10}
                     onChange={(e) => setEditingSettings({...editingSettings, totalSessions: parseInt(e.target.value) || 1})}
-                    className="bg-gray-800 border-gray-700 text-white mt-1"
+                    className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                   />
                 </div>
               ) : (
                 <div>
-                  <Label className="text-gray-300">Sessions Per Week</Label>
+                  <Label className="text-gray-600">Sessions Per Week</Label>
                   <Input
                     type="number"
                     min={1}
                     max={7}
                     value={editingSettings.sessionsPerWeek}
                     onChange={(e) => setEditingSettings({...editingSettings, sessionsPerWeek: parseInt(e.target.value) || 1})}
-                    className="bg-gray-800 border-gray-700 text-white mt-1"
+                    className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                   />
                 </div>
               )}
               
               <div>
-                <Label className="text-gray-300">Price Per Session ($)</Label>
+                <Label className="text-gray-600">Price Per Session ($)</Label>
                 <Input
                   type="number"
                   min={0}
                   value={editingSettings.pricePerSession}
                   onChange={(e) => setEditingSettings({...editingSettings, pricePerSession: parseFloat(e.target.value) || 0})}
-                  className="bg-gray-800 border-gray-700 text-white mt-1"
+                  className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                 />
               </div>
               
               {editingSettings.frequency !== 'per_session' && (
-                <div className="bg-gray-800 rounded-lg p-3">
-                  <p className="text-sm text-gray-400">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-sm text-gray-500">
                     {editingSettings.frequency === 'upfront' 
                       ? 'Total package price:'
                       : `Total per ${editingSettings.frequency === 'weekly' ? 'week' : editingSettings.frequency === 'fortnightly' ? 'fortnight' : 'month'}:`
@@ -854,10 +854,10 @@ export default function PaymentsPage() {
                           setShowSettingsDialog(false);
                           setEditingSettings(null);
                         }}
-                        className="w-full text-left p-3 rounded-lg bg-gray-800 hover:bg-gray-750 transition-colors border border-gray-700"
+                        className="w-full text-left p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-200"
                       >
-                        <p className="text-sm text-white font-medium">Switch to Continuous</p>
-                        <p className="text-xs text-gray-400 mt-0.5">Remove package limit — just track total sessions & payments</p>
+                        <p className="text-sm text-gray-900 font-medium">Switch to Continuous</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Remove package limit — just track total sessions & payments</p>
                       </button>
                     )}
                   </div>
@@ -878,14 +878,14 @@ export default function PaymentsPage() {
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    className="flex-1 border-gray-700 text-gray-300"
+                    className="flex-1 border-gray-200 text-gray-500"
                     onClick={() => setShowSettingsDialog(false)}
                   >
                     Cancel
                   </Button>
                   <Button
                     variant="outline"
-                    className="flex-1 border-gray-700 text-gray-300"
+                    className="flex-1 border-gray-200 text-gray-500"
                     onClick={handleSaveSettings}
                   >
                     Save Settings
@@ -899,10 +899,10 @@ export default function PaymentsPage() {
 
       {/* Confirm Payment Dialog */}
       <Dialog open={showConfirmPaymentDialog} onOpenChange={setShowConfirmPaymentDialog}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle>Confirm Payment</DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogTitle className="text-gray-900">Confirm Payment</DialogTitle>
+            <DialogDescription className="text-gray-500">
               Record payment for {selectedClient ? getClientInfo(selectedClient).name : 'client'}
             </DialogDescription>
           </DialogHeader>
@@ -924,7 +924,7 @@ export default function PaymentsPage() {
                     
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label className="text-gray-300">Price Per Session ($)</Label>
+                        <Label className="text-gray-600">Price Per Session ($)</Label>
                         <Input
                           type="number"
                           min="0"
@@ -932,36 +932,36 @@ export default function PaymentsPage() {
                           value={confirmPaymentPrice}
                           onChange={(e) => setConfirmPaymentPrice(e.target.value)}
                           placeholder="0"
-                          className="bg-gray-800 border-gray-700 text-white mt-1"
+                          className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         />
                       </div>
                       <div>
-                        <Label className="text-gray-300">Sessions Paid For</Label>
+                        <Label className="text-gray-600">Sessions Paid For</Label>
                         <Input
                           type="number"
                           min="1"
                           value={confirmPaymentSessions}
                           onChange={(e) => setConfirmPaymentSessions(e.target.value)}
                           placeholder="1"
-                          className="bg-gray-800 border-gray-700 text-white mt-1"
+                          className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         />
                       </div>
                     </div>
                     
                     <div>
-                      <Label className="text-gray-300">Payment Date</Label>
+                      <Label className="text-gray-600">Payment Date</Label>
                       <Input
                         type="date"
                         value={paymentDate}
                         onChange={(e) => setPaymentDate(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                       />
                     </div>
                     
-                    <div className="bg-gray-800 rounded-lg p-4">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                       <div className="flex justify-between">
-                        <span className="text-gray-400">Total Payment</span>
-                        <span className="font-bold text-white text-lg">${totalAmount.toFixed(2)}</span>
+                        <span className="text-gray-500">Total Payment</span>
+                        <span className="font-bold text-gray-900 text-lg">${totalAmount.toFixed(2)}</span>
                       </div>
                     </div>
                     

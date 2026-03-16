@@ -406,12 +406,13 @@ export default function ProgramPage() {
             >
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
-                    <Sparkles className="w-6 h-6 text-white" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shadow-lg shadow-violet-500/30 relative">
+                    <span className="text-2xl">🤖</span>
+                    <Sparkles className="w-3 h-3 text-white absolute -top-0.5 -right-0.5" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Create Workout</h3>
-                    <p className="text-xs text-gray-500">AI generates a single workout for you</p>
+                    <h3 className="font-semibold text-gray-900">AI Workout Builder</h3>
+                    <p className="text-xs text-gray-500">🤖 AI generates a single workout for you</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-violet-400" />
@@ -424,12 +425,13 @@ export default function ProgramPage() {
             >
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                    <Calendar className="w-6 h-6 text-blue-400" />
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/30 to-indigo-500/30 flex items-center justify-center relative">
+                    <span className="text-2xl">🤖</span>
+                    <Calendar className="w-3 h-3 text-blue-400 absolute -bottom-0.5 -right-0.5" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">Create Program</h3>
-                    <p className="text-xs text-gray-500">AI-generated or pick from templates</p>
+                    <h3 className="font-semibold text-gray-900">AI Program Builder</h3>
+                    <p className="text-xs text-gray-500">🤖 AI-generated or pick from templates</p>
                   </div>
                 </div>
                 <ChevronRight className="w-5 h-5 text-gray-500" />
@@ -527,9 +529,9 @@ export default function ProgramPage() {
 
       {/* Browse Templates Dialog */}
       <Dialog open={showBrowseTemplates} onOpenChange={setShowBrowseTemplates}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-emerald-400" />
               Suggested Programs
             </DialogTitle>
@@ -541,7 +543,7 @@ export default function ProgramPage() {
           {/* Filters */}
           <div className="flex flex-wrap gap-2 mb-1">
             <select value={filterGoal} onChange={(e) => setFilterGoal(e.target.value)}
-              className="text-xs px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white">
+              className="text-xs px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
               <option value="all">All Goals</option>
               <option value="strength">Strength</option>
               <option value="hypertrophy">Muscle Growth</option>
@@ -551,14 +553,14 @@ export default function ProgramPage() {
               <option value="general">General</option>
             </select>
             <select value={filterDifficulty} onChange={(e) => setFilterDifficulty(e.target.value)}
-              className="text-xs px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white">
+              className="text-xs px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
               <option value="all">All Levels</option>
               <option value="beginner">Beginner</option>
               <option value="intermediate">Intermediate</option>
               <option value="advanced">Advanced</option>
             </select>
             <select value={filterFrequency} onChange={(e) => setFilterFrequency(parseInt(e.target.value))}
-              className="text-xs px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white">
+              className="text-xs px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-gray-900">
               <option value={0}>Any Frequency</option>
               <option value={2}>2× / week</option>
               <option value={3}>3× / week</option>
@@ -568,7 +570,7 @@ export default function ProgramPage() {
             </select>
             {(filterGoal !== 'all' || filterDifficulty !== 'all' || filterFrequency !== 0) && (
               <button onClick={() => { setFilterGoal('all'); setFilterDifficulty('all'); setFilterFrequency(0); }}
-                className="text-xs px-2 py-1.5 text-gray-400 hover:text-white flex items-center gap-1">
+                className="text-xs px-2 py-1.5 text-gray-400 hover:text-gray-900 flex items-center gap-1">
                 <X className="w-3 h-3" /> Clear
               </button>
             )}
@@ -586,10 +588,10 @@ export default function ProgramPage() {
 
               if (filtered.length === 0) {
                 return (
-                  <Card className="bg-gray-800/50 border-gray-700">
+                  <Card className="bg-gray-50 border-gray-200">
                     <CardContent className="py-6 text-center">
-                      <Filter className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">No programs match your filters</p>
+                      <Filter className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">No programs match your filters</p>
                       <button className="text-xs text-violet-400 mt-1 hover:underline"
                         onClick={() => { setFilterGoal('all'); setFilterDifficulty('all'); setFilterFrequency(0); }}>
                         Clear filters
@@ -607,7 +609,7 @@ export default function ProgramPage() {
 
                 return (
                   <Card key={program.id}
-                    className="bg-gray-800/50 border-gray-700 cursor-pointer hover:border-emerald-500/40 transition-colors"
+                    className="bg-gray-50 border-gray-200 cursor-pointer hover:border-emerald-500/40 transition-colors"
                     onClick={() => { setShowBrowseTemplates(false); setSelectedProgram(program); setProgramSaved(false); }}
                   >
                     <CardContent className="p-3">
@@ -616,8 +618,8 @@ export default function ProgramPage() {
                           <LayoutGrid className="w-5 h-5 text-emerald-400" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-white text-sm truncate">{program.name}</h3>
-                          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2">{program.description}</p>
+                          <h3 className="font-semibold text-gray-900 text-sm truncate">{program.name}</h3>
+                          <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{program.description}</p>
                           <div className="flex flex-wrap gap-1 mt-2">
                             <Badge className={`text-[10px] border-0 ${diffColor}`}>{program.difficulty}</Badge>
                             <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">
@@ -639,13 +641,13 @@ export default function ProgramPage() {
 
       {/* AI Generator Dialog */}
       <Dialog open={showGenerator} onOpenChange={(open) => { if (!open) { setShowGenerator(false); resetGenerator(); } }}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md max-h-[85vh] overflow-y-auto">
           
           {/* Step 1: Form */}
           {genStep === 'form' && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
                   <Brain className="w-5 h-5 text-violet-400" />
                   AI Workout Generator
                 </DialogTitle>
@@ -664,7 +666,7 @@ export default function ProgramPage() {
               <div className="space-y-5 pt-2">
                 {/* Goal */}
                 <div className="space-y-2">
-                  <Label className="text-white font-medium">What&apos;s your goal?</Label>
+                  <Label className="text-gray-900 font-medium">What&apos;s your goal?</Label>
                   <div className="grid grid-cols-2 gap-2">
                     {[
                       { value: 'strength', label: 'Strength', icon: '💪', desc: 'Get stronger' },
@@ -678,12 +680,12 @@ export default function ProgramPage() {
                         className={`p-3 rounded-xl border text-left transition-all ${
                           goal === g.value
                             ? 'border-violet-500 bg-violet-500/10 shadow-md shadow-violet-500/10'
-                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                         }`}
                       >
                         <span className="text-lg">{g.icon}</span>
-                        <p className="text-sm font-medium text-white mt-1">{g.label}</p>
-                        <p className="text-[10px] text-gray-400">{g.desc}</p>
+                        <p className="text-sm font-medium text-gray-900 mt-1">{g.label}</p>
+                        <p className="text-[10px] text-gray-500">{g.desc}</p>
                       </button>
                     ))}
                   </div>
@@ -691,7 +693,7 @@ export default function ProgramPage() {
 
                 {/* Experience */}
                 <div className="space-y-2">
-                  <Label className="text-white font-medium">Experience level</Label>
+                  <Label className="text-gray-900 font-medium">Experience level</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: 'beginner', label: 'Beginner', desc: '< 6 months' },
@@ -704,11 +706,11 @@ export default function ProgramPage() {
                         className={`p-3 rounded-xl border text-center transition-all ${
                           expertise === e.value
                             ? 'border-violet-500 bg-violet-500/10'
-                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                         }`}
                       >
-                        <p className="text-sm font-medium text-white">{e.label}</p>
-                        <p className="text-[10px] text-gray-400">{e.desc}</p>
+                        <p className="text-sm font-medium text-gray-900">{e.label}</p>
+                        <p className="text-[10px] text-gray-500">{e.desc}</p>
                       </button>
                     ))}
                   </div>
@@ -716,12 +718,12 @@ export default function ProgramPage() {
 
                 {/* Equipment */}
                 <div className="space-y-2">
-                  <Label className="text-white font-medium">Available equipment</Label>
+                  <Label className="text-gray-900 font-medium">Available equipment</Label>
                   <Select value={equipment} onValueChange={setEquipment}>
-                    <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                       <SelectValue placeholder="Select equipment access" />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectContent className="bg-white border-gray-200">
                       <SelectItem value="full_gym">Full Gym (barbells, machines, cables)</SelectItem>
                       <SelectItem value="home_dumbbells">Home — Dumbbells + Bench</SelectItem>
                       <SelectItem value="minimal">Minimal — Dumbbells + Pull-up Bar</SelectItem>
@@ -733,7 +735,7 @@ export default function ProgramPage() {
 
                 {/* Duration */}
                 <div className="space-y-2">
-                  <Label className="text-white font-medium">Session duration</Label>
+                  <Label className="text-gray-900 font-medium">Session duration</Label>
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { value: '30', label: '30 min', desc: 'Quick' },
@@ -746,11 +748,11 @@ export default function ProgramPage() {
                         className={`p-3 rounded-xl border text-center transition-all ${
                           duration === d.value
                             ? 'border-violet-500 bg-violet-500/10'
-                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                            : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                         }`}
                       >
                         <Clock className="w-4 h-4 mx-auto text-gray-400 mb-1" />
-                        <p className="text-sm font-medium text-white">{d.label}</p>
+                        <p className="text-sm font-medium text-gray-900">{d.label}</p>
                       </button>
                     ))}
                   </div>
@@ -758,29 +760,29 @@ export default function ProgramPage() {
 
                 {/* Mode Toggle */}
                 <div className="space-y-2">
-                  <Label className="text-white font-medium">What to generate</Label>
+                  <Label className="text-gray-900 font-medium">What to generate</Label>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setProgramMode(false)}
                       className={`p-3 rounded-xl border text-center transition-all ${
                         !programMode
                           ? 'border-violet-500 bg-violet-500/10'
-                          : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                       }`}
                     >
                       <Dumbbell className="w-4 h-4 mx-auto text-violet-400 mb-1" />
-                      <p className="text-sm font-medium text-white">Single Workout</p>
+                      <p className="text-sm font-medium text-gray-900">Single Workout</p>
                     </button>
                     <button
                       onClick={() => setProgramMode(true)}
                       className={`p-3 rounded-xl border text-center transition-all ${
                         programMode
                           ? 'border-violet-500 bg-violet-500/10'
-                          : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                          : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                       }`}
                     >
                       <Calendar className="w-4 h-4 mx-auto text-violet-400 mb-1" />
-                      <p className="text-sm font-medium text-white">Weekly Program</p>
+                      <p className="text-sm font-medium text-gray-900">Weekly Program</p>
                     </button>
                   </div>
                 </div>
@@ -789,7 +791,7 @@ export default function ProgramPage() {
                 {programMode && (
                   <div className="space-y-3">
                     <div className="space-y-2">
-                      <Label className="text-white font-medium">Training days per week</Label>
+                      <Label className="text-gray-900 font-medium">Training days per week</Label>
                       <div className="grid grid-cols-5 gap-2">
                         {[2, 3, 4, 5, 6].map(d => (
                           <button
@@ -809,16 +811,16 @@ export default function ProgramPage() {
                             className={`p-2 rounded-lg border text-center transition-all ${
                               trainingDays === d
                                 ? 'border-violet-500 bg-violet-500/10'
-                                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                                : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                             }`}
                           >
-                            <p className="text-sm font-bold text-white">{d}</p>
+                            <p className="text-sm font-bold text-gray-900">{d}</p>
                           </button>
                         ))}
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label className="text-white font-medium text-xs">Which days?</Label>
+                      <Label className="text-gray-900 font-medium text-xs">Which days?</Label>
                       <div className="flex flex-wrap gap-1.5">
                         {WEEKDAYS.map(day => (
                           <button
@@ -833,7 +835,7 @@ export default function ProgramPage() {
                             className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
                               selectedDays.includes(day)
                                 ? 'border-violet-500 bg-violet-500/20 text-violet-300'
-                                : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600'
+                                : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
                             }`}
                           >
                             {day.slice(0, 3).toUpperCase()}
@@ -860,11 +862,11 @@ export default function ProgramPage() {
           {genStep === 'injury_check' && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-amber-400" />
                   Safety Check
                 </DialogTitle>
-                <DialogDescription className="text-gray-400">
+                <DialogDescription className="text-gray-500">
                   Your safety is our top priority
                 </DialogDescription>
               </DialogHeader>
@@ -885,8 +887,8 @@ export default function ProgramPage() {
                     onClick={() => handleInjuryResponse(false)}
                   >
                     <Zap className="w-5 h-5 text-green-400" />
-                    <span className="font-semibold text-white">No injuries</span>
-                    <span className="text-[10px] text-gray-400">I&apos;m good to go</span>
+                    <span className="font-semibold text-gray-900">No injuries</span>
+                    <span className="text-[10px] text-gray-500">I&apos;m good to go</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -894,8 +896,8 @@ export default function ProgramPage() {
                     onClick={() => handleInjuryResponse(true)}
                   >
                     <Heart className="w-5 h-5 text-amber-400" />
-                    <span className="font-semibold text-white">Yes, I do</span>
-                    <span className="text-[10px] text-gray-400">I have limitations</span>
+                    <span className="font-semibold text-gray-900">Yes, I do</span>
+                    <span className="text-[10px] text-gray-500">I have limitations</span>
                   </Button>
                 </div>
               </div>
@@ -906,7 +908,7 @@ export default function ProgramPage() {
           {genStep === 'injury_block' && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-rose-400" />
                   Your Safety Comes First
                 </DialogTitle>
@@ -918,8 +920,8 @@ export default function ProgramPage() {
                     <div className="w-16 h-16 mx-auto rounded-full bg-rose-500/20 flex items-center justify-center">
                       <ShieldAlert className="w-8 h-8 text-rose-400" />
                     </div>
-                    <h3 className="text-lg font-bold text-white">We recommend a personal trainer</h3>
-                    <p className="text-sm text-gray-300 leading-relaxed">
+                    <h3 className="text-lg font-bold text-gray-900">We recommend a personal trainer</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">
                       Working out with injuries requires professional guidance to avoid making things worse. 
                       A qualified trainer can design a safe, effective program tailored to your specific needs.
                     </p>
@@ -953,13 +955,13 @@ export default function ProgramPage() {
             <div className="py-12 text-center space-y-6">
               <div className="relative">
                 <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-violet-500/20 to-fuchsia-500/20 flex items-center justify-center">
-                  <Loader2 className="w-10 h-10 text-violet-400 animate-spin" />
+                  <span className="text-4xl animate-bounce">🤖</span>
                 </div>
                 <div className="absolute inset-0 w-20 h-20 mx-auto rounded-full border-2 border-violet-500/30 animate-pulse" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Creating your workout...</h3>
-                <p className="text-sm text-gray-400 mt-2">
+                <h3 className="text-lg font-bold text-gray-900">🤖 Building your workout...</h3>
+                <p className="text-sm text-gray-500 mt-2">
                   AI is building a personalized {programMode ? `${trainingDays}-day program` : `${goal.replace('_', ' ')} workout`} for {expertise} level
                 </p>
               </div>
@@ -974,8 +976,8 @@ export default function ProgramPage() {
           {genStep === 'result' && programMode && generatedProgram && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-violet-400" />
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
+                  <span className="text-lg">🤖</span>
                   Your AI Program
                 </DialogTitle>
                 <DialogDescription className="text-gray-400">
@@ -998,11 +1000,11 @@ export default function ProgramPage() {
 
                 <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
                   {generatedProgram.days.map((day, di) => (
-                    <Card key={di} className="bg-gray-800/50 border-gray-700/50">
+                    <Card key={di} className="bg-gray-50 border-gray-200">
                       <CardContent className="p-3">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-white">{day.dayLabel}</span>
-                          <Badge variant="outline" className="text-[10px] border-gray-600 text-gray-400 capitalize">
+                          <span className="text-sm font-semibold text-gray-900">{day.dayLabel}</span>
+                          <Badge variant="outline" className="text-[10px] border-gray-200 text-gray-500 capitalize">
                             {day.scheduledDay}
                           </Badge>
                         </div>
@@ -1020,9 +1022,9 @@ export default function ProgramPage() {
                             </div>
                             <div className="space-y-1">
                               {block.exercises.map((ex, ei) => (
-                                <div key={ei} className="flex items-center justify-between py-1 px-2 rounded bg-gray-900/50">
-                                  <span className="text-xs text-white">{ex.name}</span>
-                                  <span className="text-[10px] text-gray-400">{ex.sets}×{ex.reps} • {ex.restSeconds}s</span>
+                                <div key={ei} className="flex items-center justify-between py-1 px-2 rounded bg-gray-100">
+                                  <span className="text-xs text-gray-900">{ex.name}</span>
+                                  <span className="text-[10px] text-gray-500">{ex.sets}×{ex.reps} • {ex.restSeconds}s</span>
                                 </div>
                               ))}
                             </div>
@@ -1069,7 +1071,7 @@ export default function ProgramPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="outline"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                      className="border-gray-200 text-gray-500 hover:bg-gray-50"
                       onClick={() => { resetGenerator(); setProgramMode(true); }}
                     >
                       <Sparkles className="w-3 h-3 mr-1" />
@@ -1077,7 +1079,7 @@ export default function ProgramPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                      className="border-gray-200 text-gray-500 hover:bg-gray-50"
                       onClick={() => { setShowGenerator(false); resetGenerator(); }}
                     >
                       Close
@@ -1092,8 +1094,8 @@ export default function ProgramPage() {
           {genStep === 'result' && !programMode && generatedWorkout && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-violet-400" />
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
+                  <span className="text-lg">🤖</span>
                   Your AI Workout
                 </DialogTitle>
                 <DialogDescription className="text-gray-400">
@@ -1120,7 +1122,7 @@ export default function ProgramPage() {
                 {/* Blocks */}
                 <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
                   {generatedWorkout.blocks.map((block, bi) => (
-                    <Card key={bi} className="bg-gray-800/50 border-gray-700/50">
+                    <Card key={bi} className="bg-gray-50 border-gray-200">
                       <CardContent className="p-3">
                         <div className="flex items-center gap-2 mb-2">
                           <Badge variant="outline" className={`text-[10px] border-0 ${
@@ -1131,15 +1133,15 @@ export default function ProgramPage() {
                           }`}>
                             {block.type}
                           </Badge>
-                          <span className="text-sm font-semibold text-white">{block.name}</span>
+                          <span className="text-sm font-semibold text-gray-900">{block.name}</span>
                         </div>
                         <div className="space-y-1.5">
                           {block.exercises.map((ex, ei) => (
-                            <div key={ei} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-gray-900/50">
+                            <div key={ei} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-gray-100">
                               <div className="flex items-center gap-2">
                                 <span className="text-[10px] text-gray-500 w-4">{ei + 1}</span>
                                 <div>
-                                  <p className="text-sm text-white">{ex.name}</p>
+                                  <p className="text-sm text-gray-900">{ex.name}</p>
                                   {ex.notes && <p className="text-[10px] text-gray-500">{ex.notes}</p>}
                                 </div>
                               </div>
@@ -1195,7 +1197,7 @@ export default function ProgramPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       variant="outline"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                      className="border-gray-200 text-gray-500 hover:bg-gray-50"
                       onClick={() => { resetGenerator(); }}
                     >
                       <Sparkles className="w-3 h-3 mr-1" />
@@ -1203,7 +1205,7 @@ export default function ProgramPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                      className="border-gray-200 text-gray-500 hover:bg-gray-50"
                       onClick={() => { setShowGenerator(false); resetGenerator(); }}
                     >
                       Close
@@ -1218,11 +1220,11 @@ export default function ProgramPage() {
 
       {/* Suggested Program Detail Dialog */}
       <Dialog open={!!selectedProgram} onOpenChange={(open) => { if (!open) setSelectedProgram(null); }}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[85vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md max-h-[85vh] overflow-y-auto">
           {selectedProgram && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-white flex items-center gap-2">
+                <DialogTitle className="text-gray-900 flex items-center gap-2">
                   <LayoutGrid className="w-5 h-5 text-emerald-400" />
                   {selectedProgram.name}
                 </DialogTitle>
@@ -1247,7 +1249,7 @@ export default function ProgramPage() {
                   <Badge className="text-[10px] bg-purple-500/20 text-purple-300 border-0">
                     {selectedProgram.weeks} weeks
                   </Badge>
-                  <Badge className="text-[10px] bg-gray-700/50 text-gray-300 border-0 capitalize">
+                  <Badge className="text-[10px] bg-gray-200 text-gray-600 border-0 capitalize">
                     {selectedProgram.structure.replace(/_/g, ' ')}
                   </Badge>
                   {selectedProgram.classSafe && (
@@ -1261,9 +1263,9 @@ export default function ProgramPage() {
                 <ScrollArea className="max-h-[40vh]">
                   <div className="space-y-3">
                     {selectedProgram.days.map((day, di) => (
-                      <Card key={di} className="bg-gray-800/50 border-gray-700/50">
+                      <Card key={di} className="bg-gray-50 border-gray-200">
                         <CardContent className="p-3">
-                          <h4 className="text-sm font-semibold text-white mb-2 flex items-center gap-2">
+                          <h4 className="text-sm font-semibold text-gray-900 mb-2 flex items-center gap-2">
                             <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
                             {day.dayLabel}
                           </h4>
@@ -1281,8 +1283,8 @@ export default function ProgramPage() {
                               </div>
                               <div className="space-y-0.5 pl-2">
                                 {block.exercises.map((ex, ei) => (
-                                  <div key={ei} className="flex items-center justify-between py-1 px-2 rounded bg-gray-900/50">
-                                    <span className="text-xs text-white">{ex.defaultExercise}</span>
+                                  <div key={ei} className="flex items-center justify-between py-1 px-2 rounded bg-gray-100">
+                                    <span className="text-xs text-gray-900">{ex.defaultExercise}</span>
                                     <span className="text-[10px] text-gray-500 flex-shrink-0 ml-2">
                                       {ex.sets}×{ex.reps} • {ex.rest}
                                     </span>
@@ -1335,22 +1337,22 @@ export default function ProgramPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="w-full border-gray-700 text-gray-300 hover:bg-gray-800"
+                      className="w-full border-gray-200 text-gray-500 hover:bg-gray-50"
                       onClick={() => setSelectedProgram(null)}
                     >
                       Close
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-4 pt-2 border-t border-gray-800">
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <div className="space-y-4 pt-2 border-t border-gray-200">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                       <Calendar className="w-4 h-4 text-emerald-400" />
                       Schedule — {selectedProgram.days.length} workouts / week for {selectedProgram.weeks} weeks
                     </h3>
 
                     {/* Schedule Mode */}
                     <div className="space-y-2">
-                      <Label className="text-gray-400 text-xs font-medium">How to schedule</Label>
+                      <Label className="text-gray-600 text-xs font-medium">How to schedule</Label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
                           { value: 'fixed' as const, label: 'Fixed Days', desc: 'Same days each week' },
@@ -1363,10 +1365,10 @@ export default function ProgramPage() {
                             className={`p-2 rounded-lg border text-center transition-all ${
                               scheduleMode === m.value
                                 ? 'border-emerald-500 bg-emerald-500/10'
-                                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                                : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                             }`}
                           >
-                            <p className="text-xs font-medium text-white">{m.label}</p>
+                            <p className="text-xs font-medium text-gray-900">{m.label}</p>
                             <p className="text-[10px] text-gray-500">{m.desc}</p>
                           </button>
                         ))}
@@ -1376,7 +1378,7 @@ export default function ProgramPage() {
                     {/* Fixed Days picker */}
                     {scheduleMode === 'fixed' && (
                       <div className="space-y-2">
-                        <Label className="text-gray-400 text-xs font-medium">Select {selectedProgram.days.length} days</Label>
+                        <Label className="text-gray-600 text-xs font-medium">Select {selectedProgram.days.length} days</Label>
                         <div className="flex flex-wrap gap-1.5">
                           {WEEKDAYS.map(day => (
                             <button
@@ -1391,7 +1393,7 @@ export default function ProgramPage() {
                               className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                                 scheduleFixedDays.includes(day)
                                   ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                                  : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600'
+                                  : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
                               }`}
                             >
                               {day.slice(0, 3).toUpperCase()}
@@ -1409,7 +1411,7 @@ export default function ProgramPage() {
                     {/* Cycle mode info */}
                     {scheduleMode === 'cycle' && (
                       <div className="space-y-2">
-                        <Label className="text-gray-400 text-xs font-medium">Training days (cycle through workouts)</Label>
+                        <Label className="text-gray-600 text-xs font-medium">Training days (cycle through workouts)</Label>
                         <div className="flex flex-wrap gap-1.5">
                           {WEEKDAYS.map(day => (
                             <button
@@ -1424,7 +1426,7 @@ export default function ProgramPage() {
                               className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                                 scheduleFixedDays.includes(day)
                                   ? 'border-emerald-500 bg-emerald-500/20 text-emerald-300'
-                                  : 'border-gray-700 bg-gray-800/50 text-gray-400 hover:border-gray-600'
+                                  : 'border-gray-200 bg-gray-50 text-gray-400 hover:border-gray-300'
                               }`}
                             >
                               {day.slice(0, 3).toUpperCase()}
@@ -1440,7 +1442,7 @@ export default function ProgramPage() {
                     {/* Interval mode */}
                     {scheduleMode === 'interval' && (
                       <div className="space-y-2">
-                        <Label className="text-gray-400 text-xs font-medium">Train every...</Label>
+                        <Label className="text-gray-600 text-xs font-medium">Train every...</Label>
                         <div className="flex gap-2">
                           {[2, 3, 4].map(n => (
                             <button
@@ -1449,11 +1451,11 @@ export default function ProgramPage() {
                               className={`flex-1 p-2.5 rounded-lg border text-center transition-all ${
                                 scheduleInterval === n
                                   ? 'border-emerald-500 bg-emerald-500/10'
-                                  : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                                  : 'border-gray-200 bg-gray-50 hover:border-gray-300'
                               }`}
                             >
-                              <p className="text-sm font-bold text-white">{n}</p>
-                              <p className="text-[10px] text-gray-400">days</p>
+                              <p className="text-sm font-bold text-gray-900">{n}</p>
+                              <p className="text-[10px] text-gray-500">days</p>
                             </button>
                           ))}
                         </div>
@@ -1467,7 +1469,7 @@ export default function ProgramPage() {
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
-                        className="border-gray-700 text-gray-300"
+                        className="border-gray-200 text-gray-500"
                         onClick={() => setShowScheduleStep(false)}
                       >
                         Back

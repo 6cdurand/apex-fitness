@@ -205,7 +205,7 @@ export default function CommunityPage() {
               <section>
                 <h3 className="text-sm font-semibold text-gray-400 mb-3">Browse</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <Card className="bg-gray-900 border-gray-800 cursor-pointer hover:border-sky-500/50 transition-colors"
+                  <Card className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-sky-500/50 transition-colors"
                     onClick={() => router.push('/friends')}
                   >
                     <CardContent className="p-4 flex items-center gap-3">
@@ -218,7 +218,7 @@ export default function CommunityPage() {
                       </div>
                     </CardContent>
                   </Card>
-                  <Card className="bg-gray-900 border-gray-800 cursor-pointer hover:border-purple-500/50 transition-colors"
+                  <Card className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-purple-500/50 transition-colors"
                     onClick={() => router.push('/settings')}
                   >
                     <CardContent className="p-4 flex items-center gap-3">
@@ -305,7 +305,7 @@ function UserRow({ user, isFollowing, onFollow, onUnfollow, onClick }: {
         <Button
           size="sm"
           variant={isFollowing ? 'outline' : 'default'}
-          className={isFollowing ? 'border-gray-700 text-gray-400 h-8' : 'bg-sky-500 hover:bg-sky-600 h-8'}
+          className={isFollowing ? 'border-gray-200 text-gray-500 h-8' : 'bg-sky-500 hover:bg-sky-600 h-8'}
           onClick={(e) => { e.stopPropagation(); isFollowing ? onUnfollow() : onFollow(); }}
         >
           {isFollowing ? <UserMinus className="w-3 h-3 mr-1" /> : <UserPlus className="w-3 h-3 mr-1" />}

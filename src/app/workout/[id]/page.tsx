@@ -212,54 +212,54 @@ export default function WorkoutDetailPage() {
         <div className="px-4 py-6 space-y-6">
           {/* Summary Stats */}
           <div className="grid grid-cols-2 gap-3">
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center">
                   <Clock className="w-5 h-5 text-sky-400" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-white">
+                  <p className="text-xl font-bold text-gray-900">
                     {workout.duration ? formatDuration(workout.duration) : '--'}
                   </p>
-                  <p className="text-xs text-gray-400">Duration</p>
+                  <p className="text-xs text-gray-500">Duration</p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-white">
+                  <p className="text-xl font-bold text-gray-900">
                     {Math.round(workout.totalVolume).toLocaleString()}
                   </p>
-                  <p className="text-xs text-gray-400">Volume (kg)</p>
+                  <p className="text-xs text-gray-500">Volume (kg)</p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center">
                   <Dumbbell className="w-5 h-5 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-white">{totalSets}</p>
-                  <p className="text-xs text-gray-400">Sets</p>
+                  <p className="text-xl font-bold text-gray-900">{totalSets}</p>
+                  <p className="text-xs text-gray-500">Sets</p>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="p-4 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
                   <Trophy className="w-5 h-5 text-amber-400" />
                 </div>
                 <div>
-                  <p className="text-xl font-bold text-white">{totalReps}</p>
-                  <p className="text-xs text-gray-400">Reps</p>
+                  <p className="text-xl font-bold text-gray-900">{totalReps}</p>
+                  <p className="text-xs text-gray-500">Reps</p>
                 </div>
               </CardContent>
             </Card>
@@ -278,7 +278,7 @@ export default function WorkoutDetailPage() {
                     const exercise = workout.exercises.find(e => e.exerciseId === pb.exerciseId);
                     return (
                       <div key={pb.id} className="flex items-center justify-between bg-black/20 rounded-lg px-3 py-2">
-                        <span className="text-white text-sm">{exercise?.exercise?.name || 'Exercise'}</span>
+                        <span className="text-gray-900 text-sm">{exercise?.exercise?.name || 'Exercise'}</span>
                         <Badge className="bg-amber-500/30 text-amber-300">
                           {Math.round(pb.oneRepMax)}kg 1RM
                           <span className="text-amber-400/70 ml-1">({pb.bestWeight}×{pb.bestReps})</span>
@@ -312,7 +312,7 @@ export default function WorkoutDetailPage() {
 
           {/* Trainer Notes — only visible to the trainer who conducted the PT session */}
           {isSessionTrainer && (
-            <Card className="bg-gray-900 border-amber-500/30">
+            <Card className="bg-amber-50 border-amber-200 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-amber-400 flex items-center gap-2">
@@ -347,10 +347,10 @@ export default function WorkoutDetailPage() {
                     value={trainerNotesText}
                     onChange={(e) => setTrainerNotesText(e.target.value)}
                     placeholder="Session observations, form cues, programming adjustments..."
-                    className="bg-gray-800 border-amber-500/30 text-white placeholder-gray-500 min-h-[100px]"
+                    className="bg-white border-amber-200 text-gray-900 placeholder-gray-400 min-h-[100px]"
                   />
                 ) : (
-                  <p className={trainerNotesText ? "text-gray-300 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
+                  <p className={trainerNotesText ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
                     {trainerNotesText || 'No trainer notes for this session'}
                   </p>
                 )}
@@ -359,10 +359,10 @@ export default function WorkoutDetailPage() {
           )}
 
           {/* Notes Section — visible to the workout owner */}
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-gray-600 flex items-center gap-2">
                   <FileText className="w-4 h-4" />
                   Notes
                 </h3>
@@ -371,7 +371,7 @@ export default function WorkoutDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsEditingNotes(true)}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-400 hover:text-gray-900"
                   >
                     <Edit2 className="w-4 h-4 mr-1" />
                     {notes ? 'Edit' : 'Add Notes'}
@@ -394,10 +394,10 @@ export default function WorkoutDetailPage() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add notes about this workout..."
-                  className="bg-gray-800 border-gray-700 text-white placeholder-gray-500 min-h-[100px]"
+                  className="bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 min-h-[100px]"
                 />
               ) : (
-                <p className={notes ? "text-gray-300 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
+                <p className={notes ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
                   {notes || 'No notes for this workout'}
                 </p>
               )}
@@ -407,7 +407,7 @@ export default function WorkoutDetailPage() {
           {/* Exercises */}
           <section>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Dumbbell className="w-5 h-5 text-sky-400" />
                 Exercises ({workout.exercises.length})
               </h2>
@@ -416,7 +416,7 @@ export default function WorkoutDetailPage() {
                   variant="ghost"
                   size="sm"
                   onClick={handleStartEdit}
-                  className="text-gray-400 hover:text-white"
+                  className="text-gray-400 hover:text-gray-900"
                 >
                   <Edit2 className="w-4 h-4 mr-1" />
                   Edit Workout
@@ -427,7 +427,7 @@ export default function WorkoutDetailPage() {
                     variant="ghost"
                     size="sm"
                     onClick={handleCancelEdit}
-                    className="text-gray-400 hover:text-white"
+                    className="text-gray-400 hover:text-gray-900"
                   >
                     Cancel
                   </Button>
@@ -460,12 +460,12 @@ export default function WorkoutDetailPage() {
                 );
 
                 return (
-                  <Card key={ex.id} className="bg-gray-900 border-gray-800">
+                  <Card key={ex.id} className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
                           {getExerciseAnimationUrl(ex.exerciseId) && (
-                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                               <img
                                 src={getExerciseAnimationUrl(ex.exerciseId)}
                                 alt={ex.exercise?.name || ''}
@@ -475,7 +475,7 @@ export default function WorkoutDetailPage() {
                             </div>
                           )}
                           <div>
-                            <h3 className="font-semibold text-white">{ex.exercise?.name || 'Unknown Exercise'}</h3>
+                            <h3 className="font-semibold text-gray-900">{ex.exercise?.name || 'Unknown Exercise'}</h3>
                             <p className="text-xs text-gray-500">
                               {ex.exercise?.primaryMuscles?.map(m => getMuscleDisplayName(m)).join(', ') || ''}
                             </p>
@@ -491,43 +491,43 @@ export default function WorkoutDetailPage() {
                       </div>
 
                       {/* Sets Table */}
-                      <div className="rounded-lg overflow-hidden border border-gray-800">
-                        <div className="grid grid-cols-4 gap-2 px-3 py-2 bg-gray-800 text-xs text-gray-500 font-medium">
+                      <div className="rounded-lg overflow-hidden border border-gray-200">
+                        <div className="grid grid-cols-4 gap-2 px-3 py-2 bg-gray-50 text-xs text-gray-500 font-medium">
                           <div>SET</div>
                           <div className="text-center">WEIGHT</div>
                           <div className="text-center">REPS</div>
                           <div className="text-right">VOLUME</div>
                         </div>
                         {completedSets.map((set) => (
-                          <div key={set.id} className="grid grid-cols-4 gap-2 px-3 py-2 border-t border-gray-800 items-center">
-                            <div className="text-gray-400">{set.setNumber}</div>
+                          <div key={set.id} className="grid grid-cols-4 gap-2 px-3 py-2 border-t border-gray-200 items-center">
+                            <div className="text-gray-500">{set.setNumber}</div>
                             {isEditingWorkout ? (
                               <>
                                 <input
                                   type="number"
                                   value={set.weight || 0}
                                   onChange={(e) => handleUpdateSet(ex.id, set.id, 'weight', parseFloat(e.target.value) || 0)}
-                                  className="w-full text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                                  className="w-full text-center bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm"
                                 />
                                 <input
                                   type="number"
                                   value={set.reps || 0}
                                   onChange={(e) => handleUpdateSet(ex.id, set.id, 'reps', parseInt(e.target.value) || 0)}
-                                  className="w-full text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                                  className="w-full text-center bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm"
                                 />
                               </>
                             ) : (
                               <>
-                                <div className={cn("text-center", set.isAssisted ? "text-blue-400" : "text-white")}>
+                                <div className={cn("text-center", set.isAssisted ? "text-blue-500" : "text-gray-900")}>
                                   {set.isAssisted && <span className="text-xs mr-0.5">-</span>}
                                   {set.weight || 0} kg
                                 </div>
-                                <div className="text-center text-white">{set.reps || 0}</div>
+                                <div className="text-center text-gray-900">{set.reps || 0}</div>
                               </>
                             )}
-                            <div className="text-right text-gray-400">
+                            <div className="text-right text-gray-500">
                               {set.isAssisted ? (
-                                <span className="text-blue-400/70">assisted</span>
+                                <span className="text-blue-500/70">assisted</span>
                               ) : (
                                 <>{((set.weight || 0) * (set.reps || 0)).toLocaleString()} kg</>
                               )}
@@ -536,9 +536,9 @@ export default function WorkoutDetailPage() {
                         ))}
                       </div>
 
-                      <div className="flex justify-between mt-3 pt-3 border-t border-gray-800 text-sm">
+                      <div className="flex justify-between mt-3 pt-3 border-t border-gray-200 text-sm">
                         <span className="text-gray-500">Total Volume</span>
-                        <span className="text-white font-medium">{exerciseVolume.toLocaleString()} kg</span>
+                        <span className="text-gray-900 font-medium">{exerciseVolume.toLocaleString()} kg</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -584,13 +584,13 @@ export default function WorkoutDetailPage() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <Trash2 className="w-5 h-5 text-red-400" />
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-red-500" />
               Delete Workout
             </DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogDescription className="text-gray-500">
               Are you sure you want to delete &ldquo;{workout?.name}&rdquo;? This will remove the workout from your history and recalculate your stats, PBs, and medals.
             </DialogDescription>
           </DialogHeader>
@@ -598,7 +598,7 @@ export default function WorkoutDetailPage() {
             <Button
               variant="outline"
               onClick={() => setShowDeleteConfirm(false)}
-              className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
+              className="flex-1 border-gray-200 text-gray-500 hover:bg-gray-50"
             >
               Cancel
             </Button>

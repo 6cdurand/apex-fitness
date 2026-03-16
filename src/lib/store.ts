@@ -2015,6 +2015,7 @@ interface TrainerState {
   // Client Programs
   addClientProgram: (program: ClientProgram) => void;
   updateClientProgram: (programId: string, updates: Partial<ClientProgram>) => void;
+  deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
   
@@ -3066,6 +3067,12 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase
         const updated = get().clientPrograms.find(p => p.id === programId);
         if (updated) syncClientProgramToSupabase(updated);
+      },
+
+      deleteClientProgram: (programId) => {
+        set(state => ({
+          clientPrograms: state.clientPrograms.filter(p => p.id !== programId),
+        }));
       },
 
       getClientPrograms: (clientId) => {

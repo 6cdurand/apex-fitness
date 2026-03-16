@@ -167,7 +167,7 @@ export default function MedalsPage() {
   };
 
   const getTierBorder = (tier: string, earned: boolean) => {
-    if (!earned) return 'border-gray-700';
+    if (!earned) return 'border-gray-200';
     switch (tier) {
       case 'diamond': return 'border-purple-500';
       case 'platinum': return 'border-cyan-400';
@@ -225,7 +225,7 @@ export default function MedalsPage() {
                 className={`flex items-center gap-2 px-4 py-2 rounded-full whitespace-nowrap transition-all ${
                   isActive 
                     ? 'bg-sky-500 text-white' 
-                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -280,7 +280,7 @@ export default function MedalsPage() {
                         {formatNumber(medal.currentProgress)} / {formatNumber(medal.nextTarget || medal.currentTier?.target || 0)}
                       </span>
                     </div>
-                    <div className="h-3 bg-gray-800 rounded-full overflow-hidden border border-white/20">
+                    <div className="h-3 bg-gray-200 rounded-full overflow-hidden border border-gray-300">
                       <div 
                         className={`h-full rounded-full transition-all ${medal.isMaxed ? 'bg-purple-500' : nextTierColor}`}
                         style={{ width: `${Math.max(medal.progressPercent, 5)}%` }}

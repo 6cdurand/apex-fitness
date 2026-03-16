@@ -164,8 +164,8 @@ export function PageHeader({
     <header className={cn(
       "sticky top-0 z-40",
       "bg-gradient-to-b",
-      isTrainerMode ? "from-rose-500 via-rose-600 to-rose-700" : "from-sky-500 via-sky-600 to-sky-700",
-      "px-5 pt-14 pb-8 shadow-xl",
+      isTrainerMode ? "from-rose-500 to-rose-600" : "from-sky-500 to-sky-600",
+      "px-5 pt-14 pb-8 shadow-lg",
       isTrainerMode ? "shadow-rose-500/10" : "shadow-sky-500/10"
     )}>
       {/* Subtle pattern overlay */}

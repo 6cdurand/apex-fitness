@@ -66,7 +66,14 @@ export default function MessagesPage() {
 
   if (!isAuthenticated || !user) return null;
 
-  const userConversations = getConversationsForUser(user.id);
+  const userConversations = getConversationsForUser(user.id).sort((a, b) => {
+    const aUnread = messages.filter(m => m.conversationId === a.id && m.receiverId === user.id && !m.read).length;
+    const bUnread = messages.filter(m => m.conversationId === b.id && m.receiverId === user.id && !m.read).length;
+    // Unread conversations first, then by most recent
+    if (aUnread > 0 && bUnread === 0) return -1;
+    if (bUnread > 0 && aUnread === 0) return 1;
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+  });
   
   const getOtherUser = (conversation: Conversation) => {
     const otherId = conversation.participants.find(p => p !== user.id);
@@ -112,7 +119,7 @@ export default function MessagesPage() {
         {selectedConversation ? (
           <>
             {/* Chat Header */}
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-3 bg-gray-900/50">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-center gap-3 bg-white/95 backdrop-blur-sm">
               <Button 
                 variant="ghost" 
                 size="icon"
@@ -127,14 +134,14 @@ export default function MessagesPage() {
                     <Link href={otherUser?.id ? `/profile/${otherUser.id}` : '#'}>
                       <Avatar className="w-10 h-10 hover:ring-2 hover:ring-sky-500/50 transition-all cursor-pointer">
                         <AvatarImage src={otherUser?.profilePhoto} />
-                        <AvatarFallback className="bg-gray-800">
+                        <AvatarFallback className="bg-gray-100 text-gray-900">
                           {otherUser?.displayName?.[0] || '?'}
                         </AvatarFallback>
                       </Avatar>
                     </Link>
                     <div>
                       <div className="flex items-center gap-2">
-                        <Link href={otherUser?.id ? `/profile/${otherUser.id}` : '#'} className="font-semibold text-white hover:text-sky-400 hover:underline transition-colors">
+                        <Link href={otherUser?.id ? `/profile/${otherUser.id}` : '#'} className="font-semibold text-gray-900 hover:text-sky-500 hover:underline transition-colors">
                           {otherUser?.displayName || otherUser?.username}
                         </Link>
                         {otherUser?.isVerifiedTrainer && (
@@ -171,7 +178,7 @@ export default function MessagesPage() {
                           className={`max-w-[75%] rounded-2xl px-4 py-2 ${
                             isOwn
                               ? 'bg-sky-500 text-white rounded-br-md'
-                              : 'bg-gray-800 text-gray-200 rounded-bl-md'
+                              : 'bg-gray-100 text-gray-900 rounded-bl-md'
                           }`}
                         >
                           <p className="text-sm">{msg.content}</p>
@@ -195,14 +202,14 @@ export default function MessagesPage() {
             </ScrollArea>
 
             {/* Message Input */}
-            <div className="px-4 py-3 border-t border-gray-800 bg-gray-900/50">
+            <div className="px-4 py-3 border-t border-gray-200 bg-white">
               <div className="flex gap-2">
                 <Input
                   placeholder="Type a message..."
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  className="flex-1 bg-gray-800 border-gray-700"
+                  className="flex-1 bg-gray-50 border-gray-200 text-gray-900"
                 />
                 <Button 
                   onClick={handleSendMessage}
@@ -226,7 +233,7 @@ export default function MessagesPage() {
                   placeholder="Search users to message..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-800 border-gray-700 text-white"
+                  className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
 
@@ -237,18 +244,18 @@ export default function MessagesPage() {
                   {filteredUsers.map((u) => (
                     <Card 
                       key={u.id} 
-                      className="bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                      className="bg-white border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
                       onClick={() => startConversation(u)}
                     >
                       <CardContent className="p-3 flex items-center gap-3">
                         <Avatar className="w-10 h-10">
                           <AvatarImage src={u.profilePhoto} />
-                          <AvatarFallback className="bg-gray-800">
+                          <AvatarFallback className="bg-gray-100 text-gray-900">
                             {u.displayName?.[0] || '?'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
-                          <p className="font-medium text-white">{u.displayName || u.username}</p>
+                          <p className="font-medium text-gray-900">{u.displayName || u.username}</p>
                           <p className="text-xs text-gray-500">@{u.username}</p>
                         </div>
                         {u.isTrainer && (
@@ -275,7 +282,7 @@ export default function MessagesPage() {
                       >
                         <Avatar className="w-12 h-12 ring-2 ring-sky-500/50">
                           <AvatarImage src={client.profilePhoto} />
-                          <AvatarFallback className="bg-gray-800">
+                          <AvatarFallback className="bg-gray-100 text-gray-900">
                             {client.displayName?.[0] || '?'}
                           </AvatarFallback>
                         </Avatar>
@@ -292,10 +299,10 @@ export default function MessagesPage() {
               <div>
                 <p className="text-xs text-gray-500 mb-2">Recent Conversations</p>
                 {userConversations.length === 0 ? (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="py-12 text-center">
-                      <MessageCircle className="w-12 h-12 text-gray-700 mx-auto mb-3" />
-                      <p className="text-gray-400">No conversations yet</p>
+                      <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No conversations yet</p>
                       <p className="text-sm text-gray-500">Search for someone to start chatting</p>
                     </CardContent>
                   </Card>
@@ -310,19 +317,24 @@ export default function MessagesPage() {
                       return (
                         <Card 
                           key={conv.id}
-                          className="bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-800/50 transition-colors"
+                          className="bg-white border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
                           onClick={() => setSelectedConversation(conv)}
                         >
                           <CardContent className="p-3 flex items-center gap-3">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={otherUser?.profilePhoto} />
-                              <AvatarFallback className="bg-gray-800">
-                                {otherUser?.displayName?.[0] || '?'}
-                              </AvatarFallback>
-                            </Avatar>
+                            <div className="relative">
+                              <Avatar className="w-12 h-12">
+                                <AvatarImage src={otherUser?.profilePhoto} />
+                                <AvatarFallback className="bg-gray-100 text-gray-900">
+                                  {otherUser?.displayName?.[0] || '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                              {unreadCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-sky-500 rounded-full border-2 border-white" />
+                              )}
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <p className="font-medium text-white truncate">
+                                <p className="font-medium text-gray-900 truncate">
                                   {otherUser?.displayName || otherUser?.username}
                                 </p>
                                 {otherUser?.isVerifiedTrainer && (
@@ -330,7 +342,7 @@ export default function MessagesPage() {
                                 )}
                               </div>
                               {conv.lastMessage && (
-                                <p className="text-sm text-gray-500 truncate">
+                                <p className={`text-sm truncate ${unreadCount > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
                                   {conv.lastMessage.senderId === user.id ? 'You: ' : ''}
                                   {conv.lastMessage.content}
                                 </p>

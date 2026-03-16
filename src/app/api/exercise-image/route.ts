@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { buildExercisePrompt } from '@/lib/exerciseImageGen';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return null;
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // Dynamic import of exercise library to get exercise details
 async function getExerciseById(exerciseId: string) {
@@ -20,6 +23,9 @@ export async function GET(req: NextRequest) {
   if (!exerciseId) {
     return NextResponse.json({ error: 'exerciseId required' }, { status: 400 });
   }
+
+  const supabase = getSupabase();
+  if (!supabase) return NextResponse.json({ imageUrl: null, cached: false });
 
   // Check cache in Supabase
   const { data } = await supabase
@@ -44,12 +50,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'exerciseId required' }, { status: 400 });
   }
 
+  const supabase = getSupabase();
+
   // 1. Check Supabase cache first
-  const { data: cached } = await supabase
+  const { data: cached } = supabase ? await supabase
     .from('exercise_images')
     .select('image_url')
     .eq('exercise_id', exerciseId)
-    .single();
+    .single() : { data: null };
 
   if (cached?.image_url) {
     return NextResponse.json({ imageUrl: cached.image_url, cached: true });
@@ -120,18 +128,20 @@ export async function POST(req: NextRequest) {
       const imgBuffer = Buffer.from(await imgBlob.arrayBuffer());
       const filePath = `exercise-images/${exerciseId}.png`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('images')
-        .upload(filePath, imgBuffer, {
-          contentType: 'image/png',
-          upsert: true,
-        });
-
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage
+      if (supabase) {
+        const { error: uploadError } = await supabase.storage
           .from('images')
-          .getPublicUrl(filePath);
-        permanentUrl = publicUrlData.publicUrl;
+          .upload(filePath, imgBuffer, {
+            contentType: 'image/png',
+            upsert: true,
+          });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('images')
+            .getPublicUrl(filePath);
+          permanentUrl = publicUrlData.publicUrl;
+        }
       }
     } catch (storageErr) {
       // If storage upload fails, we still have the DALL-E URL (valid ~1 hour)
@@ -139,7 +149,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 6. Cache in Supabase table
-    await supabase.from('exercise_images').upsert({
+    if (supabase) await supabase.from('exercise_images').upsert({
       exercise_id: exerciseId,
       exercise_name: exercise.name,
       image_url: permanentUrl,

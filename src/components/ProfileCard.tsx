@@ -134,7 +134,7 @@ export function ProfileCard({
               <Avatar className="w-16 h-16 border-2 border-gray-900">
                 <AvatarImage src={user.profilePhoto} />
                 <AvatarFallback className="bg-gray-800 text-white text-xl">
-                  {user.displayName?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
+                  {user.displayName?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
               {/* Overall Rating Badge */}
@@ -153,7 +153,7 @@ export function ProfileCard({
             {/* Name & Stats */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-white truncate">{user.displayName || user.username}</h3>
+                <h3 className="font-bold text-white truncate">{user.displayName || user.username || 'Unknown'}</h3>
                 {user.isVerifiedTrainer && <BadgeCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />}
               </div>
               <p className="text-xs text-gray-500">@{user.username}</p>
@@ -291,7 +291,7 @@ export function ProfileCard({
                     strengthRating.tier === 'novice' ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' :
                     'bg-gray-500/20 text-gray-400 border-gray-500/30'
                   } border font-semibold px-2 py-0.5`}>
-                    {strengthRating.tier?.charAt(0).toUpperCase() + strengthRating.tier?.slice(1)}
+                    {strengthRating.tier ? strengthRating.tier.charAt(0).toUpperCase() + strengthRating.tier.slice(1) : 'Unranked'}
                   </Badge>
                 </div>
                 

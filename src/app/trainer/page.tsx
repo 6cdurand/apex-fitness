@@ -122,7 +122,7 @@ export default function MyTrainerPage() {
         <div className="px-4 py-6 space-y-6">
           {/* Current Trainer Section */}
           {myTrainer ? (
-            <Card className="bg-gray-900 border-gray-800 overflow-hidden">
+            <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
               <CardContent className="p-0">
                 <div className="bg-gradient-to-r from-rose-500 to-rose-600 p-4">
                   <div className="flex items-center gap-4">
@@ -154,16 +154,16 @@ export default function MyTrainerPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 divide-x divide-gray-800">
-                  <Button variant="ghost" className="rounded-none py-4 text-gray-300 hover:bg-gray-800">
+                <div className="grid grid-cols-3 divide-x divide-gray-200">
+                  <Button variant="ghost" className="rounded-none py-4 text-gray-600 hover:bg-gray-50">
                     <MessageCircle className="w-5 h-5 mr-2" />
                     Message
                   </Button>
-                  <Button variant="ghost" className="rounded-none py-4 text-gray-300 hover:bg-gray-800">
+                  <Button variant="ghost" className="rounded-none py-4 text-gray-600 hover:bg-gray-50">
                     <Calendar className="w-5 h-5 mr-2" />
                     Schedule
                   </Button>
-                  <Button variant="ghost" className="rounded-none py-4 text-gray-300 hover:bg-gray-800">
+                  <Button variant="ghost" className="rounded-none py-4 text-gray-600 hover:bg-gray-50">
                     <Users className="w-5 h-5 mr-2" />
                     Profile
                   </Button>
@@ -171,9 +171,9 @@ export default function MyTrainerPage() {
               </CardContent>
             </Card>
           ) : (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-12 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
                   <GraduationCap className="w-10 h-10 text-gray-600" />
                 </div>
                 <h3 className="font-semibold text-gray-400 mb-2">No Trainer Connected</h3>
@@ -218,7 +218,7 @@ export default function MyTrainerPage() {
                       </Badge>
                     ))}
                     {upcomingWorkouts[0].exercises.length > 4 && (
-                      <Badge variant="outline" className="border-gray-700 text-gray-400">
+                      <Badge variant="outline" className="border-gray-200 text-gray-500">
                         +{upcomingWorkouts[0].exercises.length - 4} more
                       </Badge>
                     )}
@@ -226,10 +226,10 @@ export default function MyTrainerPage() {
                 </CardContent>
               </Card>
             ) : (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-8 text-center">
-                  <Dumbbell className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-400 mb-1">No workouts scheduled</p>
+                  <Dumbbell className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-1">No workouts scheduled</p>
                   <p className="text-sm text-gray-500">
                     {myTrainer ? 'Your trainer will assign workouts soon' : 'Connect with a trainer to get started'}
                   </p>
@@ -247,7 +247,7 @@ export default function MyTrainerPage() {
               </h2>
               <div className="space-y-3">
                 {upcomingWorkouts.slice(1).map((workout) => (
-                  <Card key={workout.id} className="bg-gray-900 border-gray-800">
+                  <Card key={workout.id} className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div>
@@ -275,9 +275,9 @@ export default function MyTrainerPage() {
                 <Star className="w-5 h-5 text-amber-400" />
                 Trainer Notes
               </h2>
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-8 text-center">
-                  <p className="text-gray-400">No notes from your trainer yet</p>
+                  <p className="text-gray-500">No notes from your trainer yet</p>
                 </CardContent>
               </Card>
             </section>
@@ -291,23 +291,23 @@ export default function MyTrainerPage() {
                 Find Trainers
               </h2>
             </div>
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-8 text-center">
-                <Search className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-400 mb-1">Browse available trainers</p>
+                <Search className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-500 mb-1">Browse available trainers</p>
                 <p className="text-sm text-gray-500 mb-4">
                   Find the perfect trainer for your goals
                 </p>
                 <Dialog open={showFindTrainer} onOpenChange={setShowFindTrainer}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" className="border-gray-700">
+                    <Button variant="outline" className="border-gray-200">
                       <Search className="w-4 h-4 mr-2" />
                       Search Trainers
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+                  <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
                     <DialogHeader>
-                      <DialogTitle className="text-white">Find a Trainer</DialogTitle>
+                      <DialogTitle className="text-gray-900">Find a Trainer</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <Input
@@ -318,7 +318,7 @@ export default function MyTrainerPage() {
                           setTrainerSearchQuery(e.target.value);
                           setSelectedTrainer(null);
                         }}
-                        className="bg-gray-800 border-gray-700 text-white"
+                        className="bg-gray-50 border-gray-200 text-gray-900"
                       />
                       
                       {isLoadingTrainers ? (
@@ -340,7 +340,7 @@ export default function MyTrainerPage() {
                                 className={`p-3 rounded-lg border cursor-pointer transition-colors flex items-center gap-3 ${
                                   selectedTrainer?.id === trainer.id
                                     ? 'border-rose-500 bg-rose-500/10'
-                                    : 'border-gray-700 hover:border-gray-600 bg-gray-800'
+                                    : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                                 }`}
                               >
                                 <Avatar className="w-10 h-10">

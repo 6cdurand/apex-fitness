@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+function getSupabase() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseKey) return null;
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 // POST — batch fetch cached image URLs for multiple exercise IDs
 export async function POST(req: NextRequest) {
@@ -11,6 +14,9 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(exerciseIds) || exerciseIds.length === 0) {
     return NextResponse.json({ images: {} });
   }
+
+  const supabase = getSupabase();
+  if (!supabase) return NextResponse.json({ images: {} });
 
   // Limit batch size
   const ids = exerciseIds.slice(0, 100);

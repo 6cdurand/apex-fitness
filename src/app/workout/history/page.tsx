@@ -136,31 +136,31 @@ export default function WorkoutHistoryPage() {
             placeholder="Search workouts or exercises..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-800 border-gray-700 text-white"
+            className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
           />
         </div>
 
         {/* Stats Summary */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-sky-400">
+              <p className="text-2xl font-bold text-sky-500">
                 {activeWorkouts.filter(w => isThisWeek(new Date(w.startTime))).length}
               </p>
-              <p className="text-xs text-gray-400">This Week</p>
+              <p className="text-xs text-gray-500">This Week</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-blue-400">
+              <p className="text-2xl font-bold text-blue-500">
                 {activeWorkouts.filter(w => isThisMonth(new Date(w.startTime))).length}
               </p>
-              <p className="text-xs text-gray-400">This Month</p>
+              <p className="text-xs text-gray-500">This Month</p>
             </CardContent>
           </Card>
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardContent className="p-3 text-center">
-              <p className="text-2xl font-bold text-purple-400">
+              <p className="text-2xl font-bold text-purple-500">
                 {activeWorkouts.length}
               </p>
               <p className="text-xs text-gray-400">All Time</p>
@@ -171,10 +171,10 @@ export default function WorkoutHistoryPage() {
         {/* Workout List */}
         <ScrollArea className="h-[calc(100vh-380px)]">
           {sortedDates.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-16 text-center">
-                <Dumbbell className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-400 mb-2">No workouts found</h3>
+                <Dumbbell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <h3 className="font-semibold text-gray-500 mb-2">No workouts found</h3>
                 <p className="text-sm text-gray-500">
                   {searchQuery ? 'Try a different search term' : 'Start your first workout to see it here'}
                 </p>
@@ -192,13 +192,13 @@ export default function WorkoutHistoryPage() {
                     {groupedWorkouts[date].map((workout) => (
                       <Card
                         key={workout.id}
-                        className="bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-850 transition-colors"
+                        className="bg-white border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
                         onClick={() => openWorkoutSummary(workout)}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-white truncate">{workout.name}</h4>
+                              <h4 className="font-semibold text-gray-900 truncate">{workout.name}</h4>
                               <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
                                 <span className="flex items-center gap-1">
                                   <Clock className="w-3 h-3" />
@@ -219,13 +219,13 @@ export default function WorkoutHistoryPage() {
                                   <Badge 
                                     key={ex.id} 
                                     variant="outline" 
-                                    className="text-xs border-gray-700 text-gray-400"
+                                    className="text-xs border-gray-200 text-gray-500"
                                   >
                                     {ex.exercise.name}
                                   </Badge>
                                 ))}
                                 {workout.exercises.length > 3 && (
-                                  <Badge variant="outline" className="text-xs border-gray-700 text-gray-400">
+                                  <Badge variant="outline" className="text-xs border-gray-200 text-gray-500">
                                     +{workout.exercises.length - 3}
                                   </Badge>
                                 )}
@@ -245,11 +245,11 @@ export default function WorkoutHistoryPage() {
 
         {/* Workout Summary Modal */}
         <Dialog open={!!selectedWorkout} onOpenChange={() => setSelectedWorkout(null)}>
-          <DialogContent className="bg-gray-900 border-gray-800 max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md max-h-[85vh] overflow-y-auto">
             {selectedWorkout && (
               <>
                 <DialogHeader>
-                  <DialogTitle className="text-white flex items-center gap-2">
+                  <DialogTitle className="text-gray-900 flex items-center gap-2">
                     <Dumbbell className="w-5 h-5 text-sky-400" />
                     {selectedWorkout.name}
                   </DialogTitle>
@@ -268,9 +268,9 @@ export default function WorkoutHistoryPage() {
 
                 <div className="space-y-4 mt-4">
                   {/* Session Time — Editable */}
-                  <div className="p-3 bg-gray-800 rounded-xl">
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-400 font-medium">Session Time</span>
+                      <span className="text-xs text-gray-500 font-medium">Session Time</span>
                       {editingTimes ? (
                         <div className="flex gap-2">
                           <button
@@ -302,23 +302,23 @@ export default function WorkoutHistoryPage() {
                           type="time"
                           value={editStartTime}
                           onChange={(e) => setEditStartTime(e.target.value)}
-                          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center"
+                          className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center"
                         />
                         <span className="text-gray-500">→</span>
                         <input
                           type="time"
                           value={editEndTime}
                           onChange={(e) => setEditEndTime(e.target.value)}
-                          className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm w-24 text-center"
+                          className="bg-white border border-gray-200 rounded px-2 py-1 text-gray-900 text-sm w-24 text-center"
                         />
                       </div>
                     ) : (
                       <div className="flex items-center justify-center gap-3 text-sm">
-                        <span className="text-white font-medium">
+                        <span className="text-gray-900 font-medium">
                           {new Date(selectedWorkout.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
                         </span>
                         <span className="text-gray-500">→</span>
-                        <span className="text-white font-medium">
+                        <span className="text-gray-900 font-medium">
                           {selectedWorkout.endTime
                             ? new Date(selectedWorkout.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                             : '--'}
@@ -329,24 +329,24 @@ export default function WorkoutHistoryPage() {
 
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center">
                       <Clock className="w-4 h-4 text-blue-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{formatDurationLong(selectedWorkout.duration)}</p>
+                      <p className="text-lg font-bold text-gray-900">{formatDurationLong(selectedWorkout.duration)}</p>
                       <p className="text-xs text-gray-500">Duration</p>
                     </div>
-                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center">
                       <Trophy className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{Math.round(selectedWorkout.totalVolume).toLocaleString()}</p>
+                      <p className="text-lg font-bold text-gray-900">{Math.round(selectedWorkout.totalVolume).toLocaleString()}</p>
                       <p className="text-xs text-gray-500">Volume (kg)</p>
                     </div>
-                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center">
                       <Dumbbell className="w-4 h-4 text-purple-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{selectedWorkout.exercises.length}</p>
+                      <p className="text-lg font-bold text-gray-900">{selectedWorkout.exercises.length}</p>
                       <p className="text-xs text-gray-500">Exercises</p>
                     </div>
-                    <div className="p-3 bg-gray-800 rounded-xl text-center">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-center">
                       <Flame className="w-4 h-4 text-orange-400 mx-auto mb-1" />
-                      <p className="text-lg font-bold text-white">{selectedWorkout.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0)}</p>
+                      <p className="text-lg font-bold text-gray-900">{selectedWorkout.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0)}</p>
                       <p className="text-xs text-gray-500">Sets Done</p>
                     </div>
                   </div>
@@ -391,10 +391,10 @@ export default function WorkoutHistoryPage() {
                         }, ex.sets[0]);
                         
                         return (
-                          <div key={ex.id} className="p-3 bg-gray-800 rounded-lg">
+                          <div key={ex.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-medium text-white">{ex.exercise.name}</p>
+                                <p className="font-medium text-gray-900">{ex.exercise.name}</p>
                                 <p className="text-xs text-gray-500">
                                   {completedSets}/{ex.sets.length} sets completed
                                 </p>
@@ -437,9 +437,9 @@ export default function WorkoutHistoryPage() {
                   </div>
 
                   {/* Notes */}
-                  <div className="p-3 bg-gray-800 rounded-xl">
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-400 font-medium flex items-center gap-1">
+                      <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
                         <StickyNote className="w-3 h-3" />
                         Notes
                       </span>
@@ -465,10 +465,10 @@ export default function WorkoutHistoryPage() {
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
                         placeholder="Add workout notes..."
-                        className="w-full h-20 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        className="w-full h-20 px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
                       />
                     ) : (
-                      <p className="text-sm text-gray-300">
+                      <p className="text-sm text-gray-600">
                         {selectedWorkout.notes || <span className="text-gray-600 italic">No notes</span>}
                       </p>
                     )}
@@ -476,13 +476,13 @@ export default function WorkoutHistoryPage() {
 
                   {/* Save to Library */}
                   {showSaveToLibrary ? (
-                    <div className="p-3 bg-gray-800 rounded-xl space-y-3">
-                      <p className="text-sm font-medium text-white">Save to Workout Library</p>
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+                      <p className="text-sm font-medium text-gray-900">Save to Workout Library</p>
                       <Input
                         placeholder="Workout name..."
                         value={saveLibraryName}
                         onChange={(e) => setSaveLibraryName(e.target.value)}
-                        className="bg-gray-700 border-gray-600 text-white"
+                        className="bg-white border-gray-200 text-gray-900"
                         autoFocus
                       />
                       <div className="flex gap-2">
@@ -541,7 +541,7 @@ export default function WorkoutHistoryPage() {
                   ) : (
                     <Button
                       variant="outline"
-                      className="w-full border-gray-700 text-gray-300 hover:text-white"
+                      className="w-full border-gray-200 text-gray-500 hover:text-gray-900"
                       onClick={() => { setShowSaveToLibrary(true); setSaveLibraryName(selectedWorkout.name); }}
                     >
                       <Bookmark className="w-4 h-4 mr-2" />

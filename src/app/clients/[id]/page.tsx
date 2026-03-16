@@ -67,6 +67,8 @@ export default function ClientDetailPage() {
     getPackagesForClient,
     getEventsForClient,
     getActiveProgram,
+    getClientPrograms,
+    deleteClientProgram,
     markSessionComplete,
     markSessionNoShow,
     toggleSessionPaid,
@@ -81,6 +83,8 @@ export default function ClientDetailPage() {
     updateClient,
     blockPerformances,
     getClientProfile,
+    addCalendarEvent,
+    deleteCalendarEvent,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -247,6 +251,7 @@ export default function ClientDetailPage() {
   const packages = useMemo(() => getPackagesForClient(clientId), [clientId]);
   const calendarEvents = useMemo(() => getEventsForClient(clientId), [clientId]);
   const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId]);
+  const allClientPrograms = useMemo(() => getClientPrograms(clientId), [clientId]);
   
   // Messages
   const conversation = useMemo(() => {
@@ -568,52 +573,55 @@ export default function ClientDetailPage() {
 
   return (
     <MainLayout>
-      {/* Header */}
-      <div className="sticky top-0 z-50 bg-gray-950 border-b border-gray-800">
-        <div className="flex items-center gap-4 px-4 pt-12 pb-4">
-          <Button variant="ghost" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <button onClick={() => setShowProfileCard(true)}>
-            <Avatar className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all">
-              <AvatarImage src={clientUser.profilePhoto} />
-              <AvatarFallback>{clientUser.displayName?.charAt(0)}</AvatarFallback>
-            </Avatar>
-          </button>
-          <div className="flex-1">
-            <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
-            <p className="text-sm text-gray-400">@{clientUser.username}</p>
+      {/* Header - Rose/Red Trainer Theme */}
+      <div className="sticky top-0 z-50">
+        <div className="bg-gradient-to-r from-rose-600 to-red-500 px-4 pt-12 pb-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-white/80 hover:text-white hover:bg-white/10">
+              <ArrowLeft className="w-5 h-5" />
+            </Button>
+            <button onClick={() => setShowProfileCard(true)}>
+              <Avatar className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-white/50 transition-all border-2 border-white/20">
+                <AvatarImage src={clientUser.profilePhoto} />
+                <AvatarFallback className="bg-rose-700 text-white">{clientUser.displayName?.charAt(0)}</AvatarFallback>
+              </Avatar>
+            </button>
+            <div className="flex-1">
+              <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
+              <p className="text-sm text-rose-100">@{clientUser.username}</p>
+            </div>
+            <Badge 
+              variant={clientRelation.status === 'active' ? 'default' : 'secondary'}
+              className={`cursor-pointer hover:opacity-80 transition-opacity ${
+                clientRelation.status === 'active' ? 'bg-white/20 text-white border-white/30' : 'bg-rose-800 text-rose-200'
+              }`}
+              onClick={() => {
+                const newStatus = clientRelation.status === 'active' ? 'paused' : 'active';
+                updateClient(clientId, { status: newStatus });
+                toast.success(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
+              }}
+            >
+              {clientRelation.status === 'active' ? 'Active' : clientRelation.status === 'paused' ? 'Paused' : clientRelation.status}
+            </Badge>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setShowRemoveClientConfirm(true)}
+              className="text-white/60 hover:text-white hover:bg-white/10"
+            >
+              <Trash2 className="w-5 h-5" />
+            </Button>
           </div>
-          <Badge 
-            variant={clientRelation.status === 'active' ? 'default' : 'secondary'}
-            className="cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => {
-              const newStatus = clientRelation.status === 'active' ? 'paused' : 'active';
-              updateClient(clientId, { status: newStatus });
-              toast.success(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
-            }}
-          >
-            {clientRelation.status === 'active' ? 'Active' : clientRelation.status === 'paused' ? 'Paused' : clientRelation.status}
-          </Badge>
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setShowRemoveClientConfirm(true)}
-            className="text-red-400 hover:text-red-300 hover:bg-red-500/10"
-          >
-            <Trash2 className="w-5 h-5" />
-          </Button>
         </div>
       </div>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-        <TabsList className="grid grid-cols-6 mx-4 mt-4 bg-gray-900">
+        <TabsList className="grid grid-cols-5 mx-4 mt-4 bg-gray-100">
           <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="program" className="text-xs data-[state=active]:bg-rose-500">Program</TabsTrigger>
           <TabsTrigger value="progress" className="text-xs">Progress</TabsTrigger>
           <TabsTrigger value="messages" className="text-xs">Messages</TabsTrigger>
-          <TabsTrigger value="sessions" className="text-xs">Sessions</TabsTrigger>
-          <TabsTrigger value="calendar" className="text-xs">Calendar</TabsTrigger>
           <TabsTrigger value="payments" className="text-xs">Payments</TabsTrigger>
         </TabsList>
 
@@ -663,14 +671,14 @@ export default function ClientDetailPage() {
                     </div>
                   )}
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-semibold text-white flex items-center gap-2">
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                       <Package className={`w-5 h-5 ${isPackageCompleted ? 'text-green-400' : activePackage.isContinuous ? 'text-blue-400' : 'text-sky-400'}`} />
                       {isPackageCompleted ? 'Completed Package' : activePackage.isContinuous ? 'Continuous Training' : 'Session Package'}
                     </h3>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-gray-400 hover:text-white"
+                      className="text-gray-500 hover:text-gray-900"
                       onClick={() => {
                         setEditPackageTotal(activePackage.totalSessions.toString());
                         setEditPackageUsed((activePackage.usedSessions || 0).toString());
@@ -688,16 +696,16 @@ export default function ClientDetailPage() {
                     /* Continuous package display */
                     <>
                       <div className="grid grid-cols-3 gap-3 text-center">
-                        <div className="bg-gray-900/50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-2">
                           <p className="text-2xl font-bold text-blue-400">{activePackage.usedSessions || 0}</p>
                           <p className="text-xs text-gray-400">Sessions Done</p>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-2">
                           <p className="text-2xl font-bold text-sky-400">{activePackage.paidSessions || 0}</p>
                           <p className="text-xs text-gray-400">Sessions Paid</p>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-gray-900">${activePackage.pricePerSession.toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Per Session</p>
                         </div>
                       </div>
@@ -708,7 +716,7 @@ export default function ClientDetailPage() {
                           <p className="text-lg font-bold text-sky-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Total Paid</p>
                         </div>
-                        <div className={`p-2 rounded-lg text-center ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'bg-amber-500/10' : 'bg-gray-800'}`}>
+                        <div className={`p-2 rounded-lg text-center ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'bg-amber-500/10' : 'bg-gray-50'}`}>
                           <p className={`text-lg font-bold ${(activePackage.usedSessions || 0) > (activePackage.paidSessions || 0) ? 'text-amber-400' : 'text-gray-400'}`}>
                             ${(Math.max(0, (activePackage.usedSessions || 0) - (activePackage.paidSessions || 0)) * activePackage.pricePerSession).toFixed(0)}
                           </p>
@@ -720,15 +728,15 @@ export default function ClientDetailPage() {
                     /* Fixed package display */
                     <>
                       <div className="grid grid-cols-3 gap-3 text-center">
-                        <div className="bg-gray-900/50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-2">
                           <p className="text-2xl font-bold text-sky-400">{activePackage.usedSessions || 0}/{activePackage.totalSessions}</p>
                           <p className="text-xs text-gray-400">Sessions Used</p>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-2">
-                          <p className="text-2xl font-bold text-white">${activePackage.pricePerSession.toFixed(0)}</p>
+                        <div className="bg-gray-50 rounded-lg p-2">
+                          <p className="text-2xl font-bold text-gray-900">${activePackage.pricePerSession.toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Per Session</p>
                         </div>
-                        <div className="bg-gray-900/50 rounded-lg p-2">
+                        <div className="bg-gray-50 rounded-lg p-2">
                           <p className="text-2xl font-bold text-blue-400">${((activePackage.paidSessions || 0) * activePackage.pricePerSession).toFixed(0)}</p>
                           <p className="text-xs text-gray-400">Total Paid</p>
                         </div>
@@ -744,7 +752,7 @@ export default function ClientDetailPage() {
                             <span>{activePackage.remainingSessions || 0} remaining</span>
                           )}
                         </div>
-                        <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div 
                             className={`h-full ${(activePackage.usedSessions || 0) > activePackage.totalSessions ? 'bg-gradient-to-r from-emerald-500 to-emerald-400' : 'bg-gradient-to-r from-sky-500 to-blue-500'}`}
                             style={{ width: `${Math.min(100, ((activePackage.usedSessions || 0) / Math.max(activePackage.totalSessions, activePackage.usedSessions || 1)) * 100)}%` }}
@@ -769,7 +777,7 @@ export default function ClientDetailPage() {
               </Card>
             ) : (
               /* No active package - compact hint */
-              <div className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                 <span className="text-xs text-gray-500">No session package</span>
                 <Button
                   size="sm"
@@ -796,9 +804,9 @@ export default function ClientDetailPage() {
                 setNewPackagePrice('');
               }
             }}>
-              <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogContent className="bg-white border-gray-200 shadow-sm">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Create Session Package</DialogTitle>
+                  <DialogTitle className="text-gray-900">Create Session Package</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   {/* Package Type Toggle */}
@@ -806,7 +814,7 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       variant={!isContinuousPackage ? "default" : "outline"}
-                      className={!isContinuousPackage ? "flex-1 bg-sky-500 hover:bg-sky-600" : "flex-1 border-gray-700 text-gray-400"}
+                      className={!isContinuousPackage ? "flex-1 bg-sky-500 hover:bg-sky-600" : "flex-1 border-gray-200 text-gray-500"}
                       onClick={() => setIsContinuousPackage(false)}
                     >
                       Fixed Sessions
@@ -814,7 +822,7 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       variant={isContinuousPackage ? "default" : "outline"}
-                      className={isContinuousPackage ? "flex-1 bg-blue-500 hover:bg-blue-600" : "flex-1 border-gray-700 text-gray-400"}
+                      className={isContinuousPackage ? "flex-1 bg-blue-500 hover:bg-blue-600" : "flex-1 border-gray-200 text-gray-500"}
                       onClick={() => setIsContinuousPackage(true)}
                     >
                       Continuous
@@ -823,24 +831,24 @@ export default function ClientDetailPage() {
                   
                   {!isContinuousPackage && (
                     <div>
-                      <Label className="text-gray-300">Total Sessions</Label>
+                      <Label className="text-gray-600">Total Sessions</Label>
                       <Input
                         type="number"
                         value={newPackageTotal}
                         onChange={(e) => setNewPackageTotal(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         placeholder="e.g., 10"
                       />
                     </div>
                   )}
                   
                   <div>
-                    <Label className="text-gray-300">Price Per Session ($)</Label>
+                    <Label className="text-gray-600">Price Per Session ($)</Label>
                     <Input
                       type="number"
                       value={newPackagePrice}
                       onChange={(e) => setNewPackagePrice(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                       placeholder="e.g., 50"
                     />
                   </div>
@@ -853,10 +861,10 @@ export default function ClientDetailPage() {
                       </p>
                     </div>
                   ) : newPackageTotal && newPackagePrice && (
-                    <div className="p-3 bg-gray-800 rounded-lg">
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Package Total:</span>
-                        <span className="text-sky-400 font-bold">
+                        <span className="text-gray-500">Package Total:</span>
+                        <span className="text-sky-500 font-bold">
                           ${(parseInt(newPackageTotal) * parseFloat(newPackagePrice)).toFixed(2)}
                         </span>
                       </div>
@@ -915,9 +923,9 @@ export default function ClientDetailPage() {
 
             {/* Edit Package Dialog */}
             <Dialog open={showEditPackage} onOpenChange={setShowEditPackage}>
-              <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogContent className="bg-white border-gray-200 shadow-sm">
                 <DialogHeader>
-                  <DialogTitle className="text-white">
+                  <DialogTitle className="text-gray-900">
                     {editPackageIsContinuous ? 'Edit Continuous Training' : 'Edit Session Package'}
                   </DialogTitle>
                 </DialogHeader>
@@ -927,7 +935,7 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       variant={!editPackageIsContinuous ? 'default' : 'outline'}
-                      className={!editPackageIsContinuous ? 'flex-1 bg-sky-500 hover:bg-sky-600' : 'flex-1 border-gray-700 text-gray-400'}
+                      className={!editPackageIsContinuous ? 'flex-1 bg-sky-500 hover:bg-sky-600' : 'flex-1 border-gray-200 text-gray-500'}
                       onClick={() => setEditPackageIsContinuous(false)}
                     >
                       Fixed Sessions
@@ -935,7 +943,7 @@ export default function ClientDetailPage() {
                     <Button
                       type="button"
                       variant={editPackageIsContinuous ? 'default' : 'outline'}
-                      className={editPackageIsContinuous ? 'flex-1 bg-blue-500 hover:bg-blue-600' : 'flex-1 border-gray-700 text-gray-400'}
+                      className={editPackageIsContinuous ? 'flex-1 bg-blue-500 hover:bg-blue-600' : 'flex-1 border-gray-200 text-gray-500'}
                       onClick={() => setEditPackageIsContinuous(true)}
                     >
                       Continuous
@@ -945,12 +953,12 @@ export default function ClientDetailPage() {
                   {/* For fixed packages: show total sessions */}
                   {!editPackageIsContinuous && (
                     <div>
-                      <Label className="text-gray-300">Total Sessions in Package</Label>
+                      <Label className="text-gray-600">Total Sessions in Package</Label>
                       <Input
                         type="number"
                         value={editPackageTotal}
                         onChange={(e) => setEditPackageTotal(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         placeholder="e.g., 10"
                       />
                     </div>
@@ -958,43 +966,43 @@ export default function ClientDetailPage() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label className="text-gray-300">Sessions Completed</Label>
+                      <Label className="text-gray-600">Sessions Completed</Label>
                       <Input
                         type="number"
                         value={editPackageUsed}
                         onChange={(e) => setEditPackageUsed(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         placeholder="e.g., 5"
                       />
                     </div>
                     <div>
-                      <Label className="text-gray-300">Sessions Paid</Label>
+                      <Label className="text-gray-600">Sessions Paid</Label>
                       <Input
                         type="number"
                         value={editPackagePaid}
                         onChange={(e) => setEditPackagePaid(e.target.value)}
-                        className="bg-gray-800 border-gray-700 text-white mt-1"
+                        className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                         placeholder="e.g., 5"
                       />
                     </div>
                   </div>
                   
                   <div>
-                    <Label className="text-gray-300">Price Per Session ($)</Label>
+                    <Label className="text-gray-600">Price Per Session ($)</Label>
                     <Input
                       type="number"
                       value={editPackagePrice}
                       onChange={(e) => setEditPackagePrice(e.target.value)}
-                      className="bg-gray-800 border-gray-700 text-white mt-1"
+                      className="bg-gray-50 border-gray-200 text-gray-900 mt-1"
                       placeholder="e.g., 50"
                     />
                   </div>
                   
                   {/* Summary */}
-                  <div className="p-3 bg-gray-800 rounded-lg space-y-2">
+                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-400">Total Earned:</span>
-                      <span className="text-sky-400 font-bold">
+                      <span className="text-gray-500">Total Earned:</span>
+                      <span className="text-sky-500 font-bold">
                         ${((parseInt(editPackageUsed || '0')) * parseFloat(editPackagePrice || '0')).toFixed(2)}
                       </span>
                     </div>
@@ -1013,9 +1021,9 @@ export default function ClientDetailPage() {
                       </div>
                     )}
                     {!editPackageIsContinuous && (
-                      <div className="flex justify-between text-sm border-t border-gray-700 pt-2 mt-2">
+                      <div className="flex justify-between text-sm border-t border-gray-200 pt-2 mt-2">
                         <span className="text-gray-400">Sessions Remaining:</span>
-                        <span className="text-white font-bold">
+                        <span className="text-gray-900 font-bold">
                           {Math.max(0, parseInt(editPackageTotal || '0') - parseInt(editPackageUsed || '0'))}
                         </span>
                       </div>
@@ -1057,7 +1065,7 @@ export default function ClientDetailPage() {
             {/* Import History Button */}
             <Button
               variant="outline"
-              className="w-full border-dashed border-gray-700 text-gray-400 hover:text-white hover:border-sky-500"
+              className="w-full border-dashed border-gray-300 text-gray-500 hover:text-gray-900 hover:border-sky-500"
               onClick={() => setShowEditStats(true)}
             >
               <Edit className="w-4 h-4 mr-2" />
@@ -1066,56 +1074,56 @@ export default function ClientDetailPage() {
             
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-3">
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-sky-500/20 rounded-lg">
                       <CheckCircle2 className="w-5 h-5 text-sky-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">{completedWorkouts}</p>
+                      <p className="text-2xl font-bold text-gray-900">{completedWorkouts}</p>
                       <p className="text-xs text-gray-400">Workouts Done</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-500/20 rounded-lg">
                       <Calendar className="w-5 h-5 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">{upcomingSessions}</p>
+                      <p className="text-2xl font-bold text-gray-900">{upcomingSessions}</p>
                       <p className="text-xs text-gray-400">Upcoming</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-amber-500/20 rounded-lg">
                       <CreditCard className="w-5 h-5 text-amber-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">{activePackage?.remainingSessions || 0}</p>
+                      <p className="text-2xl font-bold text-gray-900">{activePackage?.remainingSessions || 0}</p>
                       <p className="text-xs text-gray-400">Sessions Left</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
               
-              <Card className={`border ${unpaidSessions > 0 ? 'bg-red-950/30 border-red-500/50' : 'bg-gray-900 border-gray-800'}`}>
+              <Card className={`border ${unpaidSessions > 0 ? 'bg-red-950/30 border-red-500/50' : 'bg-white border-gray-200 shadow-sm'}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className={`p-2 rounded-lg ${unpaidSessions > 0 ? 'bg-red-500/20' : 'bg-purple-500/20'}`}>
                       <DollarSign className={`w-5 h-5 ${unpaidSessions > 0 ? 'text-red-400' : 'text-purple-400'}`} />
                     </div>
                     <div>
-                      <p className={`text-2xl font-bold ${unpaidSessions > 0 ? 'text-red-400' : 'text-white'}`}>
+                      <p className={`text-2xl font-bold ${unpaidSessions > 0 ? 'text-red-500' : 'text-gray-900'}`}>
                         {unpaidSessions > 0 ? unpaidSessions : `$${totalPaid}`}
                       </p>
                       <p className="text-xs text-gray-400">
@@ -1129,10 +1137,10 @@ export default function ClientDetailPage() {
 
             {/* Program Compliance */}
             {compliance.totalAssigned > 0 && (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                       <Target className="w-4 h-4 text-sky-400" />
                       Program Adherence
                     </h3>
@@ -1166,7 +1174,7 @@ export default function ClientDetailPage() {
                     <div className="flex-1 space-y-1">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Assigned</span>
-                        <span className="text-white">{compliance.totalAssigned}</span>
+                        <span className="text-gray-900">{compliance.totalAssigned}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Completed</span>
@@ -1206,9 +1214,9 @@ export default function ClientDetailPage() {
             )}
 
             {/* Client Info */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
                   <User className="w-5 h-5 text-sky-400" />
                   Client Info
                 </CardTitle>
@@ -1216,29 +1224,29 @@ export default function ClientDetailPage() {
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Member since</span>
-                  <span className="text-white">{format(new Date(clientRelation.startDate), 'MMM d, yyyy')}</span>
+                  <span className="text-gray-900">{format(new Date(clientRelation.startDate), 'MMM d, yyyy')}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-400">Gender</span>
-                  <span className="text-white capitalize">{clientUser.gender}</span>
+                  <span className="text-gray-900 capitalize">{clientUser.gender}</span>
                 </div>
                 {clientUser.height && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Height</span>
-                    <span className="text-white">{clientUser.height}cm</span>
+                    <span className="text-gray-900">{clientUser.height}cm</span>
                   </div>
                 )}
                 {clientUser.weight && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Weight</span>
-                    <span className="text-white">{clientUser.weight}kg</span>
+                    <span className="text-gray-900">{clientUser.weight}kg</span>
                   </div>
                 )}
-                <div className="pt-3 border-t border-gray-800 space-y-3">
+                <div className="pt-3 border-t border-gray-200 space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-400">Email</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-white text-xs truncate max-w-[140px]">{clientUser.email}</span>
+                      <span className="text-gray-900 text-xs truncate max-w-[140px]">{clientUser.email}</span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1281,9 +1289,9 @@ export default function ClientDetailPage() {
             </Card>
 
             {/* Onboarding & Program */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
                   <ClipboardList className="w-5 h-5 text-sky-400" />
                   Onboarding & Program
                 </CardTitle>
@@ -1305,13 +1313,29 @@ export default function ClientDetailPage() {
                   </div>
                 ) : activeProgram ? (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sky-400">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span className="text-sm">Active Program</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-sky-400">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="text-sm">Active Program</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-7 text-xs"
+                        onClick={() => {
+                          if (confirm(`Delete program "${activeProgram.templateName}"? This cannot be undone.`)) {
+                            deleteClientProgram(activeProgram.id);
+                            toast.success('Program deleted');
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3 h-3 mr-1" />
+                        Delete
+                      </Button>
                     </div>
-                    <div className="bg-gray-800 rounded-lg p-3 space-y-2">
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-white">{activeProgram.templateName}</span>
+                        <span className="font-medium text-gray-900">{activeProgram.templateName}</span>
                         <Badge variant="secondary" className="bg-sky-500/20 text-sky-400">
                           {activeProgram.phase}
                         </Badge>
@@ -1382,24 +1406,61 @@ export default function ClientDetailPage() {
                         ))}
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                       <Button 
                         variant="outline"
                         onClick={() => router.push(`/clients/${clientId}/program/builder`)}
                         className="w-full"
                       >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Edit Program
+                        <Edit className="w-4 h-4 mr-1" />
+                        Edit
                       </Button>
                       <Button 
                         variant="outline"
                         onClick={() => router.push(`/clients/${clientId}/program/select`)}
                         className="w-full"
                       >
-                        <Dumbbell className="w-4 h-4 mr-2" />
-                        Change Program
+                        <Dumbbell className="w-4 h-4 mr-1" />
+                        Change
+                      </Button>
+                      <Button 
+                        variant="outline"
+                        onClick={() => router.push(`/clients/${clientId}/program/preview`)}
+                        className="w-full"
+                      >
+                        <ClipboardList className="w-4 h-4 mr-1" />
+                        View
                       </Button>
                     </div>
+                    {/* Past Programs */}
+                    {allClientPrograms.filter(p => p.id !== activeProgram.id).length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 mb-2">Past Programs</p>
+                        <div className="space-y-1.5">
+                          {allClientPrograms.filter(p => p.id !== activeProgram.id).map(prog => (
+                            <div key={prog.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                              <div>
+                                <p className="text-sm text-gray-600">{prog.templateName}</p>
+                                <p className="text-[10px] text-gray-600">{prog.status} • {prog.weeklyPlan?.length || 0} days/week</p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-400 hover:text-red-300 hover:bg-red-500/10 h-6 w-6 p-0"
+                                onClick={() => {
+                                  if (confirm(`Delete past program "${prog.templateName}"?`)) {
+                                    deleteClientProgram(prog.id);
+                                    toast.success('Program deleted');
+                                  }
+                                }}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -1429,10 +1490,10 @@ export default function ClientDetailPage() {
             </Card>
 
             {/* Goals - Always show with edit option */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="text-gray-900 flex items-center gap-2">
                     <Target className="w-5 h-5 text-sky-400" />
                     Goals
                   </CardTitle>
@@ -1452,7 +1513,7 @@ export default function ClientDetailPage() {
                 {clientRelation.goals && clientRelation.goals.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {clientRelation.goals.map((goal, i) => (
-                      <Badge key={i} variant="secondary" className="bg-gray-800">
+                      <Badge key={i} variant="secondary" className="bg-gray-100 text-gray-700">
                         {goal}
                       </Badge>
                     ))}
@@ -1465,9 +1526,9 @@ export default function ClientDetailPage() {
 
             {/* Edit Goals Dialog */}
             <Dialog open={showEditGoals} onOpenChange={setShowEditGoals}>
-              <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogContent className="bg-white border-gray-200 shadow-sm">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Edit Goals</DialogTitle>
+                  <DialogTitle className="text-gray-900">Edit Goals</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="flex gap-2">
@@ -1475,7 +1536,7 @@ export default function ClientDetailPage() {
                       value={newGoal}
                       onChange={(e) => setNewGoal(e.target.value)}
                       placeholder="Add a goal..."
-                      className="bg-gray-800 border-gray-700 text-white"
+                      className="bg-gray-50 border-gray-200 text-gray-900"
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && newGoal.trim()) {
                           setEditGoals([...editGoals, newGoal.trim()]);
@@ -1500,7 +1561,7 @@ export default function ClientDetailPage() {
                       <Badge 
                         key={i} 
                         variant="secondary" 
-                        className="bg-gray-800 cursor-pointer hover:bg-red-900/50 group"
+                        className="bg-gray-100 text-gray-700 cursor-pointer hover:bg-red-100 group"
                         onClick={() => setEditGoals(editGoals.filter((_, idx) => idx !== i))}
                       >
                         {goal}
@@ -1534,9 +1595,9 @@ export default function ClientDetailPage() {
               const aloneLabels: Record<string, string> = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
               const injuryLabels: Record<string, string> = { shoulder: 'Shoulder', knee: 'Knee', back: 'Lower Back', hip: 'Hip', ankle: 'Ankle', wrist: 'Wrist', neck: 'Neck', none: 'None' };
               return (
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-white border-gray-200 shadow-sm">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-white flex items-center gap-2">
+                    <CardTitle className="text-gray-900 flex items-center gap-2">
                       <User className="w-5 h-5 text-sky-400" />
                       Client Profile
                     </CardTitle>
@@ -1545,15 +1606,15 @@ export default function ClientDetailPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-[11px] text-gray-500 uppercase tracking-wider">Experience</p>
-                        <p className="text-sm text-white">{expLabels[profile.experienceLevel] || profile.experienceLevel}</p>
+                        <p className="text-sm text-gray-900">{expLabels[profile.experienceLevel] || profile.experienceLevel}</p>
                       </div>
                       <div>
                         <p className="text-[11px] text-gray-500 uppercase tracking-wider">Training Pref</p>
-                        <p className="text-sm text-white">{prefLabels[profile.trainingPreference] || profile.trainingPreference}</p>
+                        <p className="text-sm text-gray-900">{prefLabels[profile.trainingPreference] || profile.trainingPreference}</p>
                       </div>
                       <div>
                         <p className="text-[11px] text-gray-500 uppercase tracking-wider">Sessions/Week</p>
-                        <p className="text-sm text-white">{profile.daysPerWeek}× • {profile.sessionLength} min</p>
+                        <p className="text-sm text-gray-900">{profile.daysPerWeek}× • {profile.sessionLength} min</p>
                       </div>
                     </div>
 
@@ -1577,7 +1638,7 @@ export default function ClientDetailPage() {
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <p className="text-[11px] text-gray-500 uppercase tracking-wider">Trains Alone</p>
-                        <p className="text-sm text-white">{aloneLabels[profile.trainAloneOutsidePT] || profile.trainAloneOutsidePT}</p>
+                        <p className="text-sm text-gray-900">{aloneLabels[profile.trainAloneOutsidePT] || profile.trainAloneOutsidePT}</p>
                       </div>
                     </div>
 
@@ -1620,10 +1681,10 @@ export default function ClientDetailPage() {
             })()}
 
             {/* Notes - Always show with edit option */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="text-gray-900 flex items-center gap-2">
                     <ClipboardList className="w-5 h-5 text-sky-400" />
                     Notes
                   </CardTitle>
@@ -1641,7 +1702,7 @@ export default function ClientDetailPage() {
               </CardHeader>
               <CardContent>
                 {clientRelation.notes ? (
-                  <p className="text-gray-300 text-sm whitespace-pre-wrap">{clientRelation.notes}</p>
+                  <p className="text-gray-700 text-sm leading-relaxed">{clientRelation.notes}</p>
                 ) : (
                   <p className="text-gray-500 text-sm">No notes yet. Click edit to add notes.</p>
                 )}
@@ -1650,16 +1711,16 @@ export default function ClientDetailPage() {
 
             {/* Edit Notes Dialog */}
             <Dialog open={showEditNotes} onOpenChange={setShowEditNotes}>
-              <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogContent className="bg-white border-gray-200 shadow-sm">
                 <DialogHeader>
-                  <DialogTitle className="text-white">Edit Notes</DialogTitle>
+                  <DialogTitle className="text-gray-900">Edit Notes</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
                   <Textarea
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
                     placeholder="Add notes about this client..."
-                    className="bg-gray-800 border-gray-700 text-white min-h-[150px]"
+                    className="bg-gray-50 border-gray-200 text-gray-900 min-h-[150px]"
                   />
                   <Button
                     className="w-full bg-sky-500 hover:bg-sky-600"
@@ -1695,10 +1756,10 @@ export default function ClientDetailPage() {
             )}
 
             {/* Recent Workouts */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className="text-gray-900 flex items-center gap-2">
                     <Dumbbell className="w-5 h-5 text-sky-400" />
                     Recent Workouts
                   </CardTitle>
@@ -1756,14 +1817,14 @@ export default function ClientDetailPage() {
                         return (
                         <div
                           key={workout.id}
-                          className="p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
+                          className="p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
                         >
                           <div className="flex items-center justify-between">
                             <div 
                               className="flex-1 min-w-0 cursor-pointer"
                               onClick={() => router.push(`/workout/${workout.id}`)}
                             >
-                              <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                              <p className="font-medium text-gray-900 text-sm truncate">{workout.name}</p>
                               <p className="text-xs text-gray-500">
                                 {format(new Date(workout.startTime), 'MMM d')} • {workout.exercises.length} exercises
                               </p>
@@ -1816,7 +1877,7 @@ export default function ClientDetailPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-gray-400 hover:text-white"
+                                className="h-8 w-8 text-gray-400 hover:text-gray-900"
                                 title="Edit Workout"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1944,14 +2005,14 @@ export default function ClientDetailPage() {
           <TabsContent value="progress" className="mt-4 space-y-4">
             {/* Workout Categories Summary */}
             <div className="grid grid-cols-2 gap-3">
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-sky-500/20 rounded-lg">
                       <Dumbbell className="w-5 h-5 text-sky-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">
+                      <p className="text-2xl font-bold text-gray-900">
                         {clientWorkoutHistory.filter(w => !w.assignedBy).length}
                       </p>
                       <p className="text-xs text-gray-400">Solo Training</p>
@@ -1960,14 +2021,14 @@ export default function ClientDetailPage() {
                 </CardContent>
               </Card>
               
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-blue-500/20 rounded-lg">
                       <User className="w-5 h-5 text-blue-400" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold text-white">
+                      <p className="text-2xl font-bold text-gray-900">
                         {clientWorkoutHistory.filter(w => w.assignedBy).length}
                       </p>
                       <p className="text-xs text-gray-400">PT Sessions</p>
@@ -1978,9 +2039,9 @@ export default function ClientDetailPage() {
             </div>
             
             {/* Full Workout History */}
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-white flex items-center gap-2">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
                   <Dumbbell className="w-5 h-5 text-sky-400" />
                   All Workouts ({clientWorkoutHistory.length})
                 </CardTitle>
@@ -1995,13 +2056,13 @@ export default function ClientDetailPage() {
                       .map(workout => (
                         <div
                           key={workout.id}
-                          className="flex items-center justify-between p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors"
+                          className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
                         >
                           <div 
                             className="flex-1 min-w-0 cursor-pointer"
                             onClick={() => router.push(`/workout/${workout.id}`)}
                           >
-                            <p className="font-medium text-white text-sm truncate">{workout.name}</p>
+                            <p className="font-medium text-gray-900 text-sm truncate">{workout.name}</p>
                             <p className="text-xs text-gray-500">
                               {format(new Date(workout.startTime), 'MMM d, yyyy')} • {workout.exercises.length} exercises
                               {workout.assignedBy && <span className="text-blue-400 ml-1">• PT Session</span>}
@@ -2056,7 +2117,7 @@ export default function ClientDetailPage() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-gray-400 hover:text-white"
+                              className="h-8 w-8 text-gray-400 hover:text-gray-900"
                               title="Edit Workout"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2106,9 +2167,9 @@ export default function ClientDetailPage() {
               };
               
               return (
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-white border-gray-200 shadow-sm">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-white flex items-center gap-2">
+                    <CardTitle className="text-gray-900 flex items-center gap-2">
                       <Clock className="w-5 h-5 text-purple-400" />
                       Circuit History ({clientCircuitPerformances.length})
                     </CardTitle>
@@ -2116,10 +2177,10 @@ export default function ClientDetailPage() {
                   <CardContent>
                     <div className="space-y-3 max-h-[300px] overflow-y-auto">
                       {clientCircuitPerformances.map(perf => (
-                        <div key={perf.id} className="p-3 bg-gray-800 rounded-lg">
+                        <div key={perf.id} className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <div>
-                              <p className="font-medium text-white text-sm">{perf.blockName}</p>
+                              <p className="font-medium text-gray-900 text-sm">{perf.blockName}</p>
                               <p className="text-xs text-gray-500">
                                 {format(new Date(perf.performedAt), 'MMM d, yyyy')}
                               </p>
@@ -2166,7 +2227,7 @@ export default function ClientDetailPage() {
 
           {/* Messages Tab */}
           <TabsContent value="messages" className="mt-4">
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="p-0">
                 {/* Messages List */}
                 <div className="h-[400px] overflow-y-auto p-4 space-y-3">
@@ -2186,7 +2247,7 @@ export default function ClientDetailPage() {
                           className={`max-w-[80%] rounded-2xl px-4 py-2 ${
                             msg.senderId === user?.id
                               ? 'bg-sky-500 text-white'
-                              : 'bg-gray-800 text-gray-100'
+                              : 'bg-gray-100 text-gray-900'
                           }`}
                         >
                           <p className="text-sm">{msg.content}</p>
@@ -2229,18 +2290,18 @@ export default function ClientDetailPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sky-400 font-medium">{activePackage.name}</p>
-                      <p className="text-white text-2xl font-bold">
+                      <p className="text-gray-900 text-2xl font-bold">
                         {activePackage.remainingSessions}/{activePackage.totalSessions} sessions
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-gray-400 text-sm">Expires</p>
-                      <p className="text-white text-sm">
+                      <p className="text-gray-900 text-sm">
                         {activePackage.expiryDate ? format(new Date(activePackage.expiryDate), 'MMM d, yyyy') : 'Never'}
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 bg-gray-900/50 rounded-full h-2">
+                  <div className="mt-3 bg-gray-50 rounded-full h-2">
                     <div 
                       className="bg-sky-500 h-2 rounded-full transition-all"
                       style={{ width: `${(activePackage.usedSessions / activePackage.totalSessions) * 100}%` }}
@@ -2253,7 +2314,7 @@ export default function ClientDetailPage() {
             {/* Sessions List */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-white font-medium">Session History</h3>
+                <h3 className="text-gray-900 font-medium">Session History</h3>
                 <Button size="sm" variant="outline" onClick={() => setShowAddSession(true)}>
                   <Plus className="w-4 h-4 mr-1" />
                   Add Session
@@ -2261,7 +2322,7 @@ export default function ClientDetailPage() {
               </div>
               
               {sessions.length === 0 ? (
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-8 text-center">
                     <ClipboardList className="w-12 h-12 text-gray-600 mx-auto mb-2" />
                     <p className="text-gray-400">No sessions recorded</p>
@@ -2278,7 +2339,7 @@ export default function ClientDetailPage() {
                           ? 'bg-red-950/30 border-red-500/50' 
                           : session.status === 'scheduled' && session.paid 
                             ? 'bg-amber-950/30 border-amber-500/50'
-                            : 'bg-gray-900 border-gray-800'
+                            : 'bg-white border-gray-200 shadow-sm'
                       }`}
                     >
                       <CardContent className="p-4">
@@ -2302,7 +2363,7 @@ export default function ClientDetailPage() {
                               )}
                             </div>
                             <div>
-                              <p className="text-white font-medium">
+                              <p className="text-gray-900 font-medium">
                                 {format(new Date(session.date), 'EEE, MMM d')}
                               </p>
                               <p className="text-gray-400 text-sm">
@@ -2405,7 +2466,7 @@ export default function ClientDetailPage() {
                 <>
                   {/* Header */}
                   <div className="flex items-center justify-between">
-                    <h3 className="text-white font-medium">{format(now, 'MMMM yyyy')}</h3>
+                    <h3 className="text-gray-900 font-medium">{format(now, 'MMMM yyyy')}</h3>
                     <Button size="sm" onClick={() => router.push(`/clients/${clientId}/book`)}>
                       <Plus className="w-4 h-4 mr-1" />
                       Book Session
@@ -2425,7 +2486,7 @@ export default function ClientDetailPage() {
                   </div>
 
                   {/* Calendar Grid */}
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-white border-gray-200 shadow-sm">
                     <CardContent className="p-2">
                       {/* Day Headers */}
                       <div className="grid grid-cols-7 gap-1 mb-1">
@@ -2485,7 +2546,7 @@ export default function ClientDetailPage() {
                   </Card>
 
                   {/* Upcoming Sessions List */}
-                  <h3 className="text-white font-medium mt-4">Upcoming Sessions</h3>
+                  <h3 className="text-gray-900 font-medium mt-4">Upcoming Sessions</h3>
                   {(() => {
                     // Get all completed workouts for this client
                     const completedWorkoutDates = clientWorkoutHistory
@@ -2520,7 +2581,7 @@ export default function ClientDetailPage() {
                     
                     if (allUpcoming.length === 0) {
                       return (
-                        <Card className="bg-gray-900 border-gray-800">
+                        <Card className="bg-white border-gray-200 shadow-sm">
                           <CardContent className="p-6 text-center">
                             <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
                             <p className="text-gray-400 text-sm">No upcoming sessions</p>
@@ -2557,7 +2618,7 @@ export default function ClientDetailPage() {
                                       )}
                                     </div>
                                     <div>
-                                      <p className="text-white font-medium text-sm">{title}</p>
+                                      <p className="text-gray-900 font-medium text-sm">{title}</p>
                                       <p className="text-gray-400 text-xs">
                                         {format(eventDate, 'EEE, MMM d')} {time && `• ${time}`}
                                       </p>
@@ -2585,13 +2646,13 @@ export default function ClientDetailPage() {
             {packages.length > 0 && (
               <Card className="bg-gradient-to-r from-sky-900/30 to-blue-900/30 border-sky-500/30">
                 <CardContent className="p-4">
-                  <h3 className="text-white font-semibold mb-3 flex items-center gap-2">
+                  <h3 className="text-gray-900 font-semibold mb-3 flex items-center gap-2">
                     <Dumbbell className="w-4 h-4 text-sky-400" />
                     Session Balance
                   </h3>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="text-center">
-                      <p className="text-2xl font-bold text-white">
+                      <p className="text-2xl font-bold text-gray-900">
                         {packages.reduce((sum, p) => sum + p.totalSessions, 0)}
                       </p>
                       <p className="text-xs text-gray-400">Covered</p>
@@ -2614,7 +2675,7 @@ export default function ClientDetailPage() {
                     <div className="mt-3 pt-3 border-t border-gray-700">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Avg. Per Session</span>
-                        <span className="text-white font-medium">
+                        <span className="text-gray-900 font-medium">
                           ${(packages.reduce((sum, p) => sum + p.priceTotal, 0) / 
                              packages.reduce((sum, p) => sum + p.totalSessions, 0)).toFixed(2)}
                         </span>
@@ -2627,13 +2688,13 @@ export default function ClientDetailPage() {
 
             {/* Payment Summary */}
             <div className="grid grid-cols-2 gap-3">
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-sky-400">${totalPaid}</p>
                   <p className="text-xs text-gray-400">Total Paid</p>
                 </CardContent>
               </Card>
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="p-4 text-center">
                   <p className="text-2xl font-bold text-amber-400">
                     ${pendingPayments.reduce((sum, p) => sum + p.amount, 0)}
@@ -2651,10 +2712,10 @@ export default function ClientDetailPage() {
 
             {/* Payments List */}
             <div className="space-y-2">
-              <h3 className="text-white font-medium">Payment History</h3>
+              <h3 className="text-gray-900 font-medium">Payment History</h3>
               
               {payments.length === 0 ? (
-                <Card className="bg-gray-900 border-gray-800">
+                <Card className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-8 text-center">
                     <CreditCard className="w-12 h-12 text-gray-600 mx-auto mb-2" />
                     <p className="text-gray-400">No payments recorded</p>
@@ -2664,7 +2725,7 @@ export default function ClientDetailPage() {
                 payments
                   .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
                   .map((payment) => (
-                    <Card key={payment.id} className="bg-gray-900 border-gray-800">
+                    <Card key={payment.id} className="bg-white border-gray-200 shadow-sm">
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-3">
@@ -2680,7 +2741,7 @@ export default function ClientDetailPage() {
                               )}
                             </div>
                             <div>
-                              <p className="text-white font-medium">{payment.description}</p>
+                              <p className="text-gray-900 font-medium">{payment.description}</p>
                               <p className="text-gray-400 text-sm">
                                 {format(new Date(payment.paidAt || payment.createdAt), 'MMM d, yyyy')}
                                 {payment.method && ` • ${payment.method.replace('_', ' ')}`}
@@ -2689,7 +2750,7 @@ export default function ClientDetailPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
-                              <p className="text-white font-bold">${payment.amount}</p>
+                              <p className="text-gray-900 font-bold">${payment.amount}</p>
                               {payment.status === 'pending' && (
                                 <Button 
                                   size="sm" 
@@ -2704,7 +2765,7 @@ export default function ClientDetailPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-8 w-8 text-gray-400 hover:text-white"
+                              className="h-8 w-8 text-gray-400 hover:text-gray-900"
                               onClick={() => handleEditPayment(payment)}
                             >
                               <Settings className="w-4 h-4" />
@@ -2756,9 +2817,9 @@ export default function ClientDetailPage() {
 
       {/* Add Payment Dialog */}
       <Dialog open={showAddPayment} onOpenChange={setShowAddPayment}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Record Payment</DialogTitle>
+            <DialogTitle className="text-gray-900">Record Payment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -2769,7 +2830,7 @@ export default function ClientDetailPage() {
                   placeholder="0.00"
                   value={paymentAmount}
                   onChange={(e) => setPaymentAmount(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
               <div>
@@ -2778,7 +2839,7 @@ export default function ClientDetailPage() {
                   type="date"
                   value={paymentDate}
                   onChange={(e) => setPaymentDate(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
             </div>
@@ -2790,7 +2851,7 @@ export default function ClientDetailPage() {
                 placeholder="0"
                 value={sessionsCovered}
                 onChange={(e) => setSessionsCovered(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2810,7 +2871,7 @@ export default function ClientDetailPage() {
                 placeholder="e.g., PT Session, Package Payment"
                 value={paymentDescription}
                 onChange={(e) => setPaymentDescription(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2860,9 +2921,9 @@ export default function ClientDetailPage() {
 
       {/* Edit Payment Dialog */}
       <Dialog open={showEditPayment} onOpenChange={setShowEditPayment}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Edit Payment</DialogTitle>
+            <DialogTitle className="text-gray-900">Edit Payment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -2871,7 +2932,7 @@ export default function ClientDetailPage() {
                 type="number"
                 value={editPaymentAmount}
                 onChange={(e) => setEditPaymentAmount(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2881,7 +2942,7 @@ export default function ClientDetailPage() {
                 type="date"
                 value={editPaymentDate}
                 onChange={(e) => setEditPaymentDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2931,9 +2992,9 @@ export default function ClientDetailPage() {
 
       {/* Edit Stats Modal for importing existing client history */}
       <Dialog open={showEditStats} onOpenChange={setShowEditStats}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Import Client History</DialogTitle>
+            <DialogTitle className="text-gray-900">Import Client History</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <p className="text-gray-400 text-sm">
@@ -2947,7 +3008,7 @@ export default function ClientDetailPage() {
                 placeholder="e.g., 10"
                 value={editSessionsDone}
                 onChange={(e) => setEditSessionsDone(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2958,7 +3019,7 @@ export default function ClientDetailPage() {
                 placeholder="e.g., 5"
                 value={editSessionsLeft}
                 onChange={(e) => setEditSessionsLeft(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2969,7 +3030,7 @@ export default function ClientDetailPage() {
                 placeholder="e.g., 500"
                 value={editTotalPaid}
                 onChange={(e) => setEditTotalPaid(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -2986,7 +3047,7 @@ export default function ClientDetailPage() {
 
       {/* Edit Workout Dialog */}
       <Dialog open={!!editingWorkout} onOpenChange={(open) => !open && setEditingWorkout(null)}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-white">Edit Workout</DialogTitle>
           </DialogHeader>
@@ -3060,19 +3121,19 @@ export default function ClientDetailPage() {
 
       {/* Edit Email Dialog */}
       <Dialog open={showEditEmail} onOpenChange={setShowEditEmail}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Update Client Email</DialogTitle>
+            <DialogTitle className="text-gray-900">Update Client Email</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-gray-300">Email Address</Label>
+              <Label className="text-gray-600">Email Address</Label>
               <Input
                 type="email"
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 placeholder="client@gmail.com"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
               <p className="text-xs text-gray-500">
                 Enter the client&apos;s Google email to link their account
@@ -3117,7 +3178,7 @@ export default function ClientDetailPage() {
 
       {/* Client Profile Card Popup */}
       <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-sm">
           {(() => {
             const { personalBests } = useWorkoutStore.getState();
             const clientPBs = personalBests.filter(pb => pb.userId === clientId);
@@ -3135,41 +3196,41 @@ export default function ClientDetailPage() {
                   <div className="flex items-center gap-3">
                     <Avatar className="w-16 h-16 border-2 border-rose-500">
                       <AvatarImage src={clientUser?.profilePhoto} />
-                      <AvatarFallback className="bg-gray-800 text-white text-xl">
+                      <AvatarFallback className="bg-gray-100 text-gray-900 text-xl">
                         {clientUser?.displayName?.[0] || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <DialogTitle className="text-white">{clientUser?.displayName}</DialogTitle>
-                      <p className="text-sm text-gray-400">@{clientUser?.username}</p>
+                      <DialogTitle className="text-gray-900">{clientUser?.displayName}</DialogTitle>
+                      <p className="text-sm text-gray-500">@{clientUser?.username}</p>
                       {clientUser?.gymName && <p className="text-xs text-sky-400 mt-0.5">{clientUser.gymName}</p>}
                     </div>
                   </div>
                 </DialogHeader>
                 <div className="grid grid-cols-3 gap-3 mt-3">
-                  <div className="bg-gray-800 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-white">{clientWorkouts.length}</p>
-                    <p className="text-xs text-gray-400">Workouts</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-gray-900">{clientWorkouts.length}</p>
+                    <p className="text-xs text-gray-500">Workouts</p>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-amber-400">{clientMedals.length}</p>
-                    <p className="text-xs text-gray-400">Medals</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-amber-500">{clientMedals.length}</p>
+                    <p className="text-xs text-gray-500">Medals</p>
                   </div>
-                  <div className="bg-gray-800 rounded-lg p-3 text-center">
-                    <p className="text-2xl font-bold text-sky-400">{clientPBs.length}</p>
-                    <p className="text-xs text-gray-400">PBs</p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                    <p className="text-2xl font-bold text-sky-500">{clientPBs.length}</p>
+                    <p className="text-xs text-gray-500">PBs</p>
                   </div>
                 </div>
                 {rating && (
-                  <div className="bg-gray-800 rounded-lg p-3 mt-2">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-400">Strength Rating</span>
-                      <span className="text-lg font-bold text-white">{rating.overall?.toFixed(0) || '—'}</span>
+                      <span className="text-sm text-gray-500">Strength Rating</span>
+                      <span className="text-lg font-bold text-gray-900">{rating.overall?.toFixed(0) || '—'}</span>
                     </div>
                   </div>
                 )}
                 {clientUser?.bio && (
-                  <p className="text-sm text-gray-400 mt-2">{clientUser.bio}</p>
+                  <p className="text-sm text-gray-600 mt-2">{clientUser.bio}</p>
                 )}
               </>
             );

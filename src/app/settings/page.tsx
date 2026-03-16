@@ -608,77 +608,77 @@ function SettingsPageContent() {
 
       <div className="px-4 py-6 space-y-6">
         {/* Profile Settings */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <User className="w-5 h-5 text-sky-400" />
               Profile
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-gray-300">Display Name</Label>
+              <Label className="text-gray-600">Display Name</Label>
               <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 placeholder="Your display name"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-gray-300">Personal Email</Label>
+              <Label className="text-gray-600">Personal Email</Label>
               <Input
                 type="email"
                 value={personalEmail}
                 onChange={(e) => setPersonalEmail(e.target.value)}
                 placeholder="your@email.com"
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
               <p className="text-[11px] text-gray-500">Used for app access links and notifications</p>
             </div>
             <div className="space-y-2">
-              <Label className="text-gray-300">Bio</Label>
+              <Label className="text-gray-600">Bio</Label>
               <Textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="Tell us about yourself..."
-                className="bg-gray-800 border-gray-700 text-white min-h-[80px]"
+                className="bg-gray-50 border-gray-200 text-gray-900 min-h-[80px]"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-gray-300">Height (cm)</Label>
+                <Label className="text-gray-600">Height (cm)</Label>
                 <Input
                   type="number"
                   value={height}
                   onChange={(e) => setHeight(e.target.value)}
                   placeholder="175"
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-gray-300">Weight (kg)</Label>
+                <Label className="text-gray-600">Weight (kg)</Label>
                 <Input
                   type="number"
                   value={weight}
                   onChange={(e) => setWeight(e.target.value)}
                   placeholder="70"
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-gray-300">Gym</Label>
+              <Label className="text-gray-600">Gym</Label>
               {gymName && !showGymSearch ? (
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-md px-3 py-2">
+                  <div className="flex-1 flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
                     <Dumbbell className="w-4 h-4 text-sky-400" />
-                    <span className="text-white text-sm">{gymName}</span>
+                    <span className="text-gray-900 text-sm">{gymName}</span>
                   </div>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-9 w-9 text-gray-400 hover:text-white"
+                    className="h-9 w-9 text-gray-400 hover:text-gray-900"
                     onClick={() => { setShowGymSearch(true); setGymSearch(gymName); }}
                   >
                     <Search className="w-4 h-4" />
@@ -699,17 +699,17 @@ function SettingsPageContent() {
                     onChange={(e) => { setGymSearch(e.target.value); setShowGymSearch(true); }}
                     onFocus={() => setShowGymSearch(true)}
                     placeholder="Search or add your gym..."
-                    className="bg-gray-800 border-gray-700 text-white"
+                    className="bg-gray-50 border-gray-200 text-gray-900"
                   />
                   {showGymSearch && gymSearch.trim() && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-gray-800 border border-gray-700 rounded-lg z-50 max-h-48 overflow-y-auto shadow-xl">
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg z-50 max-h-48 overflow-y-auto shadow-xl">
                       {gyms
                         .filter(g => g.name.toLowerCase().includes(gymSearch.toLowerCase()))
                         .slice(0, 5)
                         .map(g => (
                           <button
                             key={g.id}
-                            className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm text-white flex items-center gap-2"
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm text-gray-900 flex items-center gap-2"
                             onClick={() => { setGymName(g.name); setGymSearch(''); setShowGymSearch(false); }}
                           >
                             <Dumbbell className="w-3 h-3 text-sky-400" />
@@ -719,7 +719,7 @@ function SettingsPageContent() {
                         ))}
                       {!gyms.some(g => g.name.toLowerCase() === gymSearch.toLowerCase()) && (
                         <button
-                          className="w-full text-left px-3 py-2 hover:bg-gray-700 text-sm text-sky-400 flex items-center gap-2 border-t border-gray-700"
+                          className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm text-sky-500 flex items-center gap-2 border-t border-gray-200"
                           onClick={() => handleAddGym(gymSearch)}
                         >
                           <Plus className="w-3 h-3" />
@@ -735,22 +735,22 @@ function SettingsPageContent() {
         </Card>
 
         {/* Connected Services */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-emerald-400" />
               Connected Services
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Apple Health */}
-            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
                   <Heart className="w-5 h-5 text-red-400" />
                 </div>
                 <div>
-                  <p className="font-medium text-white text-sm">Apple Health</p>
+                  <p className="font-medium text-gray-900 text-sm">Apple Health</p>
                   <p className="text-xs text-gray-500">Requires iOS app (HealthKit)</p>
                 </div>
               </div>
@@ -769,13 +769,13 @@ function SettingsPageContent() {
             </div>
 
             {/* Google/Samsung Health */}
-            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
                   <Smartphone className="w-5 h-5 text-green-400" />
                 </div>
                 <div>
-                  <p className="font-medium text-white text-sm">Google / Samsung Health</p>
+                  <p className="font-medium text-gray-900 text-sm">Google / Samsung Health</p>
                   <p className="text-xs text-gray-500">Requires Android app (Health Connect)</p>
                 </div>
               </div>
@@ -794,13 +794,13 @@ function SettingsPageContent() {
             </div>
 
             {/* Calendar */}
-            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-blue-400" />
                 </div>
                 <div>
-                  <p className="font-medium text-white text-sm">Google Calendar</p>
+                  <p className="font-medium text-gray-900 text-sm">Google Calendar</p>
                   <p className="text-xs text-gray-500">Sign in to sync bookings & workouts</p>
                 </div>
               </div>
@@ -831,13 +831,13 @@ function SettingsPageContent() {
 
             {/* Stripe — trainers only */}
             {user.isTrainer && (
-              <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
                     <CreditCard className="w-5 h-5 text-purple-400" />
                   </div>
                   <div>
-                    <p className="font-medium text-white text-sm">Stripe</p>
+                    <p className="font-medium text-gray-900 text-sm">Stripe</p>
                     <p className="text-xs text-gray-500">Connect account to accept payments</p>
                   </div>
                 </div>
@@ -876,7 +876,7 @@ function SettingsPageContent() {
         {/* Connection Info Dialog */}
         {showHealthInfo && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowHealthInfo(null)}>
-            <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-sm w-full p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="bg-white border border-gray-200 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-lg" onClick={e => e.stopPropagation()}>
               <div className="text-center">
                 <div className={`w-16 h-16 rounded-2xl mx-auto mb-3 flex items-center justify-center ${
                   showHealthInfo === 'appleHealth' ? 'bg-red-500/20' :
@@ -888,21 +888,21 @@ function SettingsPageContent() {
                   {showHealthInfo === 'calendar' && <Calendar className="w-8 h-8 text-blue-400" />}
                   {showHealthInfo === 'stripe' && <CreditCard className="w-8 h-8 text-purple-400" />}
                 </div>
-                <h3 className="text-lg font-semibold text-white">
+                <h3 className="text-lg font-semibold text-gray-900">
                   {showHealthInfo === 'appleHealth' ? 'Apple Health' : 'Google / Samsung Health'}
                 </h3>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-sm text-gray-500 mt-2">
                   {showHealthInfo === 'appleHealth' && 'Apple Health uses HealthKit which requires a native iOS app. Once our iOS app is available, it will read your steps, calories, heart rate, and sleep data directly from your Apple ID.'}
                   {showHealthInfo === 'googleHealth' && 'Google Health Connect requires a native Android app. Once our Android app is available, it will read your steps, calories, and heart rate data from your Google or Samsung account.'}
                 </p>
                 <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mt-2">
-                  <p className="text-xs text-amber-300">📱 Native app coming soon! Tap below to be notified when it launches.</p>
+                  <p className="text-xs text-amber-600">📱 Native app coming soon! Tap below to be notified when it launches.</p>
                 </div>
               </div>
               <div className="flex gap-3">
                 <Button
                   variant="outline"
-                  className="flex-1 border-gray-700 text-gray-300"
+                  className="flex-1 border-gray-200 text-gray-500"
                   onClick={() => setShowHealthInfo(null)}
                 >
                   Not Now
@@ -921,9 +921,9 @@ function SettingsPageContent() {
         )}
 
         {/* Preferences */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <Scale className="w-5 h-5 text-blue-400" />
               Preferences
             </CardTitle>
@@ -931,30 +931,30 @@ function SettingsPageContent() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Body Weight Unit</p>
+                <p className="font-medium text-gray-900">Body Weight Unit</p>
                 <p className="text-sm text-gray-500">For your body weight display</p>
               </div>
               <Select value={preferredUnit} onValueChange={(v) => setPreferredUnit(v as WeightUnit)}>
-                <SelectTrigger className="w-24 bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="w-24 bg-gray-50 border-gray-200 text-gray-900">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-white border-gray-200">
                   <SelectItem value="kg">kg</SelectItem>
                   <SelectItem value="lb">lb</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <Separator className="bg-gray-800" />
+            <Separator className="bg-gray-200" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Exercise Weight Unit</p>
+                <p className="font-medium text-gray-900">Exercise Weight Unit</p>
                 <p className="text-sm text-gray-500">For workout exercises display</p>
               </div>
               <Select value={exerciseUnit} onValueChange={(v) => setExerciseUnit(v as WeightUnit)}>
-                <SelectTrigger className="w-24 bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="w-24 bg-gray-50 border-gray-200 text-gray-900">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-white border-gray-200">
                   <SelectItem value="kg">kg</SelectItem>
                   <SelectItem value="lb">lb</SelectItem>
                 </SelectContent>
@@ -964,9 +964,9 @@ function SettingsPageContent() {
         </Card>
 
         {/* Privacy Settings */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <Shield className="w-5 h-5 text-green-400" />
               Privacy
             </CardTitle>
@@ -974,7 +974,7 @@ function SettingsPageContent() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Public Profile</p>
+                <p className="font-medium text-gray-900">Public Profile</p>
                 <p className="text-sm text-gray-500">Anyone can view your profile and stats</p>
               </div>
               <Switch 
@@ -983,8 +983,8 @@ function SettingsPageContent() {
                 className="data-[state=checked]:bg-sky-500"
               />
             </div>
-            <div className="p-3 bg-gray-800 rounded-lg">
-              <p className="text-xs text-gray-400">
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-xs text-gray-500">
                 {isPublicProfile 
                   ? "Your profile is visible to everyone. Anyone can see your strength ratings and workout stats."
                   : "Your profile is private. Only your trainer and friends can see your strength ratings and workout stats."}
@@ -994,9 +994,9 @@ function SettingsPageContent() {
         </Card>
 
         {/* Notifications */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <Bell className="w-5 h-5 text-amber-400" />
               Notifications
             </CardTitle>
@@ -1004,7 +1004,7 @@ function SettingsPageContent() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Weekly Reports</p>
+                <p className="font-medium text-gray-900">Weekly Reports</p>
                 <p className="text-sm text-gray-500">Get notified when your weekly report is ready</p>
               </div>
               <Switch 
@@ -1013,18 +1013,18 @@ function SettingsPageContent() {
                 className="data-[state=checked]:bg-sky-500"
               />
             </div>
-            <Separator className="bg-gray-800" />
+            <Separator className="bg-gray-200" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Workout Reminders</p>
+                <p className="font-medium text-gray-900">Workout Reminders</p>
                 <p className="text-sm text-gray-500">Remind me to workout</p>
               </div>
               <Switch className="data-[state=checked]:bg-sky-500" />
             </div>
-            <Separator className="bg-gray-800" />
+            <Separator className="bg-gray-200" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-white">Social Notifications</p>
+                <p className="font-medium text-gray-900">Social Notifications</p>
                 <p className="text-sm text-gray-500">Likes, comments, and follows</p>
               </div>
               <Switch defaultChecked className="data-[state=checked]:bg-sky-500" />
@@ -1033,11 +1033,11 @@ function SettingsPageContent() {
         </Card>
 
         {/* More Options */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardContent className="p-0">
             <Button
               variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
             >
               <Shield className="w-5 h-5 mr-3 text-gray-500" />
               Privacy & Security
@@ -1045,7 +1045,7 @@ function SettingsPageContent() {
             </Button>
             <Button
               variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
             >
               <Palette className="w-5 h-5 mr-3 text-gray-500" />
               Appearance
@@ -1053,7 +1053,7 @@ function SettingsPageContent() {
             </Button>
             <Button
               variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none"
+              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none"
             >
               <HelpCircle className="w-5 h-5 mr-3 text-gray-500" />
               Help & Support
@@ -1064,9 +1064,9 @@ function SettingsPageContent() {
 
         {/* Trainer Import - Only show for trainers */}
         {user.isTrainer && (
-          <Card className="bg-gray-900 border-gray-800">
+          <Card className="bg-white border-gray-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-gray-900 flex items-center gap-2">
                 <Users className="w-5 h-5 text-sky-400" />
                 Client Import
               </CardTitle>
@@ -1097,59 +1097,59 @@ function SettingsPageContent() {
         )}
 
         {/* Cloud Sync - Supabase */}
-        <Card className="bg-gray-900 border-blue-900">
+        <Card className="bg-white border-blue-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               <Cloud className="w-5 h-5 text-blue-400" />
               Cloud Sync (Supabase)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-500">
               Sync your data to the cloud for cross-device access. Your data is stored locally first, then backed up to Supabase.
             </p>
             
             {/* Data summary */}
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Clients</span>
-                <span className="text-white font-medium">{clients.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Clients</span>
+                <span className="text-gray-900 font-medium">{clients.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Sessions</span>
-                <span className="text-white font-medium">{sessions.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Sessions</span>
+                <span className="text-gray-900 font-medium">{sessions.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Calendar</span>
-                <span className="text-white font-medium">{calendarEvents.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Calendar</span>
+                <span className="text-gray-900 font-medium">{calendarEvents.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Payments</span>
-                <span className="text-white font-medium">{payments.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Payments</span>
+                <span className="text-gray-900 font-medium">{payments.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Programs</span>
-                <span className="text-white font-medium">{clientPrograms.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Programs</span>
+                <span className="text-gray-900 font-medium">{clientPrograms.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Workouts</span>
-                <span className="text-white font-medium">{sessionWorkouts.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Workouts</span>
+                <span className="text-gray-900 font-medium">{sessionWorkouts.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Library Templates</span>
-                <span className="text-white font-medium">{workoutLibrary.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Library Templates</span>
+                <span className="text-gray-900 font-medium">{workoutLibrary.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Circuit Templates</span>
-                <span className="text-white font-medium">{circuitLibrary.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Circuit Templates</span>
+                <span className="text-gray-900 font-medium">{circuitLibrary.length}</span>
               </div>
-              <div className="flex items-center justify-between bg-gray-800 rounded p-2">
-                <span className="text-gray-400">Workout History</span>
-                <span className="text-white font-medium">{workoutHistory.length}</span>
+              <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded p-2">
+                <span className="text-gray-500">Workout History</span>
+                <span className="text-gray-900 font-medium">{workoutHistory.length}</span>
               </div>
             </div>
 
-            <Separator className="bg-gray-700" />
+            <Separator className="bg-gray-200" />
 
             <Button
               className="w-full bg-blue-600 hover:bg-blue-700"
@@ -1187,7 +1187,7 @@ function SettingsPageContent() {
         </Card>
 
         {/* Delete Account */}
-        <Card className="bg-gray-900 border-red-900">
+        <Card className="bg-white border-red-200 shadow-sm">
           <CardHeader>
             <CardTitle className="text-red-400 flex items-center gap-2">
               ⚠️ Danger Zone
@@ -1208,9 +1208,9 @@ function SettingsPageContent() {
         </Card>
 
         {/* Developer Options */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
               🔧 Developer Options
             </CardTitle>
           </CardHeader>

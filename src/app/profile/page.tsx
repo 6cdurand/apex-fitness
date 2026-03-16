@@ -400,7 +400,7 @@ export default function ProfilePage() {
               <Avatar className="w-24 h-24 border-4 border-white/20 group-hover:border-white/40 transition-all duration-300 shadow-xl shadow-black/30">
                 <AvatarImage src={user.profilePhoto} />
                 <AvatarFallback className="text-2xl bg-slate-800 text-white font-bold">
-                  {user.displayName?.[0]?.toUpperCase() || user.username[0].toUpperCase()}
+                  {user.displayName?.[0]?.toUpperCase() || user.username?.[0]?.toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center backdrop-blur-sm">
@@ -1012,11 +1012,11 @@ export default function ProfilePage() {
         )}
 
         {/* Account Actions */}
-        <Card className="bg-gray-900 border-gray-800">
+        <Card className="bg-white border-gray-200 shadow-sm">
           <CardContent className="p-0">
             <Button
               variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
               onClick={() => router.push('/settings')}
             >
               <Edit className="w-5 h-5 mr-3 text-gray-500" />
@@ -1026,7 +1026,7 @@ export default function ProfilePage() {
             {user.isTrainer && (
               <Button
                 variant="ghost"
-                className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+                className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
                 onClick={() => router.push('/payments')}
               >
                 <DollarSign className="w-5 h-5 mr-3 text-gray-500" />
@@ -1037,7 +1037,7 @@ export default function ProfilePage() {
             {!user.isTrainer && (
               <Button
                 variant="ghost"
-                className="w-full justify-start h-14 px-4 text-gray-300 hover:bg-gray-800 rounded-none border-b border-gray-800"
+                className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
                 onClick={() => {
                   updateUser({ isTrainer: true, mode: 'trainer' });
                   toast.success('Upgraded to trainer! Redirecting...');
@@ -1089,9 +1089,9 @@ export default function ProfilePage() {
 
       {/* Followers Modal */}
       <Dialog open={showFollowersModal} onOpenChange={setShowFollowersModal}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-white">Followers</h2>
+            <h2 className="text-xl font-bold text-gray-900">Followers</h2>
             {actualFollowers.length === 0 ? (
               <p className="text-gray-400 text-center py-4">No followers yet</p>
             ) : (
@@ -1101,7 +1101,7 @@ export default function ProfilePage() {
                     const followerUser = allUsers.find((u: any) => u.id === followerId);
                     const client = clients.find(c => c.clientId === followerId);
                     return (
-                      <div key={followerId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800">
+                      <div key={followerId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
                         <Avatar className="w-10 h-10">
                           <AvatarImage src={followerUser?.profilePhoto} />
                           <AvatarFallback className="bg-sky-500 text-white">
@@ -1154,9 +1154,9 @@ export default function ProfilePage() {
 
       {/* Following Modal */}
       <Dialog open={showFollowingModal} onOpenChange={setShowFollowingModal}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
           <div className="space-y-4">
-            <h2 className="text-xl font-bold text-white">Following</h2>
+            <h2 className="text-xl font-bold text-gray-900">Following</h2>
             {actualFollowing.length === 0 ? (
               <p className="text-gray-400 text-center py-4">Not following anyone</p>
             ) : (
@@ -1165,7 +1165,7 @@ export default function ProfilePage() {
                   {actualFollowing.map((followingId: string) => {
                     const followingUser = allUsers.find((u: any) => u.id === followingId);
                     return (
-                      <div key={followingId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-800">
+                      <div key={followingId} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
                         <Avatar className="w-10 h-10">
                           <AvatarImage src={followingUser?.profilePhoto} />
                           <AvatarFallback className="bg-rose-500 text-white">
@@ -1190,7 +1190,7 @@ export default function ProfilePage() {
 
       {/* Trainer Stats Medal Progress Modal */}
       <Dialog open={showTrainerStatModal !== null} onOpenChange={(open) => !open && setShowTrainerStatModal(null)}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-md">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-md">
           <div className="space-y-4">
             {showTrainerStatModal === 'clients' && (
               <>
@@ -1215,7 +1215,7 @@ export default function ProfilePage() {
                     const earned = current >= milestone.target;
                     const progress = Math.min((current / milestone.target) * 100, 100);
                     return (
-                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-gray-800'}`}>
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-emerald-500/20 border border-emerald-500/30' : 'bg-gray-50 border border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xl">{milestone.icon}</span>
@@ -1255,7 +1255,7 @@ export default function ProfilePage() {
                     const earned = current >= milestone.target;
                     const progress = Math.min((current / milestone.target) * 100, 100);
                     return (
-                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-sky-500/20 border border-sky-500/30' : 'bg-gray-800'}`}>
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-sky-500/20 border border-sky-500/30' : 'bg-gray-50 border border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xl">{milestone.icon}</span>
@@ -1295,7 +1295,7 @@ export default function ProfilePage() {
                     const earned = current >= milestone.target;
                     const progress = Math.min((current / milestone.target) * 100, 100);
                     return (
-                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-gray-800'}`}>
+                      <div key={milestone.id} className={`p-3 rounded-lg ${earned ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-gray-50 border border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="text-xl">{milestone.icon}</span>
@@ -1314,7 +1314,7 @@ export default function ProfilePage() {
             )}
             <Button 
               variant="outline" 
-              className="w-full border-gray-700 text-white hover:bg-gray-800"
+              className="w-full border-gray-200 text-gray-600 hover:bg-gray-50"
               onClick={() => {
                 setShowTrainerStatModal(null);
                 router.push('/medals');

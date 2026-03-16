@@ -385,7 +385,7 @@ export default function TodayPage() {
         {/* Today's Workouts — user mode only (trainer sees client workouts below) */}
         {user.mode !== 'trainer' && todayWorkouts.length > 0 && isToday && (
           <section>
-            <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
               <Dumbbell className="w-4 h-4" />
               Completed Today
             </h2>
@@ -505,11 +505,11 @@ export default function TodayPage() {
           // Color config per event type
           // 'session' = client PT session (blue), 'consultation' = consultation (emerald), 'workout' = solo/personal (orange)
           const typeConfig: Record<string, { label: string; border: string; badge: string; badgeText: string; avatarBg: string; avatarText: string; accent: string }> = {
-            session: { label: 'Client Session', border: 'border-sky-500/30', badge: 'bg-sky-500/20', badgeText: 'text-sky-400', avatarBg: 'bg-sky-900', avatarText: 'text-sky-300', accent: 'sky' },
-            consultation: { label: 'Consultation', border: 'border-emerald-500/30', badge: 'bg-emerald-500/20', badgeText: 'text-emerald-400', avatarBg: 'bg-emerald-900', avatarText: 'text-emerald-300', accent: 'emerald' },
-            workout: { label: 'Solo Training', border: 'border-orange-500/30', badge: 'bg-orange-500/20', badgeText: 'text-orange-400', avatarBg: 'bg-orange-900', avatarText: 'text-orange-300', accent: 'orange' },
-            assessment: { label: 'Assessment', border: 'border-purple-500/30', badge: 'bg-purple-500/20', badgeText: 'text-purple-400', avatarBg: 'bg-purple-900', avatarText: 'text-purple-300', accent: 'purple' },
-            rest: { label: 'Rest Day', border: 'border-gray-500/30', badge: 'bg-gray-500/20', badgeText: 'text-gray-400', avatarBg: 'bg-gray-900', avatarText: 'text-gray-300', accent: 'gray' },
+            session: { label: 'Client Session', border: 'border-sky-200', badge: 'bg-sky-500/10', badgeText: 'text-sky-500', avatarBg: 'bg-sky-100', avatarText: 'text-sky-600', accent: 'sky' },
+            consultation: { label: 'Consultation', border: 'border-emerald-200', badge: 'bg-emerald-500/10', badgeText: 'text-emerald-500', avatarBg: 'bg-emerald-100', avatarText: 'text-emerald-600', accent: 'emerald' },
+            workout: { label: 'Solo Training', border: 'border-orange-200', badge: 'bg-orange-500/10', badgeText: 'text-orange-500', avatarBg: 'bg-orange-100', avatarText: 'text-orange-600', accent: 'orange' },
+            assessment: { label: 'Assessment', border: 'border-purple-200', badge: 'bg-purple-500/10', badgeText: 'text-purple-500', avatarBg: 'bg-purple-100', avatarText: 'text-purple-600', accent: 'purple' },
+            rest: { label: 'Rest Day', border: 'border-gray-200', badge: 'bg-gray-500/10', badgeText: 'text-gray-500', avatarBg: 'bg-gray-100', avatarText: 'text-gray-600', accent: 'gray' },
           };
           
           return (
@@ -517,11 +517,11 @@ export default function TodayPage() {
               {/* Unified Session Timeline */}
               <section>
                 <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
                     <Users className="w-4 h-4" />
                     {isToday ? "Today's Schedule" : `Schedule — ${format(selectedDate, 'MMM d')}`}
                   </h2>
-                  <Badge variant="secondary" className="bg-sky-500/20 text-sky-400 text-xs">
+                  <Badge variant="secondary" className="bg-sky-500/10 text-sky-500 text-xs">
                     {allEvents.length}
                   </Badge>
                 </div>
@@ -556,7 +556,7 @@ export default function TodayPage() {
                       return (
                         <Card
                           key={event.id}
-                          className={`bg-gray-900 ${sessionDone ? 'border-green-500/30' : config.border} overflow-hidden transition-all`}
+                          className={`bg-white shadow-sm ${sessionDone ? 'border-green-200' : config.border} overflow-hidden transition-all`}
                         >
                           {/* Left color accent bar */}
                           <div className={`flex`}>
@@ -584,12 +584,12 @@ export default function TodayPage() {
                                         <Link
                                           href={user?.mode === 'trainer' ? `/clients/${event.clientId}` : `/profile/${event.clientId}`}
                                           onClick={(e) => e.stopPropagation()}
-                                          className="font-medium text-white text-sm hover:text-sky-400 hover:underline transition-colors"
+                                          className="font-medium text-gray-900 text-sm hover:text-sky-500 hover:underline transition-colors"
                                         >
                                           {displayName}
                                         </Link>
                                       ) : (
-                                        <p className="font-medium text-white text-sm">{displayName}</p>
+                                        <p className="font-medium text-gray-900 text-sm">{displayName}</p>
                                       )}
                                       <p className="text-xs text-gray-500 flex items-center gap-1">
                                         <Clock className="w-3 h-3" />
@@ -735,7 +735,7 @@ export default function TodayPage() {
                                 </div>
                                 {/* Bottom row for sessions: workout status + create workout (trainer mode only) */}
                                 {eventType === 'session' && !sessionDone && (
-                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-800">
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
                                     <p className="text-xs text-gray-500 flex items-center gap-1">
                                       <Dumbbell className="w-3 h-3" />
                                       {hasWorkout ? 'Workout assigned' : 'No workout assigned'}
@@ -744,7 +744,7 @@ export default function TodayPage() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-6 text-[11px] border-sky-500/30 text-sky-400 hover:bg-sky-500/10"
+                                        className="h-6 text-[11px] border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           router.push(`/workout/builder?workoutId=${matchedWorkout?.id}&eventId=${event.id}&clientId=${event.clientId}`);
@@ -756,7 +756,7 @@ export default function TodayPage() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="h-6 text-[11px] border-gray-700 text-gray-400 hover:text-white hover:border-sky-500/50"
+                                        className="h-6 text-[11px] border-gray-300 text-gray-500 hover:text-gray-900 hover:border-sky-500/50"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           if (event.clientId) {
@@ -771,8 +771,8 @@ export default function TodayPage() {
                                 )}
                                 {/* Consultation: link to onboarding (trainer mode only) */}
                                 {eventType === 'consultation' && (
-                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-800">
-                                    <p className="text-xs text-emerald-400/70 flex items-center gap-1">
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
+                                    <p className="text-xs text-emerald-500/70 flex items-center gap-1">
                                       <CalendarRange className="w-3 h-3" />
                                       New client consultation
                                     </p>
@@ -801,10 +801,10 @@ export default function TodayPage() {
                     })}
                   </div>
                 ) : (
-                  <Card className="bg-gray-900 border-gray-800">
+                  <Card className="bg-gray-50 border-gray-200">
                     <CardContent className="py-6 text-center">
-                      <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm text-gray-400">
+                      <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">
                         No sessions {isToday ? 'today' : `on ${format(selectedDate, 'MMM d')}`}
                       </p>
                     </CardContent>
@@ -825,15 +825,15 @@ export default function TodayPage() {
                   <DialogTrigger asChild>
                     <Button
                       variant="outline"
-                      className="h-auto py-5 bg-gray-800 border-gray-700 hover:bg-gray-700 flex flex-col items-center gap-2 rounded-2xl"
+                      className="h-auto py-5 bg-gray-50 border-gray-200 hover:bg-gray-100 flex flex-col items-center gap-2 rounded-2xl"
                     >
-                      <Calendar className="w-5 h-5 text-sky-400" />
-                      <span className="font-semibold text-sm text-white">Book</span>
+                      <Calendar className="w-5 h-5 text-sky-500" />
+                      <span className="font-semibold text-sm text-gray-700">Book</span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="bg-gray-900 border-gray-800 max-w-xs">
+                  <DialogContent className="bg-white border-gray-200 max-w-xs">
                     <DialogHeader>
-                      <DialogTitle className="text-white">Book</DialogTitle>
+                      <DialogTitle className="text-gray-900">Book</DialogTitle>
                       <DialogDescription>Choose an option</DialogDescription>
                     </DialogHeader>
                     <div className="space-y-3 py-2">
@@ -849,14 +849,14 @@ export default function TodayPage() {
                       </Button>
                       <Button
                         variant="outline"
-                        className="w-full justify-start gap-3 h-12 border-gray-700 hover:bg-gray-800"
+                        className="w-full justify-start gap-3 h-12 border-gray-200 hover:bg-gray-50"
                         onClick={() => {
                           setShowBookDialog(false);
                           router.push('/calendar');
                         }}
                       >
-                        <Calendar className="w-5 h-5 text-gray-400" />
-                        <span className="font-semibold text-white">Access Calendar</span>
+                        <Calendar className="w-5 h-5 text-gray-500" />
+                        <span className="font-semibold text-gray-700">Access Calendar</span>
                       </Button>
                     </div>
                   </DialogContent>
@@ -866,25 +866,25 @@ export default function TodayPage() {
               {/* Recent Client Completions */}
               {recentClientWorkouts.length > 0 && (
                 <section>
-                  <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
-                    <Check className="w-4 h-4 text-green-400" />
+                  <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-500" />
                     Recent Client Completions
                   </h2>
                   <div className="space-y-2">
                     {recentClientWorkouts.map((workout) => {
                       const clientInfo = getClientDisplayInfo(workout.userId);
                       return (
-                        <Card key={workout.id} className="bg-gray-900 border-gray-800">
+                        <Card key={workout.id} className="bg-white border-gray-200 shadow-sm">
                           <CardContent className="p-3 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <Avatar className="w-8 h-8">
                                 <AvatarImage src={clientInfo?.profilePhoto} />
-                                <AvatarFallback className="bg-gray-800 text-white text-xs">
+                                <AvatarFallback className="bg-gray-100 text-gray-600 text-xs">
                                   {clientInfo?.displayName?.[0] || '?'}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <p className="text-sm text-white">{clientInfo?.displayName || 'Client'}</p>
+                                <p className="text-sm text-gray-900">{clientInfo?.displayName || 'Client'}</p>
                                 <p className="text-xs text-gray-500">
                                   {workout.name} • {format(new Date(workout.startTime), 'MMM d')}
                                 </p>
@@ -907,7 +907,7 @@ export default function TodayPage() {
           <section>
             {almostEvolved.length > 0 && (
               <div className="mb-4">
-                <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4" />
                   Almost Evolved
                 </h3>
@@ -920,12 +920,12 @@ export default function TodayPage() {
                     const nextLabel = nextThreshold === 5 ? 'Gold' : nextThreshold === 20 ? 'Diamond' : nextThreshold === 50 ? 'Pink Diamond' : '';
                     return (
                       <div key={medal.id} className="flex-shrink-0 w-20 text-center cursor-pointer" onClick={() => router.push('/medals')}>
-                        <div className={`relative w-14 h-14 mx-auto rounded-full flex items-center justify-center bg-gray-800 border border-gray-700 ${glowClass} ${frameClass}`}>
+                        <div className={`relative w-14 h-14 mx-auto rounded-full flex items-center justify-center bg-gray-100 border border-gray-200 ${glowClass} ${frameClass}`}>
                           <span className="text-xl">{medal.icon}</span>
-                          <span className="absolute -top-1 -right-1 text-[9px] bg-gray-800 border border-gray-700 rounded-full px-1">{medal.timesEarned || 1}x</span>
+                          <span className="absolute -top-1 -right-1 text-[9px] bg-white border border-gray-200 rounded-full px-1 text-gray-600">{medal.timesEarned || 1}x</span>
                         </div>
-                        <p className="text-[10px] text-white mt-1 font-medium truncate">{medal.name}</p>
-                        <p className="text-[9px] text-gray-500">{evoCheck.remaining} to {nextLabel}</p>
+                        <p className="text-[10px] text-gray-900 mt-1 font-medium truncate">{medal.name}</p>
+                        <p className="text-[9px] text-gray-400">{evoCheck.remaining} to {nextLabel}</p>
                       </div>
                     );
                   })}
@@ -935,28 +935,28 @@ export default function TodayPage() {
             
             {closestUnearned.length > 0 && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
                   <Trophy className="w-4 h-4" />
                   Closest Medals
                 </h3>
                 <div className="space-y-2">
                   {closestUnearned.map((def) => (
-                    <div key={def.id} className="flex items-center gap-3 p-2.5 bg-gray-800/50 rounded-lg cursor-pointer hover:bg-gray-800 transition-colors" onClick={() => router.push('/medals')}>
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-800 border border-gray-700 flex-shrink-0">
+                    <div key={def.id} className="flex items-center gap-3 p-2.5 bg-gray-50 border border-gray-100 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors" onClick={() => router.push('/medals')}>
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-100 border border-gray-200 flex-shrink-0">
                         <span className="text-lg">{def.icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
-                          <p className="text-xs text-white font-medium truncate">{def.name}</p>
-                          <span className="text-[10px] text-gray-400 ml-2 flex-shrink-0">{def.pct}%</span>
+                          <p className="text-xs text-gray-900 font-medium truncate">{def.name}</p>
+                          <span className="text-[10px] text-gray-500 ml-2 flex-shrink-0">{def.pct}%</span>
                         </div>
-                        <div className="w-full h-1.5 bg-gray-700 rounded-full mt-1 overflow-hidden">
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${def.pct >= 75 ? 'bg-emerald-500' : def.pct >= 50 ? 'bg-sky-500' : 'bg-gray-500'}`}
+                            className={`h-full rounded-full transition-all ${def.pct >= 75 ? 'bg-emerald-500' : def.pct >= 50 ? 'bg-sky-500' : 'bg-gray-400'}`}
                             style={{ width: `${def.pct}%` }}
                           />
                         </div>
-                        <p className="text-[10px] text-gray-500 mt-0.5">
+                        <p className="text-[10px] text-gray-400 mt-0.5">
                           {def.remaining <= 0 ? 'Almost there!' : (def.progressLabel || `${def.remaining} to go`)}
                         </p>
                       </div>
@@ -974,11 +974,11 @@ export default function TodayPage() {
         {user.mode !== 'trainer' && recentWorkouts.length > 0 && (
           <section>
             <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-400 flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
                 <History className="w-4 h-4" />
                 Recent Workouts
               </h2>
-              <Button variant="ghost" size="sm" className="text-sky-400 text-xs h-7" onClick={() => router.push('/workout/history')}>
+              <Button variant="ghost" size="sm" className="text-sky-500 text-xs h-7" onClick={() => router.push('/workout/history')}>
                 See All
               </Button>
             </div>
@@ -988,7 +988,7 @@ export default function TodayPage() {
                 return (
                   <Card
                     key={workout.id}
-                    className={`bg-gray-900 border-gray-800 cursor-pointer hover:bg-gray-850 transition-colors border-l-2 ${
+                    className={`bg-white border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors border-l-2 ${
                       isTrainerWorkout ? 'border-l-rose-500' : 'border-l-sky-500'
                     }`}
                     onClick={() => router.push(`/workout/${workout.id}`)}
@@ -997,11 +997,11 @@ export default function TodayPage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-medium text-white text-sm">{workout.name}</h3>
+                            <h3 className="font-medium text-gray-900 text-sm">{workout.name}</h3>
                             <Badge className={`text-[10px] px-1.5 py-0 ${
                               isTrainerWorkout 
-                                ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' 
-                                : 'bg-sky-500/20 text-sky-400 border-sky-500/30'
+                                ? 'bg-rose-500/10 text-rose-500 border-rose-500/30' 
+                                : 'bg-sky-500/10 text-sky-500 border-sky-500/30'
                             }`}>
                               {isTrainerWorkout ? 'Trainer' : 'Solo'}
                             </Badge>
@@ -1010,7 +1010,7 @@ export default function TodayPage() {
                             {format(new Date(workout.startTime), 'MMM d • h:mm a')} • {workout.exercises.length} exercises
                           </p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-600" />
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
                       </div>
                     </CardContent>
                   </Card>
@@ -1023,9 +1023,9 @@ export default function TodayPage() {
 
       {/* Template Picker Dialog */}
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+        <DialogContent className="bg-white border-gray-200 max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white">Workout Templates</DialogTitle>
+            <DialogTitle className="text-gray-900">Workout Templates</DialogTitle>
             <DialogDescription>Choose a template to start</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] pr-4">
@@ -1033,12 +1033,12 @@ export default function TodayPage() {
               {allTemplates.map((template) => (
                 <Card
                   key={template.id}
-                  className="bg-gray-800 border-gray-700 cursor-pointer hover:bg-gray-750"
+                  className="bg-gray-50 border-gray-200 cursor-pointer hover:bg-gray-100"
                   onClick={() => setSelectedTemplate(template)}
                 >
                   <CardContent className="p-3">
-                    <h3 className="font-medium text-white text-sm">{template.name}</h3>
-                    <p className="text-xs text-gray-400 mt-1">
+                    <h3 className="font-medium text-gray-900 text-sm">{template.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1">
                       {template.exercises.length} exercises
                       {template.estimatedDuration ? ` • ~${template.estimatedDuration} min` : ''}
                     </p>
@@ -1052,21 +1052,21 @@ export default function TodayPage() {
 
       {/* Template Preview */}
       <Dialog open={!!selectedTemplate} onOpenChange={(open) => !open && setSelectedTemplate(null)}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+        <DialogContent className="bg-white border-gray-200 max-w-lg max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="text-white">{selectedTemplate?.name}</DialogTitle>
+            <DialogTitle className="text-gray-900">{selectedTemplate?.name}</DialogTitle>
             <DialogDescription>{selectedTemplate?.description}</DialogDescription>
           </DialogHeader>
           <ScrollArea className="max-h-[50vh] pr-4">
             <div className="space-y-2">
               {selectedTemplate?.exercises.map((ex, idx) => (
-                <div key={ex.id} className="flex items-center gap-3 p-2 bg-gray-800 rounded-lg">
-                  <div className="w-7 h-7 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-400 font-semibold text-xs">
+                <div key={ex.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+                  <div className="w-7 h-7 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-500 font-semibold text-xs">
                     {idx + 1}
                   </div>
                   <div>
-                    <p className="font-medium text-white text-sm">{ex.exercise.name}</p>
-                    <p className="text-xs text-gray-400">{ex.sets.length} sets</p>
+                    <p className="font-medium text-gray-900 text-sm">{ex.exercise.name}</p>
+                    <p className="text-xs text-gray-500">{ex.sets.length} sets</p>
                   </div>
                 </div>
               ))}
@@ -1089,10 +1089,10 @@ export default function TodayPage() {
       </Dialog>
       {/* Date Confirmation Dialog — when starting a workout on a non-today date */}
       <Dialog open={showDateConfirm} onOpenChange={setShowDateConfirm}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-white">Start Workout Today?</DialogTitle>
-            <DialogDescription className="text-gray-400">
+            <DialogTitle className="text-gray-900">Start Workout Today?</DialogTitle>
+            <DialogDescription className="text-gray-500">
               This session is scheduled for {pendingStartEvent ? format(selectedDate, 'EEEE, MMM d') : ''}. 
               Start the workout now? The session date will be updated to today.
             </DialogDescription>

@@ -83,7 +83,7 @@ function InvitePageContent() {
 
       {/* Content */}
       <div className="flex-1 flex items-center justify-center px-4 py-8">
-        <Card className="w-full max-w-md bg-gray-900 border-gray-800">
+        <Card className="w-full max-w-md bg-white border-gray-200 shadow-sm">
           <CardHeader className="text-center">
             {status === 'loading' && (
               <>
@@ -146,9 +146,9 @@ function InvitePageContent() {
             {status === 'valid' && (
               <div className="space-y-4">
                 {inviteData?.email && (
-                  <div className="p-3 bg-gray-800 rounded-lg text-center">
-                    <p className="text-xs text-gray-400 mb-1">Invitation sent to</p>
-                    <p className="text-white font-medium">{inviteData.email}</p>
+                  <div className="p-3 bg-gray-50 rounded-lg text-center">
+                    <p className="text-xs text-gray-500 mb-1">Invitation sent to</p>
+                    <p className="text-gray-900 font-medium">{inviteData.email}</p>
                   </div>
                 )}
 
@@ -177,7 +177,7 @@ function InvitePageContent() {
               <Button
                 onClick={() => router.push('/auth')}
                 variant="outline"
-                className="w-full border-gray-700 text-white hover:bg-gray-800"
+                className="w-full border-gray-200 text-gray-600 hover:bg-gray-50"
               >
                 Go to Sign Up
               </Button>

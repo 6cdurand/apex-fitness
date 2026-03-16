@@ -804,7 +804,7 @@ function ClientsPageContent() {
                             className="w-12 h-12 cursor-pointer hover:ring-2 hover:ring-rose-500 transition-all"
                           >
                             <AvatarImage src={clientUser?.profilePhoto} />
-                            <AvatarFallback className="bg-gray-800 text-white">
+                            <AvatarFallback className="bg-gray-100 text-gray-600">
                               {clientUser?.displayName?.[0] || clientUser?.username?.[0] || '?'}
                             </AvatarFallback>
                           </Avatar>
@@ -815,19 +815,19 @@ function ClientsPageContent() {
                             <Link
                               href={`/clients/${client.clientId}`}
                               onClick={(e) => e.stopPropagation()}
-                              className="font-semibold text-white truncate hover:text-sky-400 hover:underline transition-colors"
+                              className="font-semibold text-gray-900 truncate hover:text-sky-500 hover:underline transition-colors"
                             >
                               {clientUser?.displayName || clientUser?.username || 'Unknown'}
                             </Link>
                             {clientUser?.gender && clientUser.gender !== 'other' && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-400 capitalize">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 capitalize">
                                 {clientUser.gender === 'female' ? '♀' : '♂'}
                               </span>
                             )}
                             <Badge 
                               className={`cursor-pointer transition-colors ${client.status === 'active' 
-                                ? 'bg-sky-500/20 text-sky-400 hover:bg-red-500/20 hover:text-red-400' 
-                                : 'bg-amber-500/20 text-amber-400 hover:bg-sky-500/20 hover:text-sky-400'
+                                ? 'bg-sky-500/10 text-sky-500 hover:bg-red-500/10 hover:text-red-500' 
+                                : 'bg-amber-500/10 text-amber-500 hover:bg-sky-500/10 hover:text-sky-500'
                               }`}
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -846,13 +846,13 @@ function ClientsPageContent() {
                               {workoutsDone} sessions
                             </span>
                             {activePackage && (
-                              <span className="flex items-center gap-1 text-sky-400">
+                              <span className="flex items-center gap-1 text-sky-500">
                                 <Target className="w-3 h-3" />
                                 {activePackage.remainingSessions} left
                               </span>
                             )}
                             {totalPaid > 0 && (
-                              <span className="flex items-center gap-1 text-blue-400">
+                              <span className="flex items-center gap-1 text-blue-500">
                                 <DollarSign className="w-3 h-3" />
                                 ${totalPaid}
                               </span>
@@ -867,7 +867,7 @@ function ClientsPageContent() {
                           {client.goals && client.goals.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-2">
                               {client.goals.slice(0, 2).map((goal, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs border-gray-700 text-gray-400">
+                                <Badge key={idx} variant="outline" className="text-xs border-gray-200 text-gray-500">
                                   {goal}
                                 </Badge>
                               ))}
@@ -879,11 +879,11 @@ function ClientsPageContent() {
                       </div>
 
                       {/* Quick Actions */}
-                      <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-800">
+                      <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-200">
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-400 hover:text-white"
+                          className="text-gray-500 hover:text-gray-900"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (!user?.id) return;
@@ -897,7 +897,7 @@ function ClientsPageContent() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-400 hover:text-white"
+                          className="text-gray-500 hover:text-gray-900"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedClientId(client.clientId);
@@ -910,7 +910,7 @@ function ClientsPageContent() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-400 hover:text-white"
+                          className="text-gray-500 hover:text-gray-900"
                           onClick={(e) => {
                             e.stopPropagation();
                             setBookingClientId(client.clientId);
@@ -944,9 +944,9 @@ function ClientsPageContent() {
 
             {/* Groups List */}
             {trainerGroups.length === 0 ? (
-              <Card className="bg-gray-900 border-gray-800">
+              <Card className="bg-white border-gray-200 shadow-sm">
                 <CardContent className="py-16 text-center">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
                     <UsersRound className="w-10 h-10 text-gray-600" />
                   </div>
                   <h3 className="font-semibold text-gray-400 mb-2">No groups yet</h3>
@@ -964,7 +964,7 @@ function ClientsPageContent() {
                   return (
                     <Card 
                       key={group.id}
-                      className="bg-gray-900 border-gray-800 cursor-pointer hover:border-gray-700 transition-colors"
+                      className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-gray-300 transition-colors"
                       onClick={() => router.push(`/clients/group/${group.id}`)}
                     >
                       <CardContent className="p-4">
@@ -977,7 +977,7 @@ function ClientsPageContent() {
                               <UsersRound className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <h3 className="font-semibold text-white">{group.name}</h3>
+                              <h3 className="font-semibold text-gray-900">{group.name}</h3>
                               <p className="text-sm text-gray-400">
                                 {memberCount} member{memberCount !== 1 ? 's' : ''}
                                 {group.pricePerSession && ` • $${group.pricePerSession}/session`}
@@ -1006,7 +1006,7 @@ function ClientsPageContent() {
                             {memberPreviews.map((member, i) => (
                               <Avatar key={i} className="w-8 h-8 border-2 border-gray-900">
                                 <AvatarImage src={member?.profilePhoto} />
-                                <AvatarFallback className="bg-gray-800 text-white text-xs">
+                                <AvatarFallback className="bg-gray-100 text-gray-900 text-xs">
                                   {member?.displayName?.[0] || '?'}
                                 </AvatarFallback>
                               </Avatar>
@@ -1034,9 +1034,9 @@ function ClientsPageContent() {
 
       {/* Add Group Dialog */}
       <Dialog open={showAddGroup} onOpenChange={setShowAddGroup}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-white">Create Group</DialogTitle>
+            <DialogTitle className="text-gray-900">Create Group</DialogTitle>
             <DialogDescription>
               Create a group for group fitness classes
             </DialogDescription>
@@ -1049,17 +1049,17 @@ function ClientsPageContent() {
                 placeholder="e.g., Morning Bootcamp"
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
             <div className="space-y-2">
-              <Label className="text-gray-300">Description</Label>
+              <Label>Description</Label>
               <Input
                 placeholder="e.g., High intensity group training"
                 value={newGroupDescription}
                 onChange={(e) => setNewGroupDescription(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
@@ -1071,16 +1071,16 @@ function ClientsPageContent() {
                   placeholder="e.g., 25"
                   value={newGroupPrice}
                   onChange={(e) => setNewGroupPrice(e.target.value)}
-                  className="bg-gray-800 border-gray-700 text-white"
+                  className="bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-gray-300">Color</Label>
+                <Label>Color</Label>
                 <Input
                   type="color"
                   value={newGroupColor}
                   onChange={(e) => setNewGroupColor(e.target.value)}
-                  className="bg-gray-800 border-gray-700 h-10 cursor-pointer"
+                  className="bg-gray-50 border-gray-200 h-10 cursor-pointer"
                 />
               </div>
             </div>
@@ -1093,10 +1093,10 @@ function ClientsPageContent() {
                   placeholder="Search clients..."
                   value={groupSearchQuery}
                   onChange={(e) => setGroupSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-800 border-gray-700 text-white"
+                  className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
                 />
               </div>
-              <ScrollArea className="h-48 border border-gray-700 rounded-lg">
+              <ScrollArea className="h-48 border border-gray-200 rounded-lg">
                 <div className="p-2 space-y-1">
                   {trainerClients
                     .filter(c => {
@@ -1112,17 +1112,17 @@ function ClientsPageContent() {
                         <div
                           key={client.id}
                           className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                            isSelected ? 'bg-blue-500/20 border border-blue-500' : 'hover:bg-gray-800'
+                            isSelected ? 'bg-blue-500/20 border border-blue-500' : 'hover:bg-gray-50'
                           }`}
                           onClick={() => toggleGroupMember(client.clientId)}
                         >
                           <Avatar className="w-8 h-8">
                             <AvatarImage src={clientUser?.profilePhoto} />
-                            <AvatarFallback className="bg-gray-700 text-white text-xs">
+                            <AvatarFallback className="bg-gray-100 text-gray-900 text-xs">
                               {clientUser?.displayName?.[0] || '?'}
                             </AvatarFallback>
                           </Avatar>
-                          <span className="flex-1 text-white text-sm">
+                          <span className="flex-1 text-gray-900 text-sm">
                             {clientUser?.displayName || clientUser?.username || 'Unknown'}
                           </span>
                           {isSelected && <CheckCircle2 className="w-5 h-5 text-blue-400" />}
@@ -1145,9 +1145,9 @@ function ClientsPageContent() {
 
       {/* Booking Dialog */}
       <Dialog open={showBooking} onOpenChange={setShowBooking}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Book Session</DialogTitle>
+            <DialogTitle className="text-gray-900">Book Session</DialogTitle>
             <DialogDescription>
               Schedule a training session with {allUsers.find(u => u.id === bookingClientId)?.displayName || 'this client'}
             </DialogDescription>
@@ -1159,17 +1159,17 @@ function ClientsPageContent() {
                 type="date"
                 value={bookingDate}
                 onChange={(e) => setBookingDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
             
             <div className="space-y-2">
-              <Label className="text-gray-300">Time</Label>
+              <Label className="text-gray-600">Time</Label>
               <Select value={bookingTime} onValueChange={setBookingTime}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                   <SelectValue placeholder="Select time" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700 max-h-60">
+                <SelectContent className="bg-white border-gray-200 max-h-60">
                   {Array.from({ length: 28 }, (_, i) => {
                     const hour = Math.floor(i / 2) + 6;
                     const minute = i % 2 === 0 ? '00' : '30';
@@ -1186,12 +1186,12 @@ function ClientsPageContent() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-gray-300">Duration</Label>
+              <Label className="text-gray-600">Duration</Label>
               <Select value={bookingDuration} onValueChange={setBookingDuration}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                   <SelectValue placeholder="Select duration" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-white border-gray-200">
                   <SelectItem value="30">30 minutes</SelectItem>
                   <SelectItem value="45">45 minutes</SelectItem>
                   <SelectItem value="60">1 hour</SelectItem>
@@ -1203,13 +1203,13 @@ function ClientsPageContent() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-gray-300">Notes (optional)</Label>
+              <Label className="text-gray-600">Notes (optional)</Label>
               <Input
                 type="text"
                 placeholder="e.g., Focus on upper body"
                 value={bookingNotes}
                 onChange={(e) => setBookingNotes(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 
@@ -1253,21 +1253,21 @@ function ClientsPageContent() {
 
       {/* Assign Workout Dialog */}
       <Dialog open={showAssignWorkout} onOpenChange={setShowAssignWorkout}>
-        <DialogContent className="bg-gray-900 border-gray-800">
+        <DialogContent className="bg-white border-gray-200 shadow-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Assign Workout</DialogTitle>
+            <DialogTitle className="text-gray-900">Assign Workout</DialogTitle>
             <DialogDescription>
               Choose a template and schedule date for this client
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-gray-300">Workout Template</Label>
+              <Label className="text-gray-600">Workout Template</Label>
               <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                   <SelectValue placeholder="Select a template" />
                 </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectContent className="bg-white border-gray-200">
                   {defaultTemplates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.name}
@@ -1278,12 +1278,12 @@ function ClientsPageContent() {
             </div>
             
             <div className="space-y-2">
-              <Label className="text-gray-300">Scheduled Date</Label>
+              <Label className="text-gray-600">Scheduled Date</Label>
               <Input
                 type="date"
                 value={scheduledDate}
                 onChange={(e) => setScheduledDate(e.target.value)}
-                className="bg-gray-800 border-gray-700 text-white"
+                className="bg-gray-50 border-gray-200 text-gray-900"
               />
             </div>
 
@@ -1300,7 +1300,7 @@ function ClientsPageContent() {
 
       {/* Client Profile Card Popup */}
       <Dialog open={showProfileCard} onOpenChange={setShowProfileCard}>
-        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-sm">
           {profileClientId && (() => {
             try {
             const clientUser = allUsers.find(u => u.id === profileClientId);
@@ -1353,24 +1353,24 @@ function ClientsPageContent() {
                   <div className="flex items-center gap-3">
                     <Avatar className="w-16 h-16 border-2 border-rose-500">
                       <AvatarImage src={clientUser?.profilePhoto} />
-                      <AvatarFallback className="bg-gray-800 text-white text-xl">
+                      <AvatarFallback className="bg-gray-100 text-gray-900 text-xl">
                         {clientUser?.displayName?.[0] || '?'}
                       </AvatarFallback>
                     </Avatar>
                     <div>
-                      <DialogTitle className="text-white text-lg">
+                      <DialogTitle className="text-gray-900 text-lg">
                         {clientUser?.displayName || 'Unknown'}
                       </DialogTitle>
-                      <p className="text-sm text-gray-400">{completedSessions} sessions completed</p>
+                      <p className="text-sm text-gray-500">{completedSessions} sessions completed</p>
                     </div>
                   </div>
                 </DialogHeader>
 
                 {/* Strength Rating */}
-                <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-3">
                     <Trophy className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-medium text-white">Strength Rating</span>
+                    <span className="text-sm font-medium text-gray-900">Strength Rating</span>
                     <Badge className="ml-auto bg-amber-500/20 text-amber-400">
                       {realStrengthRating?.overall || 0}
                     </Badge>
@@ -1381,33 +1381,33 @@ function ClientsPageContent() {
                     <div className="space-y-2">
                       {benchPB && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-400">Bench/Chest</span>
+                          <span className="text-gray-500">Bench/Chest</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-white">{Math.round(benchPB.oneRepMax)}kg 1RM</span>
+                            <span className="text-gray-900">{Math.round(benchPB.oneRepMax)}kg 1RM</span>
                           </div>
                         </div>
                       )}
                       {shoulderPB && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-400">Shoulders</span>
+                          <span className="text-gray-500">Shoulders</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-white">{Math.round(shoulderPB.oneRepMax)}kg 1RM</span>
+                            <span className="text-gray-900">{Math.round(shoulderPB.oneRepMax)}kg 1RM</span>
                           </div>
                         </div>
                       )}
                       {squatPB && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-400">Squat/Legs</span>
+                          <span className="text-gray-500">Squat/Legs</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-white">{Math.round(squatPB.oneRepMax)}kg 1RM</span>
+                            <span className="text-gray-900">{Math.round(squatPB.oneRepMax)}kg 1RM</span>
                           </div>
                         </div>
                       )}
                       {deadliftPB && (
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-gray-400">Deadlift</span>
+                          <span className="text-gray-500">Deadlift</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-white">{Math.round(deadliftPB.oneRepMax)}kg 1RM</span>
+                            <span className="text-gray-900">{Math.round(deadliftPB.oneRepMax)}kg 1RM</span>
                           </div>
                         </div>
                       )}
@@ -1421,10 +1421,10 @@ function ClientsPageContent() {
                 </div>
 
                 {/* Top Medals */}
-                <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-3">
                     <Award className="w-4 h-4 text-amber-400" />
-                    <span className="text-sm font-medium text-white">Top Medals</span>
+                    <span className="text-sm font-medium text-gray-900">Top Medals</span>
                   </div>
                   {topMedals.length === 0 ? (
                     <p className="text-xs text-gray-500 text-center py-2">No medals earned yet</p>
@@ -1442,7 +1442,7 @@ function ClientsPageContent() {
                           }`}
                         >
                           <span className="text-2xl">{medal.icon}</span>
-                          <p className="text-xs text-gray-400 mt-1 truncate">{medal.name}</p>
+                          <p className="text-xs text-gray-500 mt-1 truncate">{medal.name}</p>
                           <Badge className={`text-xs mt-1 ${
                             medal.tier === 'diamond' ? 'bg-cyan-500' :
                             medal.tier === 'platinum' ? 'bg-slate-300 text-gray-800' :
@@ -1464,7 +1464,7 @@ function ClientsPageContent() {
                     <p className="text-xs text-gray-500 mb-2">Goals</p>
                     <div className="flex flex-wrap gap-1">
                       {client.goals.map((goal, idx) => (
-                        <Badge key={idx} variant="outline" className="text-xs border-gray-700 text-gray-400">
+                        <Badge key={idx} variant="outline" className="text-xs border-gray-200 text-gray-500">
                           {goal}
                         </Badge>
                       ))}

@@ -106,12 +106,12 @@ export default function NotificationsPage() {
       <ScrollArea className="flex-1">
         <div className="px-4 py-4">
           {userNotifications.length === 0 ? (
-            <Card className="bg-gray-900 border-gray-800">
+            <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-16 text-center">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
-                  <Bell className="w-10 h-10 text-gray-600" />
+                <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Bell className="w-10 h-10 text-gray-400" />
                 </div>
-                <h3 className="font-semibold text-gray-400 mb-2">No notifications</h3>
+                <h3 className="font-semibold text-gray-500 mb-2">No notifications</h3>
                 <p className="text-sm text-gray-500">
                   You&apos;re all caught up! Check back later.
                 </p>
@@ -123,8 +123,8 @@ export default function NotificationsPage() {
                 <Card 
                   key={notification.id}
                   className={cn(
-                    "bg-gray-900 border-gray-800 cursor-pointer transition-colors",
-                    !notification.read && "bg-gray-900/80 border-l-2 border-l-sky-500"
+                    "bg-white border-gray-200 shadow-sm cursor-pointer transition-colors",
+                    !notification.read && "bg-sky-50 border-l-2 border-l-sky-500"
                   )}
                   onClick={() => {
                     markNotificationRead(notification.id);
@@ -144,7 +144,7 @@ export default function NotificationsPage() {
                       <div className="flex-1 min-w-0">
                         <p className={cn(
                           "font-medium",
-                          notification.read ? "text-gray-300" : "text-white"
+                          notification.read ? "text-gray-500" : "text-gray-900"
                         )}>
                           {notification.title}
                         </p>
