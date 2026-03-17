@@ -16,6 +16,7 @@ import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition } from '@/lib/medals';
 import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
+import { ExerciseImage } from '@/components/ExerciseImage';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { Exercise, WorkoutSet } from '@/types';
 import { 
@@ -1730,6 +1731,7 @@ export default function ActiveWorkoutPage() {
                             {idx + 1}
                           </span>
                           <div className="flex-1 flex items-center gap-1.5">
+                            <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-6 !h-6 !rounded-full flex-shrink-0" />
                             <p className="text-gray-900 font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
                             <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
                           </div>
@@ -2006,6 +2008,7 @@ export default function ActiveWorkoutPage() {
                           <div className="flex items-center justify-between mb-1">
                             <div>
                               <div className="flex items-center gap-1.5">
+                                <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-6 !h-6 !rounded-full flex-shrink-0" />
                                 <p className="font-medium text-gray-900">
                                   {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) 
                                     ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise') 
@@ -2543,6 +2546,7 @@ export default function ActiveWorkoutPage() {
                   <div className="flex items-center justify-between p-4 border-b border-gray-800">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
+                        <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-7 !h-7 !rounded-full flex-shrink-0" />
                         <h3 className="font-semibold text-white">
                           {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name)
                             ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise')

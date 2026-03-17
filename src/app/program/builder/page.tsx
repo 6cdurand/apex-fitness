@@ -281,6 +281,7 @@ function ProgramBuilderContent() {
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>('fixed');
+  const [trainingFrequency, setTrainingFrequency] = useState(existingProgram?.trainingDaysPerWeek || daysPerWeek);
   
   // ── Exercise edit dialog state ──
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: ProgramExercise } | null>(null);
@@ -413,13 +414,11 @@ function ProgramBuilderContent() {
       })),
     };
     setDays(prev => [...prev, newDay]);
-    setDaysPerWeek(prev => prev + 1);
   };
   
   const removeDay = (index: number) => {
     if (days.length <= 1) return;
     setDays(prev => prev.filter((_, i) => i !== index));
-    setDaysPerWeek(prev => prev - 1);
     if (activeDayIndex >= days.length - 1) setActiveDayIndex(Math.max(0, days.length - 2));
   };
   
@@ -430,7 +429,6 @@ function ProgramBuilderContent() {
       blocks: [],
     };
     setDays(prev => [...prev, newDay]);
-    setDaysPerWeek(prev => prev + 1);
     setActiveDayIndex(days.length);
   };
   
@@ -532,7 +530,8 @@ function ProgramBuilderContent() {
         phase: phase as TrainingPhase,
         goal: goal as TrainingGoal,
         weeklyPlan,
-        trainingDaysPerWeek: daysPerWeek,
+        trainingDaysPerWeek: scheduleMode === 'flexible' ? trainingFrequency : days.length,
+        cycleAcrossWeeks: scheduleMode === 'flexible',
         selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
         updatedAt: new Date().toISOString(),
       });
@@ -552,7 +551,8 @@ function ProgramBuilderContent() {
       phase: phase as TrainingPhase,
       goal: goal as TrainingGoal,
       weeklyPlan,
-      trainingDaysPerWeek: daysPerWeek,
+      trainingDaysPerWeek: scheduleMode === 'flexible' ? trainingFrequency : days.length,
+      cycleAcrossWeeks: scheduleMode === 'flexible',
       selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
       startDate,
       endDate: (() => {
@@ -961,7 +961,7 @@ function ProgramBuilderContent() {
                           <span className="text-xs text-gray-500 w-5 flex-shrink-0">{exIdx + 1}.</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
+                              <p className="text-sm text-gray-900 font-medium truncate">{ex.exerciseName}</p>
                               <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                             </div>
                             <p className="text-xs text-gray-400 mt-0.5">
@@ -1101,6 +1101,20 @@ function ProgramBuilderContent() {
                     <p className="text-xs text-gray-400">Workouts will cycle in order. Client sees &quot;Next Workout&quot; and can do it on any day.</p>
                   </div>
                 </div>
+                <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg">
+                  <Label className="text-gray-300 text-sm flex-shrink-0">Training Frequency</Label>
+                  <Select value={String(trainingFrequency)} onValueChange={v => setTrainingFrequency(parseInt(v))}>
+                    <SelectTrigger className="bg-gray-800 border-gray-700 text-white w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[2,3,4,5,6,7].map(n => (
+                        <SelectItem key={n} value={String(n)}>{n}×/wk</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-gray-500">Client trains {trainingFrequency}×/wk, cycling through {days.length} workouts</p>
+                </div>
                 <div className="space-y-2">
                   {days.map((day, i) => (
                     <div key={day.id} className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
@@ -1130,10 +1144,10 @@ function ProgramBuilderContent() {
                   <p className="text-sm text-white font-medium">Program Summary</p>
                   <p className="text-xs text-gray-400">{programName}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">{daysPerWeek}×/wk</Badge>
+                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">{scheduleMode === 'flexible' ? trainingFrequency : days.length}×/wk</Badge>
                     <Badge className="text-[10px] bg-purple-500/20 text-purple-300 border-0">{actualWeeks} weeks</Badge>
                     <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-0">{allDaysTotalEx} exercises</Badge>
-                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-0">{actualWeeks * daysPerWeek} sessions</Badge>
+                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-0">{actualWeeks * (scheduleMode === 'flexible' ? trainingFrequency : days.length)} sessions</Badge>
                     {autoRepeat && <Badge className="text-[10px] bg-orange-500/20 text-orange-300 border-0">Auto-repeat</Badge>}
                   </div>
                 </div>
@@ -1502,7 +1516,7 @@ function ProgramBuilderContent() {
                       </div>
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
-                          {filterExercisesBySearch(COMMON_EXERCISES, swapSearch)
+                          {filterExercisesBySearch(exerciseLibrary, swapSearch)
                           .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
                           .slice(0, 50)
                           .map(ex => {
