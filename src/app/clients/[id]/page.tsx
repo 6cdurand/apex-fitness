@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
@@ -85,6 +85,7 @@ export default function ClientDetailPage() {
     getClientProfile,
     addCalendarEvent,
     deleteCalendarEvent,
+    clientPrograms: storeClientPrograms,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -174,7 +175,8 @@ export default function ClientDetailPage() {
   }, [personalBests, clientId, clientPBs]);
   
   const [messageInput, setMessageInput] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'overview');
   const [showAddSession, setShowAddSession] = useState(false);
   const [showAddPayment, setShowAddPayment] = useState(false);
   const [showEditStats, setShowEditStats] = useState(false);
@@ -217,6 +219,9 @@ export default function ClientDetailPage() {
   const [isContinuousPackage, setIsContinuousPackage] = useState(false);
   const [isSyncingWorkouts, setIsSyncingWorkouts] = useState(false);
   
+  // PT/Personal toggle per workout day when scheduling
+  const [daySessionTypes, setDaySessionTypes] = useState<Record<number, 'pt' | 'personal'>>({});
+  
   // Workout editing state
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const [editedWorkoutExercises, setEditedWorkoutExercises] = useState<Workout['exercises'] | null>(null);
@@ -250,8 +255,8 @@ export default function ClientDetailPage() {
   const payments = useMemo(() => getPaymentsForClient(clientId), [clientId]);
   const packages = useMemo(() => getPackagesForClient(clientId), [clientId]);
   const calendarEvents = useMemo(() => getEventsForClient(clientId), [clientId]);
-  const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId]);
-  const allClientPrograms = useMemo(() => getClientPrograms(clientId), [clientId]);
+  const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId, storeClientPrograms]);
+  const allClientPrograms = useMemo(() => getClientPrograms(clientId), [clientId, storeClientPrograms]);
   
   // Messages
   const conversation = useMemo(() => {
@@ -617,10 +622,6 @@ export default function ClientDetailPage() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={(val) => {
-        if (val === 'program') {
-          router.push(`/program/builder?clientId=${clientId}`);
-          return;
-        }
         setActiveTab(val);
       }} className="flex-1">
         <TabsList className="grid grid-cols-5 mx-4 mt-4 bg-gray-100">
@@ -2422,9 +2423,40 @@ export default function ClientDetailPage() {
                       Schedule to Client Calendar
                     </h3>
                     <p className="text-xs text-gray-500 mb-3">
-                      Push this program to {clientUser.displayName}&apos;s calendar. Workouts appear on <strong>their</strong> calendar — use &quot;Book&quot; for PT sessions on both calendars.
+                      Set each day as <strong>PT</strong> (shows on your Today page) or <strong>Personal</strong> (client only). Toggle anytime.
                     </p>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      {/* Per-day PT/Personal toggles */}
+                      <div className="space-y-1.5">
+                        {activeProgram.weeklyPlan.map((day: any, idx: number) => {
+                          const isPT = daySessionTypes[idx] === 'pt';
+                          return (
+                            <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <Dumbbell className="w-4 h-4 text-rose-500" />
+                                <span className="text-sm font-medium text-gray-900">{day.dayLabel}</span>
+                                <span className="text-[10px] text-gray-500">
+                                  {day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => setDaySessionTypes(prev => ({
+                                  ...prev,
+                                  [idx]: isPT ? 'personal' : 'pt',
+                                }))}
+                                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                                  isPT
+                                    ? 'bg-sky-500 text-white'
+                                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                }`}
+                              >
+                                {isPT ? 'PT' : 'Personal'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+
                       <div className="flex items-center gap-2">
                         <label className="text-sm text-gray-600 w-24">Start date</label>
                         <Input
@@ -2440,7 +2472,6 @@ export default function ClientDetailPage() {
                           const startInput = document.getElementById(`schedule-start-${clientId}`) as HTMLInputElement;
                           const startDate = startInput?.value ? new Date(startInput.value) : new Date();
                           
-                          // Map day labels to day-of-week offsets (Mon=0 ... Sun=6)
                           const dayMap: Record<string, number> = {
                             'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
                             'friday': 4, 'saturday': 5, 'sunday': 6,
@@ -2453,20 +2484,21 @@ export default function ClientDetailPage() {
                           
                           activeProgram.weeklyPlan.forEach((day: any, idx: number) => {
                             const label = (day.dayLabel || '').toLowerCase();
-                            // Try to match day name, otherwise use index
                             const dayOffset = dayMap[label] ?? idx;
                             const eventDate = addDays(weekStart, dayOffset);
                             
-                            // Only schedule if date is today or future
                             if (eventDate >= new Date(new Date().toDateString())) {
+                              const isPT = daySessionTypes[idx] === 'pt';
                               const exerciseCount = day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0;
                               addCalendarEvent({
                                 title: `${day.dayLabel} - ${activeProgram.templateName}`,
-                                type: 'workout',
+                                type: isPT ? 'session' : 'workout',
                                 date: format(eventDate, 'yyyy-MM-dd'),
+                                startTime: isPT ? '09:00' : undefined,
+                                endTime: isPT ? '10:00' : undefined,
                                 clientId: clientId,
                                 trainerId: user?.id || '',
-                                notes: `${exerciseCount} exercises • Assigned by trainer`,
+                                notes: `${exerciseCount} exercises • ${isPT ? 'PT Session' : 'Personal'} • Assigned by trainer`,
                                 status: 'scheduled',
                               });
                               eventsCreated++;
@@ -2474,7 +2506,7 @@ export default function ClientDetailPage() {
                           });
                           
                           if (eventsCreated > 0) {
-                            toast.success(`Scheduled ${eventsCreated} workouts to ${clientUser.displayName}'s calendar`);
+                            toast.success(`Scheduled ${eventsCreated} workouts (${Object.values(daySessionTypes).filter(v => v === 'pt').length} PT) to ${clientUser.displayName}'s calendar`);
                           } else {
                             toast.error('No workouts scheduled — start date may be in the past');
                           }

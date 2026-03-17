@@ -1,5 +1,5 @@
 [build]
-  command = "echo GROQ_API_KEY=$GROQ_API_KEY > .env.production && echo NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL >> .env.production && echo NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY >> .env.production && npm run build"
+  command = "echo GROQ_API_KEY=$GROQ_API_KEY > .env.production && echo NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL >> .env.production && echo NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY >> .env.production && echo OPENAI_API_KEY=$OPENAI_API_KEY >> .env.production && npm run build"
   publish = ".next"
 
 [[plugins]]

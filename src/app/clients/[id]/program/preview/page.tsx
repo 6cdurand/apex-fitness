@@ -289,66 +289,10 @@ export default function WeeklyPlanPreviewPage() {
 
     addClientProgram(program);
     
-    // Auto-schedule sessions based on selected training days
-    if (selectedTrainingDays.length > 0) {
-      const dayToNumber: Record<string, number> = {
-        sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
-        thursday: 4, friday: 5, saturday: 6
-      };
-      
-      const today = new Date();
-      const currentDayOfWeek = today.getDay();
-      const numWorkouts = workoutDays.length;
-      const numDaysPerWeek = selectedTrainingDays.length;
-      
-      // Track global session index for cycling across weeks
-      let globalSessionIndex = 0;
-      
-      // Schedule sessions for next 4 weeks
-      for (let week = 0; week < 4; week++) {
-        selectedTrainingDays.forEach((dayName, dayIdx) => {
-          const targetDayNum = dayToNumber[dayName];
-          let daysUntil = targetDayNum - currentDayOfWeek;
-          if (daysUntil <= 0 && week === 0) daysUntil += 7;
-          
-          const sessionDate = new Date(today);
-          sessionDate.setDate(today.getDate() + daysUntil + (week * 7));
-          
-          let workoutIndex: number;
-          
-          if (cycleAcrossWeeks && numDaysPerWeek > numWorkouts) {
-            // Cycling mode: workouts cycle across weeks
-            // E.g., 3 days/week with 2 workouts (A, B):
-            // Week 1: A, B, A | Week 2: B, A, B | Week 3: A, B, A...
-            workoutIndex = globalSessionIndex % numWorkouts;
-          } else {
-            // Fixed mode: use manual assignments or simple modulo within week
-            workoutIndex = workoutAssignments[dayName] ?? dayIdx % numWorkouts;
-          }
-          
-          const workout = workoutDays[workoutIndex];
-          const isPTSession = sessionType === 'pt' || (sessionType === 'mixed' && dayIdx === 0);
-          
-          addCalendarEvent({
-            title: workout?.dayLabel || `Training Day ${dayIdx + 1}`,
-            type: isPTSession ? 'session' : 'workout',
-            date: sessionDate.toISOString().split('T')[0],
-            startTime: '09:00',
-            endTime: '10:00',
-            duration: 60,
-            clientId,
-            trainerId: client.trainerId,
-            status: 'scheduled',
-            notes: `Week ${week + 1} - ${template.name}`,
-            workoutId: isPTSession ? undefined : program.id, // PT sessions start empty
-          });
-          
-          globalSessionIndex++;
-        });
-      }
-    }
+    // Sessions are now scheduled manually from the client's Program tab
+    // using the "Schedule to Client Calendar" section with PT/Personal toggles
     
-    router.push(`/clients/${clientId}`);
+    router.push(`/clients/${clientId}?tab=program`);
   };
 
   const getBlockIcon = (type: string) => {

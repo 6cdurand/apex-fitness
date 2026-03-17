@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -37,9 +38,12 @@ import {
   RefreshCw,
   Edit,
   Eye,
+  ArrowLeftRight,
+  Clock,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase } from '@/types';
-import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
+import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
+import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
 import { useWorkoutStore } from '@/lib/store';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -60,6 +64,16 @@ const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; col
   { value: 'circuit', label: 'Circuit', icon: <Target className="h-4 w-4 text-orange-400" />, color: 'orange' },
   { value: 'cardio', label: 'Cardio', icon: <Heart className="h-4 w-4 text-green-500" />, color: 'green' },
   { value: 'cooldown', label: 'Cool-down', icon: <RotateCcw className="h-4 w-4 text-purple-500" />, color: 'purple' },
+];
+
+// Set style options (matching workout builder)
+const SET_STYLES = [
+  { id: 'fixed', name: 'Fixed', description: 'Same reps each set', icon: '⬜' },
+  { id: 'pyramid', name: 'Pyramid', description: '12→10→8→6', icon: '🔺' },
+  { id: 'reverse-pyramid', name: 'Rev Pyramid', description: '6→8→10→12', icon: '🔻' },
+  { id: '5x5', name: '5×5', description: '5 sets of 5', icon: '5️⃣' },
+  { id: 'drop-set', name: 'Drop Set', description: 'No rest between', icon: '⬇️' },
+  { id: 'amrap', name: 'AMRAP', description: 'Max reps', icon: '♾️' },
 ];
 
 const getBlockStyles = (type: BlockType) => {
@@ -162,6 +176,8 @@ interface ProgramExercise {
   sets: number;
   reps: string;
   rest: string;
+  repType?: 'reps' | 'time';
+  setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
   tempo?: string;
   notes?: string;
 }
@@ -236,7 +252,9 @@ function ProgramBuilderContent() {
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>('fixed');
   
   // ── Exercise edit dialog state ──
-  const [editingExercise, setEditingExercise] = useState<{ blockId: string; exerciseId: string; sets: number; reps: string; rest: string } | null>(null);
+  const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: ProgramExercise } | null>(null);
+  const [showSwapPanel, setShowSwapPanel] = useState(false);
+  const [swapSearch, setSwapSearch] = useState('');
   
   // ── Schedule state ──
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -903,7 +921,9 @@ function ProgramBuilderContent() {
                               size="icon"
                               className="h-6 w-6 text-gray-500 hover:text-sky-400"
                               onClick={() => {
-                                setEditingExercise({ blockId: block.id, exerciseId: ex.id, sets: ex.sets, reps: ex.reps, rest: ex.rest });
+                                setEditingExercise({ blockId: block.id, exercise: { ...ex } });
+                                setShowSwapPanel(false);
+                                setSwapSearch('');
                               }}
                             >
                               <Edit className="w-3 h-3" />
@@ -1283,65 +1303,403 @@ function ProgramBuilderContent() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Exercise Edit Dialog ── */}
-      <Dialog open={!!editingExercise} onOpenChange={(open) => { if (!open) setEditingExercise(null); }}>
-        <DialogContent className="bg-white border-gray-200 max-w-xs">
+      {/* ── Exercise Edit Dialog (rich, matching workout builder) ── */}
+      <Dialog open={!!editingExercise} onOpenChange={(open) => {
+        if (!open) {
+          setEditingExercise(null);
+          setShowSwapPanel(false);
+          setSwapSearch('');
+        }
+      }}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-gray-900">Edit Exercise</DialogTitle>
+            <DialogTitle className="text-white">Edit Exercise</DialogTitle>
           </DialogHeader>
           {editingExercise && (
-            <div className="space-y-4 py-2">
-              <div>
-                <Label className="text-gray-700 text-sm">Sets</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={editingExercise.sets}
-                  onChange={(e) => setEditingExercise({ ...editingExercise, sets: parseInt(e.target.value) || 0 })}
-                  className="mt-1 h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-700 text-sm">Reps</Label>
-                <Input
-                  value={editingExercise.reps}
-                  onChange={(e) => setEditingExercise({ ...editingExercise, reps: e.target.value })}
-                  placeholder="e.g. 8-12"
-                  className="mt-1 h-10"
-                />
-              </div>
-              <div>
-                <Label className="text-gray-700 text-sm">Rest</Label>
-                <Input
-                  value={editingExercise.rest}
-                  onChange={(e) => setEditingExercise({ ...editingExercise, rest: e.target.value })}
-                  placeholder="e.g. 90s"
-                  className="mt-1 h-10"
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
+            <div className="space-y-4">
+              {/* Exercise name + badge + swap button */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-gray-400 text-xs">Exercise</Label>
+                  <p className="font-medium text-white">{editingExercise.exercise.exerciseName}</p>
+                  <Badge variant="outline" className="text-xs capitalize mt-1 border-gray-600 text-gray-300">
+                    {exerciseLibraryMap.get(editingExercise.exercise.exerciseId)?.category || editingExercise.exercise.movementPattern}
+                  </Badge>
+                </div>
                 <Button
                   variant="outline"
-                  className="flex-1 border-gray-200"
-                  onClick={() => setEditingExercise(null)}
+                  size="sm"
+                  className="border-gray-600 text-gray-300 hover:text-white"
+                  onClick={() => setShowSwapPanel(!showSwapPanel)}
                 >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1 bg-sky-500 hover:bg-sky-600"
-                  onClick={() => {
-                    updateExercise(editingExercise.blockId, editingExercise.exerciseId, {
-                      sets: editingExercise.sets,
-                      reps: editingExercise.reps,
-                      rest: editingExercise.rest,
-                    });
-                    setEditingExercise(null);
-                  }}
-                >
-                  Save
+                  <ArrowLeftRight className="h-4 w-4 mr-2" />
+                  {showSwapPanel ? 'Hide Swaps' : 'Swap Exercise'}
                 </Button>
               </div>
+
+              {/* Swap Suggestions Panel */}
+              {showSwapPanel && (
+                <div className="border border-gray-700 rounded-lg p-4 bg-gray-800/50">
+                  <Tabs defaultValue="similar" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3 mb-3 bg-gray-800">
+                      <TabsTrigger value="similar" className="text-xs">
+                        <Dumbbell className="h-3 w-3 mr-1" />
+                        Similar
+                      </TabsTrigger>
+                      <TabsTrigger value="muscle" className="text-xs">
+                        <Target className="h-3 w-3 mr-1" />
+                        Same Pattern
+                      </TabsTrigger>
+                      <TabsTrigger value="all" className="text-xs">
+                        <Search className="h-3 w-3 mr-1" />
+                        All Exercises
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="similar" className="mt-2">
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {getDirectSwaps(editingExercise.exercise.exerciseId).length > 0 ? (
+                            getDirectSwaps(editingExercise.exercise.exerciseId).map(ex => (
+                              <Button
+                                key={ex.id}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-left h-auto py-2 text-gray-300 hover:text-white hover:bg-gray-700"
+                                onClick={() => {
+                                  setEditingExercise({
+                                    ...editingExercise,
+                                    exercise: {
+                                      ...editingExercise.exercise,
+                                      exerciseId: ex.id,
+                                      exerciseName: ex.name,
+                                    }
+                                  });
+                                  setShowSwapPanel(false);
+                                }}
+                              >
+                                <div>
+                                  <p className="font-medium text-sm">{ex.name}</p>
+                                  <p className="text-xs text-gray-500">{ex.equipment}</p>
+                                </div>
+                              </Button>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-500 text-center py-4">No direct swaps available</p>
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="muscle" className="mt-2">
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {(() => {
+                            const currentLib = exerciseLibraryMap.get(editingExercise.exercise.exerciseId);
+                            const currentMuscles = currentLib?.primaryMuscles || [];
+                            return COMMON_EXERCISES.filter(ex => {
+                              if (ex.id === editingExercise.exercise.exerciseId) return false;
+                              if (ex.pattern === editingExercise.exercise.movementPattern) return true;
+                              const lib = exerciseLibraryMap.get(ex.id);
+                              return lib?.primaryMuscles?.some(m => currentMuscles.includes(m as any)) ?? false;
+                            }).map(ex => {
+                              const lib = exerciseLibraryMap.get(ex.id);
+                              return (
+                                <Button
+                                  key={ex.id}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-left h-auto py-2 text-gray-300 hover:text-white hover:bg-gray-700"
+                                  onClick={() => {
+                                    setEditingExercise({
+                                      ...editingExercise,
+                                      exercise: {
+                                        ...editingExercise.exercise,
+                                        exerciseId: ex.id,
+                                        exerciseName: ex.name,
+                                        movementPattern: ex.pattern,
+                                      }
+                                    });
+                                    setShowSwapPanel(false);
+                                  }}
+                                >
+                                  <div>
+                                    <p className="font-medium text-sm">{ex.name}</p>
+                                    <p className="text-xs text-gray-500 capitalize">
+                                      {lib?.primaryMuscles?.join(', ') || ex.pattern}
+                                    </p>
+                                  </div>
+                                </Button>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent value="all" className="mt-2">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                        <Input
+                          value={swapSearch}
+                          onChange={(e) => setSwapSearch(e.target.value)}
+                          placeholder="Search all exercises..."
+                          className="pl-9 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500"
+                        />
+                      </div>
+                      <ScrollArea className="h-32">
+                        <div className="space-y-1">
+                          {filterExercisesBySearch(COMMON_EXERCISES, swapSearch)
+                          .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
+                          .slice(0, 50)
+                          .map(ex => {
+                            const libEntry = exerciseLibraryMap.get(ex.id);
+                            return (
+                              <Button
+                                key={ex.id}
+                                variant="ghost"
+                                size="sm"
+                                className="w-full justify-start text-left h-auto py-2 text-gray-300 hover:text-white hover:bg-gray-700"
+                                onClick={() => {
+                                  setEditingExercise({
+                                    ...editingExercise,
+                                    exercise: {
+                                      ...editingExercise.exercise,
+                                      exerciseId: ex.id,
+                                      exerciseName: ex.name,
+                                      movementPattern: ex.pattern || '',
+                                    }
+                                  });
+                                  setShowSwapPanel(false);
+                                  setSwapSearch('');
+                                }}
+                              >
+                                <div>
+                                  <p className="font-medium text-sm">{ex.name}</p>
+                                  <p className="text-xs text-gray-500 capitalize">
+                                    {libEntry?.equipment || ex.pattern}
+                                    {libEntry?.primaryMuscles?.length ? ` · ${libEntry.primaryMuscles.join(', ')}` : ''}
+                                  </p>
+                                </div>
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              )}
+
+              {/* Set Style Selection */}
+              <div>
+                <Label className="mb-2 block text-gray-300">Set Style</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {SET_STYLES.map((style) => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      className={`h-auto py-2 px-2 flex flex-col items-center justify-center text-center rounded-md border overflow-hidden transition-colors ${
+                        (editingExercise.exercise.setStyle || 'fixed') === style.id
+                          ? 'bg-sky-500 border-sky-500 text-white'
+                          : 'bg-transparent border-gray-700 text-gray-300 hover:bg-gray-800'
+                      }`}
+                      onClick={() => {
+                        let newSets = editingExercise.exercise.sets;
+                        let newReps = editingExercise.exercise.reps;
+                        if (style.id === '5x5') { newSets = 5; newReps = '5'; }
+                        else if (style.id === 'pyramid') { newSets = 4; newReps = '12→10→8→6'; }
+                        else if (style.id === 'reverse-pyramid') { newSets = 4; newReps = '6→8→10→12'; }
+                        else if (style.id === 'drop-set') { newSets = 3; newReps = '10→10→10'; }
+                        else if (style.id === 'amrap') { newReps = 'AMRAP'; }
+                        setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, setStyle: style.id as any, sets: newSets, reps: newReps }
+                        });
+                      }}
+                    >
+                      <span className="font-medium text-sm whitespace-nowrap">{style.icon} {style.name}</span>
+                      <span className="text-xs opacity-70 truncate w-full">{style.description}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  These are suggestions - edit sets/reps below to record actual performance
+                </p>
+              </div>
+
+              {/* Measurement Type (Reps vs Time) */}
+              <div>
+                <Label className="mb-2 block text-gray-300">Measurement Type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={(editingExercise.exercise.repType || 'reps') === 'reps' ? 'default' : 'outline'}
+                    size="sm"
+                    className={(editingExercise.exercise.repType || 'reps') === 'reps' ? 'bg-sky-500 hover:bg-sky-600' : 'border-gray-600 text-gray-300'}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, repType: 'reps', reps: editingExercise.exercise.repType === 'time' ? '10' : editingExercise.exercise.reps }
+                    })}
+                  >
+                    Reps
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={editingExercise.exercise.repType === 'time' ? 'default' : 'outline'}
+                    size="sm"
+                    className={editingExercise.exercise.repType === 'time' ? 'bg-blue-500 hover:bg-blue-600' : 'border-gray-600 text-gray-300'}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, repType: 'time', reps: editingExercise.exercise.repType === 'reps' || !editingExercise.exercise.repType ? '30s' : editingExercise.exercise.reps }
+                    })}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    Time
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {editingExercise.exercise.repType === 'time'
+                    ? 'Use for cardio, holds, stretches (e.g., 30s, 1min, 5min)'
+                    : 'Standard repetition counting'
+                  }
+                </p>
+              </div>
+
+              {/* Sets / Reps / Rest */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-gray-300">Sets</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={editingExercise.exercise.sets}
+                    onChange={(e) => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, sets: parseInt(e.target.value) || 0 }
+                    })}
+                    className="bg-gray-800/50 border-gray-700 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-300">{editingExercise.exercise.repType === 'time' ? 'Duration' : 'Reps'}</Label>
+                  <Input
+                    value={editingExercise.exercise.reps}
+                    placeholder={editingExercise.exercise.repType === 'time' ? '30s' : '8-12'}
+                    onChange={(e) => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, reps: e.target.value }
+                    })}
+                    className="bg-gray-800/50 border-gray-700 text-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-300">Rest</Label>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {REST_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.value}
+                        type="button"
+                        variant={editingExercise.exercise.rest === `${preset.value}s` ? 'default' : 'outline'}
+                        size="sm"
+                        className={`text-xs h-6 px-2 ${editingExercise.exercise.rest === `${preset.value}s` ? 'bg-sky-500 hover:bg-sky-600' : 'border-gray-600 text-gray-300'}`}
+                        onClick={() => setEditingExercise({
+                          ...editingExercise,
+                          exercise: { ...editingExercise.exercise, rest: `${preset.value}s` }
+                        })}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tempo */}
+              <div>
+                <Label className="mb-2 block text-gray-300">Tempo</Label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {Object.entries(TEMPO_PRESETS).map(([key, preset]) => (
+                    <Button
+                      key={key}
+                      type="button"
+                      variant={editingExercise.exercise.tempo === preset.tempo.join('') ? 'default' : 'outline'}
+                      size="sm"
+                      className={`text-xs h-7 ${editingExercise.exercise.tempo === preset.tempo.join('') ? 'bg-sky-500 hover:bg-sky-600' : 'border-gray-600 text-gray-300'}`}
+                      onClick={() => setEditingExercise({
+                        ...editingExercise,
+                        exercise: { ...editingExercise.exercise, tempo: preset.tempo.join('') }
+                      })}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                  <Button
+                    type="button"
+                    variant={!editingExercise.exercise.tempo ? 'default' : 'outline'}
+                    size="sm"
+                    className={`text-xs h-7 ${!editingExercise.exercise.tempo ? 'bg-gray-600' : 'border-gray-600 text-gray-300'}`}
+                    onClick={() => setEditingExercise({
+                      ...editingExercise,
+                      exercise: { ...editingExercise.exercise, tempo: '' }
+                    })}
+                  >
+                    None
+                  </Button>
+                </div>
+                <Input
+                  value={editingExercise.exercise.tempo || ''}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    exercise: { ...editingExercise.exercise, tempo: e.target.value }
+                  })}
+                  placeholder="Custom: 3010"
+                  className="h-8 bg-gray-800/50 border-gray-700 text-white"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editingExercise.exercise.tempo
+                    ? `${editingExercise.exercise.tempo[0] || 0}s down, ${editingExercise.exercise.tempo[1] || 0}s pause, ${editingExercise.exercise.tempo[2] || 0}s up, ${editingExercise.exercise.tempo[3] || 0}s top`
+                    : 'Eccentric-pause-concentric-pause (affects time estimate)'}
+                </p>
+              </div>
+
+              {/* Coaching Notes */}
+              <div>
+                <Label className="text-gray-300">Coaching Notes (optional)</Label>
+                <Input
+                  value={editingExercise.exercise.notes || ''}
+                  onChange={(e) => setEditingExercise({
+                    ...editingExercise,
+                    exercise: { ...editingExercise.exercise, notes: e.target.value }
+                  })}
+                  placeholder="Any coaching cues for this exercise..."
+                  className="bg-gray-800/50 border-gray-700 text-white"
+                />
+              </div>
+
+              {/* Save button */}
+              <Button
+                className="w-full bg-sky-500 hover:bg-sky-600"
+                onClick={() => {
+                  updateExercise(editingExercise.blockId, editingExercise.exercise.id, {
+                    exerciseId: editingExercise.exercise.exerciseId,
+                    exerciseName: editingExercise.exercise.exerciseName,
+                    movementPattern: editingExercise.exercise.movementPattern,
+                    sets: editingExercise.exercise.sets,
+                    reps: editingExercise.exercise.reps,
+                    rest: editingExercise.exercise.rest,
+                    repType: editingExercise.exercise.repType,
+                    setStyle: editingExercise.exercise.setStyle,
+                    tempo: editingExercise.exercise.tempo,
+                    notes: editingExercise.exercise.notes,
+                  });
+                  setEditingExercise(null);
+                  setShowSwapPanel(false);
+                }}
+              >
+                <Save className="h-4 w-4 mr-2" /> Save Changes
+              </Button>
             </div>
           )}
         </DialogContent>

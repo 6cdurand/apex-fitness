@@ -1668,6 +1668,8 @@ export async function syncCalendarEventToSupabase(event: any): Promise<boolean> 
       color: event.color || null,
       client_confirmed: event.clientConfirmed || false,
       client_confirmed_at: event.clientConfirmedAt || null,
+      recurrence_group: event.recurrenceGroup || null,
+      contact_name: event.contactName || null,
     };
     
     const { error } = await supabase.from('calendar_events').upsert(dbEvent, { onConflict: 'id' });
@@ -1713,6 +1715,8 @@ export async function fetchCalendarEventsFromSupabase(trainerId: string): Promis
       color: e.color,
       clientConfirmed: e.client_confirmed,
       clientConfirmedAt: e.client_confirmed_at,
+      recurrenceGroup: e.recurrence_group || undefined,
+      contactName: e.contact_name || undefined,
     }));
   } catch (e) {
     console.error('[Calendar Fetch] Exception:', e);
@@ -2843,6 +2847,97 @@ export async function deleteWorkoutTemplateFromSupabase(templateId: string): Pro
     const { error } = await supabase.from('workout_templates').delete().eq('id', templateId);
     if (error) {
       console.error('[Template Delete] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ============ NOTIFICATIONS SYNC ============
+
+export async function syncNotificationToSupabase(notification: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const dbNotification = {
+      id: notification.id,
+      user_id: notification.userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message || null,
+      read: notification.read || false,
+      link: notification.link || null,
+      created_at: notification.createdAt,
+    };
+    
+    const { error } = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
+    if (error) {
+      console.error('[Notification Sync] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Notification Sync] Exception:', e);
+    return false;
+  }
+}
+
+export async function fetchNotificationsFromSupabase(userId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    
+    if (error) {
+      console.error('[Notification Fetch] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(n => ({
+      id: n.id,
+      userId: n.user_id,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      read: n.read,
+      link: n.link,
+      createdAt: n.created_at,
+    }));
+  } catch (e) {
+    console.error('[Notification Fetch] Exception:', e);
+    return [];
+  }
+}
+
+export async function markNotificationReadInSupabase(notificationId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const { error } = await supabase.from('notifications').update({ read: true }).eq('id', notificationId);
+    if (error) {
+      console.error('[Notification Update] Error:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+export async function deleteNotificationsFromSupabase(userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const { error } = await supabase.from('notifications').delete().eq('user_id', userId);
+    if (error) {
+      console.error('[Notification Delete] Error:', error.message);
       return false;
     }
     return true;

@@ -45,6 +45,7 @@ import {
   syncWorkoutTemplateToSupabase,
   deleteWorkoutTemplateFromSupabase,
   fetchWorkoutTemplatesFromSupabase,
+  fetchNotificationsFromSupabase,
 } from './supabaseSync';
 import {
   User,
@@ -1854,6 +1855,11 @@ export const useSocialStore = create<SocialState>()(
         set(state => ({
           notifications: [newNotification, ...state.notifications],
         }));
+
+        // Sync to Supabase
+        import('./supabaseSync').then(({ syncNotificationToSupabase }) => {
+          syncNotificationToSupabase(newNotification);
+        });
       },
 
       markNotificationRead: (notificationId) => {
@@ -1862,6 +1868,11 @@ export const useSocialStore = create<SocialState>()(
             n.id === notificationId ? { ...n, read: true } : n
           ),
         }));
+
+        // Sync to Supabase
+        import('./supabaseSync').then(({ markNotificationReadInSupabase }) => {
+          markNotificationReadInSupabase(notificationId);
+        });
       },
 
       markAllNotificationsRead: () => {
@@ -1876,6 +1887,11 @@ export const useSocialStore = create<SocialState>()(
         set(state => ({
           notifications: state.notifications.filter(n => n.userId !== userId),
         }));
+
+        // Delete from Supabase
+        import('./supabaseSync').then(({ deleteNotificationsFromSupabase }) => {
+          deleteNotificationsFromSupabase(userId);
+        });
       },
 
       getUnreadCount: () => {
@@ -3650,6 +3666,26 @@ export const useTrainerStore = create<TrainerState>()(
           localOnlyTemplates.forEach(t => syncWorkoutTemplateToSupabase(t));
           useWorkoutStore.setState({ templates: [...supabaseTemplates, ...localOnlyTemplates] });
           console.log(`[Trainer Store] ✅ Templates loaded: ${supabaseTemplates.length} from Supabase, ${localOnlyTemplates.length} local-only`);
+        }
+        
+        // Load notifications from Supabase into social store
+        const supabaseNotifications = await fetchNotificationsFromSupabase(trainerId);
+        if (supabaseNotifications.length > 0) {
+          const currentNotifications = useSocialStore.getState().notifications;
+          // Merge: Supabase as source of truth, keep local-only notifications
+          const localOnlyNotifications = currentNotifications.filter(
+            ln => !supabaseNotifications.find((sn: any) => sn.id === ln.id)
+          );
+          // Sync local-only to Supabase
+          localOnlyNotifications.forEach(n => {
+            import('./supabaseSync').then(({ syncNotificationToSupabase }) => {
+              syncNotificationToSupabase(n);
+            });
+          });
+          useSocialStore.setState({ 
+            notifications: [...supabaseNotifications, ...localOnlyNotifications] 
+          });
+          console.log(`[Trainer Store] ✅ Notifications loaded: ${supabaseNotifications.length} from Supabase, ${localOnlyNotifications.length} local-only`);
         }
       },
 

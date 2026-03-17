@@ -47,6 +47,7 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
@@ -378,6 +379,8 @@ function WorkoutBuilderContent() {
     blockPerformances,
     getBlockPerformances,
     getBestBlockPerformance,
+    getActiveProgram,
+    clientPrograms,
   } = useTrainerStore();
   
   const client = clients.find(c => c.clientId === clientId);
@@ -434,6 +437,7 @@ function WorkoutBuilderContent() {
   // Block type selection dialog state
   const [showBlockTypeDialog, setShowBlockTypeDialog] = useState(false);
   const [selectedBlockType, setSelectedBlockType] = useState<BlockType | null>(null);
+  const [showProgramDialog, setShowProgramDialog] = useState(false);
   
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
@@ -1031,6 +1035,15 @@ function WorkoutBuilderContent() {
             <ArrowLeft className="h-4 w-4 mr-2" /> Back
           </Button>
           <div className="flex gap-2">
+            {selectedClientId && getActiveProgram(selectedClientId) && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setShowProgramDialog(true)}
+              >
+                📋 From Program
+              </Button>
+            )}
             <Button 
               variant="outline" 
               size="sm"
@@ -1099,7 +1112,7 @@ function WorkoutBuilderContent() {
                 value={workoutName}
                 onChange={(e) => setWorkoutName(e.target.value)}
                 placeholder="Enter workout name..."
-                className="mt-2"
+                className="mt-2 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500"
               />
             </div>
             {blocks.length > 0 && (
@@ -1175,7 +1188,7 @@ function WorkoutBuilderContent() {
                   type="date"
                   value={assignmentDate}
                   onChange={(e) => setAssignmentDate(e.target.value)}
-                  className="mt-1"
+                  className="mt-1 bg-gray-800/50 border-gray-700 text-white"
                 />
               </div>
             )}
@@ -1187,7 +1200,7 @@ function WorkoutBuilderContent() {
                   type="number"
                   value={assignmentWeeks}
                   onChange={(e) => setAssignmentWeeks(parseInt(e.target.value) || 1)}
-                  className="w-20"
+                  className="w-20 bg-gray-800/50 border-gray-700 text-white"
                   min={1}
                   max={52}
                 />
@@ -1596,7 +1609,7 @@ function WorkoutBuilderContent() {
                             value={exerciseSearch}
                             onChange={(e) => setExerciseSearch(e.target.value)}
                             placeholder="Search exercises..."
-                            className="pl-9"
+                            className="pl-9 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500"
                             autoFocus
                           />
                         </div>
@@ -1841,7 +1854,7 @@ function WorkoutBuilderContent() {
                           value={exerciseSearch}
                           onChange={(e) => setExerciseSearch(e.target.value)}
                           placeholder="Search all exercises..."
-                          className="pl-9"
+                          className="pl-9 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500"
                         />
                       </div>
                       <ScrollArea className="h-32">
@@ -3031,6 +3044,83 @@ function WorkoutBuilderContent() {
         }}
         icon={<Trash2 className="w-5 h-5 text-red-400" />}
       />
+
+      {/* Select from Program Dialog */}
+      <Dialog open={showProgramDialog} onOpenChange={setShowProgramDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-white">Select from Program</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Load a workout day from {clientDisplayName || 'client'}&apos;s active program
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[50vh]">
+            <div className="space-y-2">
+              {(() => {
+                const program = selectedClientId ? getActiveProgram(selectedClientId) : null;
+                if (!program) return <p className="text-sm text-gray-500 text-center py-4">No active program</p>;
+                return program.weeklyPlan.map((day: any, idx: number) => {
+                  const exerciseCount = day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0;
+                  return (
+                    <button
+                      key={idx}
+                      className="w-full text-left p-3 rounded-lg border border-gray-700 hover:border-sky-500/50 hover:bg-gray-800 transition-colors"
+                      onClick={() => {
+                        if (!day.blocks || day.blocks.length === 0) {
+                          toast.error('This day has no exercises');
+                          return;
+                        }
+                        const programBlocks: WorkoutBlock[] = day.blocks.map((block: any) => ({
+                          id: `block-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                          type: block.type || 'work',
+                          name: block.name || 'Main Lifts',
+                          exercises: (block.exercises || []).map((ex: any) => ({
+                            id: `ex-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                            exerciseId: ex.exerciseId,
+                            exerciseName: ex.exerciseName,
+                            movementPattern: ex.movementPattern || 'compound',
+                            sets: ex.sets || 3,
+                            reps: ex.reps || '8-12',
+                            repType: ex.repType || 'reps',
+                            rest: ex.rest || '60s',
+                            setStyle: ex.setStyle || 'fixed',
+                            tempo: ex.tempo,
+                            notes: ex.notes,
+                          })),
+                        }));
+                        setBlocks(programBlocks);
+                        setWorkoutName(`${day.dayLabel} - ${program.templateName}`);
+                        setShowProgramDialog(false);
+                        toast.success(`Loaded "${day.dayLabel}" from program`);
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-white">{day.dayLabel}</p>
+                          <p className="text-xs text-gray-400">{exerciseCount} exercises</p>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gray-500" />
+                      </div>
+                      {day.blocks?.map((block: any, bIdx: number) => (
+                        <div key={bIdx} className="mt-1.5">
+                          {block.exercises?.slice(0, 3).map((ex: any, eIdx: number) => (
+                            <p key={eIdx} className="text-[11px] text-gray-500 pl-2">
+                              • {ex.exerciseName} — {ex.sets}×{ex.reps}
+                            </p>
+                          ))}
+                          {(block.exercises?.length || 0) > 3 && (
+                            <p className="text-[10px] text-gray-600 pl-2">+{block.exercises.length - 3} more</p>
+                          )}
+                        </div>
+                      ))}
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

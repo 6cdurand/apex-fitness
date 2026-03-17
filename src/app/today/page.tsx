@@ -35,7 +35,9 @@ import {
   CalendarRange,
   Edit,
   Share2,
-  MessageCircle
+  MessageCircle,
+  Trash2,
+  FileText
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -48,7 +50,7 @@ export default function TodayPage() {
   const { user, isAuthenticated, switchMode } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates, personalBests, volumeRollups } = useWorkoutStore();
   const { medals } = useMedalStore();
-  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms } = useTrainerStore();
+  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent } = useTrainerStore();
 
   const [selectedDate, setSelectedDate] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -531,7 +533,7 @@ export default function TodayPage() {
         {/* Unified Timeline — shows in BOTH user and trainer mode for trainer users */}
         {user.isTrainer && (() => {
           const trainerEvents = getEventsForDate(selectedDateStr).filter(e => 
-            e.trainerId === user.id && e.status !== 'cancelled' && e.clientId !== user.id
+            e.trainerId === user.id && e.status !== 'cancelled' && e.clientId !== user.id && e.type !== 'workout'
           );
           
           // Merge all events: upcoming first, completed below, each sub-sorted by time
@@ -661,17 +663,32 @@ export default function TodayPage() {
                                     </div>
                                   </div>
                                   {sessionDone ? (
-                                    <Badge 
-                                      className="bg-green-500/20 text-green-400 text-xs cursor-pointer hover:bg-green-500/30 transition-colors"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (completedWorkout) {
-                                          router.push(`/workout/${completedWorkout.id}`);
-                                        }
-                                      }}
-                                    >
-                                      <Check className="w-3 h-3 mr-1" /> Done
-                                    </Badge>
+                                    <div className="flex items-center gap-1.5">
+                                      <Badge 
+                                        className="bg-green-500/20 text-green-400 text-xs cursor-pointer hover:bg-green-500/30 transition-colors"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (completedWorkout) {
+                                            router.push(`/workout/${completedWorkout.id}`);
+                                          }
+                                        }}
+                                      >
+                                        <Check className="w-3 h-3 mr-1" /> Done
+                                      </Badge>
+                                      {completedWorkout && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-6 text-[10px] border-green-500/30 text-green-500 hover:bg-green-500/10"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            router.push(`/workout/${completedWorkout.id}`);
+                                          }}
+                                        >
+                                          <FileText className="w-3 h-3 mr-1" /> Summary
+                                        </Button>
+                                      )}
+                                    </div>
                                   ) : eventType === 'consultation' ? (
                                     <Button 
                                       size="sm" 
@@ -794,6 +811,23 @@ export default function TodayPage() {
                                     </Button>
                                   )}
                                 </div>
+                                {/* Delete button for any non-completed session */}
+                                {!sessionDone && (
+                                  <div className="flex justify-end mt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] text-gray-400 hover:text-red-400 hover:bg-red-500/10"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        deleteCalendarEvent(event.id);
+                                        toast.success('Session removed');
+                                      }}
+                                    >
+                                      <Trash2 className="w-3 h-3 mr-1" /> Remove
+                                    </Button>
+                                  </div>
+                                )}
                                 {/* Bottom row for sessions: workout status + create workout (trainer mode only) */}
                                 {eventType === 'session' && !sessionDone && (
                                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">

@@ -14,7 +14,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
         "transition-all duration-200 outline-none",
         "file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium",
         "disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50",
-        "focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 focus:bg-white",
+        "focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20",
         "hover:border-gray-300",
         "aria-invalid:ring-red-500/20 aria-invalid:border-red-500/50",
         className
