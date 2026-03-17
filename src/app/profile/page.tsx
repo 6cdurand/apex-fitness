@@ -389,7 +389,14 @@ export default function ProfilePage() {
 
   return (
     <MainLayout>
-      <div className={`bg-gradient-to-b ${isTrainerMode ? 'from-rose-500 via-rose-600 to-rose-700' : 'from-sky-500 via-sky-600 to-sky-700'} pt-14 pb-12 px-5 relative overflow-hidden`}>
+      <div className="pt-14 pb-12 px-5 relative overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${isTrainerMode ? 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&h=400&fit=crop&crop=center' : 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&h=400&fit=crop&crop=center'})` }}
+        />
+        {/* Gradient overlay */}
+        <div className={`absolute inset-0 ${isTrainerMode ? 'bg-gradient-to-b from-rose-600/85 via-rose-500/80 to-rose-700/90' : 'bg-gradient-to-b from-sky-600/85 via-sky-500/80 to-sky-700/90'}`} />
         {/* Subtle background pattern */}
         <div className="absolute inset-0 opacity-5 bg-[radial-gradient(circle_at_30%_20%,white_1px,transparent_1px)] bg-[length:32px_32px] pointer-events-none" />
         

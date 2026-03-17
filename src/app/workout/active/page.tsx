@@ -1265,8 +1265,14 @@ export default function ActiveWorkoutPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-gradient-to-r from-sky-500 to-sky-600 px-4 pt-12 pb-2">
-        <div className="flex items-center justify-between mb-2">
+      <header className="sticky top-0 z-50 px-4 pt-12 pb-2 relative overflow-hidden">
+        {/* Background image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${isPT ? 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=800&h=300&fit=crop&crop=center' : 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800&h=300&fit=crop&crop=center'})` }}
+        />
+        <div className={`absolute inset-0 ${isPT ? 'bg-gradient-to-r from-rose-600/85 to-rose-500/85' : 'bg-gradient-to-r from-sky-600/85 to-sky-500/85'}`} />
+        <div className="relative flex items-center justify-between mb-2">
           <Button
             variant="ghost"
             size="sm"
@@ -1357,7 +1363,7 @@ export default function ActiveWorkoutPage() {
         </div>
 
         {/* Timer Bar */}
-        <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 mb-2">
+        <div className="relative flex items-center justify-between bg-white/10 rounded-xl p-3 mb-2">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <Clock className="w-5 h-5 text-white" />
@@ -1407,7 +1413,7 @@ export default function ActiveWorkoutPage() {
         </div>
 
         {/* Progress Bar - Below timer, not overlapping */}
-        <div className="w-full bg-white/20 rounded-full h-2">
+        <div className="relative w-full bg-white/20 rounded-full h-2">
           <div 
             className="bg-white h-2 rounded-full transition-all duration-300"
             style={{ width: `${totalSets > 0 ? (completedSets / totalSets) * 100 : 0}%` }}
@@ -1730,6 +1736,8 @@ export default function ActiveWorkoutPage() {
                           <div className="flex items-center gap-1">
                             <Input
                               type="number"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
                               value={circuitExerciseReps[workoutExercise.id] || (workoutExercise.sets || [])[0]?.reps || ''}
                               onChange={(e) => {
                                 const reps = parseInt(e.target.value) || 0;
@@ -2163,6 +2171,8 @@ export default function ActiveWorkoutPage() {
                                     <div className="col-span-4">
                                       <Input
                                         type="number"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         placeholder="30"
                                         value={set.duration || ''}
                                         onChange={(e) => updateSet(workoutExercise.id, set.id, { duration: parseInt(e.target.value) || 30 })}
@@ -2216,6 +2226,8 @@ export default function ActiveWorkoutPage() {
                                     <div className="col-span-3">
                                       <Input
                                         type="number"
+                                        inputMode="decimal"
+                                        pattern="[0-9.]*"
                                         placeholder="0"
                                         min="0"
                                         step="0.5"
@@ -2236,6 +2248,8 @@ export default function ActiveWorkoutPage() {
                                     <div className="col-span-3">
                                       <Input
                                         type="number"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         placeholder="0"
                                         min="0"
                                         value={set.reps != null && set.reps !== undefined ? set.reps : ''}
@@ -3777,6 +3791,7 @@ function SetRow({
             <Input
               type="number"
               inputMode="decimal"
+              pattern="[0-9.]*"
               placeholder="0"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
@@ -3798,6 +3813,7 @@ function SetRow({
           <Input
             type="number"
             inputMode="numeric"
+            pattern="[0-9]*"
             placeholder="0"
             value={reps}
             onChange={(e) => setReps(e.target.value)}
@@ -3873,6 +3889,7 @@ function SetRow({
                 <Input
                   type="number"
                   inputMode="decimal"
+                  pattern="[0-9.]*"
                   placeholder="0"
                   value={drop.weight || ''}
                   onChange={(e) => {
@@ -3887,6 +3904,7 @@ function SetRow({
                 <Input
                   type="number"
                   inputMode="numeric"
+                  pattern="[0-9]*"
                   placeholder="0"
                   value={drop.reps || ''}
                   onChange={(e) => {

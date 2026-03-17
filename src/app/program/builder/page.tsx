@@ -235,6 +235,9 @@ function ProgramBuilderContent() {
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>('fixed');
   
+  // ── Exercise edit dialog state ──
+  const [editingExercise, setEditingExercise] = useState<{ blockId: string; exerciseId: string; sets: number; reps: string; rest: string } | null>(null);
+  
   // ── Schedule state ──
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   
@@ -900,16 +903,7 @@ function ProgramBuilderContent() {
                               size="icon"
                               className="h-6 w-6 text-gray-500 hover:text-sky-400"
                               onClick={() => {
-                                const newSets = prompt('Sets:', String(ex.sets));
-                                const newReps = prompt('Reps:', ex.reps);
-                                const newRest = prompt('Rest:', ex.rest);
-                                if (newSets || newReps || newRest) {
-                                  updateExercise(block.id, ex.id, {
-                                    ...(newSets ? { sets: parseInt(newSets) || ex.sets } : {}),
-                                    ...(newReps ? { reps: newReps } : {}),
-                                    ...(newRest ? { rest: newRest } : {}),
-                                  });
-                                }
+                                setEditingExercise({ blockId: block.id, exerciseId: ex.id, sets: ex.sets, reps: ex.reps, rest: ex.rest });
                               }}
                             >
                               <Edit className="w-3 h-3" />
@@ -1286,6 +1280,70 @@ function ProgramBuilderContent() {
               })}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Exercise Edit Dialog ── */}
+      <Dialog open={!!editingExercise} onOpenChange={(open) => { if (!open) setEditingExercise(null); }}>
+        <DialogContent className="bg-white border-gray-200 max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Edit Exercise</DialogTitle>
+          </DialogHeader>
+          {editingExercise && (
+            <div className="space-y-4 py-2">
+              <div>
+                <Label className="text-gray-700 text-sm">Sets</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={editingExercise.sets}
+                  onChange={(e) => setEditingExercise({ ...editingExercise, sets: parseInt(e.target.value) || 0 })}
+                  className="mt-1 h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-gray-700 text-sm">Reps</Label>
+                <Input
+                  value={editingExercise.reps}
+                  onChange={(e) => setEditingExercise({ ...editingExercise, reps: e.target.value })}
+                  placeholder="e.g. 8-12"
+                  className="mt-1 h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-gray-700 text-sm">Rest</Label>
+                <Input
+                  value={editingExercise.rest}
+                  onChange={(e) => setEditingExercise({ ...editingExercise, rest: e.target.value })}
+                  placeholder="e.g. 90s"
+                  className="mt-1 h-10"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-200"
+                  onClick={() => setEditingExercise(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-sky-500 hover:bg-sky-600"
+                  onClick={() => {
+                    updateExercise(editingExercise.blockId, editingExercise.exerciseId, {
+                      sets: editingExercise.sets,
+                      reps: editingExercise.reps,
+                      rest: editingExercise.rest,
+                    });
+                    setEditingExercise(null);
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
