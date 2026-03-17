@@ -1872,7 +1872,17 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const dbProgram = {
+    const trainingDaysJson = {
+      scheduleMode: program.scheduleMode || null,
+      trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
+      selectedDays: program.selectedDays || null,
+      cycleAcrossWeeks: program.cycleAcrossWeeks || false,
+      sessionPTMap: program.sessionPTMap || null,
+      nextWorkoutIndex: program.nextWorkoutIndex || 0,
+      autoRepeat: program.autoRepeat || false,
+      sessionType: program.sessionType || null,
+    };
+    const dbProgram: Record<string, any> = {
       id: program.id,
       client_id: program.clientId,
       trainer_id: program.trainerId,
@@ -1881,23 +1891,27 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       phase: program.phase || null,
       goal: program.goal || null,
       weekly_plan: program.weeklyPlan || null,
-      training_days: {
-        scheduleMode: program.scheduleMode || null,
-        trainingDaysPerWeek: program.trainingDaysPerWeek || null,
-        selectedDays: program.selectedDays || null,
-        cycleAcrossWeeks: program.cycleAcrossWeeks || false,
-        sessionPTMap: program.sessionPTMap || null,
-        nextWorkoutIndex: program.nextWorkoutIndex || 0,
-        autoRepeat: program.autoRepeat || false,
-        sessionType: program.sessionType || null,
-      },
+      // Top-level columns (from older migration — always exist)
+      training_days_per_week: program.trainingDaysPerWeek ?? null,
+      selected_days: program.selectedDays || null,
+      cycle_across_weeks: program.cycleAcrossWeeks || false,
+      session_type: program.sessionType || null,
       start_date: program.startDate || null,
       end_date: program.endDate || null,
       status: program.status || 'active',
       updated_at: new Date().toISOString(),
     };
+    // Also write JSONB column if it exists (from new migration)
+    // We try with it first; if it fails we retry without
+    dbProgram.training_days = trainingDaysJson;
     
-    const { error } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+    let { error } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+    if (error && error.message?.includes('training_days')) {
+      // training_days JSONB column doesn't exist yet — retry without it
+      delete dbProgram.training_days;
+      const retry = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.error('[Program Sync] Error:', error.message);
       return false;
@@ -1933,6 +1947,7 @@ export async function fetchClientProgramsFromSupabase(trainerId: string): Promis
 
 function mapProgramFromSupabase(p: any) {
   const td = p.training_days || {};
+  // Prefer JSONB training_days, fallback to top-level columns (older migration)
   return {
     id: p.id,
     clientId: p.client_id,
@@ -1943,13 +1958,13 @@ function mapProgramFromSupabase(p: any) {
     goal: p.goal,
     weeklyPlan: p.weekly_plan || [],
     scheduleMode: td.scheduleMode || undefined,
-    trainingDaysPerWeek: td.trainingDaysPerWeek || undefined,
-    selectedDays: td.selectedDays || undefined,
-    cycleAcrossWeeks: td.cycleAcrossWeeks || false,
+    trainingDaysPerWeek: td.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
+    selectedDays: td.selectedDays || p.selected_days || undefined,
+    cycleAcrossWeeks: td.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
     sessionPTMap: td.sessionPTMap || undefined,
     nextWorkoutIndex: td.nextWorkoutIndex || 0,
     autoRepeat: td.autoRepeat || false,
-    sessionType: td.sessionType || undefined,
+    sessionType: td.sessionType || p.session_type || undefined,
     startDate: p.start_date,
     endDate: p.end_date,
     status: p.status,
@@ -2942,19 +2957,27 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const dbNotification = {
+    const url = notification.actionUrl || notification.link || null;
+    const dbNotification: Record<string, any> = {
       id: notification.id,
       user_id: notification.userId,
       type: notification.type,
       title: notification.title,
       message: notification.message || null,
       read: notification.read || false,
-      link: notification.actionUrl || notification.link || null,
-      action_url: notification.actionUrl || notification.link || null,
+      action_url: url,
       created_at: notification.createdAt,
     };
+    // Try with link column (new migration); if fails, retry without
+    dbNotification.link = url;
     
-    const { error } = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
+    let { error } = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
+    if (error && error.message?.includes('link')) {
+      // link column doesn't exist yet — retry without it
+      delete dbNotification.link;
+      const retry = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.error('[Notification Sync] Error:', error.message);
       return false;

@@ -3236,9 +3236,10 @@ export const useTrainerStore = create<TrainerState>()(
       loadClientDataFromSupabase: async (clientId) => {
         console.log('[Trainer Store] 🔄 Loading client data from Supabase for:', clientId);
         try {
-          const [programs, events] = await Promise.all([
+          const [programs, events, notifications] = await Promise.all([
             import('./supabaseSync').then(m => m.fetchClientProgramsForUser(clientId)),
             import('./supabaseSync').then(m => m.fetchCalendarEventsForUser(clientId)),
+            import('./supabaseSync').then(m => m.fetchNotificationsFromSupabase(clientId)),
           ]);
           
           const currentPrograms = get().clientPrograms;
@@ -3267,6 +3268,23 @@ export const useTrainerStore = create<TrainerState>()(
             clientPrograms: [...updatedPrograms, ...newPrograms],
             calendarEvents: [...updatedEvents, ...newEvents],
           });
+          
+          // Load notifications into social store for this client
+          if (notifications.length > 0) {
+            const currentNotifications = useSocialStore.getState().notifications;
+            const newNotifications = notifications.filter(
+              (sn: any) => !currentNotifications.find(ln => ln.id === sn.id)
+            );
+            // Update existing with Supabase data
+            const updatedNotifications = currentNotifications.map(ln => {
+              const fresh = notifications.find((sn: any) => sn.id === ln.id);
+              return fresh ? { ...ln, ...fresh } : ln;
+            });
+            useSocialStore.setState({
+              notifications: [...updatedNotifications, ...newNotifications],
+            });
+            console.log(`[Trainer Store] ✅ Client notifications loaded: ${notifications.length} from Supabase`);
+          }
           
           console.log(`[Trainer Store] ✅ Client data loaded: ${programs.length} programs, ${events.length} events`);
         } catch (e) {
@@ -3714,7 +3732,26 @@ export const useTrainerStore = create<TrainerState>()(
           sessionPackages: supabasePackages,
           calendarEvents: [...mergedCalendarEvents, ...localOnlyEvents],
           payments: supabasePayments,
-          clientPrograms: supabasePrograms,
+          clientPrograms: (() => {
+            const currentPrograms = get().clientPrograms;
+            // Merge: Supabase programs with local scheduling fields preserved
+            const merged = supabasePrograms.map((sbProg: any) => {
+              const localProg = currentPrograms.find((lp: any) => lp.id === sbProg.id);
+              // If Supabase lost trainingDaysPerWeek but local has it, preserve local
+              if (localProg && localProg.trainingDaysPerWeek && !sbProg.trainingDaysPerWeek) {
+                const restored = { ...sbProg, trainingDaysPerWeek: localProg.trainingDaysPerWeek, scheduleMode: localProg.scheduleMode, selectedDays: localProg.selectedDays, cycleAcrossWeeks: localProg.cycleAcrossWeeks, sessionPTMap: localProg.sessionPTMap, nextWorkoutIndex: localProg.nextWorkoutIndex, autoRepeat: localProg.autoRepeat, sessionType: localProg.sessionType };
+                syncClientProgramToSupabase(restored);
+                return restored;
+              }
+              return sbProg;
+            });
+            // Also keep local-only programs not yet in Supabase
+            const localOnly = currentPrograms.filter(
+              (lp: any) => !supabasePrograms.find((sp: any) => sp.id === lp.id)
+            );
+            localOnly.forEach((p: any) => syncClientProgramToSupabase(p));
+            return [...merged, ...localOnly];
+          })(),
           bookingRequests: supabaseBookings,
           sessionWorkouts: [...supabaseSessionWorkouts, ...localOnlyWorkouts],
           workoutLibrary: supabaseWorkoutLibrary,
