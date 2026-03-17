@@ -929,9 +929,12 @@ export interface ClientProgram {
   weeklyPlan: ClientWorkoutDay[];
   
   // Scheduling configuration
+  scheduleMode?: 'fixed' | 'flexible';
   trainingDaysPerWeek?: number;
   selectedDays?: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[];
   cycleAcrossWeeks?: boolean; // When days > workouts, cycle workouts across weeks
+  sessionPTMap?: Record<number, 'pt' | 'personal'>; // Per-session-slot PT marking (key = session index 0..trainingDaysPerWeek-1)
+  nextWorkoutIndex?: number; // Tracks cycling position (which workout day is next)
   sessionType?: 'pt' | 'solo' | 'mixed';
   
   startDate: string;

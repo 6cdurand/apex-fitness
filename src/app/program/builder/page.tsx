@@ -280,8 +280,10 @@ function ProgramBuilderContent() {
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
-  const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>('fixed');
+  const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>(existingProgram?.scheduleMode || 'fixed');
   const [trainingFrequency, setTrainingFrequency] = useState(existingProgram?.trainingDaysPerWeek || daysPerWeek);
+  const [fixedDays, setFixedDays] = useState<Weekday[]>(existingProgram?.selectedDays as Weekday[] || []);
+  const [sessionPTMap, setSessionPTMap] = useState<Record<number, 'pt' | 'personal'>>(existingProgram?.sessionPTMap || {});
   
   // ── Exercise edit dialog state ──
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: ProgramExercise } | null>(null);
@@ -523,19 +525,24 @@ function ProgramBuilderContent() {
       })),
     }));
     
+    const effectiveFrequency = scheduleMode === 'flexible' ? trainingFrequency : (fixedDays.length || days.length);
+    const effectiveDays = scheduleMode === 'fixed' ? fixedDays : [];
+    
+    const programFields = {
+      templateName: programName || 'Custom Program',
+      phase: phase as TrainingPhase,
+      goal: goal as TrainingGoal,
+      weeklyPlan,
+      scheduleMode,
+      trainingDaysPerWeek: effectiveFrequency,
+      cycleAcrossWeeks: effectiveFrequency > days.length,
+      selectedDays: effectiveDays as any[],
+      sessionPTMap,
+      nextWorkoutIndex: 0,
+    };
+    
     if (isEditMode && existingProgram) {
-      // Update existing program
-      updateClientProgram(existingProgram.id, {
-        templateName: programName || existingProgram.templateName,
-        phase: phase as TrainingPhase,
-        goal: goal as TrainingGoal,
-        weeklyPlan,
-        trainingDaysPerWeek: scheduleMode === 'flexible' ? trainingFrequency : days.length,
-        cycleAcrossWeeks: scheduleMode === 'flexible',
-        selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
-        updatedAt: new Date().toISOString(),
-      });
-      
+      updateClientProgram(existingProgram.id, { ...programFields, updatedAt: new Date().toISOString() });
       setShowSaveDialog(false);
       toast.success('Program updated!');
       router.back();
@@ -547,13 +554,7 @@ function ProgramBuilderContent() {
       clientId: targetClientId,
       trainerId: isTrainerMode ? user.id : user.id,
       templateId: 'custom',
-      templateName: programName || 'Custom Program',
-      phase: phase as TrainingPhase,
-      goal: goal as TrainingGoal,
-      weeklyPlan,
-      trainingDaysPerWeek: scheduleMode === 'flexible' ? trainingFrequency : days.length,
-      cycleAcrossWeeks: scheduleMode === 'flexible',
-      selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
+      ...programFields,
       startDate,
       endDate: (() => {
         const start = new Date(startDate);
@@ -568,40 +569,75 @@ function ProgramBuilderContent() {
     
     addClientProgram(program);
     
-    // Create calendar events for scheduled sessions
+    // Auto-create calendar events for all weeks
     const dayMap: Record<string, number> = {
       sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
       thursday: 4, friday: 5, saturday: 6,
     };
-    
     const startD = new Date(startDate);
-    const todayDow = startD.getDay();
+    let cycleIdx = 0; // Tracks which workout in the cycle
     
-    for (let week = 0; week < actualWeeks; week++) {
-      days.forEach(day => {
-        if (!day.scheduledDay) return;
-        const targetDow = dayMap[day.scheduledDay] ?? 1;
-        let daysUntil = targetDow - todayDow;
-        if (daysUntil < 0) daysUntil += 7;
-        
-        const eventDate = new Date(startD);
-        eventDate.setDate(eventDate.getDate() + daysUntil + (week * 7));
-        const dateStr = eventDate.toISOString().split('T')[0];
-        
-        const totalEx = day.blocks.reduce((s, b) => s + b.exercises.length, 0);
-        
-        addCalendarEvent({
-          title: day.label,
-          type: 'workout',
-          date: dateStr,
-          startTime: '07:00',
-          endTime: '08:00',
-          clientId: targetClientId,
-          trainerId: user.id,
-          status: 'scheduled',
-          notes: `${totalEx} exercises • ${programName || 'Custom Program'}`,
+    if (scheduleMode === 'fixed' && fixedDays.length > 0) {
+      // Fixed: cycle workouts across fixed weekdays, shifting each week
+      for (let week = 0; week < actualWeeks; week++) {
+        fixedDays.forEach((wd, slotIdx) => {
+          const workoutIdx = cycleIdx % days.length;
+          const day = days[workoutIdx];
+          const targetDow = dayMap[wd] ?? 1;
+          const weekStart = new Date(startD);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (targetDow === 0 ? 7 : targetDow) + (week * 7));
+          if (weekStart < startD && week === 0) { weekStart.setDate(weekStart.getDate() + 7); }
+          const dateStr = weekStart.toISOString().split('T')[0];
+          const totalEx = day.blocks.reduce((s, b) => s + b.exercises.length, 0);
+          const isPT = sessionPTMap[slotIdx] === 'pt';
+          
+          addCalendarEvent({
+            title: `${day.label} - ${programName || 'Program'}`,
+            type: isPT ? 'session' : 'workout',
+            date: dateStr,
+            startTime: isPT ? '09:00' : '07:00',
+            endTime: isPT ? '10:00' : '08:00',
+            clientId: targetClientId,
+            trainerId: user.id,
+            status: 'scheduled',
+            notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
+          });
+          cycleIdx++;
         });
-      });
+      }
+    } else if (scheduleMode === 'flexible') {
+      // Flexible: spread sessions across the week, cycling workouts
+      const spreadDays = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      const gap = Math.max(1, Math.floor(7 / trainingFrequency));
+      
+      for (let week = 0; week < actualWeeks; week++) {
+        for (let s = 0; s < trainingFrequency; s++) {
+          const workoutIdx = cycleIdx % days.length;
+          const day = days[workoutIdx];
+          const spreadIdx = Math.min(s * gap, 6);
+          const wd = spreadDays[spreadIdx];
+          const targetDow = dayMap[wd] ?? 1;
+          const weekStart = new Date(startD);
+          weekStart.setDate(weekStart.getDate() - weekStart.getDay() + (targetDow === 0 ? 7 : targetDow) + (week * 7));
+          if (weekStart < startD && week === 0) { weekStart.setDate(weekStart.getDate() + 7); }
+          const dateStr = weekStart.toISOString().split('T')[0];
+          const totalEx = day.blocks.reduce((s2, b) => s2 + b.exercises.length, 0);
+          const isPT = sessionPTMap[s] === 'pt';
+          
+          addCalendarEvent({
+            title: `${day.label} - ${programName || 'Program'}`,
+            type: isPT ? 'session' : 'workout',
+            date: dateStr,
+            startTime: isPT ? '09:00' : '07:00',
+            endTime: isPT ? '10:00' : '08:00',
+            clientId: targetClientId,
+            trainerId: user.id,
+            status: 'scheduled',
+            notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
+          });
+          cycleIdx++;
+        }
+      }
     }
     
     // Save to library if requested
@@ -623,7 +659,8 @@ function ProgramBuilderContent() {
     }
     
     setShowSaveDialog(false);
-    toast.success(`Program created! ${actualWeeks * daysPerWeek} sessions scheduled.`);
+    const totalSessions = actualWeeks * effectiveFrequency;
+    toast.success(`Program created! ${totalSessions} sessions scheduled.`);
     router.back();
   };
 
@@ -1062,31 +1099,62 @@ function ProgramBuilderContent() {
 
             {scheduleMode === 'fixed' && (
             <Card className="bg-gray-900 border-gray-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-white text-sm">Assign Days to Weekdays</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {days.map((day, i) => (
-                  <div key={day.id} className="flex items-center gap-3">
-                    <span className="text-sm text-white w-24 truncate">{day.label}</span>
-                    <Select
-                      value={day.scheduledDay || ''}
-                      onValueChange={v => setDays(prev => prev.map((d, idx) => idx === i ? { ...d, scheduledDay: v as Weekday } : d))}
-                    >
-                      <SelectTrigger className="bg-gray-800 border-gray-700 text-white text-xs flex-1">
-                        <SelectValue placeholder="Pick day..." />
-                      </SelectTrigger>
-                      <SelectContent className="bg-gray-800 border-gray-700">
-                        {WEEKDAYS.map(wd => (
-                          <SelectItem key={wd} value={wd} className="capitalize">{wd}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <span className="text-[10px] text-gray-500">
-                      {day.blocks.reduce((s, b) => s + b.exercises.length, 0)} ex
-                    </span>
+              <CardContent className="p-4 space-y-4">
+                <div>
+                  <Label className="text-gray-300 text-sm mb-2 block">Training Days</Label>
+                  <p className="text-[10px] text-gray-500 mb-2">Pick which days the client trains. Workouts cycle across these days.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAYS.map(wd => {
+                      const isSelected = fixedDays.includes(wd);
+                      return (
+                        <button
+                          key={wd}
+                          type="button"
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-all ${
+                            isSelected ? 'bg-sky-500 text-white' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:border-gray-500'
+                          }`}
+                          onClick={() => {
+                            setFixedDays(prev => 
+                              isSelected ? prev.filter(d => d !== wd) : [...prev, wd].sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b))
+                            );
+                          }}
+                        >
+                          {wd.slice(0, 3)}
+                        </button>
+                      );
+                    })}
                   </div>
-                ))}
+                </div>
+                {fixedDays.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-gray-300 text-sm">Session Schedule Preview</Label>
+                    <p className="text-[10px] text-gray-500">
+                      {fixedDays.length} training days, cycling through {days.length} workouts
+                      {fixedDays.length > days.length && ' (pattern shifts each week)'}
+                    </p>
+                    <div className="space-y-1.5">
+                      {fixedDays.map((wd, slotIdx) => {
+                        const workoutIdx = slotIdx % days.length;
+                        const isPT = sessionPTMap[slotIdx] === 'pt';
+                        return (
+                          <div key={wd} className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
+                            <span className="text-xs text-gray-500 capitalize w-12">{wd.slice(0, 3)}</span>
+                            <span className="text-sm text-white flex-1">{days[workoutIdx]?.label || 'Workout'}</span>
+                            <button
+                              type="button"
+                              onClick={() => setSessionPTMap(prev => ({ ...prev, [slotIdx]: isPT ? 'personal' : 'pt' }))}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+                                isPT ? 'bg-sky-500 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                              }`}
+                            >
+                              {isPT ? 'PT' : 'Personal'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
             )}
@@ -1098,11 +1166,11 @@ function ProgramBuilderContent() {
                   <RefreshCw className="w-5 h-5 text-amber-400 flex-shrink-0" />
                   <div>
                     <p className="text-sm text-white font-medium">Flexible Schedule</p>
-                    <p className="text-xs text-gray-400">Workouts will cycle in order. Client sees &quot;Next Workout&quot; and can do it on any day.</p>
+                    <p className="text-xs text-gray-400">Workouts cycle in order. Client sees &quot;Next Workout&quot; and does it on any day.</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg">
-                  <Label className="text-gray-300 text-sm flex-shrink-0">Training Frequency</Label>
+                  <Label className="text-gray-300 text-sm flex-shrink-0">Frequency</Label>
                   <Select value={String(trainingFrequency)} onValueChange={v => setTrainingFrequency(parseInt(v))}>
                     <SelectTrigger className="bg-gray-800 border-gray-700 text-white w-24">
                       <SelectValue />
@@ -1113,16 +1181,31 @@ function ProgramBuilderContent() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-gray-500">Client trains {trainingFrequency}×/wk, cycling through {days.length} workouts</p>
+                  <p className="text-[10px] text-gray-500">cycling {days.length} workouts</p>
                 </div>
-                <div className="space-y-2">
-                  {days.map((day, i) => (
-                    <div key={day.id} className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
-                      <span className="text-xs text-gray-500 w-6">{i + 1}.</span>
-                      <span className="text-sm text-white flex-1">{day.label}</span>
-                      <span className="text-[10px] text-gray-500">{day.blocks.reduce((s, b) => s + b.exercises.length, 0)} exercises</span>
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  <Label className="text-gray-300 text-sm">Weekly Sessions</Label>
+                  <p className="text-[10px] text-gray-500 mb-1">Set each session as PT or Personal</p>
+                  {Array.from({ length: trainingFrequency }, (_, slotIdx) => {
+                    const workoutIdx = slotIdx % days.length;
+                    const isPT = sessionPTMap[slotIdx] === 'pt';
+                    return (
+                      <div key={slotIdx} className="flex items-center gap-3 px-3 py-2 bg-gray-800/50 rounded-lg">
+                        <span className="text-xs text-gray-500 w-6">{slotIdx + 1}.</span>
+                        <span className="text-sm text-white flex-1">{days[workoutIdx]?.label || 'Workout'}</span>
+                        <span className="text-[10px] text-gray-500">{days[workoutIdx]?.blocks.reduce((s, b) => s + b.exercises.length, 0) || 0} ex</span>
+                        <button
+                          type="button"
+                          onClick={() => setSessionPTMap(prev => ({ ...prev, [slotIdx]: isPT ? 'personal' : 'pt' }))}
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+                            isPT ? 'bg-sky-500 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                          }`}
+                        >
+                          {isPT ? 'PT' : 'Personal'}
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -1144,10 +1227,10 @@ function ProgramBuilderContent() {
                   <p className="text-sm text-white font-medium">Program Summary</p>
                   <p className="text-xs text-gray-400">{programName}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">{scheduleMode === 'flexible' ? trainingFrequency : days.length}×/wk</Badge>
+                    <Badge className="text-[10px] bg-sky-500/20 text-sky-300 border-0">{scheduleMode === 'flexible' ? trainingFrequency : fixedDays.length || days.length}×/wk</Badge>
                     <Badge className="text-[10px] bg-purple-500/20 text-purple-300 border-0">{actualWeeks} weeks</Badge>
                     <Badge className="text-[10px] bg-emerald-500/20 text-emerald-300 border-0">{allDaysTotalEx} exercises</Badge>
-                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-0">{actualWeeks * (scheduleMode === 'flexible' ? trainingFrequency : days.length)} sessions</Badge>
+                    <Badge className="text-[10px] bg-amber-500/20 text-amber-300 border-0">{actualWeeks * (scheduleMode === 'flexible' ? trainingFrequency : fixedDays.length || days.length)} sessions</Badge>
                     {autoRepeat && <Badge className="text-[10px] bg-orange-500/20 text-orange-300 border-0">Auto-repeat</Badge>}
                   </div>
                 </div>

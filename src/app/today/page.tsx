@@ -50,7 +50,7 @@ export default function TodayPage() {
   const { user, isAuthenticated, switchMode } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates, personalBests, volumeRollups } = useWorkoutStore();
   const { medals } = useMedalStore();
-  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent } = useTrainerStore();
+  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent, getNextProgramWorkout } = useTrainerStore();
 
   const [selectedDate, setSelectedDate] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -474,6 +474,103 @@ export default function TodayPage() {
         )}
 
         {/* Medals Earned Today — removed per user request */}
+
+        {/* Next Workout — client mode, active program */}
+        {user.mode !== 'trainer' && isToday && (() => {
+          const next = getNextProgramWorkout(user.id);
+          if (!next) return null;
+          const { program, dayIndex, day, remainingThisWeek, sessionType } = next;
+          const totalEx = day?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+          
+          if (remainingThisWeek <= 0) {
+            return (
+              <Card className="bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-emerald-500/30">
+                <CardContent className="p-4 text-center">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-2">
+                    <Check className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <p className="font-semibold text-gray-900">All done this week! 🎉</p>
+                  <p className="text-xs text-gray-500 mt-1">{program.trainingDaysPerWeek || program.weeklyPlan.length} sessions completed. Rest up for next week.</p>
+                </CardContent>
+              </Card>
+            );
+          }
+          
+          return (
+            <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                      <Dumbbell className="w-5 h-5 text-sky-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 font-medium">Next Workout</p>
+                      <h3 className="font-semibold text-gray-900">{day?.dayLabel || 'Workout'}</h3>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <Badge className={`text-[10px] border-0 ${sessionType === 'pt' ? 'bg-sky-500/20 text-sky-600' : 'bg-gray-200 text-gray-600'}`}>
+                      {sessionType === 'pt' ? 'PT Session' : 'Personal'}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} more this week</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 mb-3">
+                  <p className="text-xs text-gray-500">{totalEx} exercises • {program.templateName}</p>
+                  {program.scheduleMode === 'flexible' && (
+                    <Badge className="text-[9px] bg-amber-500/10 text-amber-600 border-0">Cycling</Badge>
+                  )}
+                </div>
+                <Button
+                  className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                  onClick={() => {
+                    const exercises = (day?.blocks || []).flatMap((block: any) =>
+                      (block.exercises || []).map((ex: any) => ({
+                        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        exerciseId: ex.exerciseId || ex.id,
+                        exercise: {
+                          id: ex.exerciseId || ex.id,
+                          name: ex.exerciseName || ex.name || 'Exercise',
+                          category: 'strength',
+                          muscleGroups: [],
+                        },
+                        sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+                          id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                          setNumber: si + 1,
+                          targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                          reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                          weight: 0,
+                          completed: false,
+                        })),
+                        restTimerSeconds: parseInt(ex.rest) || 90,
+                        notes: ex.notes || '',
+                      }))
+                    );
+                    if (exercises.length > 0) {
+                      startFromTemplate({
+                        id: `program-${program.id}-${dayIndex}`,
+                        name: `${day?.dayLabel || 'Workout'} - ${program.templateName}`,
+                        description: `From ${program.templateName}`,
+                        exercises,
+                        category: 'strength',
+                        estimatedDuration: 60,
+                        createdAt: new Date().toISOString(),
+                        createdBy: user.id,
+                        isPublic: false,
+                        updatedAt: new Date().toISOString(),
+                      } as any);
+                      router.push('/workout/active');
+                    }
+                  }}
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Start {day?.dayLabel || 'Workout'}
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {/* Quick Start */}
         {user.mode !== 'trainer' && (

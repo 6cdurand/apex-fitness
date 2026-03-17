@@ -2302,7 +2302,7 @@ export default function ClientDetailPage() {
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-900">{activeProgram.templateName}</h3>
-                          <p className="text-xs text-gray-500">{activeProgram.weeklyPlan.length} days/week</p>
+                          <p className="text-xs text-gray-500">{activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan.length}×/week • {activeProgram.weeklyPlan.length} workouts{activeProgram.scheduleMode === 'flexible' ? ' • Flexible' : activeProgram.selectedDays?.length ? ' • Fixed' : ''}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1">
@@ -2415,106 +2415,29 @@ export default function ClientDetailPage() {
                   </Button>
                 </div>
 
-                {/* Assign Program to Client Calendar */}
+                {/* Program Schedule Info */}
                 <Card className="bg-white border-gray-200 shadow-sm">
                   <CardContent className="p-4">
                     <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
                       <Calendar className="w-5 h-5 text-rose-500" />
-                      Schedule to Client Calendar
+                      Schedule
                     </h3>
-                    <p className="text-xs text-gray-500 mb-3">
-                      Set each day as <strong>PT</strong> (shows on your Today page) or <strong>Personal</strong> (client only). Toggle anytime.
-                    </p>
-                    <div className="space-y-3">
-                      {/* Per-day PT/Personal toggles */}
-                      <div className="space-y-1.5">
-                        {activeProgram.weeklyPlan.map((day: any, idx: number) => {
-                          const isPT = daySessionTypes[idx] === 'pt';
-                          return (
-                            <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <Dumbbell className="w-4 h-4 text-rose-500" />
-                                <span className="text-sm font-medium text-gray-900">{day.dayLabel}</span>
-                                <span className="text-[10px] text-gray-500">
-                                  {day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => setDaySessionTypes(prev => ({
-                                  ...prev,
-                                  [idx]: isPT ? 'personal' : 'pt',
-                                }))}
-                                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                                  isPT
-                                    ? 'bg-sky-500 text-white'
-                                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                                }`}
-                              >
-                                {isPT ? 'PT' : 'Personal'}
-                              </button>
-                            </div>
-                          );
-                        })}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Badge className="bg-sky-500/20 text-sky-600 border-0 text-xs">{activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan.length}×/wk</Badge>
+                        <span>{activeProgram.scheduleMode === 'flexible' ? 'Flexible — cycling' : 'Fixed days'}</span>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600 w-24">Start date</label>
-                        <Input
-                          type="date"
-                          defaultValue={new Date().toISOString().split('T')[0]}
-                          id={`schedule-start-${clientId}`}
-                          className="bg-gray-50 border-gray-200 text-gray-900 flex-1"
-                        />
-                      </div>
-                      <Button
-                        className="w-full bg-rose-500 hover:bg-rose-600 text-white"
-                        onClick={() => {
-                          const startInput = document.getElementById(`schedule-start-${clientId}`) as HTMLInputElement;
-                          const startDate = startInput?.value ? new Date(startInput.value) : new Date();
-                          
-                          const dayMap: Record<string, number> = {
-                            'monday': 0, 'tuesday': 1, 'wednesday': 2, 'thursday': 3,
-                            'friday': 4, 'saturday': 5, 'sunday': 6,
-                            'mon': 0, 'tue': 1, 'wed': 2, 'thu': 3, 'fri': 4, 'sat': 5, 'sun': 6,
-                            'day 1': 0, 'day 2': 1, 'day 3': 2, 'day 4': 3, 'day 5': 4, 'day 6': 5, 'day 7': 6,
-                          };
-                          
-                          let eventsCreated = 0;
-                          const weekStart = startOfWeek(startDate, { weekStartsOn: 1 });
-                          
-                          activeProgram.weeklyPlan.forEach((day: any, idx: number) => {
-                            const label = (day.dayLabel || '').toLowerCase();
-                            const dayOffset = dayMap[label] ?? idx;
-                            const eventDate = addDays(weekStart, dayOffset);
-                            
-                            if (eventDate >= new Date(new Date().toDateString())) {
-                              const isPT = daySessionTypes[idx] === 'pt';
-                              const exerciseCount = day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0;
-                              addCalendarEvent({
-                                title: `${day.dayLabel} - ${activeProgram.templateName}`,
-                                type: isPT ? 'session' : 'workout',
-                                date: format(eventDate, 'yyyy-MM-dd'),
-                                startTime: isPT ? '09:00' : undefined,
-                                endTime: isPT ? '10:00' : undefined,
-                                clientId: clientId,
-                                trainerId: user?.id || '',
-                                notes: `${exerciseCount} exercises • ${isPT ? 'PT Session' : 'Personal'} • Assigned by trainer`,
-                                status: 'scheduled',
-                              });
-                              eventsCreated++;
-                            }
-                          });
-                          
-                          if (eventsCreated > 0) {
-                            toast.success(`Scheduled ${eventsCreated} workouts (${Object.values(daySessionTypes).filter(v => v === 'pt').length} PT) to ${clientUser.displayName}'s calendar`);
-                          } else {
-                            toast.error('No workouts scheduled — start date may be in the past');
-                          }
-                        }}
-                      >
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Schedule {activeProgram.weeklyPlan.length} Workouts This Week
-                      </Button>
+                      {activeProgram.selectedDays && activeProgram.selectedDays.length > 0 && (
+                        <p className="text-xs text-gray-500">
+                          Days: {activeProgram.selectedDays.map((d: string) => d.slice(0, 3)).join(', ')}
+                        </p>
+                      )}
+                      {activeProgram.sessionPTMap && Object.values(activeProgram.sessionPTMap).some(v => v === 'pt') && (
+                        <p className="text-xs text-gray-500">
+                          {Object.values(activeProgram.sessionPTMap).filter(v => v === 'pt').length} PT sessions / {Object.values(activeProgram.sessionPTMap).filter(v => v === 'personal').length} Personal per week
+                        </p>
+                      )}
+                      <p className="text-[10px] text-gray-400 mt-1">Sessions are auto-scheduled from the program builder. Edit the program to change scheduling.</p>
                     </div>
                   </CardContent>
                 </Card>

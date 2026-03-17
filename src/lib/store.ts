@@ -2034,6 +2034,7 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal' } | null;
   
   // Client Profiles (onboarding data)
   saveClientProfile: (profile: ClientProgrammingProfile) => void;
@@ -3097,6 +3098,49 @@ export const useTrainerStore = create<TrainerState>()(
 
       getActiveProgram: (clientId) => {
         return get().clientPrograms.find(p => p.clientId === clientId && p.status === 'active');
+      },
+
+      getNextProgramWorkout: (userId) => {
+        const program = get().clientPrograms.find(p => p.clientId === userId && p.status === 'active');
+        if (!program || !program.weeklyPlan?.length) return null;
+        
+        const freq = program.trainingDaysPerWeek || program.weeklyPlan.length;
+        
+        // Count completed workouts this week (Mon-Sun)
+        const now = new Date();
+        const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon...
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const weekStart = new Date(now);
+        weekStart.setHours(0, 0, 0, 0);
+        weekStart.setDate(weekStart.getDate() + mondayOffset);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        
+        const { workoutHistory } = useWorkoutStore.getState();
+        const completedThisWeek = workoutHistory.filter(w => {
+          if (w.userId !== userId || w.status !== 'completed' || w.deletedAt) return false;
+          const d = new Date(w.startTime);
+          return d >= weekStart && d < weekEnd;
+        }).length;
+        
+        const remainingThisWeek = Math.max(0, freq - completedThisWeek);
+        
+        // Compute cycle position from total lifetime completed workouts for this program
+        const programStart = program.startDate ? new Date(program.startDate) : new Date(program.createdAt);
+        const totalCompleted = workoutHistory.filter(w => {
+          if (w.userId !== userId || w.status !== 'completed' || w.deletedAt) return false;
+          const d = new Date(w.startTime);
+          return d >= programStart;
+        }).length;
+        
+        const dayIndex = totalCompleted % program.weeklyPlan.length;
+        const day = program.weeklyPlan[dayIndex];
+        
+        // Determine session type from PT map
+        const slotInWeek = completedThisWeek % freq;
+        const sessionType = program.sessionPTMap?.[slotInWeek] === 'pt' ? 'pt' : 'personal';
+        
+        return { program, dayIndex, day, remainingThisWeek, sessionType };
       },
 
       // Client Profiles
