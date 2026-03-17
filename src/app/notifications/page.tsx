@@ -51,6 +51,7 @@ export default function NotificationsPage() {
       case 'pb_achieved': return <Trophy className="w-5 h-5 text-amber-400" />;
       case 'comment': return <MessageCircle className="w-5 h-5 text-blue-400" />;
       case 'like': return <Heart className="w-5 h-5 text-red-400" />;
+      case 'program_assigned': return <Dumbbell className="w-5 h-5 text-emerald-400" />;
       default: return <Bell className="w-5 h-5 text-gray-400" />;
     }
   };
@@ -65,6 +66,7 @@ export default function NotificationsPage() {
       case 'pb_achieved': return 'bg-amber-500/20';
       case 'comment': return 'bg-blue-500/20';
       case 'like': return 'bg-red-500/20';
+      case 'program_assigned': return 'bg-emerald-500/20';
       default: return 'bg-gray-500/20';
     }
   };

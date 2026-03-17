@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useWorkoutStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -32,9 +32,11 @@ import {
   Filter,
   BookOpen,
   ChevronDown,
+  ChevronUp,
   X,
   LayoutGrid,
-  User
+  User,
+  Trophy
 } from 'lucide-react';
 import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
@@ -105,6 +107,20 @@ export default function ProgramPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { startFromTemplate } = useWorkoutStore();
+  const { clientPrograms, getNextProgramWorkout, loadClientDataFromSupabase } = useTrainerStore();
+  
+  // Active trainer-assigned program
+  const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  
+  // Load client programs from Supabase
+  useEffect(() => {
+    if (user?.id && !user.isTrainer) {
+      loadClientDataFromSupabase(user.id);
+    }
+  }, [user?.id]);
+  
+  const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
+  const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
 
   // AI Generator state
   const [showGenerator, setShowGenerator] = useState(false);
@@ -372,6 +388,233 @@ export default function ProgramPage() {
       <PageHeader title="Program" subtitle="Your training plans" />
 
       <div className="px-4 py-4 space-y-5">
+
+        {/* Active Trainer-Assigned Program */}
+        {activeProgram && (
+          <section>
+            <h2 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+              <Trophy className="w-4 h-4" />
+              Active Program
+            </h2>
+            <Card className="bg-gradient-to-br from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-base">{activeProgram.templateName}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}×/week • {activeProgram.weeklyPlan?.length} unique workouts
+                      {activeProgram.scheduleMode === 'flexible' ? ' • Flexible' : activeProgram.selectedDays?.length ? ` • ${activeProgram.selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 2)).join('/')}` : ''}
+                    </p>
+                  </div>
+                  <Badge className="text-[10px] bg-emerald-500/20 text-emerald-600 border-0">Active</Badge>
+                </div>
+
+                {/* Program details */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-white/60 rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-sky-600">{activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}</p>
+                    <p className="text-[10px] text-gray-500">Days/Week</p>
+                  </div>
+                  <div className="bg-white/60 rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-purple-600">{activeProgram.weeklyPlan?.length}</p>
+                    <p className="text-[10px] text-gray-500">Workouts</p>
+                  </div>
+                  <div className="bg-white/60 rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-amber-600">
+                      {activeProgram.weeklyPlan?.reduce((s: number, d: any) => s + (d.blocks?.reduce((s2: number, b: any) => s2 + (b.exercises?.length || 0), 0) || 0), 0)}
+                    </p>
+                    <p className="text-[10px] text-gray-500">Exercises</p>
+                  </div>
+                </div>
+
+                {/* Next Workout highlight */}
+                {nextWorkout && nextWorkout.remainingThisWeek > 0 && (
+                  <div className="bg-white rounded-xl p-3 border border-sky-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-sky-500/20 flex items-center justify-center">
+                          <Play className="w-4 h-4 text-sky-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500">Up Next</p>
+                          <p className="font-semibold text-gray-900 text-sm">{nextWorkout.day?.dayLabel || 'Workout'}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge className={`text-[10px] border-0 ${nextWorkout.sessionType === 'pt' ? 'bg-sky-500/20 text-sky-600' : 'bg-gray-200 text-gray-600'}`}>
+                          {nextWorkout.sessionType === 'pt' ? 'PT' : 'Personal'}
+                        </Badge>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{nextWorkout.remainingThisWeek} left this week</p>
+                      </div>
+                    </div>
+                    <Button
+                      className="w-full bg-sky-500 hover:bg-sky-600 text-white text-sm"
+                      onClick={() => {
+                        if (!user || !nextWorkout.day) return;
+                        const exercises = (nextWorkout.day.blocks || []).flatMap((block: any) =>
+                          (block.exercises || []).map((ex: any) => ({
+                            id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                            exerciseId: ex.exerciseId || ex.id,
+                            exercise: {
+                              id: ex.exerciseId || ex.id,
+                              name: ex.exerciseName || ex.name || 'Exercise',
+                              category: 'strength',
+                              muscleGroups: [],
+                            },
+                            sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+                              id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                              setNumber: si + 1,
+                              targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                              reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                              weight: 0,
+                              completed: false,
+                            })),
+                            restTimerSeconds: parseInt(ex.rest) || 90,
+                            notes: ex.notes || '',
+                          }))
+                        );
+                        if (exercises.length > 0) {
+                          startFromTemplate({
+                            id: `program-${activeProgram.id}-${nextWorkout.dayIndex}`,
+                            name: `${nextWorkout.day.dayLabel || 'Workout'} - ${activeProgram.templateName}`,
+                            description: `From ${activeProgram.templateName}`,
+                            exercises,
+                            category: 'strength',
+                            estimatedDuration: 60,
+                            createdAt: new Date().toISOString(),
+                            createdBy: user.id,
+                            isPublic: false,
+                            updatedAt: new Date().toISOString(),
+                          } as any);
+                          router.push('/workout/active');
+                        }
+                      }}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Start {nextWorkout.day?.dayLabel || 'Workout'}
+                    </Button>
+                  </div>
+                )}
+                {nextWorkout && nextWorkout.remainingThisWeek <= 0 && (
+                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 text-center">
+                    <Check className="w-5 h-5 text-emerald-500 mx-auto mb-1" />
+                    <p className="font-semibold text-gray-900 text-sm">All done this week!</p>
+                    <p className="text-[10px] text-gray-500">Rest up for next week</p>
+                  </div>
+                )}
+
+                {/* Workout day list */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-gray-500 mt-1">Workout Days</p>
+                  {activeProgram.weeklyPlan?.map((day: any, idx: number) => {
+                    const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                    const isExpanded = expandedDay === idx;
+                    const isNext = nextWorkout?.dayIndex === idx;
+                    return (
+                      <div key={day.id || idx}>
+                        <button
+                          className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors ${
+                            isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
+                          }`}
+                          onClick={() => setExpandedDay(isExpanded ? null : idx)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                              isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {String.fromCharCode(65 + idx)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">{day.dayLabel}</p>
+                              <p className="text-[10px] text-gray-500">{totalEx} exercises • {day.blocks?.length || 0} blocks</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {isNext && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Next</Badge>}
+                            {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                          </div>
+                        </button>
+                        {isExpanded && (
+                          <div className="mt-1 ml-9 space-y-1">
+                            {day.blocks?.map((block: any, bi: number) => (
+                              <div key={block.id || bi} className="bg-gray-50 rounded-lg p-2">
+                                <p className="text-[10px] font-semibold text-gray-500 uppercase mb-1">{block.name || block.type}</p>
+                                {block.exercises?.map((ex: any, ei: number) => (
+                                  <div key={ex.id || ei} className="flex items-center justify-between py-0.5">
+                                    <p className="text-xs text-gray-900">{ei + 1}. {ex.exerciseName || ex.name}</p>
+                                    <p className="text-[10px] text-gray-500">{ex.sets}×{ex.reps} • {ex.rest}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                            <Button
+                              size="sm"
+                              className="w-full mt-1 bg-sky-500 hover:bg-sky-600 text-white text-xs h-8"
+                              onClick={() => {
+                                if (!user) return;
+                                const exercises = (day.blocks || []).flatMap((block: any) =>
+                                  (block.exercises || []).map((ex: any) => ({
+                                    id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                    exerciseId: ex.exerciseId || ex.id,
+                                    exercise: {
+                                      id: ex.exerciseId || ex.id,
+                                      name: ex.exerciseName || ex.name || 'Exercise',
+                                      category: 'strength',
+                                      muscleGroups: [],
+                                    },
+                                    sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+                                      id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                                      setNumber: si + 1,
+                                      targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                                      reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                                      weight: 0,
+                                      completed: false,
+                                    })),
+                                    restTimerSeconds: parseInt(ex.rest) || 90,
+                                    notes: ex.notes || '',
+                                  }))
+                                );
+                                if (exercises.length > 0) {
+                                  startFromTemplate({
+                                    id: `program-${activeProgram.id}-${idx}`,
+                                    name: `${day.dayLabel} - ${activeProgram.templateName}`,
+                                    description: `From ${activeProgram.templateName}`,
+                                    exercises,
+                                    category: 'strength',
+                                    estimatedDuration: 60,
+                                    createdAt: new Date().toISOString(),
+                                    createdBy: user.id,
+                                    isPublic: false,
+                                    updatedAt: new Date().toISOString(),
+                                  } as any);
+                                  router.push('/workout/active');
+                                }
+                              }}
+                            >
+                              <Play className="w-3 h-3 mr-1" />
+                              Start {day.dayLabel}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* PT Session info */}
+                {activeProgram.sessionPTMap && Object.values(activeProgram.sessionPTMap).some(v => v === 'pt') && (
+                  <div className="bg-sky-50 rounded-lg p-2.5 border border-sky-200">
+                    <p className="text-xs font-semibold text-sky-700">PT Sessions Included</p>
+                    <p className="text-[10px] text-sky-600 mt-0.5">
+                      {Object.values(activeProgram.sessionPTMap).filter(v => v === 'pt').length} of {activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length} weekly sessions are with your trainer
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
         {/* My Programs */}
         {savedPrograms.length > 0 && (

@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -227,6 +227,7 @@ function ProgramBuilderContent() {
   const { user } = useAuthStore();
   const { clients, addClientProgram, updateClientProgram, addCalendarEvent, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
+  const { addNotification } = useSocialStore();
   
   const isTrainerMode = user?.mode === 'trainer';
   
@@ -656,6 +657,17 @@ function ProgramBuilderContent() {
         createdAt: new Date().toISOString(),
       });
       localStorage.setItem(`apex-program-library-${user.id}`, JSON.stringify(savedPrograms));
+    }
+    
+    // Send notification to the client about their new program
+    if (isTrainerMode && targetClientId && targetClientId !== user.id) {
+      addNotification({
+        userId: targetClientId,
+        type: 'program_assigned',
+        title: 'New Program Assigned',
+        message: `Your trainer assigned you "${programName || 'Custom Program'}" — ${days.length} workouts, ${effectiveFrequency}×/week for ${actualWeeks} weeks`,
+        actionUrl: '/program',
+      });
     }
     
     setShowSaveDialog(false);

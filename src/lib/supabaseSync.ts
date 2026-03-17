@@ -2949,7 +2949,8 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
       title: notification.title,
       message: notification.message || null,
       read: notification.read || false,
-      link: notification.link || null,
+      link: notification.actionUrl || notification.link || null,
+      action_url: notification.actionUrl || notification.link || null,
       created_at: notification.createdAt,
     };
     
@@ -2988,7 +2989,8 @@ export async function fetchNotificationsFromSupabase(userId: string): Promise<an
       title: n.title,
       message: n.message,
       read: n.read,
-      link: n.link,
+      link: n.link || n.action_url,
+      actionUrl: n.action_url || n.link,
       createdAt: n.created_at,
     }));
   } catch (e) {
