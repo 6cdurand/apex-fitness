@@ -1724,6 +1724,45 @@ export async function fetchCalendarEventsFromSupabase(trainerId: string): Promis
   }
 }
 
+export async function fetchCalendarEventsForUser(clientId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .select('*')
+      .eq('client_id', clientId);
+    
+    if (error) {
+      console.error('[Calendar Fetch For User] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(e => ({
+      id: e.id,
+      title: e.title,
+      type: e.type,
+      date: e.date,
+      startTime: e.start_time,
+      endTime: e.end_time,
+      duration: e.duration,
+      clientId: e.client_id,
+      trainerId: e.trainer_id,
+      workoutId: e.workout_id,
+      notes: e.notes,
+      status: e.status,
+      color: e.color,
+      clientConfirmed: e.client_confirmed,
+      clientConfirmedAt: e.client_confirmed_at,
+      recurrenceGroup: e.recurrence_group || undefined,
+      contactName: e.contact_name || undefined,
+    }));
+  } catch (e) {
+    console.error('[Calendar Fetch For User] Exception:', e);
+    return [];
+  }
+}
+
 export async function deleteCalendarEventFromSupabase(eventId: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   try {
@@ -1842,7 +1881,16 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       phase: program.phase || null,
       goal: program.goal || null,
       weekly_plan: program.weeklyPlan || null,
-      training_days: program.trainingDays || null,
+      training_days: {
+        scheduleMode: program.scheduleMode || null,
+        trainingDaysPerWeek: program.trainingDaysPerWeek || null,
+        selectedDays: program.selectedDays || null,
+        cycleAcrossWeeks: program.cycleAcrossWeeks || false,
+        sessionPTMap: program.sessionPTMap || null,
+        nextWorkoutIndex: program.nextWorkoutIndex || 0,
+        autoRepeat: program.autoRepeat || false,
+        sessionType: program.sessionType || null,
+      },
       start_date: program.startDate || null,
       end_date: program.endDate || null,
       status: program.status || 'active',
@@ -1876,24 +1924,57 @@ export async function fetchClientProgramsFromSupabase(trainerId: string): Promis
       return [];
     }
     
-    return (data || []).map(p => ({
-      id: p.id,
-      clientId: p.client_id,
-      trainerId: p.trainer_id,
-      templateId: p.template_id,
-      templateName: p.template_name,
-      phase: p.phase,
-      goal: p.goal,
-      weeklyPlan: p.weekly_plan,
-      trainingDays: p.training_days,
-      startDate: p.start_date,
-      endDate: p.end_date,
-      status: p.status,
-      createdAt: p.created_at,
-      updatedAt: p.updated_at,
-    }));
+    return (data || []).map(mapProgramFromSupabase);
   } catch (e) {
     console.error('[Program Fetch] Exception:', e);
+    return [];
+  }
+}
+
+function mapProgramFromSupabase(p: any) {
+  const td = p.training_days || {};
+  return {
+    id: p.id,
+    clientId: p.client_id,
+    trainerId: p.trainer_id,
+    templateId: p.template_id,
+    templateName: p.template_name,
+    phase: p.phase,
+    goal: p.goal,
+    weeklyPlan: p.weekly_plan || [],
+    scheduleMode: td.scheduleMode || undefined,
+    trainingDaysPerWeek: td.trainingDaysPerWeek || undefined,
+    selectedDays: td.selectedDays || undefined,
+    cycleAcrossWeeks: td.cycleAcrossWeeks || false,
+    sessionPTMap: td.sessionPTMap || undefined,
+    nextWorkoutIndex: td.nextWorkoutIndex || 0,
+    autoRepeat: td.autoRepeat || false,
+    sessionType: td.sessionType || undefined,
+    startDate: p.start_date,
+    endDate: p.end_date,
+    status: p.status,
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
+  };
+}
+
+export async function fetchClientProgramsForUser(clientId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  
+  try {
+    const { data, error } = await supabase
+      .from('client_programs')
+      .select('*')
+      .eq('client_id', clientId);
+    
+    if (error) {
+      console.error('[Program Fetch For User] Error:', error.message);
+      return [];
+    }
+    
+    return (data || []).map(mapProgramFromSupabase);
+  } catch (e) {
+    console.error('[Program Fetch For User] Exception:', e);
     return [];
   }
 }

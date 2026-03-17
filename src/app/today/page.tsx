@@ -50,7 +50,7 @@ export default function TodayPage() {
   const { user, isAuthenticated, switchMode } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates, personalBests, volumeRollups } = useWorkoutStore();
   const { medals } = useMedalStore();
-  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent, getNextProgramWorkout } = useTrainerStore();
+  const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent, getNextProgramWorkout, loadClientDataFromSupabase } = useTrainerStore();
 
   const [selectedDate, setSelectedDate] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -85,6 +85,12 @@ export default function TodayPage() {
   }, [isAuthenticated, router]);
 
   // No longer auto-redirect to active workout — bottom bar handles re-entry
+
+  // Load client programs + calendar events from Supabase (for non-trainer users)
+  useEffect(() => {
+    if (!user?.id || user.isTrainer) return;
+    loadClientDataFromSupabase(user.id);
+  }, [user?.id, user?.isTrainer]);
 
   // deriveAll consistency check — runs once per day on login
   useEffect(() => {

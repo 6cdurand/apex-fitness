@@ -2044,6 +2044,7 @@ interface TrainerState {
   setInitialClientStats: (clientId: string, sessionsDone: number, sessionsLeft: number, totalPaid: number) => void;
   
   // Client-facing session functions
+  loadClientDataFromSupabase: (clientId: string) => Promise<void>;
   getScheduledSessionsForUser: (userId: string) => CalendarEvent[];
   confirmSession: (eventId: string) => void;
   
@@ -3232,6 +3233,47 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       // Client-facing session functions
+      loadClientDataFromSupabase: async (clientId) => {
+        console.log('[Trainer Store] 🔄 Loading client data from Supabase for:', clientId);
+        try {
+          const [programs, events] = await Promise.all([
+            import('./supabaseSync').then(m => m.fetchClientProgramsForUser(clientId)),
+            import('./supabaseSync').then(m => m.fetchCalendarEventsForUser(clientId)),
+          ]);
+          
+          const currentPrograms = get().clientPrograms;
+          const currentEvents = get().calendarEvents;
+          
+          // Merge: add programs not already in local store
+          const newPrograms = programs.filter(
+            (p: any) => !currentPrograms.find(cp => cp.id === p.id)
+          );
+          // Update existing programs with fresh Supabase data
+          const updatedPrograms = currentPrograms.map(cp => {
+            const fresh = programs.find((p: any) => p.id === cp.id);
+            return fresh ? { ...cp, ...fresh } : cp;
+          });
+          
+          // Merge events: add new, update existing
+          const newEvents = events.filter(
+            (e: any) => !currentEvents.find(ce => ce.id === e.id)
+          );
+          const updatedEvents = currentEvents.map(ce => {
+            const fresh = events.find((e: any) => e.id === ce.id);
+            return fresh ? { ...ce, ...fresh } : ce;
+          });
+          
+          set({
+            clientPrograms: [...updatedPrograms, ...newPrograms],
+            calendarEvents: [...updatedEvents, ...newEvents],
+          });
+          
+          console.log(`[Trainer Store] ✅ Client data loaded: ${programs.length} programs, ${events.length} events`);
+        } catch (e) {
+          console.error('[Trainer Store] Error loading client data:', e);
+        }
+      },
+
       getScheduledSessionsForUser: (userId) => {
         // Get calendar events where this user is the client
         return get().calendarEvents.filter(e => 
