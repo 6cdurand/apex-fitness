@@ -225,24 +225,55 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, addCalendarEvent, clientPrograms, savedBlocks, deleteBlock } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
   
+  // Check for existing program to edit
+  const existingProgram = clientIdParam ? getActiveProgram(clientIdParam) : null;
+  const isEditMode = !!existingProgram;
+  
   // ── Setup state ──
-  const [builderStep, setBuilderStep] = useState<BuilderStep>('setup');
-  const [programName, setProgramName] = useState('');
-  const [goal, setGoal] = useState<TrainingGoal>('hypertrophy');
-  const [phase, setPhase] = useState<TrainingPhase>('strength');
+  const [builderStep, setBuilderStep] = useState<BuilderStep>(isEditMode ? 'days' : 'setup');
+  const [programName, setProgramName] = useState(existingProgram?.templateName || '');
+  const [goal, setGoal] = useState<TrainingGoal>(existingProgram?.goal as TrainingGoal || 'hypertrophy');
+  const [phase, setPhase] = useState<TrainingPhase>(existingProgram?.phase as TrainingPhase || 'strength');
   const [durationWeeks, setDurationWeeks] = useState(4);
   const [customWeeks, setCustomWeeks] = useState('');
-  const [daysPerWeek, setDaysPerWeek] = useState(3);
+  const [daysPerWeek, setDaysPerWeek] = useState(existingProgram?.weeklyPlan?.length || 3);
   const [autoRepeat, setAutoRepeat] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientIdParam);
   
-  // ── Days state ──
-  const [days, setDays] = useState<ProgramDay[]>([]);
+  // ── Days state — load from existing program if editing ──
+  const [days, setDays] = useState<ProgramDay[]>(() => {
+    if (existingProgram?.weeklyPlan) {
+      return existingProgram.weeklyPlan.map((day: any, i: number) => ({
+        id: day.id || uuidv4(),
+        label: day.dayLabel || `Day ${String.fromCharCode(65 + i)}`,
+        scheduledDay: day.scheduledDay as Weekday | undefined,
+        blocks: (day.blocks || []).map((block: any) => ({
+          id: block.id || uuidv4(),
+          type: block.type || 'work',
+          name: block.name || 'Main Lifts',
+          exercises: (block.exercises || []).map((ex: any) => ({
+            id: ex.id || uuidv4(),
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.exerciseName,
+            movementPattern: ex.movementPattern || 'compound',
+            sets: ex.sets || 3,
+            reps: ex.reps || '8-12',
+            rest: ex.rest || '60s',
+            repType: ex.repType,
+            setStyle: ex.setStyle,
+            tempo: ex.tempo,
+            notes: ex.notes,
+          })),
+        })),
+      }));
+    }
+    return [];
+  });
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
@@ -470,6 +501,48 @@ function ProgramBuilderContent() {
     
     const targetClientId = isTrainerMode ? (selectedClientId || '') : user.id;
     
+    const weeklyPlan = days.map(d => ({
+      id: d.id,
+      dayLabel: d.label,
+      scheduledDay: d.scheduledDay,
+      blocks: d.blocks.map(b => ({
+        id: b.id,
+        type: b.type,
+        name: b.name,
+        exercises: b.exercises.map(e => ({
+          id: e.id,
+          exerciseId: e.exerciseId,
+          exerciseName: e.exerciseName,
+          movementPattern: e.movementPattern as MovementPattern,
+          sets: e.sets,
+          reps: e.reps,
+          rest: e.rest,
+          repType: e.repType,
+          setStyle: e.setStyle,
+          tempo: e.tempo,
+          notes: e.notes,
+        })),
+      })),
+    }));
+    
+    if (isEditMode && existingProgram) {
+      // Update existing program
+      updateClientProgram(existingProgram.id, {
+        templateName: programName || existingProgram.templateName,
+        phase: phase as TrainingPhase,
+        goal: goal as TrainingGoal,
+        weeklyPlan,
+        trainingDaysPerWeek: daysPerWeek,
+        selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
+        updatedAt: new Date().toISOString(),
+      });
+      
+      setShowSaveDialog(false);
+      toast.success('Program updated!');
+      router.back();
+      return;
+    }
+    
     const program: ClientProgram = {
       id: uuidv4(),
       clientId: targetClientId,
@@ -478,27 +551,7 @@ function ProgramBuilderContent() {
       templateName: programName || 'Custom Program',
       phase: phase as TrainingPhase,
       goal: goal as TrainingGoal,
-      weeklyPlan: days.map(d => ({
-        id: d.id,
-        dayLabel: d.label,
-        scheduledDay: d.scheduledDay,
-        blocks: d.blocks.map(b => ({
-          id: b.id,
-          type: b.type,
-          name: b.name,
-          exercises: b.exercises.map(e => ({
-            id: e.id,
-            exerciseId: e.exerciseId,
-            exerciseName: e.exerciseName,
-            movementPattern: e.movementPattern as MovementPattern,
-            sets: e.sets,
-            reps: e.reps,
-            rest: e.rest,
-            tempo: e.tempo,
-            notes: e.notes,
-          })),
-        })),
-      })),
+      weeklyPlan,
       trainingDaysPerWeek: daysPerWeek,
       selectedDays: days.map(d => d.scheduledDay).filter(Boolean) as any[],
       startDate,

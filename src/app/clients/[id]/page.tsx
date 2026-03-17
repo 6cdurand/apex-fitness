@@ -1416,7 +1416,7 @@ export default function ClientDetailPage() {
                     <div className="grid grid-cols-3 gap-2">
                       <Button 
                         variant="outline"
-                        onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                        onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
                         className="w-full"
                       >
                         <Edit className="w-4 h-4 mr-1" />
@@ -1485,7 +1485,7 @@ export default function ClientDetailPage() {
                       </Button>
                       <Button 
                         variant="outline"
-                        onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                        onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Create
@@ -2391,7 +2391,7 @@ export default function ClientDetailPage() {
                 <div className="grid grid-cols-3 gap-2">
                   <Button 
                     variant="outline"
-                    onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                    onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
                     className="w-full border-gray-200"
                   >
                     <Edit className="w-4 h-4 mr-1" />
@@ -2576,7 +2576,7 @@ export default function ClientDetailPage() {
                     </Button>
                     <Button 
                       variant="outline"
-                      onClick={() => router.push(`/clients/${clientId}/program/builder`)}
+                      onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
                       className="border-gray-200"
                     >
                       <Plus className="w-4 h-4 mr-1" />
