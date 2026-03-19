@@ -40,19 +40,24 @@ export default function CommunityPage() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
+    const isPlaceholder = (u: any) =>
+      u.accountStatus === 'placeholder' ||
+      u.email?.endsWith('@placeholder.local') ||
+      u.email?.endsWith('@client.apex');
+
     const loadUsers = async () => {
       const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-      setAllUsers(stored.filter((u: any) => u.id !== user?.id));
+      setAllUsers(stored.filter((u: any) => u.id !== user?.id && !isPlaceholder(u)));
       try {
         const supabaseUsers = await fetchAllUsersFromSupabase();
         if (supabaseUsers.length > 0) {
-          const merged = [...stored];
+          const merged = [...stored.filter((u: any) => !isPlaceholder(u))];
           supabaseUsers.forEach((su: any) => {
             if (!merged.find((m: any) => m.id === su.id) && su.id !== user?.id) {
               merged.push(su);
             }
           });
-          setAllUsers(merged.filter((u: any) => u.id !== user?.id));
+          setAllUsers(merged.filter((u: any) => u.id !== user?.id && !isPlaceholder(u)));
         }
       } catch (e) {
         console.error('[Community] Error loading users:', e);

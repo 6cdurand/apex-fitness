@@ -210,7 +210,7 @@ export default function ClientOnboardingPage() {
     
     // Sync to Supabase
     try {
-      await registerUserToSupabase(newClientUser as any, password);
+      await registerUserToSupabase(newClientUser as any, password, 'placeholder');
       if (accountEmail.trim()) {
         toast.success(`Account created! Invite link sent to ${accountEmail}`);
       } else {

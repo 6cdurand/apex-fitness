@@ -43,9 +43,14 @@ export default function FriendsPage() {
   }, [isAuthenticated, router]);
 
   useEffect(() => {
+    const isPlaceholder = (u: any) =>
+      u.accountStatus === 'placeholder' ||
+      u.email?.endsWith('@placeholder.local') ||
+      u.email?.endsWith('@client.apex');
+
     const loadAllUsers = async () => {
       const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-      setAllUsers(stored.filter((u: any) => u.id !== user?.id));
+      setAllUsers(stored.filter((u: any) => u.id !== user?.id && !isPlaceholder(u)));
       
       // Also fetch from Supabase for cross-device sync
       try {
@@ -53,8 +58,8 @@ export default function FriendsPage() {
         if (supabaseUsers && supabaseUsers.length > 0) {
           // Merge: Supabase is source of truth, add local-only users
           const supabaseIds = new Set(supabaseUsers.map((u: any) => u.id));
-          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id));
-          const mergedUsers = [...supabaseUsers, ...localOnlyUsers].filter((u: any) => u.id !== user?.id);
+          const localOnlyUsers = stored.filter((u: any) => !supabaseIds.has(u.id) && !isPlaceholder(u));
+          const mergedUsers = [...supabaseUsers, ...localOnlyUsers].filter((u: any) => u.id !== user?.id && !isPlaceholder(u));
           setAllUsers(mergedUsers);
         }
       } catch (e) {

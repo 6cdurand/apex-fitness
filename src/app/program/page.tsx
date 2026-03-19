@@ -111,6 +111,7 @@ export default function ProgramPage() {
   
   // Active trainer-assigned program
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
+  const [trainerName, setTrainerName] = useState<string>('');
   
   // Load client programs from Supabase
   useEffect(() => {
@@ -121,6 +122,26 @@ export default function ProgramPage() {
   
   const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
   const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
+
+  // Fetch trainer name for active program
+  useEffect(() => {
+    if (activeProgram?.trainerId) {
+      // Check localStorage first
+      const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      const trainer = stored.find((u: any) => u.id === activeProgram.trainerId);
+      if (trainer) {
+        setTrainerName(trainer.displayName || trainer.username || '');
+      } else {
+        // Fetch from Supabase
+        import('@/lib/supabaseSync').then(({ fetchAllTrainersFromSupabase }) => {
+          fetchAllTrainersFromSupabase().then(trainers => {
+            const t = trainers.find((tr: any) => tr.id === activeProgram.trainerId);
+            if (t) setTrainerName(t.displayName || t.username || '');
+          });
+        });
+      }
+    }
+  }, [activeProgram?.trainerId]);
 
   // AI Generator state
   const [showGenerator, setShowGenerator] = useState(false);
@@ -403,7 +424,7 @@ export default function ProgramPage() {
                   <div>
                     <h3 className="font-bold text-gray-900 text-base">{activeProgram.templateName}</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}×/week • {activeProgram.weeklyPlan?.length} unique workouts
+                      {trainerName ? `By ${trainerName} • ` : ''}{activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}×/week • {activeProgram.weeklyPlan?.length} unique workouts
                       {activeProgram.scheduleMode === 'flexible' ? ' • Flexible' : activeProgram.selectedDays?.length ? ` • ${activeProgram.selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 2)).join('/')}` : ''}
                     </p>
                   </div>
@@ -714,7 +735,7 @@ export default function ProgramPage() {
           <h2 className="text-sm font-semibold text-gray-400 mb-3">Get Expert Help</h2>
           <Card 
             className="bg-gradient-to-r from-rose-500/20 to-pink-500/20 border-rose-500/30 cursor-pointer hover:border-rose-500/50 transition-colors"
-            onClick={() => router.push('/friends')}
+            onClick={() => router.push('/trainer')}
           >
             <CardContent className="p-4">
               <div className="flex items-center gap-3">

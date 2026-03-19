@@ -349,19 +349,20 @@ export const useAuthStore = create<AuthState>()(
       switchMode: (mode) => {
         const currentUser = get().user;
         if (currentUser) {
-          const updatedUser = { ...currentUser, mode };
+          const isTrainer = mode === 'trainer';
+          const updatedUser = { ...currentUser, mode, isTrainer };
           set({ user: updatedUser });
           
-          // Persist mode to localStorage users array
+          // Persist mode + isTrainer to localStorage users array
           const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
           const index = storedUsers.findIndex((u: User) => u.id === currentUser.id);
           if (index !== -1) {
-            storedUsers[index] = { ...storedUsers[index], mode };
+            storedUsers[index] = { ...storedUsers[index], mode, isTrainer };
             localStorage.setItem('apex-users', JSON.stringify(storedUsers));
           }
           
-          // Sync to Supabase
-          updateUserInSupabase(currentUser.id, { mode });
+          // Sync both mode AND isTrainer to Supabase
+          updateUserInSupabase(currentUser.id, { mode, isTrainer } as any);
         }
       },
     }),
@@ -2290,7 +2291,7 @@ export const useTrainerStore = create<TrainerState>()(
           const clientId = uuidv4();
           const email = `${client.displayName.toLowerCase().replace(/\s+/g, '.')}@client.apex`;
           
-          const newUser: User & { password: string } = {
+          const newUser: User & { password: string; accountStatus?: string } = {
             id: clientId,
             email,
             username: client.displayName.toLowerCase().replace(/\s+/g, '_'),
@@ -2305,6 +2306,7 @@ export const useTrainerStore = create<TrainerState>()(
             following: [],
             trainerId,
             password: hashPassword('client123'),
+            accountStatus: 'placeholder',
           };
           
           storedUsers.push(newUser);

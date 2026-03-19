@@ -62,7 +62,7 @@ export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
 }
 
 // Register user to Supabase for cross-device login
-export async function registerUserToSupabase(user: User, password: string): Promise<boolean> {
+export async function registerUserToSupabase(user: User, password: string, accountStatus: 'active' | 'placeholder' = 'active'): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
@@ -94,6 +94,7 @@ export async function registerUserToSupabase(user: User, password: string): Prom
     is_verified_trainer: user.isVerifiedTrainer || false,
     mode: user.mode || 'user',
     trainer_id: (user as any).trainerId || null,
+    account_status: accountStatus,
   };
   
   console.log('[Supabase Register] User data:', JSON.stringify(userData, null, 2));
@@ -237,7 +238,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
   }
 }
 
-// Fetch all non-trainer users from Supabase for linking
+// Fetch all real users from Supabase (excludes placeholder/client-file accounts)
 export async function fetchAllUsersFromSupabase(): Promise<any[]> {
   if (!isSupabaseConfigured()) {
     console.log('[Supabase] Not configured, returning empty array');
@@ -245,40 +246,56 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
   }
   
   try {
-    console.log('[Supabase] Fetching all users for linking...');
+    console.log('[Supabase] Fetching all real users...');
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('is_trainer', false);
+      .neq('account_status', 'placeholder');
     
     if (error) {
+      // Fallback if account_status column doesn't exist yet
+      if (error.message?.includes('account_status')) {
+        console.log('[Supabase] account_status column not found, fetching all users');
+        const fallback = await supabase.from('users').select('*');
+        if (fallback.error) return [];
+        const users = (fallback.data || []).map(mapUserFromSupabase);
+        console.log(`[Supabase] Found ${users.length} users (no account_status filter)`);
+        return users;
+      }
       console.error('[Supabase] Error fetching users:', error.message);
       return [];
     }
     
-    // Convert to app format
-    const users = (data || []).map(u => ({
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      displayName: u.display_name,
-      gender: u.gender,
-      dateOfBirth: u.date_of_birth,
-      height: u.height,
-      weight: u.weight,
-      preferredUnit: u.preferred_unit,
-      isTrainer: u.is_trainer,
-      isVerifiedTrainer: u.is_verified_trainer,
-      mode: u.mode,
-      trainerId: u.trainer_id,
-    }));
-    
-    console.log(`[Supabase] Found ${users.length} users for linking`);
+    const users = (data || []).map(mapUserFromSupabase);
+    console.log(`[Supabase] Found ${users.length} real users`);
     return users;
   } catch (e) {
     console.error('[Supabase] Exception fetching users:', e);
     return [];
   }
+}
+
+// Helper: map a Supabase user row to app format
+function mapUserFromSupabase(u: any) {
+  return {
+    id: u.id,
+    email: u.email,
+    username: u.username,
+    displayName: u.display_name,
+    gender: u.gender,
+    dateOfBirth: u.date_of_birth,
+    height: u.height,
+    weight: u.weight,
+    preferredUnit: u.preferred_unit,
+    isTrainer: u.is_trainer,
+    isVerifiedTrainer: u.is_verified_trainer,
+    mode: u.mode,
+    trainerId: u.trainer_id,
+    bio: u.bio,
+    profilePhoto: u.avatar_url || u.profile_photo,
+    trainerSpecializations: u.trainer_specializations,
+    accountStatus: u.account_status || 'active',
+  };
 }
 
 // Get all valid user IDs from Supabase (to detect deleted accounts)
@@ -359,12 +376,14 @@ export async function updateUserInSupabase(userId: string, updates: Partial<User
     const dbUpdates: any = {};
     if (updates.displayName) dbUpdates.display_name = updates.displayName;
     if (updates.bio) dbUpdates.bio = updates.bio;
+    if (updates.gender) dbUpdates.gender = updates.gender;
     if (updates.height) dbUpdates.height = updates.height;
     if (updates.weight) dbUpdates.weight = updates.weight;
     if (updates.isTrainer !== undefined) dbUpdates.is_trainer = updates.isTrainer;
     if (updates.mode) dbUpdates.mode = updates.mode;
     if (updates.preferredUnit) dbUpdates.preferred_unit = updates.preferredUnit;
     if ((updates as any).trainerId !== undefined) dbUpdates.trainer_id = (updates as any).trainerId;
+    if ((updates as any).accountStatus) dbUpdates.account_status = (updates as any).accountStatus;
     
     const { error } = await supabase
       .from('users')
@@ -429,17 +448,7 @@ export async function fetchAllTrainersFromSupabase(): Promise<any[]> {
       return [];
     }
 
-    const trainers = (data || []).map(u => ({
-      id: u.id,
-      email: u.email,
-      username: u.username,
-      displayName: u.display_name,
-      gender: u.gender,
-      isTrainer: u.is_trainer,
-      isVerifiedTrainer: u.is_verified_trainer,
-      mode: u.mode,
-      bio: u.bio,
-    }));
+    const trainers = (data || []).map(mapUserFromSupabase);
 
     console.log(`[Supabase] Found ${trainers.length} trainers`);
     return trainers;

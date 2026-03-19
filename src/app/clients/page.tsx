@@ -312,7 +312,7 @@ function ClientsPageContent() {
     
     // Sync to Supabase so client can log in from any device
     try {
-      const synced = await registerUserToSupabase(newClientUser as any, newClientPassword);
+      const synced = await registerUserToSupabase(newClientUser as any, newClientPassword, 'placeholder');
       if (synced) {
         console.log('Client account synced to Supabase:', clientEmail);
       } else {

@@ -138,7 +138,9 @@ function AuthPageContent() {
           }
         }
         toast.success('Password set! Welcome to Catalift!');
-        router.push('/today');
+        // Redirect to onboarding if profile incomplete, else today
+        const lu1 = useAuthStore.getState().user;
+        router.push(lu1 && !lu1.height && !lu1.weight ? '/onboarding/client' : '/today');
         setIsSettingUp(false);
         return;
       }
@@ -152,7 +154,8 @@ function AuthPageContent() {
         if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
       }
       toast.success('Welcome back to Catalift!');
-      router.push('/today');
+      const lu2 = useAuthStore.getState().user;
+      router.push(lu2 && !lu2.height && !lu2.weight ? '/onboarding/client' : '/today');
       setIsSettingUp(false);
       return;
     }
@@ -173,7 +176,7 @@ function AuthPageContent() {
         if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
       }
       toast.success('Account created! Welcome to Catalift!');
-      router.push('/today');
+      router.push('/onboarding/client');
       setIsSettingUp(false);
       return;
     }
