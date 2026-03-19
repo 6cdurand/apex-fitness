@@ -29,7 +29,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Lie on a decline bench, grip the bar slightly wider than shoulder width, lower to lower chest, press up to full extension.',},
   {
     id: 'dumbbell-bench-press',
     name: 'Dumbbell Bench Press',
@@ -37,7 +38,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Lie on a flat bench holding dumbbells at chest level, press up until arms are extended, lower with control.',},
   {
     id: 'incline-dumbbell-press',
     name: 'Incline Dumbbell Press',
@@ -45,7 +47,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Set bench to 30-45 degrees, press dumbbells up from shoulder level to full extension overhead.',},
   {
     id: 'dumbbell-flyes',
     name: 'Dumbbell Flyes',
@@ -53,7 +56,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Lie on a flat bench, hold dumbbells above chest with slight elbow bend, lower arms out to sides in an arc, squeeze chest to return.',},
   {
     id: 'cable-flyes',
     name: 'Cable Flyes',
@@ -61,7 +65,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand between cable pulleys set at shoulder height, step forward, bring handles together in front of chest with a hugging motion.',},
   {
     id: 'chest-dips',
     name: 'Chest Dips',
@@ -69,7 +74,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lean forward on parallel bars, lower body by bending arms until chest is stretched, press back up.',},
   {
     id: 'push-ups',
     name: 'Push-Ups',
@@ -77,7 +83,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Start in a high plank, lower chest to the floor by bending elbows, push back up to full arm extension.',},
   {
     id: 'machine-chest-press',
     name: 'Machine Chest Press',
@@ -85,7 +92,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles at chest level, press forward to full extension, return slowly.',},
   {
     id: 'pec-deck',
     name: 'Pec Deck Machine',
@@ -93,7 +101,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with forearms on pads, bring arms together in front of chest, squeeze, then slowly return.',},
 
   // BACK
   {
@@ -112,7 +121,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings', 'lower_back'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Take a wide stance with toes pointed out, grip the bar between your legs, drive through your heels to stand up.',},
   {
     id: 'romanian-deadlift',
     name: 'Romanian Deadlift',
@@ -120,7 +130,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['back'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hold bar at hip height, hinge at hips pushing them back, lower bar along legs keeping back flat, return to standing.',},
   {
     id: 'dumbbell-rdl',
     name: 'Dumbbell Romanian Deadlift',
@@ -128,7 +139,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold dumbbells in front of thighs, hinge at hips keeping back flat, lower dumbbells along legs, drive hips forward to stand.',},
   {
     id: 'barbell-row',
     name: 'Barbell Bent-Over Row',
@@ -136,7 +148,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'traps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hinge forward at hips, grip bar wider than shoulder width, pull bar to lower chest, squeeze shoulder blades together.',},
   {
     id: 'pendlay-row',
     name: 'Pendlay Row',
@@ -144,7 +157,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'traps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hinge forward until torso is parallel to floor, bar rests on ground each rep, explosively row bar to lower chest.',},
   {
     id: 'dumbbell-row',
     name: 'Dumbbell Row',
@@ -153,7 +167,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'dumbbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Place one hand and knee on a bench, row the dumbbell to your hip with the other arm, squeeze shoulder blade at top.',},
   {
     id: 'pull-ups',
     name: 'Pull-Ups',
@@ -161,7 +176,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'forearms'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hang from a bar with overhand grip wider than shoulders, pull chin above bar, lower with control.',},
   {
     id: 'chin-ups',
     name: 'Chin-Ups',
@@ -169,7 +185,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['back', 'forearms'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hang from a bar with underhand grip at shoulder width, pull chin above bar, lower with control.',},
   {
     id: 'lat-pulldown',
     name: 'Lat Pulldown',
@@ -177,7 +194,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'back'],
     category: 'compound',
     equipment: 'cable',
-  },
+  
+  instructions: 'Sit at the machine, grip the wide bar overhead, pull bar down to upper chest, squeeze lats, return slowly.',},
   {
     id: 'close-grip-pulldown',
     name: 'Close-Grip Lat Pulldown',
@@ -185,7 +203,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'back'],
     category: 'compound',
     equipment: 'cable',
-  },
+  
+  instructions: 'Sit at the lat pulldown machine, use a close-grip handle, pull down to upper chest, squeeze lats.',},
   {
     id: 'cable-row',
     name: 'Seated Cable Row',
@@ -193,7 +212,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'cable',
-  },
+  
+  instructions: 'Sit upright at the cable row machine, pull handle to lower chest, squeeze shoulder blades together, return with control.',},
   {
     id: 'single-arm-cable-row',
     name: 'Single Arm Cable Row',
@@ -210,7 +230,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'traps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Straddle the T-bar, hinge forward, grip handle, row weight to chest while keeping back flat.',},
   {
     id: 'machine-row',
     name: 'Machine Row',
@@ -218,7 +239,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit at the row machine, grip handles, pull toward torso squeezing shoulder blades, return slowly.',},
   {
     id: 'face-pulls',
     name: 'Face Pulls',
@@ -226,7 +248,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['traps'],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Attach rope to high cable, pull toward face with elbows high, externally rotate at the end, squeeze rear delts.',},
   {
     id: 'straight-arm-pulldown',
     name: 'Straight-Arm Pulldown',
@@ -234,7 +257,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand at a cable machine, arms straight, push the bar down in an arc to your thighs, squeezing lats.',},
   {
     id: 'hyperextensions',
     name: 'Back Extensions (Hyperextensions)',
@@ -242,7 +266,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes', 'hamstrings'],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Position yourself face-down on the hyperextension bench, lower torso down, raise back up by extending the lower back.',},
 
   // SHOULDERS
   {
@@ -261,7 +286,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Sit on a bench with back support, press barbell from shoulder level overhead to full extension.',},
   {
     id: 'dumbbell-shoulder-press',
     name: 'Dumbbell Shoulder Press',
@@ -269,7 +295,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Sit or stand, hold dumbbells at shoulder height, press overhead to full extension, lower with control.',},
   {
     id: 'arnold-press',
     name: 'Arnold Press',
@@ -277,7 +304,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Start with dumbbells at chin height palms facing you, press up while rotating palms to face forward at top.',},
   {
     id: 'lateral-raises',
     name: 'Dumbbell Lateral Raises',
@@ -285,7 +313,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Stand with dumbbells at sides, raise arms out to sides until parallel with floor, lower with control.',},
   {
     id: 'cable-lateral-raises',
     name: 'Cable Lateral Raises',
@@ -293,7 +322,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand sideways to a low cable pulley, raise the handle out to the side until arm is parallel with floor.',},
   {
     id: 'front-raises',
     name: 'Front Raises',
@@ -301,7 +331,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Stand holding dumbbells in front of thighs, raise one or both arms forward to shoulder height, lower slowly.',},
   {
     id: 'rear-delt-flyes',
     name: 'Rear Delt Flyes',
@@ -309,7 +340,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Bend forward at hips, hold dumbbells below chest, raise arms out to sides squeezing rear delts.',},
   {
     id: 'reverse-pec-deck',
     name: 'Reverse Pec Deck',
@@ -317,7 +349,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit facing the pec deck machine, push handles apart by squeezing shoulder blades and rear delts.',},
   {
     id: 'upright-rows',
     name: 'Barbell Upright Rows',
@@ -325,7 +358,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hold barbell with narrow grip, pull bar up along your body to chin height, leading with elbows.',},
   {
     id: 'shrugs',
     name: 'Barbell Shrugs',
@@ -333,7 +367,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hold barbell at arms length, shrug shoulders straight up toward ears, hold briefly, lower.',},
   {
     id: 'dumbbell-shrugs',
     name: 'Dumbbell Shrugs',
@@ -341,7 +376,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold dumbbells at your sides, shrug shoulders straight up toward ears, hold briefly, lower.',},
 
   // BICEPS
   {
@@ -351,7 +387,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['forearms'],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Stand with barbell at arms length, curl up by bending elbows keeping upper arms still, lower with control.',},
   {
     id: 'ez-bar-curl',
     name: 'EZ Bar Curl',
@@ -359,7 +396,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['forearms'],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Grip the EZ bar on the angled portions, curl up keeping elbows at sides, lower with control.',},
   {
     id: 'dumbbell-curl',
     name: 'Dumbbell Bicep Curl',
@@ -367,7 +405,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['forearms'],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Stand or sit holding dumbbells at sides, curl up rotating palms to face shoulders, lower slowly.',},
   {
     id: 'hammer-curls',
     name: 'Hammer Curls',
@@ -375,7 +414,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold dumbbells with neutral grip (palms facing each other), curl up keeping wrists neutral throughout.',},
   {
     id: 'incline-dumbbell-curl',
     name: 'Incline Dumbbell Curl',
@@ -383,7 +423,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Sit on an incline bench, let arms hang straight down with dumbbells, curl up, lower slowly for a deep stretch.',},
   {
     id: 'preacher-curl',
     name: 'Preacher Curl',
@@ -391,7 +432,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Rest upper arms on the preacher bench pad, curl the bar up, lower with control for a full stretch.',},
   {
     id: 'concentration-curl',
     name: 'Concentration Curl',
@@ -400,7 +442,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'isolation',
     alternatingSides: true,
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Sit on bench, rest elbow against inner thigh, curl dumbbell up to shoulder, squeeze at top.',},
   {
     id: 'cable-curl',
     name: 'Cable Bicep Curl',
@@ -408,7 +451,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand at a low cable pulley, grip the handle, curl up keeping elbows at sides, lower with control.',},
   {
     id: 'spider-curls',
     name: 'Spider Curls',
@@ -416,7 +460,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Lie chest-down on an incline bench, let arms hang straight, curl dumbbells up squeezing biceps.',},
 
   // TRICEPS
   {
@@ -426,7 +471,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['chest', 'shoulders'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Lie on bench, grip bar at shoulder width or narrower, lower to chest, press up focusing on triceps.',},
   {
     id: 'tricep-dips',
     name: 'Tricep Dips',
@@ -434,7 +480,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['chest', 'shoulders'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Support yourself on parallel bars with arms straight, lower body by bending elbows, press back up.',},
   {
     id: 'skull-crushers',
     name: 'Skull Crushers (Lying Tricep Extension)',
@@ -442,7 +489,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Lie on bench holding bar or dumbbells above chest, bend elbows to lower weight toward forehead, extend back up.',},
   {
     id: 'tricep-pushdown',
     name: 'Tricep Pushdown',
@@ -450,7 +498,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand at a high cable pulley, push the bar down by extending elbows, keep upper arms at sides.',},
   {
     id: 'rope-pushdown',
     name: 'Rope Tricep Pushdown',
@@ -458,7 +507,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Attach rope to high cable, push down and spread the rope apart at the bottom, squeeze triceps.',},
   {
     id: 'overhead-tricep-extension',
     name: 'Overhead Tricep Extension',
@@ -466,7 +516,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold a dumbbell overhead with both hands, lower behind head by bending elbows, extend back up.',},
   {
     id: 'cable-overhead-extension',
     name: 'Cable Overhead Tricep Extension',
@@ -474,7 +525,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Face away from a high cable, grip rope overhead, extend arms forward and up, squeeze triceps.',},
   {
     id: 'kickbacks',
     name: 'Tricep Kickbacks',
@@ -483,7 +535,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'isolation',
     alternatingSides: true,
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hinge forward, hold dumbbell with arm bent at 90 degrees, extend arm straight back, squeeze tricep.',},
   {
     id: 'diamond-pushups',
     name: 'Diamond Push-Ups',
@@ -491,7 +544,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['chest'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Place hands close together under chest forming a diamond shape, lower chest to hands, push back up.',},
 
   // LEGS - QUADS
   {
@@ -510,7 +564,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes', 'abs'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Rest barbell on front delts with elbows high, squat down keeping torso upright, drive through heels to stand.',},
   {
     id: 'goblet-squat',
     name: 'Goblet Squat',
@@ -518,7 +573,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold a dumbbell or kettlebell at chest level, squat down keeping chest up, push through heels to stand.',},
   {
     id: 'leg-press',
     name: 'Leg Press',
@@ -526,7 +582,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the leg press machine, place feet shoulder-width on the platform, lower the weight by bending knees, press back up.',},
   {
     id: 'hack-squat',
     name: 'Hack Squat',
@@ -534,7 +591,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand in the hack squat machine, lower body by bending knees, press back up through heels.',},
   {
     id: 'leg-extension',
     name: 'Leg Extension',
@@ -542,7 +600,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with shins behind pad, extend legs straight out, squeeze quads at top, lower slowly.',},
   {
     id: 'lunges',
     name: 'Barbell Lunges',
@@ -551,7 +610,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'barbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Step forward with one leg, lower back knee toward ground, push off front foot to return. Alternate legs.',},
   {
     id: 'walking-lunges',
     name: 'Walking Lunges',
@@ -560,7 +620,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'dumbbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Step forward into a lunge, drive through front heel to bring back foot forward into next lunge.',},
   {
     id: 'split-squat',
     name: 'Split Squat',
@@ -569,7 +630,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'dumbbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Stand in a staggered stance, lower back knee toward the ground, push through front heel to stand back up.',},
   {
     id: 'bulgarian-split-squat',
     name: 'Bulgarian Split Squat',
@@ -578,7 +640,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'dumbbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Place rear foot on a bench behind you, lower back knee toward ground, push through front heel to stand.',},
   {
     id: 'step-ups',
     name: 'Step-Ups',
@@ -587,7 +650,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     equipment: 'dumbbell',
     alternatingSides: true,
-  },
+  
+  instructions: 'Step onto a box or bench with one foot, drive through that foot to stand on top, step back down. Alternate legs.',},
   {
     id: 'sissy-squat',
     name: 'Sissy Squat',
@@ -595,7 +659,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hold onto a support, lean back while bending knees, lower body with quads doing the work, push back up.',},
 
   // LEGS - HAMSTRINGS & GLUTES
   {
@@ -605,7 +670,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Lie face down on the machine, curl heels toward glutes by contracting hamstrings, lower slowly.',},
   {
     id: 'seated-leg-curl',
     name: 'Seated Leg Curl',
@@ -613,7 +679,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with calves on the pad, curl legs down and back, squeeze hamstrings, return slowly.',},
   {
     id: 'stiff-leg-deadlift',
     name: 'Stiff-Leg Deadlift',
@@ -621,7 +688,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hold barbell, keep legs nearly straight, hinge at hips lowering bar toward feet, return to standing.',},
   {
     id: 'good-mornings',
     name: 'Good Mornings',
@@ -629,7 +697,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Place barbell on upper back, hinge forward at hips keeping back straight, return to standing.',},
   {
     id: 'hip-thrust',
     name: 'Barbell Hip Thrust',
@@ -637,7 +706,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Sit with upper back against a bench, barbell over hips, drive hips up squeezing glutes at top, lower.',},
   {
     id: 'glute-bridge',
     name: 'Glute Bridge',
@@ -645,7 +715,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with knees bent, drive hips up squeezing glutes at the top, lower with control.',},
   {
     id: 'cable-kickbacks',
     name: 'Cable Glute Kickbacks',
@@ -654,7 +725,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'isolation',
     alternatingSides: true,
     equipment: 'cable',
-  },
+  
+  instructions: 'Attach ankle strap to low cable, face the machine, kick leg straight back squeezing glutes.',},
   {
     id: 'glute-ham-raise',
     name: 'Glute-Ham Raise',
@@ -662,7 +734,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Lock feet in the GHD machine, lower torso forward with control, pull back up using hamstrings and glutes.',},
   {
     id: 'nordic-curl',
     name: 'Nordic Hamstring Curl',
@@ -670,7 +743,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Kneel with feet anchored, slowly lower your torso forward keeping hips extended, push back up.',},
 
   // CALVES
   {
@@ -680,7 +754,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand on a raised surface, lower heels below the platform, rise up onto toes squeezing calves.',},
   {
     id: 'seated-calf-raise',
     name: 'Seated Calf Raise',
@@ -688,7 +763,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with knees under the pad, rise up onto toes, squeeze calves at top, lower slowly.',},
   {
     id: 'donkey-calf-raise',
     name: 'Donkey Calf Raise',
@@ -696,7 +772,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Bend at hips with weight on lower back, lower heels below platform, rise up onto toes.',},
   {
     id: 'leg-press-calf-raise',
     name: 'Leg Press Calf Raise',
@@ -704,7 +781,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the leg press, place toes on the bottom edge of platform, push through toes extending ankles.',},
 
   // ABS & CORE
   {
@@ -714,7 +792,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with knees bent, curl shoulders off the floor by contracting abs, lower with control.',},
   {
     id: 'sit-ups',
     name: 'Sit-Ups',
@@ -722,7 +801,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with knees bent, sit all the way up by contracting abs, lower back down with control.',},
   {
     id: 'leg-raises',
     name: 'Hanging Leg Raises',
@@ -730,7 +810,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hang from a bar, raise legs until parallel with the ground or higher, lower with control.',},
   {
     id: 'lying-leg-raises',
     name: 'Lying Leg Raises',
@@ -738,7 +819,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie flat on back, keep legs straight, raise them to vertical, lower slowly without touching floor.',},
   {
     id: 'plank',
     name: 'Plank',
@@ -746,7 +828,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['obliques'],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hold a push-up position on forearms or hands, keep body in a straight line from head to heels.',},
   {
     id: 'side-plank',
     name: 'Side Plank',
@@ -762,7 +845,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Sit with torso leaned back, feet off the ground, rotate torso side to side touching the floor.',},
   {
     id: 'cable-crunches',
     name: 'Cable Crunches',
@@ -770,7 +854,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Kneel below a high cable, hold rope behind head, crunch down contracting abs, return slowly.',},
   {
     id: 'ab-wheel-rollout',
     name: 'Ab Wheel Rollout',
@@ -778,7 +863,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Kneel holding the ab wheel, roll forward extending body, pull back using core to return to kneeling.',},
   {
     id: 'mountain-climbers',
     name: 'Mountain Climbers',
@@ -786,7 +872,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'compound',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Start in a push-up position, alternate driving knees toward chest in a running motion.',},
   {
     id: 'bicycle-crunches',
     name: 'Bicycle Crunches',
@@ -794,7 +881,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back, alternate bringing opposite elbow to knee while extending the other leg.',},
   {
     id: 'dead-bug',
     name: 'Dead Bug',
@@ -802,7 +890,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with arms up and knees at 90 degrees, extend opposite arm and leg while keeping back flat.',},
   {
     id: 'pallof-press',
     name: 'Pallof Press',
@@ -810,7 +899,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand sideways to a cable, hold handle at chest, press arms straight out resisting rotation, return to chest.',},
   {
     id: 'woodchoppers',
     name: 'Cable Woodchoppers',
@@ -818,7 +908,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand sideways to a cable, pull the handle diagonally across your body from high to low or low to high.',},
 
   // FOREARMS
   {
@@ -828,7 +919,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Sit with forearms resting on thighs palms up, curl the bar up by flexing wrists, lower slowly.',},
   {
     id: 'reverse-wrist-curls',
     name: 'Reverse Wrist Curls',
@@ -836,7 +928,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Sit with forearms on thighs palms down, extend wrists lifting the bar, lower slowly.',},
   {
     id: 'farmers-walk',
     name: "Farmer's Walk",
@@ -844,7 +937,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Hold heavy dumbbells at sides, walk with upright posture, keeping core tight and shoulders back.',},
 
   // ADDITIONAL MACHINE EXERCISES
   {
@@ -854,7 +948,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles at shoulder height, press overhead to full extension, lower slowly.',},
   {
     id: 'chest-fly-machine',
     name: 'Chest Fly Machine',
@@ -862,7 +957,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles with arms wide, bring handles together in front of chest, squeeze, return.',},
   {
     id: 'hip-abduction',
     name: 'Hip Abduction Machine',
@@ -870,7 +966,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with legs together, push knees apart against the pads, squeeze glutes, return slowly.',},
   {
     id: 'hip-adduction',
     name: 'Hip Adduction Machine',
@@ -878,7 +975,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with legs apart, bring knees together against the pads, squeeze inner thighs, return.',},
   {
     id: 'hip-thrust-machine',
     name: 'Hip Thrust Machine',
@@ -886,7 +984,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with upper back supported, drive hips up against the pad, squeeze glutes, lower.',},
   {
     id: 'assisted-pull-up',
     name: 'Assisted Pull-Up Machine',
@@ -894,7 +993,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Kneel or stand on the assist platform, grip the bar overhead, pull chin above bar with machine assistance.',},
   {
     id: 'ab-crunch-machine',
     name: 'Ab Crunch Machine',
@@ -902,7 +1002,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles, crunch forward contracting abs against resistance, return slowly.',},
   {
     id: 'lateral-raise-machine',
     name: 'Lateral Raise Machine',
@@ -910,7 +1011,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine with arms under pads, raise arms out to sides to shoulder height, lower slowly.',},
   {
     id: 'bicep-curl-machine',
     name: 'Bicep Curl Machine',
@@ -918,7 +1020,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles with arms extended, curl up squeezing biceps, lower slowly.',},
   {
     id: 'tricep-extension-machine',
     name: 'Tricep Extension Machine',
@@ -926,7 +1029,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles, extend arms by pushing down, squeeze triceps, return slowly.',},
   {
     id: 'incline-chest-press-machine',
     name: 'Incline Chest Press Machine',
@@ -934,7 +1038,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the incline machine, grip handles, press forward and up, return slowly.',},
   {
     id: 'high-row-machine',
     name: 'High Row Machine',
@@ -942,7 +1047,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip overhead handles, pull down and back toward your chest, squeeze back.',},
   {
     id: 'rdl-machine',
     name: 'RDL Machine',
@@ -950,7 +1056,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand in the machine with hips against pad, hinge forward keeping back straight, drive hips to return.',},
   {
     id: 'cable-fly-low-to-high',
     name: 'Low-to-High Cable Fly',
@@ -958,7 +1065,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand between low cable pulleys, bring handles up and together in front of upper chest in an arc.',},
 
   // SMITH MACHINE EXERCISES
   {
@@ -968,7 +1076,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Lie on bench under the Smith machine bar, unrack, lower to chest, press up.',},
   {
     id: 'smith-machine-incline-press',
     name: 'Smith Machine Incline Press',
@@ -976,7 +1085,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Set bench to 30-45 degrees under Smith machine, unrack bar, lower to upper chest, press up.',},
   {
     id: 'smith-machine-squat',
     name: 'Smith Machine Squat',
@@ -984,7 +1094,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand under the Smith machine bar on upper back, unrack, squat down, drive through heels to stand.',},
   {
     id: 'smith-machine-shoulder-press',
     name: 'Smith Machine Shoulder Press',
@@ -992,7 +1103,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit or stand under the Smith bar at shoulder level, press overhead, lower with control.',},
   {
     id: 'smith-machine-row',
     name: 'Smith Machine Row',
@@ -1000,7 +1112,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Hinge forward under the Smith machine, grip bar, row to lower chest, squeeze back.',},
   {
     id: 'smith-machine-lunge',
     name: 'Smith Machine Lunge',
@@ -1009,7 +1122,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     alternatingSides: true,
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand under Smith bar, step one foot forward into a lunge, lower back knee, push back up.',},
   {
     id: 'smith-machine-calf-raise',
     name: 'Smith Machine Calf Raise',
@@ -1017,7 +1131,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand under Smith bar on a raised surface, lower heels, rise onto toes squeezing calves.',},
   {
     id: 'smith-machine-shrug',
     name: 'Smith Machine Shrug',
@@ -1025,7 +1140,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand holding Smith bar at arms length, shrug shoulders up toward ears, hold, lower.',},
   {
     id: 'smith-machine-upright-row',
     name: 'Smith Machine Upright Row',
@@ -1033,7 +1149,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand holding Smith bar with narrow grip, pull up along body to chin height leading with elbows.',},
   {
     id: 'smith-machine-hip-thrust',
     name: 'Smith Machine Hip Thrust',
@@ -1041,7 +1158,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit with back against a bench, Smith bar over hips, drive hips up squeezing glutes.',},
   
   // ADDITIONAL COMMON MACHINE EXERCISES
   {
@@ -1051,7 +1169,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit at the machine, grip handles, pull toward torso squeezing shoulder blades, return slowly.',},
   {
     id: 'chest-supported-row-machine',
     name: 'Chest Supported Row Machine',
@@ -1059,7 +1178,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit with chest against the pad, grip handles, row toward torso squeezing back.',},
   {
     id: 'rear-delt-machine',
     name: 'Rear Delt Machine',
@@ -1067,7 +1187,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['back'],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit facing the machine, push handles apart by squeezing rear delts and shoulder blades.',},
   {
     id: 'glute-kickback-machine',
     name: 'Glute Kickback Machine',
@@ -1076,7 +1197,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'isolation',
     alternatingSides: true,
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand in the machine, push one leg back against the pad squeezing glutes, return slowly.',},
   {
     id: 'inner-thigh-machine',
     name: 'Inner Thigh Machine',
@@ -1084,7 +1206,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit with legs apart, squeeze legs together against the pads, return slowly.',},
   {
     id: 'outer-thigh-machine',
     name: 'Outer Thigh Machine',
@@ -1092,7 +1215,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit with legs together, push knees apart against the pads, squeeze outer glutes, return.',},
   {
     id: 'preacher-curl-machine',
     name: 'Preacher Curl Machine',
@@ -1100,7 +1224,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit with upper arms on the pad, curl handles up squeezing biceps, lower with control.',},
   {
     id: 'tricep-dip-machine',
     name: 'Tricep Dip Machine',
@@ -1108,7 +1233,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['chest', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit in the machine, grip handles, press down extending arms, squeeze triceps, return slowly.',},
   {
     id: 'cable-crossover',
     name: 'Cable Crossover',
@@ -1116,7 +1242,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'cable',
-  },
+  
+  instructions: 'Stand between high cable pulleys, step forward, bring handles down and together in front of chest.',},
 
   // KETTLEBELL & FUNCTIONAL
   {
@@ -1126,7 +1253,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs', 'shoulders'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Stand with feet wider than shoulders, hinge hips to swing kettlebell back between legs, thrust hips forward to swing it up to chest height.',},
   {
     id: 'kettlebell-deadlift',
     name: 'Kettlebell Deadlift',
@@ -1134,7 +1262,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back', 'quads'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Stand over kettlebell, hinge at hips to grip handle, drive through heels to stand keeping back flat.',},
   {
     id: 'kettlebell-goblet-squat',
     name: 'Kettlebell Goblet Squat',
@@ -1142,7 +1271,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold kettlebell by horns at chest level, squat down keeping chest up, push through heels to stand.',},
   {
     id: 'kettlebell-rdl',
     name: 'Kettlebell Romanian Deadlift',
@@ -1150,7 +1280,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['lower_back'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold kettlebell with both hands, hinge at hips pushing them back, lower along legs, drive hips forward to stand.',},
   // OLYMPIC / EXPLOSIVE LIFTS
   {
     id: 'power-clean',
@@ -1159,7 +1290,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['quads', 'traps', 'shoulders'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Start with bar on floor, pull explosively from ground, catch bar on front delts in a quarter squat.',},
   {
     id: 'power-snatch',
     name: 'Power Snatch',
@@ -1167,7 +1299,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'traps', 'quads'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Start with bar on floor, pull explosively overhead in one motion, catch with arms locked out.',},
   {
     id: 'clean-and-jerk',
     name: 'Clean & Jerk',
@@ -1175,7 +1308,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'quads', 'triceps', 'traps'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Clean bar to shoulders, then drive bar overhead by dipping and extending legs.',},
   {
     id: 'hang-clean',
     name: 'Hang Clean',
@@ -1183,7 +1317,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['traps', 'quads', 'shoulders'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Start with bar at hip height, dip and explosively pull bar to shoulders, catching in a quarter squat.',},
   {
     id: 'hang-snatch',
     name: 'Hang Snatch',
@@ -1191,7 +1326,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'traps', 'quads'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Start with bar at hip height, explosively pull bar overhead in one motion, catch with arms locked.',},
   {
     id: 'squat-clean',
     name: 'Squat Clean',
@@ -1199,7 +1335,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings', 'traps', 'shoulders'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Pull bar from floor, catch on front delts in a full front squat, stand up to complete the lift.',},
   {
     id: 'dumbbell-curl-to-press',
     name: 'Dumbbell Curl to Press',
@@ -1207,7 +1344,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps'],
     category: 'compound',
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Curl dumbbells to shoulders, then press overhead in one fluid motion, reverse to return.',},
   {
     id: 'reverse-lunges',
     name: 'Reverse Lunges',
@@ -1216,7 +1354,8 @@ const _rawExerciseLibrary: Exercise[] = [
     category: 'compound',
     alternatingSides: true,
     equipment: 'dumbbell',
-  },
+  
+  instructions: 'Step one foot backward into a lunge position, lower back knee toward the ground, push off to return. Alternate legs.',},
   {
     id: 'med-ball-slams',
     name: 'Medicine Ball Slams',
@@ -1224,7 +1363,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'lats'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Lift medicine ball overhead, slam it forcefully into the ground, squat to pick it up and repeat.',},
   {
     id: 'box-squat',
     name: 'Box Squat',
@@ -1232,7 +1372,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Stand in front of a box, squat down to sit briefly on the box, then drive through heels to stand back up.',},
   {
     id: 'push-press',
     name: 'Push Press',
@@ -1240,7 +1381,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'quads'],
     category: 'compound',
     equipment: 'barbell',
-  },
+  
+  instructions: 'Hold barbell at shoulders, dip knees slightly, then explosively drive bar overhead using leg power.',},
   {
     id: 'battle-ropes',
     name: 'Battle Ropes',
@@ -1248,7 +1390,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs', 'forearms'],
     category: 'compound',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold rope ends, create alternating waves by rapidly raising and lowering arms. Keep core tight.',},
   {
     id: 'shoulder-tap-plank',
     name: 'Shoulder Tap Plank',
@@ -1256,7 +1399,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hold a high plank position, lift one hand to tap opposite shoulder, alternate sides while keeping hips still.',},
   {
     id: 'knee-raises',
     name: 'Knee Raises',
@@ -1264,7 +1408,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'isolation',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hang from a bar or use a captain\'s chair, raise knees toward chest, lower with control.',},
 
   // WARMUP & MOBILITY EXERCISES
   {
@@ -1274,7 +1419,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Place band above knees, lie on back with knees bent, drive hips up pushing knees out, squeeze glutes.',},
   {
     id: 'glute-bridge',
     name: 'Glute Bridge',
@@ -1282,7 +1428,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with knees bent, drive hips up squeezing glutes at the top, lower with control.',},
   {
     id: 'banded-clamshells',
     name: 'Banded Clamshells',
@@ -1290,7 +1437,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Lie on side with band above knees, keep feet together, open top knee against band resistance, lower slowly.',},
   {
     id: 'banded-lateral-walk',
     name: 'Banded Lateral Walk',
@@ -1298,7 +1446,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['quads'],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Place band above ankles or knees, stand in half squat, step sideways maintaining tension on the band.',},
   {
     id: 'banded-monster-walk',
     name: 'Banded Monster Walk',
@@ -1306,7 +1455,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['quads'],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Place band above ankles, stand in half squat, walk forward in diagonal steps maintaining band tension.',},
   {
     id: 'bird-dog',
     name: 'Bird Dog',
@@ -1314,7 +1464,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes', 'lower_back'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'On all fours, extend opposite arm and leg simultaneously, hold briefly, return and switch sides.',},
   {
     id: 'dead-bug',
     name: 'Dead Bug',
@@ -1322,7 +1473,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lie on back with arms up and knees at 90 degrees, extend opposite arm and leg while keeping back flat.',},
   {
     id: 'cat-cow-stretch',
     name: 'Cat-Cow Stretch',
@@ -1330,7 +1482,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'On all fours, alternate between arching back up (cat) and dropping belly down (cow).',},
   {
     id: 'world-greatest-stretch',
     name: 'World\'s Greatest Stretch',
@@ -1338,7 +1491,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings', 'quads'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lunge forward, place opposite hand on ground, rotate torso opening chest toward front leg.',},
   {
     id: 'hip-circles',
     name: 'Hip Circles',
@@ -1346,7 +1500,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Stand on one leg, lift other knee and make large circles with the hip joint. Switch directions.',},
   {
     id: 'leg-swings',
     name: 'Leg Swings',
@@ -1354,7 +1509,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['quads', 'glutes'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hold a support, swing one leg forward and backward in a controlled arc. Switch to side-to-side swings.',},
   {
     id: 'arm-circles',
     name: 'Arm Circles',
@@ -1362,7 +1518,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Extend arms to sides, make small circles gradually increasing to large circles. Reverse direction.',},
   {
     id: 'shoulder-dislocates',
     name: 'Shoulder Dislocates (Band/Stick)',
@@ -1370,7 +1527,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold a band or stick wide, raise overhead and rotate behind your back keeping arms straight.',},
   {
     id: 'banded-pull-aparts',
     name: 'Banded Pull Aparts',
@@ -1378,7 +1536,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['back'],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold a band at shoulder width and height, pull hands apart stretching the band, squeeze shoulder blades.',},
   {
     id: 'banded-face-pulls',
     name: 'Banded Face Pulls',
@@ -1386,7 +1545,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['traps'],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Hold a band at face height, pull apart toward your face with elbows high, externally rotate at the end.',},
   {
     id: 'thoracic-rotations',
     name: 'Thoracic Rotations',
@@ -1394,7 +1554,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'On all fours or side-lying, rotate through your thoracic spine opening chest toward ceiling.',},
   {
     id: 'foam-roll-upper-back',
     name: 'Foam Roll Upper Back',
@@ -1402,7 +1563,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Lie on a foam roller placed under upper back, slowly roll from mid-back to shoulders, pausing on tight spots.',},
   {
     id: 'foam-roll-quads',
     name: 'Foam Roll Quads',
@@ -1410,7 +1572,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Lie face down with foam roller under thighs, roll from hip to just above knee, pausing on tight spots.',},
   {
     id: 'foam-roll-glutes',
     name: 'Foam Roll Glutes',
@@ -1418,7 +1581,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'other',
-  },
+  
+  instructions: 'Sit on foam roller, cross one ankle over opposite knee, roll over the glute muscles.',},
   {
     id: 'ankle-circles',
     name: 'Ankle Circles',
@@ -1426,7 +1590,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Lift one foot off ground, rotate ankle in circles clockwise then counterclockwise. Switch feet.',},
   {
     id: 'bodyweight-squat',
     name: 'Bodyweight Squat',
@@ -1434,7 +1599,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Stand with feet shoulder-width apart, squat down keeping chest up and weight in heels, stand back up.',},
   {
     id: 'inchworm',
     name: 'Inchworm',
@@ -1442,7 +1608,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs', 'shoulders'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Stand, bend forward to place hands on floor, walk hands out to plank, walk feet back to hands, stand up.',},
   {
     id: 'high-knees',
     name: 'High Knees',
@@ -1450,7 +1617,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['abs'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Run in place, driving knees as high as possible while pumping arms. Maintain an upright posture.',},
   {
     id: 'butt-kicks',
     name: 'Butt Kicks',
@@ -1458,7 +1626,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Run in place, kicking heels up toward glutes with each step. Keep a quick pace.',},
   {
     id: 'jumping-jacks',
     name: 'Jumping Jacks',
@@ -1466,7 +1635,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'calves'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Jump feet out wide while raising arms overhead, jump back to start. Maintain a steady rhythm.',},
   {
     id: 'mountain-climbers',
     name: 'Mountain Climbers',
@@ -1474,7 +1644,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['quads', 'shoulders'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Start in a push-up position, alternate driving knees toward chest in a running motion.',},
   {
     id: 'plank-hold',
     name: 'Plank Hold',
@@ -1482,7 +1653,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Hold a forearm or high plank position keeping body in a straight line. Engage core throughout.',},
   {
     id: 'side-plank',
     name: 'Side Plank',
@@ -1498,7 +1670,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Sit with front leg bent 90 degrees in front and back leg bent 90 degrees to the side, lean forward.',},
   {
     id: 'hip-flexor-stretch',
     name: 'Hip Flexor Stretch',
@@ -1506,7 +1679,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['glutes'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Kneel on one knee, push hips forward while keeping torso upright. Hold and switch sides.',},
   {
     id: 'pigeon-stretch',
     name: 'Pigeon Stretch',
@@ -1514,7 +1688,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'From a lunge, bring front shin across the body, lower hips toward the ground, lean forward.',},
   {
     id: 'seated-hamstring-stretch',
     name: 'Seated Hamstring Stretch',
@@ -1522,7 +1697,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Sit with one leg extended, reach toward toes hinging at hips until hamstring stretch is felt.',},
   {
     id: 'standing-quad-stretch',
     name: 'Standing Quad Stretch',
@@ -1530,7 +1706,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: [],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Stand on one leg, pull opposite heel toward glutes, hold and switch sides.',},
   {
     id: 'wall-angels',
     name: 'Wall Angels',
@@ -1538,7 +1715,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['back'],
     category: 'warmup',
     equipment: 'bodyweight',
-  },
+  
+  instructions: 'Stand with back flat against wall, arms in goal-post position, slide arms up and down the wall.',},
 
   // CARDIO MACHINES (for circuit tracking)
   {
@@ -1548,7 +1726,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['biceps', 'quads'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit on the rower, strap feet in, drive with legs first then pull handle to lower chest, reverse to return.',},
   {
     id: 'ski-erg',
     name: 'Ski Erg',
@@ -1556,7 +1735,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Stand at the machine, reach arms up to grab handles, pull down using lats and core in a skiing motion.',},
   {
     id: 'assault-bike',
     name: 'Assault Bike',
@@ -1564,7 +1744,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['shoulders', 'abs'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit on the bike, pedal with legs while pushing and pulling the handles with arms.',},
   {
     id: 'stationary-bike',
     name: 'Stationary Bike',
@@ -1572,7 +1753,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['hamstrings', 'calves'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Sit on the bike, adjust seat height, pedal at desired intensity maintaining good posture.',},
   {
     id: 'stair-master',
     name: 'Stair Master',
@@ -1580,7 +1762,8 @@ const _rawExerciseLibrary: Exercise[] = [
     secondaryMuscles: ['calves'],
     category: 'compound',
     equipment: 'machine',
-  },
+  
+  instructions: 'Step onto the machine, climb stairs at a steady pace, keep upright without leaning on handles.',},
 
   // STRETCHES
   {
@@ -1992,54 +2175,92 @@ export function getExercisesForBlockType(blockType: string): Exercise[] {
 // Warmup, activation, and cardio exercises
 export const warmupExercises: Exercise[] = [
   // Dynamic Stretches
-  { id: 'arm-circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'leg-swings', name: 'Leg Swings', primaryMuscles: ['hamstrings', 'quads'], secondaryMuscles: ['glutes'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'hip-circles', name: 'Hip Circles', primaryMuscles: ['glutes'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'torso-twists', name: 'Torso Twists', primaryMuscles: ['obliques'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'neck-rolls', name: 'Neck Rolls', primaryMuscles: ['traps'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'walking-lunges', name: 'Walking Lunges', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'high-knees', name: 'High Knees', primaryMuscles: ['quads'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'butt-kicks', name: 'Butt Kicks', primaryMuscles: ['hamstrings'], secondaryMuscles: ['quads'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'jumping-jacks', name: 'Jumping Jacks', primaryMuscles: ['shoulders'], secondaryMuscles: ['calves'], category: 'warmup', equipment: 'bodyweight' },
-  { id: 'inchworms', name: 'Inchworms', primaryMuscles: ['hamstrings', 'shoulders'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' },
+  { id: 'arm-circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Extend arms to sides, make small circles gradually increasing to large circles. Reverse direction.',},
+  { id: 'leg-swings', name: 'Leg Swings', primaryMuscles: ['hamstrings', 'quads'], secondaryMuscles: ['glutes'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Hold a support, swing one leg forward and backward in a controlled arc. Switch to side-to-side swings.',},
+  { id: 'hip-circles', name: 'Hip Circles', primaryMuscles: ['glutes'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Stand on one leg, lift other knee and make large circles with the hip joint. Switch directions.',},
+  { id: 'torso-twists', name: 'Torso Twists', primaryMuscles: ['obliques'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Stand with feet shoulder-width, rotate torso left and right, letting arms swing naturally.',},
+  { id: 'neck-rolls', name: 'Neck Rolls', primaryMuscles: ['traps'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Slowly roll head in circles, gently stretching neck muscles. Reverse direction after several reps.',},
+  { id: 'walking-lunges', name: 'Walking Lunges', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Step forward into a lunge, drive through front heel to bring back foot forward into next lunge.',},
+  { id: 'high-knees', name: 'High Knees', primaryMuscles: ['quads'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Run in place, driving knees as high as possible while pumping arms. Maintain an upright posture.',},
+  { id: 'butt-kicks', name: 'Butt Kicks', primaryMuscles: ['hamstrings'], secondaryMuscles: ['quads'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Run in place, kicking heels up toward glutes with each step. Keep a quick pace.',},
+  { id: 'jumping-jacks', name: 'Jumping Jacks', primaryMuscles: ['shoulders'], secondaryMuscles: ['calves'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Jump feet out wide while raising arms overhead, jump back to start. Maintain a steady rhythm.',},
+  { id: 'inchworms', name: 'Inchworms', primaryMuscles: ['hamstrings', 'shoulders'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' 
+  instructions: 'Stand, bend forward to place hands on floor, walk hands out to plank, walk feet back to hands, stand up.',},
   
   // Activation Exercises
-  { id: 'glute-bridges', name: 'Glute Bridges', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'activation', equipment: 'bodyweight' },
-  { id: 'bird-dogs', name: 'Bird Dogs', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: ['glutes'], category: 'activation', equipment: 'bodyweight' },
-  { id: 'dead-bugs', name: 'Dead Bugs', primaryMuscles: ['abs'], secondaryMuscles: ['lower_back'], category: 'activation', equipment: 'bodyweight' },
-  { id: 'clamshells', name: 'Clamshells', primaryMuscles: ['glutes'], secondaryMuscles: [], category: 'activation', equipment: 'bands' },
-  { id: 'band-pull-aparts', name: 'Band Pull Aparts', primaryMuscles: ['shoulders', 'back'], secondaryMuscles: ['traps'], category: 'activation', equipment: 'bands' },
-  { id: 'cat-cow', name: 'Cat-Cow Stretch', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: [], category: 'activation', equipment: 'bodyweight' },
-  { id: 'scapular-push-ups', name: 'Scapular Push-Ups', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bodyweight' },
-  { id: 'shoulder-dislocates', name: 'Shoulder Dislocates', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bands' },
+  { id: 'glute-bridges', name: 'Glute Bridges', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'activation', equipment: 'bodyweight' 
+  instructions: 'Lie on back with knees bent, drive hips up squeezing glutes at top, lower with control.',},
+  { id: 'bird-dogs', name: 'Bird Dogs', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: ['glutes'], category: 'activation', equipment: 'bodyweight' 
+  instructions: 'On all fours, extend opposite arm and leg simultaneously, hold briefly, return and switch sides.',},
+  { id: 'dead-bugs', name: 'Dead Bugs', primaryMuscles: ['abs'], secondaryMuscles: ['lower_back'], category: 'activation', equipment: 'bodyweight' 
+  instructions: 'Lie on back, arms up and knees at 90 degrees, extend opposite arm and leg while keeping back flat.',},
+  { id: 'clamshells', name: 'Clamshells', primaryMuscles: ['glutes'], secondaryMuscles: [], category: 'activation', equipment: 'bands' 
+  instructions: 'Lie on side with knees bent, keep feet together, open top knee like a clamshell, close slowly.',},
+  { id: 'band-pull-aparts', name: 'Band Pull Aparts', primaryMuscles: ['shoulders', 'back'], secondaryMuscles: ['traps'], category: 'activation', equipment: 'bands' 
+  instructions: 'Hold a band at shoulder width and height, pull hands apart stretching the band, squeeze shoulder blades.',},
+  { id: 'cat-cow', name: 'Cat-Cow Stretch', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: [], category: 'activation', equipment: 'bodyweight' 
+  instructions: 'On all fours, alternate between arching back up (cat) and dropping belly down (cow).',},
+  { id: 'scapular-push-ups', name: 'Scapular Push-Ups', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bodyweight' 
+  instructions: 'In push-up position with arms straight, protract and retract shoulder blades without bending elbows.',},
+  { id: 'shoulder-dislocates', name: 'Shoulder Dislocates', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bands' 
+  instructions: 'Hold a band or stick wide, raise overhead and rotate behind your back keeping arms straight.',},
   
   // Static Stretches (for cooldown)
   { id: 'hamstring-stretch', name: 'Hamstring Stretch', primaryMuscles: ['hamstrings'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'quad-stretch', name: 'Quad Stretch', primaryMuscles: ['quads'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', primaryMuscles: ['quads'], secondaryMuscles: ['glutes'], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'chest-stretch', name: 'Chest Stretch', primaryMuscles: ['chest'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'tricep-stretch', name: 'Tricep Stretch', primaryMuscles: ['triceps'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'quad-stretch', name: 'Quad Stretch', primaryMuscles: ['quads'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' 
+  instructions: 'Stand on one leg, pull opposite heel toward glutes, keep knees together. Hold and switch sides.',},
+  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', primaryMuscles: ['quads'], secondaryMuscles: ['glutes'], category: 'stretching', equipment: 'bodyweight' 
+  instructions: 'Kneel on one knee, push hips forward while keeping torso upright. Hold and switch sides.',},
+  { id: 'chest-stretch', name: 'Chest Stretch', primaryMuscles: ['chest'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' 
+  instructions: 'Place forearm against a wall or doorframe at shoulder height, lean forward until chest stretch is felt.',},
+  { id: 'tricep-stretch', name: 'Tricep Stretch', primaryMuscles: ['triceps'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' 
+  instructions: 'Raise one arm overhead, bend elbow, use opposite hand to gently push elbow back.',},
   { id: 'lat-stretch', name: 'Lat Stretch', primaryMuscles: ['lats'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'pigeon-pose', name: 'Pigeon Pose', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'stretching', equipment: 'bodyweight' },
+  { id: 'pigeon-pose', name: 'Pigeon Pose', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'stretching', equipment: 'bodyweight' 
+  instructions: 'From a lunge, bring front shin across the body, lower hips, lean forward over front leg.',},
   { id: 'childs-pose', name: "Child's Pose", primaryMuscles: ['lower_back', 'lats'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' },
 ];
 
 export const cardioExercises: Exercise[] = [
-  { id: 'running', name: 'Running', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['calves', 'glutes'], category: 'cardio', equipment: 'bodyweight' },
-  { id: 'cycling', name: 'Cycling', primaryMuscles: ['quads'], secondaryMuscles: ['hamstrings', 'calves'], category: 'cardio', equipment: 'machine' },
-  { id: 'rowing', name: 'Rowing', primaryMuscles: ['back', 'lats'], secondaryMuscles: ['biceps', 'shoulders'], category: 'cardio', equipment: 'machine' },
-  { id: 'swimming', name: 'Swimming', primaryMuscles: ['lats', 'shoulders'], secondaryMuscles: ['chest', 'triceps'], category: 'cardio', equipment: 'bodyweight' },
-  { id: 'elliptical', name: 'Elliptical', primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'hamstrings'], category: 'cardio', equipment: 'machine' },
-  { id: 'stair-climber', name: 'Stair Climber', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'machine' },
-  { id: 'jump-rope', name: 'Jump Rope', primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'other' },
-  { id: 'burpees', name: 'Burpees', primaryMuscles: ['chest', 'quads'], secondaryMuscles: ['shoulders', 'abs'], category: 'cardio', equipment: 'bodyweight' },
-  { id: 'mountain-climbers', name: 'Mountain Climbers', primaryMuscles: ['abs'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'bodyweight' },
-  { id: 'box-jumps', name: 'Box Jumps', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'other' },
-  { id: 'battle-ropes', name: 'Battle Ropes', primaryMuscles: ['shoulders'], secondaryMuscles: ['abs', 'back'], category: 'cardio', equipment: 'other' },
-  { id: 'sled-push', name: 'Sled Push', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['shoulders', 'calves'], category: 'cardio', equipment: 'other' },
-  { id: 'assault-bike', name: 'Assault Bike', primaryMuscles: ['quads'], secondaryMuscles: ['shoulders', 'hamstrings'], category: 'cardio', equipment: 'machine' },
-  { id: 'ski-erg', name: 'Ski Erg', primaryMuscles: ['lats', 'triceps'], secondaryMuscles: ['abs', 'shoulders'], category: 'cardio', equipment: 'machine' },
-  { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight' },
+  { id: 'running', name: 'Running', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['calves', 'glutes'], category: 'cardio', equipment: 'bodyweight' 
+  instructions: 'Run at a steady pace with upright posture, landing midfoot, arms swinging naturally at sides.',},
+  { id: 'cycling', name: 'Cycling', primaryMuscles: ['quads'], secondaryMuscles: ['hamstrings', 'calves'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Pedal at desired intensity, maintain good posture, adjust resistance as needed.',},
+  { id: 'rowing', name: 'Rowing', primaryMuscles: ['back', 'lats'], secondaryMuscles: ['biceps', 'shoulders'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Drive with legs, lean back slightly, pull handle to lower chest. Reverse the sequence to return.',},
+  { id: 'swimming', name: 'Swimming', primaryMuscles: ['lats', 'shoulders'], secondaryMuscles: ['chest', 'triceps'], category: 'cardio', equipment: 'bodyweight' 
+  instructions: 'Move through water using chosen stroke technique, maintaining steady breathing rhythm.',},
+  { id: 'elliptical', name: 'Elliptical', primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'hamstrings'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Step onto the machine, pedal in an elliptical motion while holding or pushing handles.',},
+  { id: 'stair-climber', name: 'Stair Climber', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Step onto the machine, climb stairs at a steady pace, keep upright posture.',},
+  { id: 'jump-rope', name: 'Jump Rope', primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'other' 
+  instructions: 'Hold rope handles, swing rope overhead, jump with both feet clearing the rope on each revolution.',},
+  { id: 'burpees', name: 'Burpees', primaryMuscles: ['chest', 'quads'], secondaryMuscles: ['shoulders', 'abs'], category: 'cardio', equipment: 'bodyweight' 
+  instructions: 'Drop to the floor into a push-up, push up, jump feet toward hands, explosively jump up with arms overhead.',},
+  { id: 'mountain-climbers', name: 'Mountain Climbers', primaryMuscles: ['abs'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'bodyweight' 
+  instructions: 'Start in a push-up position, alternate driving knees toward chest in a running motion.',},
+  { id: 'box-jumps', name: 'Box Jumps', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'other' 
+  instructions: 'Stand facing a box, swing arms and jump up onto the box landing softly, step back down.',},
+  { id: 'battle-ropes', name: 'Battle Ropes', primaryMuscles: ['shoulders'], secondaryMuscles: ['abs', 'back'], category: 'cardio', equipment: 'other' 
+  instructions: 'Hold rope ends, create alternating waves by rapidly raising and lowering arms. Keep core tight.',},
+  { id: 'sled-push', name: 'Sled Push', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['shoulders', 'calves'], category: 'cardio', equipment: 'other' 
+  instructions: 'Grip the sled handles, lean forward, drive legs to push the sled across the floor.',},
+  { id: 'assault-bike', name: 'Assault Bike', primaryMuscles: ['quads'], secondaryMuscles: ['shoulders', 'hamstrings'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Sit on the bike, pedal with legs while pushing and pulling the handles with arms.',},
+  { id: 'ski-erg', name: 'Ski Erg', primaryMuscles: ['lats', 'triceps'], secondaryMuscles: ['abs', 'shoulders'], category: 'cardio', equipment: 'machine' 
+  instructions: 'Stand at the machine, reach arms up to grab handles, pull down using lats and core in a skiing motion.',},
+  { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight' 
+  instructions: 'Run at maximum effort for short distances, focusing on explosive drive and arm pump.',},
 ];
 
 // Combined exercise library with all categories (deduplicated — exerciseLibrary takes priority)

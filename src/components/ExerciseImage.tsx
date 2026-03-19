@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { exercisePlaceholderSvg, generateExerciseImage } from '@/lib/exerciseImageGen';
+import { generateExerciseImage } from '@/lib/exerciseImageGen';
 import { exerciseLibraryMap } from '@/lib/exercises';
-import { Sparkles, Loader2 } from 'lucide-react';
+import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
+import { Loader2 } from 'lucide-react';
 
 interface ExerciseImageProps {
   exerciseId: string;
@@ -24,11 +25,14 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
   const [error, setError] = useState<string | null>(null);
 
   const exercise = exerciseLibraryMap.get(exerciseId);
-  const primaryMuscle = exercise?.primaryMuscles?.[0] || 'chest';
-  const equipment = exercise?.equipment || 'barbell';
+  const animationUrl = getExerciseAnimationUrl(exerciseId);
 
-  // Try to fetch cached image on mount (silently fall back to SVG if unavailable)
+  // Use animation GIF as primary source, then try cached AI image
   useEffect(() => {
+    if (animationUrl) {
+      setImageUrl(animationUrl);
+      return;
+    }
     let cancelled = false;
     fetch(`/api/exercise-image?exerciseId=${encodeURIComponent(exerciseId)}`)
       .then(res => {
@@ -42,7 +46,7 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [exerciseId]);
+  }, [exerciseId, animationUrl]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -60,8 +64,12 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
     setGenerating(false);
   };
 
-  const placeholder = exercisePlaceholderSvg(primaryMuscle, equipment);
-  const src = imageUrl || placeholder;
+  // If no image available at all, render nothing (no emoji placeholder)
+  if (!imageUrl && !animationUrl) {
+    return null;
+  }
+
+  const src = imageUrl || animationUrl || '';
 
   return (
     <div className={`relative overflow-hidden bg-slate-900 flex-shrink-0 ${SIZE_MAP[size]} ${className}`}>

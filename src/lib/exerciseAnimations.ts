@@ -47,14 +47,12 @@ export const exerciseAnimationMap: Record<string, string> = {
   // SHOULDERS
   'overhead-press': 'https://static.exercisedb.dev/media/u4bAmKp.gif',
   'seated-overhead-press': 'https://static.exercisedb.dev/media/u4bAmKp.gif',
-  'dumbbell-shoulder-press': 'https://static.exercisedb.dev/media/goJ6ezq.gif',
-  'arnold-press': 'https://static.exercisedb.dev/media/goJ6ezq.gif',
+  // dumbbell-shoulder-press and arnold-press removed — was incorrectly mapped to RDL GIF
   'lateral-raises': 'https://static.exercisedb.dev/media/3eGE2JC.gif',
   'cable-lateral-raises': 'https://static.exercisedb.dev/media/3eGE2JC.gif',
   'front-raises': 'https://static.exercisedb.dev/media/3eGE2JC.gif',
   'rear-delt-flyes': 'https://static.exercisedb.dev/media/Ln9iTbU.gif',
-  'reverse-pec-deck': 'https://static.exercisedb.dev/media/PQcUlDi.gif',
-  'rear-delt-machine': 'https://static.exercisedb.dev/media/PQcUlDi.gif',
+  // reverse-pec-deck and rear-delt-machine removed — was incorrectly mapped to pec deck GIF
   'upright-rows': 'https://static.exercisedb.dev/media/UDlhcO8.gif',
   'shrugs': 'https://static.exercisedb.dev/media/dG7tG5y.gif',
   'dumbbell-shrugs': 'https://static.exercisedb.dev/media/NJzBsGJ.gif',
@@ -77,11 +75,10 @@ export const exerciseAnimationMap: Record<string, string> = {
   'close-grip-bench': 'https://static.exercisedb.dev/media/J6Dx1Mu.gif',
   'tricep-dips': 'https://static.exercisedb.dev/media/X6C6i5Y.gif',
   'skull-crushers': 'https://static.exercisedb.dev/media/iZop9xO.gif',
-  'tricep-pushdown': 'https://static.exercisedb.dev/media/3ZflifB.gif',
-  'rope-pushdown': 'https://static.exercisedb.dev/media/3ZflifB.gif',
+  // tricep-pushdown and rope-pushdown removed — was incorrectly mapped to cable curl GIF
   'overhead-tricep-extension': 'https://static.exercisedb.dev/media/5uFK1xr.gif',
   'cable-overhead-extension': 'https://static.exercisedb.dev/media/2IxROQ1.gif',
-  'kickbacks': 'https://static.exercisedb.dev/media/W6PxUkg.gif',
+  // kickbacks removed — was incorrectly mapped to bicep curl GIF
   'diamond-pushups': 'https://static.exercisedb.dev/media/soIB2rj.gif',
   'tricep-extension-machine': 'https://static.exercisedb.dev/media/Ser9eQp.gif',
   'tricep-dip-machine': 'https://static.exercisedb.dev/media/X6C6i5Y.gif',
@@ -130,29 +127,25 @@ export const exerciseAnimationMap: Record<string, string> = {
   'leg-press-calf-raise': 'https://static.exercisedb.dev/media/Qa55kX1.gif',
 
   // ABS / CORE
-  'crunches': 'https://static.exercisedb.dev/media/soIB2rj.gif',
-  'sit-ups': 'https://static.exercisedb.dev/media/soIB2rj.gif',
-  'leg-raises': 'https://static.exercisedb.dev/media/G70mEAJ.gif',
-  'lying-leg-raises': 'https://static.exercisedb.dev/media/G70mEAJ.gif',
+  // crunches and sit-ups removed — was incorrectly mapped to push-up GIF
+  // leg-raises and lying-leg-raises removed — was incorrectly mapped to pull-up GIF
   'plank': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
   'plank-hold': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
   'side-plank': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
   'russian-twists': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
-  'cable-crunches': 'https://static.exercisedb.dev/media/3ZflifB.gif',
+  // cable-crunches removed — was incorrectly mapped to cable curl GIF
   'ab-wheel-rollout': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
   'mountain-climbers': 'https://static.exercisedb.dev/media/P9GFBME.gif',
-  'bicycle-crunches': 'https://static.exercisedb.dev/media/soIB2rj.gif',
+  // bicycle-crunches removed — was incorrectly mapped to push-up GIF
   'dead-bug': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
-  'pallof-press': 'https://static.exercisedb.dev/media/3ZflifB.gif',
-  'woodchoppers': 'https://static.exercisedb.dev/media/3ZflifB.gif',
-  'ab-crunch-machine': 'https://static.exercisedb.dev/media/soIB2rj.gif',
+  // pallof-press, woodchoppers, ab-crunch-machine removed — incorrectly mapped GIFs
   'shoulder-tap-plank': 'https://static.exercisedb.dev/media/X6ytgYZ.gif',
   'knee-raises': 'https://static.exercisedb.dev/media/G70mEAJ.gif',
 
   // FOREARMS
   'wrist-curls': 'https://static.exercisedb.dev/media/82LxxkW.gif',
   'reverse-wrist-curls': 'https://static.exercisedb.dev/media/LsZkfU6.gif',
-  'farmers-walk': 'https://static.exercisedb.dev/media/dG7tG5y.gif',
+  // farmers-walk removed — was incorrectly mapped to shrug GIF
 
   // SMITH MACHINE
   'smith-machine-bench-press': 'https://static.exercisedb.dev/media/trqKQv2.gif',
