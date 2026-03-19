@@ -349,26 +349,32 @@ export const useAuthStore = create<AuthState>()(
       switchMode: (mode) => {
         const currentUser = get().user;
         if (currentUser) {
-          const isTrainer = mode === 'trainer';
-          const updatedUser = { ...currentUser, mode, isTrainer };
+          const updatedUser = { ...currentUser, mode };
           set({ user: updatedUser });
           
-          // Persist mode + isTrainer to localStorage users array
+          // Persist mode to localStorage users array (isTrainer is a permanent account flag, never change it here)
           const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
           const index = storedUsers.findIndex((u: User) => u.id === currentUser.id);
           if (index !== -1) {
-            storedUsers[index] = { ...storedUsers[index], mode, isTrainer };
+            storedUsers[index] = { ...storedUsers[index], mode };
             localStorage.setItem('apex-users', JSON.stringify(storedUsers));
           }
           
-          // Sync both mode AND isTrainer to Supabase
-          updateUserInSupabase(currentUser.id, { mode, isTrainer } as any);
+          // Sync mode to Supabase
+          updateUserInSupabase(currentUser.id, { mode });
         }
       },
     }),
     {
       name: 'apex-auth',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        // Repair: if user is in trainer mode but isTrainer was incorrectly set to false, restore it
+        if (state?.user && state.user.mode === 'trainer' && !state.user.isTrainer) {
+          console.log('[Auth] Repairing isTrainer flag (was false while mode=trainer)');
+          state.updateUser({ isTrainer: true });
+        }
+      },
     }
   )
 );
