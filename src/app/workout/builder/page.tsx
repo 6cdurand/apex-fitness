@@ -418,6 +418,7 @@ function WorkoutBuilderContent() {
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockFolderFilter, setBlockFolderFilter] = useState<string>('all');
+  const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
   const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
   const [blockToDelete, setBlockToDelete] = useState<any>(null);
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
@@ -2639,7 +2640,7 @@ function WorkoutBuilderContent() {
       {/* Block Library Dialog */}
       <Dialog open={showBlockLibraryDialog} onOpenChange={(open) => {
         setShowBlockLibraryDialog(open);
-        if (!open) { setBlockLibraryFilter('all'); setBlockFolderFilter('all'); }
+        if (!open) { setBlockLibraryFilter('all'); setBlockFolderFilter('all'); setBlockLibrarySearch(''); }
       }}>
         <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
           <DialogHeader>
@@ -2718,10 +2719,21 @@ function WorkoutBuilderContent() {
               </Button>
             ))}
           </div>
+          {/* Search */}
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Input
+              value={blockLibrarySearch}
+              onChange={e => setBlockLibrarySearch(e.target.value)}
+              placeholder="Search blocks or exercises..."
+              className="bg-gray-800 border-gray-700 text-white pl-10 text-sm"
+            />
+          </div>
           <ScrollArea className="h-[400px] pr-4">
             {savedBlocks.filter(b => 
               (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
-              (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter))
+              (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter)) &&
+              (!blockLibrarySearch.trim() || b.name.toLowerCase().includes(blockLibrarySearch.toLowerCase()) || b.exercises.some(e => (e.exerciseName || '').toLowerCase().includes(blockLibrarySearch.toLowerCase())))
             ).length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No saved blocks yet.</p>
@@ -2732,7 +2744,8 @@ function WorkoutBuilderContent() {
                 {savedBlocks
                   .filter(b => 
                     (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
-                    (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter))
+                    (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter)) &&
+                    (!blockLibrarySearch.trim() || b.name.toLowerCase().includes(blockLibrarySearch.toLowerCase()) || b.exercises.some(e => (e.exerciseName || '').toLowerCase().includes(blockLibrarySearch.toLowerCase())))
                   )
                   .map((block) => {
                     const blockStyle = getBlockStyles(block.type);

@@ -195,6 +195,15 @@ const _rawExerciseLibrary: Exercise[] = [
     equipment: 'cable',
   },
   {
+    id: 'single-arm-cable-row',
+    name: 'Single Arm Cable Row',
+    primaryMuscles: ['back', 'lats'],
+    secondaryMuscles: ['biceps', 'traps'],
+    category: 'compound',
+    equipment: 'cable',
+    instructions: 'Stand or sit at a cable machine, grab the handle with one hand, pull toward your torso squeezing your shoulder blade back. Alternate arms.',
+  },
+  {
     id: 't-bar-row',
     name: 'T-Bar Row',
     primaryMuscles: ['back', 'lats'],

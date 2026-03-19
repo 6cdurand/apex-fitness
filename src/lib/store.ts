@@ -714,6 +714,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
           restTimer: { isRunning: false, seconds: 0, type: 'rest' },
           currentClientId: null,
+          lastDeriveResult: null,
         });
       },
 

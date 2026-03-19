@@ -2233,7 +2233,7 @@ export default function ActiveWorkoutPage() {
                                         pattern="[0-9.]*"
                                         placeholder="0"
                                         min="0"
-                                        step="0.5"
+                                        step="any"
                                         value={set.weight != null && set.weight !== undefined ? set.weight : ''}
                                         onChange={(e) => {
                                           const val = e.target.value;
