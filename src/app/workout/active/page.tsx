@@ -145,6 +145,9 @@ export default function ActiveWorkoutPage() {
   // Per-set rest timers (setId -> { remaining seconds, total seconds })
   const [setRestTimers, setSetRestTimers] = useState<Record<string, { remaining: number; total: number }>>({});
   
+  // Block type picker for the + button
+  const [showBlockTypePicker, setShowBlockTypePicker] = useState(false);
+  
   // Active stretch/timed set timers (setId -> { remaining, total, isRunning })
   const [activeSetTimers, setActiveSetTimers] = useState<Record<string, { remaining: number; total: number; isRunning: boolean }>>({});
   
@@ -302,8 +305,10 @@ export default function ActiveWorkoutPage() {
         for (const [setId, timer] of Object.entries(prev)) {
           if (timer.remaining > 0) {
             updated[setId] = { ...timer, remaining: timer.remaining - 1 };
+          } else {
+            // Keep timer at 0 so it shows red "done" state
+            updated[setId] = { ...timer, remaining: 0 };
           }
-          // Remove timers that hit zero (cleanup)
         }
         return updated;
       });
@@ -1501,18 +1506,14 @@ export default function ActiveWorkoutPage() {
             <Plus className="w-3 h-3" />
           </Button>
           
-          {/* Quick Add */}
+          {/* Quick Add - shows block type picker */}
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              setActiveBlockId(null);
-              setShowExerciseModal(true);
-            }}
+            onClick={() => setShowBlockTypePicker(true)}
             className="h-8 px-3 gap-1.5 hover:bg-slate-700 text-slate-400 ml-auto"
           >
             <Plus className="w-3 h-3" />
-            <span className="hidden sm:inline">Exercise</span>
           </Button>
         </div>
       </div>
@@ -1630,6 +1631,8 @@ export default function ActiveWorkoutPage() {
                           <>
                             {blockExercises.length} exercise{blockExercises.length !== 1 ? 's' : ''}
                             {block.type === 'circuit' && ` • ${block.circuitStyle?.toUpperCase()}`}
+                            {block.type === 'strength' && blockExercises.length === 0 && ' • Add exercises below'}
+                            {block.type === 'warmup' && blockExercises.length === 0 && ' • Add warm-up moves'}
                           </>
                         )}
                       </p>
@@ -2235,6 +2238,7 @@ export default function ActiveWorkoutPage() {
                                         min="0"
                                         step="any"
                                         value={set.weight != null && set.weight !== undefined ? set.weight : ''}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           if (val === '' || val === undefined) {
@@ -2256,6 +2260,7 @@ export default function ActiveWorkoutPage() {
                                         placeholder="0"
                                         min="0"
                                         value={set.reps != null && set.reps !== undefined ? set.reps : ''}
+                                        onFocus={(e) => e.target.select()}
                                         onChange={(e) => {
                                           const val = e.target.value;
                                           if (val === '' || val === undefined) {
@@ -2273,13 +2278,23 @@ export default function ActiveWorkoutPage() {
                                 {/* Complete Button / Rest Timer */}
                                 <div className="col-span-2 flex justify-end items-center gap-1">
                                   {/* Per-set rest timer countdown */}
-                                  {setRestTimers[set.id]?.remaining > 0 && (
-                                    <div className="flex items-center gap-1 px-2 py-1 bg-blue-500/20 rounded text-xs">
-                                      <Timer className="w-3 h-3 text-blue-400" />
-                                      <span className="text-blue-400 font-mono">
-                                        {Math.floor(setRestTimers[set.id].remaining / 60)}:{(setRestTimers[set.id].remaining % 60).toString().padStart(2, '0')}
+                                  {setRestTimers[set.id] != null && (
+                                    <button
+                                      onClick={() => setSetRestTimers(prev => { const next = { ...prev }; delete next[set.id]; return next; })}
+                                      className={cn(
+                                        "flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors",
+                                        setRestTimers[set.id]?.remaining > 0
+                                          ? "bg-blue-500/20"
+                                          : "bg-red-500/20 animate-pulse"
+                                      )}
+                                    >
+                                      <Timer className={cn("w-3 h-3", setRestTimers[set.id]?.remaining > 0 ? "text-blue-400" : "text-red-400")} />
+                                      <span className={cn("font-mono", setRestTimers[set.id]?.remaining > 0 ? "text-blue-400" : "text-red-400 font-bold")}>
+                                        {setRestTimers[set.id]?.remaining > 0
+                                          ? `${Math.floor(setRestTimers[set.id].remaining / 60)}:${(setRestTimers[set.id].remaining % 60).toString().padStart(2, '0')}`
+                                          : 'GO!'}
                                       </span>
-                                    </div>
+                                    </button>
                                   )}
                                   {!set.completed ? (
                                     <Button
@@ -3099,6 +3114,72 @@ export default function ActiveWorkoutPage() {
               <Plus className="w-4 h-4 mr-2" />
               Start {cardioConfig.type.charAt(0).toUpperCase() + cardioConfig.type.slice(1)}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Block Type Picker Dialog */}
+      <Dialog open={showBlockTypePicker} onOpenChange={setShowBlockTypePicker}>
+        <DialogContent className="bg-white border-gray-200 max-w-xs">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Add Block</DialogTitle>
+            <DialogDescription>Choose a block type to add exercises to</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 py-2">
+            <button
+              onClick={() => {
+                setShowBlockTypePicker(false);
+                if (!hasWarmup) {
+                  addBlock('warmup');
+                } else {
+                  const warmupBlock = workoutBlocks.find(b => b.type === 'warmup');
+                  if (warmupBlock) { setActiveBlockId(warmupBlock.id); setShowExerciseModal(true); }
+                }
+              }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-yellow-500/30 bg-yellow-500/10 hover:bg-yellow-500/20 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-full bg-yellow-400 inline-flex items-center justify-center">
+                <Flame className="w-5 h-5 text-white" />
+              </span>
+              <span className="text-sm font-semibold text-yellow-600">Warm-Up</span>
+              {hasWarmup && <span className="text-[10px] text-gray-400">Add exercise</span>}
+            </button>
+            <button
+              onClick={() => {
+                setShowBlockTypePicker(false);
+                if (!hasStrength) {
+                  addBlock('strength');
+                } else {
+                  const strengthBlock = workoutBlocks.find(b => b.type === 'strength');
+                  if (strengthBlock) { setActiveBlockId(strengthBlock.id); setShowExerciseModal(true); }
+                }
+              }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-full bg-blue-500 inline-flex items-center justify-center">
+                <Dumbbell className="w-5 h-5 text-white" />
+              </span>
+              <span className="text-sm font-semibold text-blue-600">Strength</span>
+              {hasStrength && <span className="text-[10px] text-gray-400">Add exercise</span>}
+            </button>
+            <button
+              onClick={() => { setShowBlockTypePicker(false); setShowCircuitDialog(true); }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-orange-500/30 bg-orange-500/10 hover:bg-orange-500/20 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-full bg-orange-400 inline-flex items-center justify-center">
+                <Zap className="w-5 h-5 text-white" />
+              </span>
+              <span className="text-sm font-semibold text-orange-600">Circuit</span>
+            </button>
+            <button
+              onClick={() => { setShowBlockTypePicker(false); setShowCardioDialog(true); }}
+              className="flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 transition-colors"
+            >
+              <span className="w-10 h-10 rounded-full bg-rose-400 inline-flex items-center justify-center">
+                <Heart className="w-5 h-5 text-white" />
+              </span>
+              <span className="text-sm font-semibold text-rose-600">Cardio</span>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

@@ -32,13 +32,16 @@ import {
   Trash2,
   DollarSign,
   Crown,
-  Search
+  Search,
+  Plus,
+  X
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ProfileCardV2 } from '@/components/ProfileCardV2';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
 import { TrainerStatsCharts } from '@/components/TrainerStatsCharts';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 
 export default function ProfilePage() {
@@ -53,6 +56,9 @@ export default function ProfilePage() {
   const [showFollowingModal, setShowFollowingModal] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [showTrainerStatModal, setShowTrainerStatModal] = useState<'clients' | 'sessions' | 'revenue' | null>(null);
+  const [showGymPicker, setShowGymPicker] = useState(false);
+  const [gymSearchText, setGymSearchText] = useState('');
+  const [gyms, setGyms] = useState<any[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -81,6 +87,37 @@ export default function ProfilePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalBests, user?.id, user?.mode]);
+
+  // Load gyms list
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('apex-gyms') || '[]');
+    setGyms(stored);
+  }, []);
+
+  const handleAddGym = (name: string) => {
+    if (!name.trim() || !user) return;
+    const newGym = { id: `gym-${Date.now()}`, name: name.trim(), createdBy: user.id, createdAt: new Date().toISOString() };
+    const updated = [...gyms, newGym];
+    setGyms(updated);
+    localStorage.setItem('apex-gyms', JSON.stringify(updated));
+    updateUser({ gymName: name.trim() });
+    setGymSearchText('');
+    setShowGymPicker(false);
+    toast.success(`Gym set to "${name.trim()}"`);
+  };
+
+  const handleSelectGym = (name: string) => {
+    updateUser({ gymName: name });
+    setGymSearchText('');
+    setShowGymPicker(false);
+    toast.success(`Gym set to "${name}"`);
+  };
+
+  const handleRemoveGym = () => {
+    updateUser({ gymName: undefined });
+    setShowGymPicker(false);
+    toast.success('Gym removed');
+  };
 
   useEffect(() => {
     const loadAllUsers = async () => {
@@ -479,6 +516,27 @@ export default function ProfilePage() {
             <p className="text-[11px] text-white/60 font-medium">Medals</p>
           </div>
         </div>
+      </div>
+
+      {/* Add Your Gym - Bible app style */}
+      <div className="px-5 -mt-3 relative z-10 mb-3">
+        {user.gymName ? (
+          <button
+            onClick={() => setShowGymPicker(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            <Dumbbell className="w-4 h-4 text-sky-500" />
+            <span className="text-sm text-gray-700 font-medium">{user.gymName}</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowGymPicker(true)}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-white border border-gray-200 border-dashed rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+          >
+            <Plus className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-500">Add your gym</span>
+          </button>
+        )}
       </div>
 
       {/* Content below gradient - white background */}
@@ -1330,6 +1388,66 @@ export default function ProfilePage() {
               <Medal className="w-4 h-4 mr-2" />
               View All Medals
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Gym Picker Dialog */}
+      <Dialog open={showGymPicker} onOpenChange={setShowGymPicker}>
+        <DialogContent className="bg-white border-gray-200 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <Dumbbell className="w-5 h-5 text-sky-500" />
+              {user.gymName ? 'Change Gym' : 'Add Your Gym'}
+            </DialogTitle>
+            <DialogDescription>Search for your gym or add a new one</DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3">
+            <Input
+              value={gymSearchText}
+              onChange={(e) => setGymSearchText(e.target.value)}
+              placeholder="Search or type gym name..."
+              className="bg-gray-50 border-gray-200 text-gray-900"
+              autoFocus
+            />
+            
+            {gymSearchText.trim() && (
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {gyms
+                  .filter((g: any) => g.name.toLowerCase().includes(gymSearchText.toLowerCase()))
+                  .slice(0, 5)
+                  .map((g: any) => (
+                    <button
+                      key={g.id}
+                      className="w-full text-left px-3 py-2.5 hover:bg-gray-50 rounded-lg text-sm text-gray-900 flex items-center gap-2 border border-gray-100"
+                      onClick={() => handleSelectGym(g.name)}
+                    >
+                      <Dumbbell className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                      <span>{g.name}</span>
+                    </button>
+                  ))}
+                {!gyms.some((g: any) => g.name.toLowerCase() === gymSearchText.toLowerCase()) && gymSearchText.trim() && (
+                  <button
+                    className="w-full text-left px-3 py-2.5 hover:bg-sky-50 rounded-lg text-sm text-sky-600 flex items-center gap-2 border border-sky-100 bg-sky-50/50"
+                    onClick={() => handleAddGym(gymSearchText)}
+                  >
+                    <Plus className="w-4 h-4 flex-shrink-0" />
+                    <span>Add &quot;{gymSearchText.trim()}&quot;</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {user.gymName && (
+              <Button
+                variant="outline"
+                className="w-full text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600"
+                onClick={handleRemoveGym}
+              >
+                <X className="w-4 h-4 mr-2" />
+                Remove Gym
+              </Button>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -1173,11 +1173,11 @@ function WorkoutBuilderContent() {
                 <Button
                   key={option.id}
                   variant={assignmentType === option.id ? "default" : "outline"}
-                  className={`h-auto py-2 px-3 flex-col items-start ${assignmentType === option.id ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
+                  className={`h-auto py-2 px-2 sm:px-3 flex-col items-start overflow-hidden ${assignmentType === option.id ? 'bg-sky-500 hover:bg-sky-600' : ''}`}
                   onClick={() => setAssignmentType(option.id as any)}
                 >
-                  <span className="font-medium text-sm">{option.name}</span>
-                  <span className="text-xs opacity-70">{option.description}</span>
+                  <span className="font-medium text-xs sm:text-sm">{option.name}</span>
+                  <span className="text-[10px] sm:text-xs opacity-70 line-clamp-2">{option.description}</span>
                 </Button>
               ))}
             </div>
