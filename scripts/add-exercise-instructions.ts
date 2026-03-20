@@ -239,7 +239,6 @@ const instructions: Record<string, string> = {
   'chest-stretch': 'Place forearm against a wall or doorframe at shoulder height, lean forward until chest stretch is felt.',
   'tricep-stretch': 'Raise one arm overhead, bend elbow, use opposite hand to gently push elbow back.',
   'pigeon-pose': 'From a lunge, bring front shin across the body, lower hips, lean forward over front leg.',
-  'walking-lunges': 'Step forward into a lunge, drive through front heel to bring back foot forward into next lunge.',
 
   // Cardio exercises from cardioExercises array
   'running': 'Run at a steady pace with upright posture, landing midfoot, arms swinging naturally at sides.',

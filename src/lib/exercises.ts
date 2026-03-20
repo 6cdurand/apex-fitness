@@ -2175,91 +2175,91 @@ export function getExercisesForBlockType(blockType: string): Exercise[] {
 // Warmup, activation, and cardio exercises
 export const warmupExercises: Exercise[] = [
   // Dynamic Stretches
-  { id: 'arm-circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'arm-circles', name: 'Arm Circles', primaryMuscles: ['shoulders'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Extend arms to sides, make small circles gradually increasing to large circles. Reverse direction.',},
-  { id: 'leg-swings', name: 'Leg Swings', primaryMuscles: ['hamstrings', 'quads'], secondaryMuscles: ['glutes'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'leg-swings', name: 'Leg Swings', primaryMuscles: ['hamstrings', 'quads'], secondaryMuscles: ['glutes'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Hold a support, swing one leg forward and backward in a controlled arc. Switch to side-to-side swings.',},
-  { id: 'hip-circles', name: 'Hip Circles', primaryMuscles: ['glutes'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'hip-circles', name: 'Hip Circles', primaryMuscles: ['glutes'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Stand on one leg, lift other knee and make large circles with the hip joint. Switch directions.',},
-  { id: 'torso-twists', name: 'Torso Twists', primaryMuscles: ['obliques'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'torso-twists', name: 'Torso Twists', primaryMuscles: ['obliques'], secondaryMuscles: ['lower_back'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Stand with feet shoulder-width, rotate torso left and right, letting arms swing naturally.',},
-  { id: 'neck-rolls', name: 'Neck Rolls', primaryMuscles: ['traps'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'neck-rolls', name: 'Neck Rolls', primaryMuscles: ['traps'], secondaryMuscles: [], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Slowly roll head in circles, gently stretching neck muscles. Reverse direction after several reps.',},
-  { id: 'walking-lunges', name: 'Walking Lunges', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'walking-lunges', name: 'Walking Lunges', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['hamstrings'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Step forward into a lunge, drive through front heel to bring back foot forward into next lunge.',},
-  { id: 'high-knees', name: 'High Knees', primaryMuscles: ['quads'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'high-knees', name: 'High Knees', primaryMuscles: ['quads'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Run in place, driving knees as high as possible while pumping arms. Maintain an upright posture.',},
-  { id: 'butt-kicks', name: 'Butt Kicks', primaryMuscles: ['hamstrings'], secondaryMuscles: ['quads'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'butt-kicks', name: 'Butt Kicks', primaryMuscles: ['hamstrings'], secondaryMuscles: ['quads'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Run in place, kicking heels up toward glutes with each step. Keep a quick pace.',},
-  { id: 'jumping-jacks', name: 'Jumping Jacks', primaryMuscles: ['shoulders'], secondaryMuscles: ['calves'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'jumping-jacks', name: 'Jumping Jacks', primaryMuscles: ['shoulders'], secondaryMuscles: ['calves'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Jump feet out wide while raising arms overhead, jump back to start. Maintain a steady rhythm.',},
-  { id: 'inchworms', name: 'Inchworms', primaryMuscles: ['hamstrings', 'shoulders'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight' 
+  { id: 'inchworms', name: 'Inchworms', primaryMuscles: ['hamstrings', 'shoulders'], secondaryMuscles: ['abs'], category: 'warmup', equipment: 'bodyweight',
   instructions: 'Stand, bend forward to place hands on floor, walk hands out to plank, walk feet back to hands, stand up.',},
   
   // Activation Exercises
-  { id: 'glute-bridges', name: 'Glute Bridges', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'activation', equipment: 'bodyweight' 
+  { id: 'glute-bridges', name: 'Glute Bridges', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'activation', equipment: 'bodyweight',
   instructions: 'Lie on back with knees bent, drive hips up squeezing glutes at top, lower with control.',},
-  { id: 'bird-dogs', name: 'Bird Dogs', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: ['glutes'], category: 'activation', equipment: 'bodyweight' 
+  { id: 'bird-dogs', name: 'Bird Dogs', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: ['glutes'], category: 'activation', equipment: 'bodyweight',
   instructions: 'On all fours, extend opposite arm and leg simultaneously, hold briefly, return and switch sides.',},
-  { id: 'dead-bugs', name: 'Dead Bugs', primaryMuscles: ['abs'], secondaryMuscles: ['lower_back'], category: 'activation', equipment: 'bodyweight' 
+  { id: 'dead-bugs', name: 'Dead Bugs', primaryMuscles: ['abs'], secondaryMuscles: ['lower_back'], category: 'activation', equipment: 'bodyweight',
   instructions: 'Lie on back, arms up and knees at 90 degrees, extend opposite arm and leg while keeping back flat.',},
-  { id: 'clamshells', name: 'Clamshells', primaryMuscles: ['glutes'], secondaryMuscles: [], category: 'activation', equipment: 'bands' 
+  { id: 'clamshells', name: 'Clamshells', primaryMuscles: ['glutes'], secondaryMuscles: [], category: 'activation', equipment: 'bands',
   instructions: 'Lie on side with knees bent, keep feet together, open top knee like a clamshell, close slowly.',},
-  { id: 'band-pull-aparts', name: 'Band Pull Aparts', primaryMuscles: ['shoulders', 'back'], secondaryMuscles: ['traps'], category: 'activation', equipment: 'bands' 
+  { id: 'band-pull-aparts', name: 'Band Pull Aparts', primaryMuscles: ['shoulders', 'back'], secondaryMuscles: ['traps'], category: 'activation', equipment: 'bands',
   instructions: 'Hold a band at shoulder width and height, pull hands apart stretching the band, squeeze shoulder blades.',},
-  { id: 'cat-cow', name: 'Cat-Cow Stretch', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: [], category: 'activation', equipment: 'bodyweight' 
+  { id: 'cat-cow', name: 'Cat-Cow Stretch', primaryMuscles: ['lower_back', 'abs'], secondaryMuscles: [], category: 'activation', equipment: 'bodyweight',
   instructions: 'On all fours, alternate between arching back up (cat) and dropping belly down (cow).',},
-  { id: 'scapular-push-ups', name: 'Scapular Push-Ups', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bodyweight' 
+  { id: 'scapular-push-ups', name: 'Scapular Push-Ups', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bodyweight',
   instructions: 'In push-up position with arms straight, protract and retract shoulder blades without bending elbows.',},
-  { id: 'shoulder-dislocates', name: 'Shoulder Dislocates', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bands' 
+  { id: 'shoulder-dislocates', name: 'Shoulder Dislocates', primaryMuscles: ['shoulders'], secondaryMuscles: ['chest'], category: 'activation', equipment: 'bands',
   instructions: 'Hold a band or stick wide, raise overhead and rotate behind your back keeping arms straight.',},
   
   // Static Stretches (for cooldown)
   { id: 'hamstring-stretch', name: 'Hamstring Stretch', primaryMuscles: ['hamstrings'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'quad-stretch', name: 'Quad Stretch', primaryMuscles: ['quads'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' 
+  { id: 'quad-stretch', name: 'Quad Stretch', primaryMuscles: ['quads'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight',
   instructions: 'Stand on one leg, pull opposite heel toward glutes, keep knees together. Hold and switch sides.',},
-  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', primaryMuscles: ['quads'], secondaryMuscles: ['glutes'], category: 'stretching', equipment: 'bodyweight' 
+  { id: 'hip-flexor-stretch', name: 'Hip Flexor Stretch', primaryMuscles: ['quads'], secondaryMuscles: ['glutes'], category: 'stretching', equipment: 'bodyweight',
   instructions: 'Kneel on one knee, push hips forward while keeping torso upright. Hold and switch sides.',},
-  { id: 'chest-stretch', name: 'Chest Stretch', primaryMuscles: ['chest'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' 
+  { id: 'chest-stretch', name: 'Chest Stretch', primaryMuscles: ['chest'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight',
   instructions: 'Place forearm against a wall or doorframe at shoulder height, lean forward until chest stretch is felt.',},
-  { id: 'tricep-stretch', name: 'Tricep Stretch', primaryMuscles: ['triceps'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' 
+  { id: 'tricep-stretch', name: 'Tricep Stretch', primaryMuscles: ['triceps'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight',
   instructions: 'Raise one arm overhead, bend elbow, use opposite hand to gently push elbow back.',},
   { id: 'lat-stretch', name: 'Lat Stretch', primaryMuscles: ['lats'], secondaryMuscles: [], category: 'stretching', equipment: 'bodyweight' },
-  { id: 'pigeon-pose', name: 'Pigeon Pose', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'stretching', equipment: 'bodyweight' 
+  { id: 'pigeon-pose', name: 'Pigeon Pose', primaryMuscles: ['glutes'], secondaryMuscles: ['hamstrings'], category: 'stretching', equipment: 'bodyweight',
   instructions: 'From a lunge, bring front shin across the body, lower hips, lean forward over front leg.',},
   { id: 'childs-pose', name: "Child's Pose", primaryMuscles: ['lower_back', 'lats'], secondaryMuscles: ['shoulders'], category: 'stretching', equipment: 'bodyweight' },
 ];
 
 export const cardioExercises: Exercise[] = [
-  { id: 'running', name: 'Running', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['calves', 'glutes'], category: 'cardio', equipment: 'bodyweight' 
+  { id: 'running', name: 'Running', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['calves', 'glutes'], category: 'cardio', equipment: 'bodyweight',
   instructions: 'Run at a steady pace with upright posture, landing midfoot, arms swinging naturally at sides.',},
-  { id: 'cycling', name: 'Cycling', primaryMuscles: ['quads'], secondaryMuscles: ['hamstrings', 'calves'], category: 'cardio', equipment: 'machine' 
+  { id: 'cycling', name: 'Cycling', primaryMuscles: ['quads'], secondaryMuscles: ['hamstrings', 'calves'], category: 'cardio', equipment: 'machine',
   instructions: 'Pedal at desired intensity, maintain good posture, adjust resistance as needed.',},
-  { id: 'rowing', name: 'Rowing', primaryMuscles: ['back', 'lats'], secondaryMuscles: ['biceps', 'shoulders'], category: 'cardio', equipment: 'machine' 
+  { id: 'rowing', name: 'Rowing', primaryMuscles: ['back', 'lats'], secondaryMuscles: ['biceps', 'shoulders'], category: 'cardio', equipment: 'machine',
   instructions: 'Drive with legs, lean back slightly, pull handle to lower chest. Reverse the sequence to return.',},
-  { id: 'swimming', name: 'Swimming', primaryMuscles: ['lats', 'shoulders'], secondaryMuscles: ['chest', 'triceps'], category: 'cardio', equipment: 'bodyweight' 
+  { id: 'swimming', name: 'Swimming', primaryMuscles: ['lats', 'shoulders'], secondaryMuscles: ['chest', 'triceps'], category: 'cardio', equipment: 'bodyweight',
   instructions: 'Move through water using chosen stroke technique, maintaining steady breathing rhythm.',},
-  { id: 'elliptical', name: 'Elliptical', primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'hamstrings'], category: 'cardio', equipment: 'machine' 
+  { id: 'elliptical', name: 'Elliptical', primaryMuscles: ['quads'], secondaryMuscles: ['glutes', 'hamstrings'], category: 'cardio', equipment: 'machine',
   instructions: 'Step onto the machine, pedal in an elliptical motion while holding or pushing handles.',},
-  { id: 'stair-climber', name: 'Stair Climber', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'machine' 
+  { id: 'stair-climber', name: 'Stair Climber', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'machine',
   instructions: 'Step onto the machine, climb stairs at a steady pace, keep upright posture.',},
-  { id: 'jump-rope', name: 'Jump Rope', primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'other' 
+  { id: 'jump-rope', name: 'Jump Rope', primaryMuscles: ['calves'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'other',
   instructions: 'Hold rope handles, swing rope overhead, jump with both feet clearing the rope on each revolution.',},
-  { id: 'burpees', name: 'Burpees', primaryMuscles: ['chest', 'quads'], secondaryMuscles: ['shoulders', 'abs'], category: 'cardio', equipment: 'bodyweight' 
+  { id: 'burpees', name: 'Burpees', primaryMuscles: ['chest', 'quads'], secondaryMuscles: ['shoulders', 'abs'], category: 'cardio', equipment: 'bodyweight',
   instructions: 'Drop to the floor into a push-up, push up, jump feet toward hands, explosively jump up with arms overhead.',},
-  { id: 'mountain-climbers', name: 'Mountain Climbers', primaryMuscles: ['abs'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'bodyweight' 
+  { id: 'mountain-climbers', name: 'Mountain Climbers', primaryMuscles: ['abs'], secondaryMuscles: ['shoulders', 'quads'], category: 'cardio', equipment: 'bodyweight',
   instructions: 'Start in a push-up position, alternate driving knees toward chest in a running motion.',},
-  { id: 'box-jumps', name: 'Box Jumps', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'other' 
+  { id: 'box-jumps', name: 'Box Jumps', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['calves'], category: 'cardio', equipment: 'other',
   instructions: 'Stand facing a box, swing arms and jump up onto the box landing softly, step back down.',},
-  { id: 'battle-ropes', name: 'Battle Ropes', primaryMuscles: ['shoulders'], secondaryMuscles: ['abs', 'back'], category: 'cardio', equipment: 'other' 
+  { id: 'battle-ropes', name: 'Battle Ropes', primaryMuscles: ['shoulders'], secondaryMuscles: ['abs', 'back'], category: 'cardio', equipment: 'other',
   instructions: 'Hold rope ends, create alternating waves by rapidly raising and lowering arms. Keep core tight.',},
-  { id: 'sled-push', name: 'Sled Push', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['shoulders', 'calves'], category: 'cardio', equipment: 'other' 
+  { id: 'sled-push', name: 'Sled Push', primaryMuscles: ['quads', 'glutes'], secondaryMuscles: ['shoulders', 'calves'], category: 'cardio', equipment: 'other',
   instructions: 'Grip the sled handles, lean forward, drive legs to push the sled across the floor.',},
-  { id: 'assault-bike', name: 'Assault Bike', primaryMuscles: ['quads'], secondaryMuscles: ['shoulders', 'hamstrings'], category: 'cardio', equipment: 'machine' 
+  { id: 'assault-bike', name: 'Assault Bike', primaryMuscles: ['quads'], secondaryMuscles: ['shoulders', 'hamstrings'], category: 'cardio', equipment: 'machine',
   instructions: 'Sit on the bike, pedal with legs while pushing and pulling the handles with arms.',},
-  { id: 'ski-erg', name: 'Ski Erg', primaryMuscles: ['lats', 'triceps'], secondaryMuscles: ['abs', 'shoulders'], category: 'cardio', equipment: 'machine' 
+  { id: 'ski-erg', name: 'Ski Erg', primaryMuscles: ['lats', 'triceps'], secondaryMuscles: ['abs', 'shoulders'], category: 'cardio', equipment: 'machine',
   instructions: 'Stand at the machine, reach arms up to grab handles, pull down using lats and core in a skiing motion.',},
-  { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight' 
+  { id: 'sprints', name: 'Sprints', primaryMuscles: ['quads', 'hamstrings'], secondaryMuscles: ['glutes', 'calves'], category: 'cardio', equipment: 'bodyweight',
   instructions: 'Run at maximum effort for short distances, focusing on explosive drive and arm pump.',},
 ];
 
