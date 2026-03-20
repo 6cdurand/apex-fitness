@@ -439,7 +439,11 @@ function ProgramBuilderContent() {
   const currentBlock = showAddExercise ? days[activeDayIndex]?.blocks.find(b => b.id === showAddExercise) : null;
   
   const filteredExercises = useMemo(() => {
-    return filterExercisesBySearch(COMMON_EXERCISES, exerciseSearch, currentBlock?.type || null);
+    // Use full exercise library for search, fall back to COMMON_EXERCISES when no search query
+    const source = exerciseSearch.trim()
+      ? exerciseLibrary.map(e => ({ id: e.id, name: e.name, pattern: e.category }))
+      : COMMON_EXERCISES;
+    return filterExercisesBySearch(source, exerciseSearch, currentBlock?.type || null);
   }, [exerciseSearch, currentBlock]);
   
   // Exercise usage counts for the target user
@@ -1316,7 +1320,7 @@ function ProgramBuilderContent() {
           <DialogHeader>
             <DialogTitle className="text-white">Activate Program</DialogTitle>
             <DialogDescription className="text-gray-400">
-              This will create {actualWeeks * daysPerWeek} calendar events over {actualWeeks} weeks.
+              This will create {actualWeeks * (scheduleMode === 'flexible' ? trainingFrequency : (fixedDays.length || days.length))} calendar events over {actualWeeks} weeks.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">

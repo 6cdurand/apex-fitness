@@ -1037,13 +1037,22 @@ function WorkoutBuilderContent() {
           </Button>
           <div className="flex gap-2">
             {selectedClientId && getActiveProgram(selectedClientId) && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowProgramDialog(true)}
-              >
-                📋 From Program
-              </Button>
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowProgramDialog(true)}
+                >
+                  📋 From Program
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => router.push(`/program/builder?clientId=${selectedClientId}`)}
+                >
+                  ✏️ Edit Program
+                </Button>
+              </>
             )}
             <Button 
               variant="outline" 

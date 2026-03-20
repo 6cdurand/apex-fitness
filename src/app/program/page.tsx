@@ -532,27 +532,29 @@ export default function ProgramPage() {
                     const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                     const isExpanded = expandedDay === idx;
                     const isNext = nextWorkout?.dayIndex === idx;
+                    const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
                     return (
                       <div key={day.id || idx}>
                         <button
                           className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors ${
-                            isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
+                            isDoneThisWeek ? 'bg-emerald-50 border border-emerald-200' : isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
                           }`}
                           onClick={() => setExpandedDay(isExpanded ? null : idx)}
                         >
                           <div className="flex items-center gap-2">
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                              isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                              isDoneThisWeek ? 'bg-emerald-500 text-white' : isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
                             }`}>
-                              {String.fromCharCode(65 + idx)}
+                              {isDoneThisWeek ? <Check className="w-4 h-4" /> : String.fromCharCode(65 + idx)}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900 text-sm">{day.dayLabel}</p>
+                              <p className={`font-medium text-sm ${isDoneThisWeek ? 'text-emerald-700' : 'text-gray-900'}`}>{day.dayLabel}</p>
                               <p className="text-[10px] text-gray-500">{totalEx} exercises • {day.blocks?.length || 0} blocks</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {isNext && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Next</Badge>}
+                            {isDoneThisWeek && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-600 border-0">Done</Badge>}
+                            {isNext && !isDoneThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Next</Badge>}
                             {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                           </div>
                         </button>

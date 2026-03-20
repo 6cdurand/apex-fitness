@@ -186,14 +186,57 @@ export function ExerciseHowTo({
               </div>
             )}
 
-            {/* Instructions */}
+            {/* Instructions — split into steps for clarity */}
             {exercise?.instructions && (
               <div>
                 <h4 className="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
                   <Target className="w-4 h-4 text-sky-400" />
                   How To Perform
                 </h4>
-                <p className="text-sm text-slate-400 leading-relaxed">{exercise.instructions}</p>
+                {(() => {
+                  // Split instructions into steps on commas/periods for a numbered list
+                  const steps = exercise.instructions
+                    .split(/[.,]/)
+                    .map(s => s.trim())
+                    .filter(s => s.length > 3);
+                  return steps.length > 1 ? (
+                    <ol className="list-decimal list-inside space-y-1.5">
+                      {steps.map((step, i) => (
+                        <li key={i} className="text-sm text-slate-400 leading-relaxed">{step}.</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-slate-400 leading-relaxed">{exercise.instructions}</p>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* Equipment & Movement Details */}
+            {exercise && (
+              <div className="grid grid-cols-2 gap-2">
+                {exercise.equipment && exercise.equipment !== 'bodyweight' && (
+                  <div className="p-2.5 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500 uppercase font-medium mb-0.5">Equipment</p>
+                    <p className="text-xs text-slate-300 capitalize">{exercise.equipment}</p>
+                  </div>
+                )}
+                <div className="p-2.5 rounded-lg bg-slate-800/50">
+                  <p className="text-[10px] text-slate-500 uppercase font-medium mb-0.5">Type</p>
+                  <p className="text-xs text-slate-300 capitalize">{exercise.category}</p>
+                </div>
+                {exercise.primaryMuscles?.[0] && (
+                  <div className="p-2.5 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500 uppercase font-medium mb-0.5">Target</p>
+                    <p className="text-xs text-slate-300 capitalize">{getMuscleDisplayName(exercise.primaryMuscles[0])}</p>
+                  </div>
+                )}
+                {exercise.secondaryMuscles?.length > 0 && (
+                  <div className="p-2.5 rounded-lg bg-slate-800/50">
+                    <p className="text-[10px] text-slate-500 uppercase font-medium mb-0.5">Also Works</p>
+                    <p className="text-xs text-slate-300 capitalize">{exercise.secondaryMuscles.map(m => getMuscleDisplayName(m)).join(', ')}</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -243,23 +286,6 @@ export function ExerciseHowTo({
                   </div>
                 )}
               </div>
-            )}
-
-            {/* Generate AI Form Cues button */}
-            {!formCues && exercise && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleGenerateCues}
-                disabled={loadingCues}
-                className="w-full border-sky-500/40 text-sky-400 hover:bg-sky-500/10"
-              >
-                {loadingCues ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating form guide...</>
-                ) : (
-                  <><Sparkles className="w-4 h-4 mr-2" />Generate AI Form Guide</>
-                )}
-              </Button>
             )}
 
             {/* Muscles Worked */}
