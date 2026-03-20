@@ -380,6 +380,7 @@ function WorkoutBuilderContent() {
     getBlockPerformances,
     getBestBlockPerformance,
     getActiveProgram,
+    rotateProgramDay,
     clientPrograms,
   } = useTrainerStore();
   
@@ -3112,8 +3113,12 @@ function WorkoutBuilderContent() {
                         }));
                         setBlocks(programBlocks);
                         setWorkoutName(`${day.dayLabel} - ${program.templateName}`);
+                        // Rotate: move this day to the back of the program order
+                        if (selectedClientId) {
+                          rotateProgramDay(selectedClientId, idx);
+                        }
                         setShowProgramDialog(false);
-                        toast.success(`Loaded "${day.dayLabel}" from program`);
+                        toast.success(`Loaded "${day.dayLabel}" from program — moved to back of rotation`);
                       }}
                     >
                       <div className="flex items-center justify-between">

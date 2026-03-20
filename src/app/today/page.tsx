@@ -481,6 +481,70 @@ export default function TodayPage() {
 
         {/* Medals Earned Today — removed per user request */}
 
+        {/* Booked PT Sessions — client view (purple) */}
+        {user.mode !== 'trainer' && (() => {
+          const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+          const todaySessions = clientScheduledSessions.filter(s => {
+            if (!s.date) return false;
+            return format(new Date(s.date), 'yyyy-MM-dd') === selectedDateStr;
+          });
+          if (todaySessions.length === 0) return null;
+          return (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Booked Sessions
+              </h2>
+              {todaySessions.map(session => (
+                <Card key={session.id} className="border-purple-300 bg-gradient-to-r from-purple-500/10 to-violet-500/10 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                          <Users className="w-5 h-5 text-purple-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{session.title || 'PT Session'}</h3>
+                          <p className="text-xs text-gray-500">
+                            {session.startTime && session.endTime
+                              ? `${session.startTime} – ${session.endTime}`
+                              : 'Time TBC'}
+                            {session.duration ? ` • ${session.duration}min` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-purple-500/20 text-purple-600 border-0 text-[10px]">
+                        PT Session
+                      </Badge>
+                    </div>
+                    {session.notes && (
+                      <p className="text-xs text-gray-500 mt-2 pl-[52px]">{session.notes}</p>
+                    )}
+                    {!session.clientConfirmed && (
+                      <div className="mt-3 pl-[52px]">
+                        <Button
+                          size="sm"
+                          className="bg-purple-500 hover:bg-purple-600 text-white text-xs h-7"
+                          onClick={() => {
+                            const { confirmSession } = useTrainerStore.getState();
+                            confirmSession(session.id);
+                            toast.success('Session confirmed!');
+                          }}
+                        >
+                          <Check className="w-3 h-3 mr-1" /> Confirm
+                        </Button>
+                      </div>
+                    )}
+                    {session.clientConfirmed && (
+                      <p className="text-[10px] text-purple-500 mt-2 pl-[52px]">✓ Confirmed</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </section>
+          );
+        })()}
+
         {/* Next Workout — client mode, active program */}
         {user.mode !== 'trainer' && isToday && (() => {
           const next = getNextProgramWorkout(user.id);

@@ -2043,6 +2043,7 @@ interface TrainerState {
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
   getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[] } | null;
+  rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
   saveClientProfile: (profile: ClientProgrammingProfile) => void;
@@ -2592,6 +2593,18 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         // Sync to Supabase immediately
         syncCalendarEventToSupabase(newEvent);
+
+        // Notify client about booked session
+        if (newEvent.clientId && newEvent.type === 'session') {
+          const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+          useSocialStore.getState().addNotification({
+            userId: newEvent.clientId,
+            type: 'session_booked',
+            title: 'Session Booked',
+            message: `${trainerName} booked a session for ${newEvent.date ? new Date(newEvent.date).toLocaleDateString('en-NZ', { weekday: 'short', month: 'short', day: 'numeric' }) : 'you'}${newEvent.startTime ? ` at ${newEvent.startTime}` : ''}`,
+            link: '/today',
+          });
+        }
       },
 
       updateCalendarEvent: (eventId, updates) => {
@@ -3165,6 +3178,15 @@ export const useTrainerStore = create<TrainerState>()(
         return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices };
       },
 
+      rotateProgramDay: (clientId, dayIndex) => {
+        const program = get().clientPrograms.find(p => p.clientId === clientId && p.status === 'active');
+        if (!program || !program.weeklyPlan?.length) return;
+        const plan = [...program.weeklyPlan];
+        const [pulled] = plan.splice(dayIndex, 1);
+        plan.push(pulled);
+        get().updateClientProgram(program.id, { weeklyPlan: plan });
+      },
+
       // Client Profiles
       saveClientProfile: (profile) => {
         set(state => ({
@@ -3343,6 +3365,18 @@ export const useTrainerStore = create<TrainerState>()(
         
         // Sync to Supabase immediately
         syncSessionWorkoutToSupabase(workoutWithTrainer);
+
+        // Notify client that a workout has been assigned
+        if (workoutWithTrainer.clientId) {
+          const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+          useSocialStore.getState().addNotification({
+            userId: workoutWithTrainer.clientId,
+            type: 'workout_assigned',
+            title: 'Workout Ready',
+            message: `${trainerName} prepared "${workoutWithTrainer.name || 'a workout'}" for your session`,
+            link: '/today',
+          });
+        }
       },
 
       getSessionWorkout: (workoutId) => {

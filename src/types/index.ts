@@ -550,7 +550,7 @@ export interface WeeklyReport {
 export type NotificationType = 
   | 'weekly_report' | 'workout_assigned' | 'friend_request' 
   | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system'
-  | 'program_assigned';
+  | 'program_assigned' | 'session_booked';
 
 export interface Notification {
   id: string;
