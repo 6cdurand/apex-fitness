@@ -112,6 +112,7 @@ export default function ProgramPage() {
   // Active trainer-assigned program
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
   const [trainerName, setTrainerName] = useState<string>('');
+  const [showSwapDialog, setShowSwapDialog] = useState(false);
   
   // Load client programs from Supabase
   useEffect(() => {
@@ -122,6 +123,49 @@ export default function ProgramPage() {
   
   const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
   const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
+
+  // Helper: start any workout day from the program
+  const startProgramDay = (dayIndex: number) => {
+    if (!user || !activeProgram?.weeklyPlan?.[dayIndex]) return;
+    const day = activeProgram.weeklyPlan[dayIndex];
+    const exercises = (day.blocks || []).flatMap((block: any) =>
+      (block.exercises || []).map((ex: any) => ({
+        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        exerciseId: ex.exerciseId || ex.id,
+        exercise: {
+          id: ex.exerciseId || ex.id,
+          name: ex.exerciseName || ex.name || 'Exercise',
+          category: 'strength',
+          muscleGroups: [],
+        },
+        sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+          id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+          setNumber: si + 1,
+          targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+          reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+          weight: 0,
+          completed: false,
+        })),
+        restTimerSeconds: parseInt(ex.rest) || 90,
+        notes: ex.notes || '',
+      }))
+    );
+    if (exercises.length > 0) {
+      startFromTemplate({
+        id: `program-${activeProgram.id}-${dayIndex}`,
+        name: `${day.dayLabel || 'Workout'} - ${activeProgram.templateName}`,
+        description: `From ${activeProgram.templateName}`,
+        exercises,
+        category: 'strength',
+        estimatedDuration: 60,
+        createdAt: new Date().toISOString(),
+        createdBy: user.id,
+        isPublic: false,
+        updatedAt: new Date().toISOString(),
+      } as any);
+      router.push('/workout/active');
+    }
+  };
 
   // Fetch trainer name for active program
   useEffect(() => {
@@ -469,52 +513,24 @@ export default function ProgramPage() {
                         <p className="text-[10px] text-gray-500 mt-0.5">{nextWorkout.remainingThisWeek} left this week</p>
                       </div>
                     </div>
-                    <Button
-                      className="w-full bg-sky-500 hover:bg-sky-600 text-white text-sm"
-                      onClick={() => {
-                        if (!user || !nextWorkout.day) return;
-                        const exercises = (nextWorkout.day.blocks || []).flatMap((block: any) =>
-                          (block.exercises || []).map((ex: any) => ({
-                            id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                            exerciseId: ex.exerciseId || ex.id,
-                            exercise: {
-                              id: ex.exerciseId || ex.id,
-                              name: ex.exerciseName || ex.name || 'Exercise',
-                              category: 'strength',
-                              muscleGroups: [],
-                            },
-                            sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                              id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                              setNumber: si + 1,
-                              targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                              reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                              weight: 0,
-                              completed: false,
-                            })),
-                            restTimerSeconds: parseInt(ex.rest) || 90,
-                            notes: ex.notes || '',
-                          }))
-                        );
-                        if (exercises.length > 0) {
-                          startFromTemplate({
-                            id: `program-${activeProgram.id}-${nextWorkout.dayIndex}`,
-                            name: `${nextWorkout.day.dayLabel || 'Workout'} - ${activeProgram.templateName}`,
-                            description: `From ${activeProgram.templateName}`,
-                            exercises,
-                            category: 'strength',
-                            estimatedDuration: 60,
-                            createdAt: new Date().toISOString(),
-                            createdBy: user.id,
-                            isPublic: false,
-                            updatedAt: new Date().toISOString(),
-                          } as any);
-                          router.push('/workout/active');
-                        }
-                      }}
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Start {nextWorkout.day?.dayLabel || 'Workout'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-sky-500 hover:bg-sky-600 text-white text-sm"
+                        onClick={() => startProgramDay(nextWorkout.dayIndex)}
+                      >
+                        <Play className="w-4 h-4 mr-2" />
+                        Start {nextWorkout.day?.dayLabel || 'Workout'}
+                      </Button>
+                      {(activeProgram.weeklyPlan?.length || 0) > 1 && (
+                        <Button
+                          variant="outline"
+                          className="border-gray-200 text-gray-600 text-sm"
+                          onClick={() => setShowSwapDialog(true)}
+                        >
+                          Swap
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
                 {nextWorkout && nextWorkout.remainingThisWeek <= 0 && (
@@ -574,46 +590,7 @@ export default function ProgramPage() {
                             <Button
                               size="sm"
                               className="w-full mt-1 bg-sky-500 hover:bg-sky-600 text-white text-xs h-8"
-                              onClick={() => {
-                                if (!user) return;
-                                const exercises = (day.blocks || []).flatMap((block: any) =>
-                                  (block.exercises || []).map((ex: any) => ({
-                                    id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                    exerciseId: ex.exerciseId || ex.id,
-                                    exercise: {
-                                      id: ex.exerciseId || ex.id,
-                                      name: ex.exerciseName || ex.name || 'Exercise',
-                                      category: 'strength',
-                                      muscleGroups: [],
-                                    },
-                                    sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                                      id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                                      setNumber: si + 1,
-                                      targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                      reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                      weight: 0,
-                                      completed: false,
-                                    })),
-                                    restTimerSeconds: parseInt(ex.rest) || 90,
-                                    notes: ex.notes || '',
-                                  }))
-                                );
-                                if (exercises.length > 0) {
-                                  startFromTemplate({
-                                    id: `program-${activeProgram.id}-${idx}`,
-                                    name: `${day.dayLabel} - ${activeProgram.templateName}`,
-                                    description: `From ${activeProgram.templateName}`,
-                                    exercises,
-                                    category: 'strength',
-                                    estimatedDuration: 60,
-                                    createdAt: new Date().toISOString(),
-                                    createdBy: user.id,
-                                    isPublic: false,
-                                    updatedAt: new Date().toISOString(),
-                                  } as any);
-                                  router.push('/workout/active');
-                                }
-                              }}
+                              onClick={() => startProgramDay(idx)}
                             >
                               <Play className="w-3 h-3 mr-1" />
                               Start {day.dayLabel}
@@ -754,6 +731,52 @@ export default function ProgramPage() {
           </Card>
         </section>
       </div>
+
+      {/* Swap Workout Dialog */}
+      <Dialog open={showSwapDialog} onOpenChange={setShowSwapDialog}>
+        <DialogContent className="bg-white border-gray-200 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Swap Workout</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Pick a different workout to do instead of {nextWorkout?.day?.dayLabel || 'the scheduled workout'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {activeProgram?.weeklyPlan?.map((day: any, idx: number) => {
+              const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+              const isScheduled = nextWorkout?.dayIndex === idx;
+              return (
+                <button
+                  key={day.id || idx}
+                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
+                    isScheduled ? 'bg-sky-50 border-2 border-sky-300' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                  }`}
+                  onClick={() => {
+                    setShowSwapDialog(false);
+                    startProgramDay(idx);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                      isScheduled ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      {String.fromCharCode(65 + idx)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm text-gray-900">{day.dayLabel}</p>
+                      <p className="text-[10px] text-gray-500">{totalEx} exercises</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {isScheduled && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
+                    <Play className="w-4 h-4 text-gray-400" />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Program Choice Dialog */}
       <Dialog open={showCreateChoice} onOpenChange={setShowCreateChoice}>

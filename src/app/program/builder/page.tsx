@@ -41,7 +41,7 @@ import {
   ArrowLeftRight,
   Clock,
 } from 'lucide-react';
-import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase } from '@/types';
+import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
 import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
 import { useWorkoutStore } from '@/lib/store';
@@ -225,7 +225,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   const { addNotification } = useSocialStore();
   
@@ -575,12 +575,16 @@ function ProgramBuilderContent() {
     addClientProgram(program);
     
     // Auto-create calendar events for all weeks
+    const programRecurrenceGroup = `program-${program.id}`;
     const dayMap: Record<string, number> = {
       sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
       thursday: 4, friday: 5, saturday: 6,
     };
     const startD = new Date(startDate);
     let cycleIdx = 0; // Tracks which workout in the cycle
+    
+    // Collect events to create, checking for conflicts
+    const eventsToCreate: Array<Omit<CalendarEvent, 'id'>> = [];
     
     if (scheduleMode === 'fixed' && fixedDays.length > 0) {
       // Fixed: cycle workouts across fixed weekdays, shifting each week
@@ -596,7 +600,7 @@ function ProgramBuilderContent() {
           const totalEx = day.blocks.reduce((s, b) => s + b.exercises.length, 0);
           const isPT = sessionPTMap[slotIdx] === 'pt';
           
-          addCalendarEvent({
+          eventsToCreate.push({
             title: `${day.label} - ${programName || 'Program'}`,
             type: isPT ? 'session' : 'workout',
             date: dateStr,
@@ -606,6 +610,7 @@ function ProgramBuilderContent() {
             trainerId: user.id,
             status: 'scheduled',
             notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
+            recurrenceGroup: programRecurrenceGroup,
           });
           cycleIdx++;
         });
@@ -629,7 +634,7 @@ function ProgramBuilderContent() {
           const totalEx = day.blocks.reduce((s2, b) => s2 + b.exercises.length, 0);
           const isPT = sessionPTMap[s] === 'pt';
           
-          addCalendarEvent({
+          eventsToCreate.push({
             title: `${day.label} - ${programName || 'Program'}`,
             type: isPT ? 'session' : 'workout',
             date: dateStr,
@@ -639,10 +644,37 @@ function ProgramBuilderContent() {
             trainerId: user.id,
             status: 'scheduled',
             notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
+            recurrenceGroup: programRecurrenceGroup,
           });
           cycleIdx++;
         }
       }
+    }
+    
+    // Check for conflicts and create events
+    const existingEvents = calendarEvents.filter(e => e.clientId === targetClientId && e.status !== 'cancelled');
+    let conflictsReplaced = 0;
+    eventsToCreate.forEach(evt => {
+      // Find conflicting events on the same date with overlapping times
+      const conflicts = existingEvents.filter(existing => {
+        if (existing.date !== evt.date) return false;
+        if (!existing.startTime || !evt.startTime) return false;
+        // Check time overlap
+        const eStart = existing.startTime.replace(':', '');
+        const eEnd = (existing.endTime || '23:59').replace(':', '');
+        const nStart = evt.startTime!.replace(':', '');
+        const nEnd = (evt.endTime || '23:59').replace(':', '');
+        return nStart < eEnd && nEnd > eStart;
+      });
+      // Replace conflicting events
+      conflicts.forEach(c => {
+        deleteCalendarEvent(c.id);
+        conflictsReplaced++;
+      });
+      addCalendarEvent(evt);
+    });
+    if (conflictsReplaced > 0) {
+      toast.info(`Replaced ${conflictsReplaced} conflicting event${conflictsReplaced > 1 ? 's' : ''} on the calendar`);
     }
     
     // Save to library if requested

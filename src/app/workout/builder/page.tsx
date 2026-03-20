@@ -1048,7 +1048,7 @@ function WorkoutBuilderContent() {
                 <Button 
                   variant="outline" 
                   size="sm"
-                  onClick={() => router.push(`/program/builder?clientId=${selectedClientId}`)}
+                  onClick={() => router.push(`/trainer/clients/${selectedClientId}?tab=program`)}
                 >
                   ✏️ Edit Program
                 </Button>

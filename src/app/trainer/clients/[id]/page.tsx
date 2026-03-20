@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { useMessageStore } from '@/lib/messageStore';
 import { MainLayout } from '@/components/layout/MainLayout';
@@ -10,7 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History, DollarSign, Edit2, Package, Check, X } from 'lucide-react';
+import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History, DollarSign, Edit2, Package, Check, X, Play, Plus, ChevronDown, ChevronUp, Trash2, ClipboardList } from 'lucide-react';
+import { startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { getClientExerciseHistory } from '@/lib/supabaseSync';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,7 +22,10 @@ import { toast } from 'sonner';
 export default function TrainerClientDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const clientId = params.id as string;
+  const initialTab = searchParams.get('tab') || 'overview';
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const { user, isAuthenticated } = useAuthStore();
   const { 
@@ -40,7 +44,13 @@ export default function TrainerClientDetailPage() {
     markSessionComplete,
     markSessionNoShow,
     toggleSessionPaid,
+    getActiveProgram,
+    clientPrograms,
+    deleteCalendarEvent,
   } = useTrainerStore();
+  
+  const activeProgram = getActiveProgram(clientId);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const { getOrCreateConversation } = useMessageStore();
 
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -264,291 +274,510 @@ export default function TrainerClientDetailPage() {
             </CardContent>
           </Card>
 
-          {clientRecord?.goals?.length ? (
-            <Card className="bg-gray-900 border-gray-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Target className="w-5 h-5 text-sky-400" />
-                  Goals
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {clientRecord.goals.map((g: string) => (
-                    <Badge key={g} variant="outline" className="border-gray-700 text-gray-300">
-                      {g}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          <div className="space-y-4">
-            <VolumeChart workouts={clientWorkouts} title="Volume Over Time" />
-            <div className="grid grid-cols-2 gap-3">
-              <MuscleProgressChart workouts={clientWorkouts} muscleGroup="chest" />
-              <MuscleProgressChart workouts={clientWorkouts} muscleGroup="back" />
-              <MuscleProgressChart workouts={clientWorkouts} muscleGroup="shoulders" />
-              <MuscleProgressChart workouts={clientWorkouts} muscleGroup="legs" />
-            </div>
+          {/* ── Tab Bar ── */}
+          <div className="flex gap-1 bg-gray-900/50 rounded-xl p-1 overflow-x-auto">
+            {[
+              { key: 'overview', label: 'Overview' },
+              { key: 'program', label: 'Program' },
+              { key: 'progress', label: 'Progress' },
+              { key: 'messages', label: 'Messages' },
+              { key: 'payments', label: 'Payments' },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  activeTab === tab.key
+                    ? 'bg-rose-500 text-white'
+                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                }`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-blue-400" />
-                Sessions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {clientSessions.length === 0 ? (
-                <p className="text-sm text-gray-500">No sessions scheduled for this client.</p>
-              ) : (
-                <div className="space-y-2">
-                  {clientSessions.slice(0, 8).map((s: any) => (
-                    <div key={s.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
-                      <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
-                        <Clock className="w-5 h-5 text-gray-300" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{s.title}</p>
-                        <p className="text-xs text-gray-500">
-                          {format(new Date(s.date), 'EEE, MMM d · h:mm a')}
-                        </p>
-                      </div>
-                      {s.status && (
-                        <Badge
-                          className={
-                            s.status === 'completed'
-                              ? 'bg-sky-500/20 text-sky-400'
-                              : 'bg-blue-500/20 text-blue-400'
-                          }
-                        >
-                          {s.status}
+          {/* ── Overview Tab ── */}
+          {activeTab === 'overview' && (
+            <>
+              {clientRecord?.goals?.length ? (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <Target className="w-5 h-5 text-sky-400" />
+                      Goals
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {clientRecord.goals.map((g: string) => (
+                        <Badge key={g} variant="outline" className="border-gray-700 text-gray-300">
+                          {g}
                         </Badge>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  </CardContent>
+                </Card>
+              ) : null}
 
-          {exerciseHistory.length > 0 && (
-            <Card className="bg-gray-900 border-gray-800">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <History className="w-5 h-5 text-purple-400" />
-                  Exercise History
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {exerciseHistory.slice(0, 10).map((ex: any) => (
-                    <div key={ex.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{ex.exercise_name}</p>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <span>{ex.times_used}x used</span>
-                          {ex.block_type && (
-                            <Badge variant="outline" className="text-xs border-gray-700 text-gray-400">
-                              {ex.block_type}
+              <Card className="bg-gray-900 border-gray-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-blue-400" />
+                    Sessions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {clientSessions.length === 0 ? (
+                    <p className="text-sm text-gray-500">No sessions scheduled for this client.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {clientSessions.slice(0, 8).map((s: any) => (
+                        <div key={s.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
+                          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                            <Clock className="w-5 h-5 text-gray-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">{s.title}</p>
+                            <p className="text-xs text-gray-500">
+                              {format(new Date(s.date), 'EEE, MMM d · h:mm a')}
+                            </p>
+                          </div>
+                          {s.status && (
+                            <Badge
+                              className={
+                                s.status === 'completed'
+                                  ? 'bg-sky-500/20 text-sky-400'
+                                  : 'bg-blue-500/20 text-blue-400'
+                              }
+                            >
+                              {s.status}
                             </Badge>
                           )}
                         </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {exerciseHistory.length > 0 && (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <History className="w-5 h-5 text-purple-400" />
+                      Exercise History
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {exerciseHistory.slice(0, 10).map((ex: any) => (
+                        <div key={ex.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">{ex.exercise_name}</p>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <span>{ex.times_used}x used</span>
+                              {ex.block_type && (
+                                <Badge variant="outline" className="text-xs border-gray-700 text-gray-400">
+                                  {ex.block_type}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {ex.best_weight && (
+                              <p className="text-sm text-sky-400 font-medium">{ex.best_weight}kg</p>
+                            )}
+                            {ex.best_reps && (
+                              <p className="text-xs text-gray-500">{ex.best_reps} reps</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="bg-gray-900 border-gray-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <Dumbbell className="w-5 h-5 text-sky-400" />
+                    Client Workouts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {clientWorkouts.length === 0 ? (
+                    <p className="text-sm text-gray-500">No workout history for this client yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {clientWorkouts.slice(0, 8).map((w: any) => (
+                        <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
+                          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                            <TrendingUp className="w-5 h-5 text-gray-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-white truncate">{w.name}</p>
+                            <p className="text-xs text-gray-500">{format(new Date(w.startTime), 'MMM d, yyyy')}</p>
+                          </div>
+                          <Badge variant="outline" className="border-gray-700 text-gray-300">
+                            {Math.round((w.totalVolume || 0) / 1000)}k
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* ── Program Tab ── */}
+          {activeTab === 'program' && (
+            <>
+              {activeProgram ? (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardContent className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-white font-semibold">{activeProgram.templateName}</h3>
+                        <p className="text-xs text-gray-500">
+                          {activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}×/week • {activeProgram.scheduleMode || 'fixed'} schedule
+                        </p>
                       </div>
-                      <div className="text-right">
-                        {ex.best_weight && (
-                          <p className="text-sm text-sky-400 font-medium">{ex.best_weight}kg</p>
-                        )}
-                        {ex.best_reps && (
-                          <p className="text-xs text-gray-500">{ex.best_reps} reps</p>
-                        )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-sky-500/30 text-sky-400 hover:bg-sky-500/10 h-8"
+                          onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
+                        >
+                          <Edit2 className="w-3 h-3 mr-1" /> Edit
+                        </Button>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    
+                    {activeProgram.weeklyPlan?.map((day: any, idx: number) => {
+                      const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                      return (
+                        <div key={day.id || idx} className="p-3 bg-gray-800/60 rounded-xl">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center text-xs font-bold text-rose-400">
+                                {String.fromCharCode(65 + idx)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">{day.dayLabel || day.label}</p>
+                                <p className="text-[10px] text-gray-500">{totalEx} exercises • {day.blocks?.length || 0} blocks</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="bg-gray-900 border-gray-800">
+                  <CardContent className="py-12 text-center space-y-3">
+                    <div className="w-16 h-16 rounded-2xl bg-rose-500/10 flex items-center justify-center mx-auto">
+                      <ClipboardList className="w-8 h-8 text-rose-400" />
+                    </div>
+                    <h3 className="text-white font-semibold">No Program Assigned</h3>
+                    <p className="text-sm text-gray-500">Create or assign a training program for {clientUser?.displayName || 'this client'}</p>
+                    <div className="flex gap-3 justify-center pt-2">
+                      <Button
+                        className="bg-rose-500 hover:bg-rose-600 text-white"
+                        onClick={() => router.push('/program')}
+                      >
+                        <ClipboardList className="w-4 h-4 mr-2" /> Select Template
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-gray-700 text-gray-300 hover:bg-gray-800"
+                        onClick={() => router.push(`/program/builder?clientId=${clientId}`)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" /> Build Custom
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Client Schedule Calendar */}
+              <Card className="bg-gray-900 border-gray-800">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-rose-400" />
+                      {clientUser?.displayName || 'Client'}&apos;s Schedule
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-gray-700 text-gray-300 hover:bg-gray-800 h-8"
+                      onClick={() => router.push('/calendar')}
+                    >
+                      + Book PT
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {/* Month navigation */}
+                  <div className="flex items-center justify-between mb-3">
+                    <button onClick={() => setCalendarMonth(prev => subMonths(prev, 1))} className="p-1 text-gray-400 hover:text-white">
+                      <ChevronDown className="w-4 h-4 rotate-90" />
+                    </button>
+                    <p className="text-sm font-medium text-white">{format(calendarMonth, 'MMMM yyyy')}</p>
+                    <button onClick={() => setCalendarMonth(prev => addMonths(prev, 1))} className="p-1 text-gray-400 hover:text-white">
+                      <ChevronUp className="w-4 h-4 rotate-90" />
+                    </button>
+                  </div>
+                  {/* Day headers */}
+                  <div className="grid grid-cols-7 text-center mb-1">
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                      <p key={i} className="text-[10px] text-gray-500 font-medium">{d}</p>
+                    ))}
+                  </div>
+                  {/* Calendar grid */}
+                  <div className="grid grid-cols-7 gap-0.5">
+                    {(() => {
+                      const monthStart = startOfMonth(calendarMonth);
+                      const monthEnd = endOfMonth(calendarMonth);
+                      const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+                      const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+                      const allDays = eachDayOfInterval({ start: calStart, end: calEnd });
+                      return allDays.map(day => {
+                        const dateStr = format(day, 'yyyy-MM-dd');
+                        const dayEvents = clientSessions.filter(e => e.date === dateStr);
+                        const isCurrentMonth = isSameMonth(day, calendarMonth);
+                        const isToday = isSameDay(day, new Date());
+                        return (
+                          <div
+                            key={dateStr}
+                            className={`relative min-h-[36px] p-0.5 rounded text-center ${
+                              isToday ? 'bg-rose-500/10 ring-1 ring-rose-500/30' : ''
+                            } ${!isCurrentMonth ? 'opacity-30' : ''}`}
+                          >
+                            <p className={`text-[11px] ${isToday ? 'text-rose-400 font-bold' : 'text-gray-400'}`}>
+                              {format(day, 'd')}
+                            </p>
+                            {dayEvents.length > 0 && (
+                              <div className="flex justify-center gap-0.5 mt-0.5">
+                                {dayEvents.slice(0, 2).map((e: any) => (
+                                  <div
+                                    key={e.id}
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      e.type === 'session' ? 'bg-rose-400' : 'bg-sky-400'
+                                    }`}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                  {/* Legend */}
+                  <div className="flex items-center gap-4 mt-3 pt-2 border-t border-gray-800">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-rose-400" />
+                      <span className="text-[10px] text-gray-500">PT Session</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full bg-sky-400" />
+                      <span className="text-[10px] text-gray-500">Workout</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {/* ── Progress Tab ── */}
+          {activeTab === 'progress' && (
+            <div className="space-y-4">
+              <VolumeChart workouts={clientWorkouts} title="Volume Over Time" />
+              <div className="grid grid-cols-2 gap-3">
+                <MuscleProgressChart workouts={clientWorkouts} muscleGroup="chest" />
+                <MuscleProgressChart workouts={clientWorkouts} muscleGroup="back" />
+                <MuscleProgressChart workouts={clientWorkouts} muscleGroup="shoulders" />
+                <MuscleProgressChart workouts={clientWorkouts} muscleGroup="legs" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Messages Tab ── */}
+          {activeTab === 'messages' && (
+            <Card className="bg-gray-900 border-gray-800">
+              <CardContent className="py-12 text-center space-y-3">
+                <MessageCircle className="w-10 h-10 text-gray-600 mx-auto" />
+                <p className="text-sm text-gray-400">Open conversation with {clientUser?.displayName || 'client'}</p>
+                <Button
+                  className="bg-rose-500 hover:bg-rose-600 text-white"
+                  onClick={() => {
+                    if (!user?.id) return;
+                    getOrCreateConversation(user.id, clientId);
+                    router.push('/messages');
+                  }}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" /> Open Messages
+                </Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Session Packages */}
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <Package className="w-5 h-5 text-blue-400" />
-                  Session Packages
-                </CardTitle>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowImportDialog(true)}
-                  className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-8"
-                >
-                  <History className="w-3 h-3 mr-1" /> Import History
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {getPackagesForClient(clientId).length === 0 ? (
-                <p className="text-sm text-gray-500">No session packages for this client.</p>
-              ) : (
-                <div className="space-y-3">
-                  {getPackagesForClient(clientId).map((pkg: any) => (
-                    <div key={pkg.id} className="p-3 bg-gray-800/60 rounded-xl">
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <p className="text-sm font-medium text-white">{pkg.name || 'Session Package'}</p>
-                          <p className="text-xs text-gray-500">
-                            {pkg.usedSessions}/{pkg.totalSessions} sessions used
-                          </p>
+          {/* ── Payments Tab ── */}
+          {activeTab === 'payments' && (
+            <>
+              {/* Session Packages */}
+              <Card className="bg-gray-900 border-gray-800">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-white text-lg flex items-center gap-2">
+                      <Package className="w-5 h-5 text-blue-400" />
+                      Session Packages
+                    </CardTitle>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setShowImportDialog(true)}
+                      className="border-blue-500/30 text-blue-400 hover:bg-blue-500/10 h-8"
+                    >
+                      <History className="w-3 h-3 mr-1" /> Import History
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {getPackagesForClient(clientId).length === 0 ? (
+                    <p className="text-sm text-gray-500">No session packages for this client.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {getPackagesForClient(clientId).map((pkg: any) => (
+                        <div key={pkg.id} className="p-3 bg-gray-800/60 rounded-xl">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <p className="text-sm font-medium text-white">{pkg.name || 'Session Package'}</p>
+                              <p className="text-xs text-gray-500">
+                                {pkg.usedSessions}/{pkg.totalSessions} sessions used
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className={pkg.status === 'active' ? 'bg-sky-500/20 text-sky-400' : 'bg-gray-500/20 text-gray-400'}>
+                                {pkg.status}
+                              </Badge>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingPackage(pkg);
+                                  setPackageForm({
+                                    totalSessions: pkg.totalSessions,
+                                    usedSessions: pkg.usedSessions,
+                                    priceTotal: pkg.priceTotal || 0,
+                                    pricePerSession: pkg.pricePerSession || 0,
+                                  });
+                                  setShowEditPackage(true);
+                                }}
+                                className="h-8 w-8 text-gray-400 hover:text-white"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="p-2 bg-gray-900 rounded-lg">
+                              <p className="text-gray-500">Total Price</p>
+                              <p className="text-white font-medium">${pkg.priceTotal || 0}</p>
+                            </div>
+                            <div className="p-2 bg-gray-900 rounded-lg">
+                              <p className="text-gray-500">Per Session</p>
+                              <p className="text-white font-medium">${pkg.pricePerSession || 0}</p>
+                            </div>
+                            <div className="p-2 bg-gray-900 rounded-lg">
+                              <p className="text-gray-500">Remaining</p>
+                              <p className="text-sky-400 font-medium">{pkg.remainingSessions} sessions</p>
+                            </div>
+                            <div className="p-2 bg-gray-900 rounded-lg">
+                              <p className="text-gray-500">Purchased</p>
+                              <p className="text-white font-medium">{pkg.purchaseDate ? format(new Date(pkg.purchaseDate), 'MMM d, yyyy') : 'N/A'}</p>
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={pkg.status === 'active' ? 'bg-sky-500/20 text-sky-400' : 'bg-gray-500/20 text-gray-400'}>
-                            {pkg.status}
-                          </Badge>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingPackage(pkg);
-                              setPackageForm({
-                                totalSessions: pkg.totalSessions,
-                                usedSessions: pkg.usedSessions,
-                                priceTotal: pkg.priceTotal || 0,
-                                pricePerSession: pkg.pricePerSession || 0,
-                              });
-                              setShowEditPackage(true);
-                            }}
-                            className="h-8 w-8 text-gray-400 hover:text-white"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="p-2 bg-gray-900 rounded-lg">
-                          <p className="text-gray-500">Total Price</p>
-                          <p className="text-white font-medium">${pkg.priceTotal || 0}</p>
-                        </div>
-                        <div className="p-2 bg-gray-900 rounded-lg">
-                          <p className="text-gray-500">Per Session</p>
-                          <p className="text-white font-medium">${pkg.pricePerSession || 0}</p>
-                        </div>
-                        <div className="p-2 bg-gray-900 rounded-lg">
-                          <p className="text-gray-500">Remaining</p>
-                          <p className="text-sky-400 font-medium">{pkg.remainingSessions} sessions</p>
-                        </div>
-                        <div className="p-2 bg-gray-900 rounded-lg">
-                          <p className="text-gray-500">Purchased</p>
-                          <p className="text-white font-medium">{pkg.purchaseDate ? format(new Date(pkg.purchaseDate), 'MMM d, yyyy') : 'N/A'}</p>
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
 
-          {/* Client Sessions */}
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-400" />
-                Sessions & Payments
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {getSessionsForClient(clientId).length === 0 ? (
-                <p className="text-sm text-gray-500">No sessions recorded yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {getSessionsForClient(clientId).slice(0, 10).map((session: any) => (
-                    <div key={session.id} className="p-3 bg-gray-800/60 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
-                          <Clock className="w-5 h-5 text-gray-300" />
+              {/* Client Sessions */}
+              <Card className="bg-gray-900 border-gray-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-white text-lg flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-green-400" />
+                    Sessions & Payments
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {getSessionsForClient(clientId).length === 0 ? (
+                    <p className="text-sm text-gray-500">No sessions recorded yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {getSessionsForClient(clientId).slice(0, 10).map((session: any) => (
+                        <div key={session.id} className="p-3 bg-gray-800/60 rounded-xl">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                              <Clock className="w-5 h-5 text-gray-300" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-white truncate">{session.type === 'pt_session' ? 'PT Session' : session.type}</p>
+                              <p className="text-xs text-gray-500">{format(new Date(session.date), 'MMM d, yyyy')}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge className={
+                                session.status === 'completed' ? 'bg-sky-500/20 text-sky-400' : 
+                                session.status === 'no_show' ? 'bg-red-500/20 text-red-400' :
+                                'bg-blue-500/20 text-blue-400'
+                              }>
+                                {session.status === 'no_show' ? 'No Show' : session.status}
+                              </Badge>
+                              <Badge 
+                                className={session.paid ? 'bg-green-500/20 text-green-400 cursor-pointer' : 'bg-amber-500/20 text-amber-400 cursor-pointer'}
+                                onClick={() => toggleSessionPaid(session.id)}
+                              >
+                                {session.paid ? 'Paid' : 'Unpaid'}
+                              </Badge>
+                            </div>
+                          </div>
+                          {/* Session Actions */}
+                          {session.status === 'scheduled' && (
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-700">
+                              <Button
+                                size="sm"
+                                onClick={() => markSessionComplete(session.id)}
+                                className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 h-8"
+                              >
+                                <Check className="w-3 h-3 mr-1" /> Complete
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => markSessionNoShow(session.id)}
+                                className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 h-8"
+                              >
+                                <X className="w-3 h-3 mr-1" /> No Show
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-white truncate">{session.type === 'pt_session' ? 'PT Session' : session.type}</p>
-                          <p className="text-xs text-gray-500">{format(new Date(session.date), 'MMM d, yyyy')}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={
-                            session.status === 'completed' ? 'bg-sky-500/20 text-sky-400' : 
-                            session.status === 'no_show' ? 'bg-red-500/20 text-red-400' :
-                            'bg-blue-500/20 text-blue-400'
-                          }>
-                            {session.status === 'no_show' ? 'No Show' : session.status}
-                          </Badge>
-                          <Badge 
-                            className={session.paid ? 'bg-green-500/20 text-green-400 cursor-pointer' : 'bg-amber-500/20 text-amber-400 cursor-pointer'}
-                            onClick={() => toggleSessionPaid(session.id)}
-                          >
-                            {session.paid ? 'Paid' : 'Unpaid'}
-                          </Badge>
-                        </div>
-                      </div>
-                      {/* Session Actions */}
-                      {session.status === 'scheduled' && (
-                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-700">
-                          <Button
-                            size="sm"
-                            onClick={() => markSessionComplete(session.id)}
-                            className="flex-1 bg-sky-500/20 text-sky-400 hover:bg-sky-500/30 h-8"
-                          >
-                            <Check className="w-3 h-3 mr-1" /> Complete
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => markSessionNoShow(session.id)}
-                            className="flex-1 border-red-500/30 text-red-400 hover:bg-red-500/10 h-8"
-                          >
-                            <X className="w-3 h-3 mr-1" /> No Show
-                          </Button>
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-900 border-gray-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-sky-400" />
-                Client Workouts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {clientWorkouts.length === 0 ? (
-                <p className="text-sm text-gray-500">No workout history for this client yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {clientWorkouts.slice(0, 8).map((w: any) => (
-                    <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
-                      <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
-                        <TrendingUp className="w-5 h-5 text-gray-300" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{w.name}</p>
-                        <p className="text-xs text-gray-500">{format(new Date(w.startTime), 'MMM d, yyyy')}</p>
-                      </div>
-                      <Badge variant="outline" className="border-gray-700 text-gray-300">
-                        {Math.round((w.totalVolume || 0) / 1000)}k
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </ScrollArea>
 
