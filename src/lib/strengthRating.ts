@@ -626,7 +626,7 @@ export function calculateFullStrengthRating(
   const lowestTierIndex = Math.min(...allTiers.map(t => tierOrder.indexOf(t)));
   const overallTier = tierOrder[lowestTierIndex];
   
-  // Overall score: average of all category contributions
+  // Overall score: average across ALL 4 categories (0-data categories count as 0)
   // KEY RULE: If a category has surpassed the overall tier, it counts as 100%
   // (e.g., Legs at 35% Intermediate counts as 100% if overall tier is Beginner)
   const overallTierIdx = tierOrder.indexOf(overallTier);
@@ -638,10 +638,8 @@ export function calculateFullStrengthRating(
     }
     return cat.totalPoints;
   });
-  const validScores = categoryScores.filter(s => s > 0);
-  const overall = validScores.length > 0 
-    ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length)
-    : 0;
+  // Always divide by total number of categories (4), not just ones with data
+  const overall = Math.round(categoryScores.reduce((a, b) => a + b, 0) / allCategories.length);
   
   return {
     overall,

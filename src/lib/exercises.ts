@@ -987,6 +987,15 @@ const _rawExerciseLibrary: Exercise[] = [
   
   instructions: 'Sit in the machine with upper back supported, drive hips up against the pad, squeeze glutes, lower.',},
   {
+    id: 'assisted-dips',
+    name: 'Assisted Dips',
+    primaryMuscles: ['chest', 'triceps'],
+    secondaryMuscles: ['shoulders'],
+    category: 'compound',
+    equipment: 'machine',
+  
+  instructions: 'Kneel or stand on the assist platform, grip parallel bars, lower body by bending arms with machine assistance, press back up.',},
+  {
     id: 'assisted-pull-up',
     name: 'Assisted Pull-Up Machine',
     primaryMuscles: ['lats', 'back'],

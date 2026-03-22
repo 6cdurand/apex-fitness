@@ -804,6 +804,7 @@ export default function ProfilePage() {
                 </Badge>
               )}
             </div>
+            <p className="text-xs text-gray-500 mt-2">Measures your free-weight strength across all major body parts. Each category averages your best barbell, dumbbell, and bodyweight lifts to give a balanced rating.</p>
           </CardHeader>
           <CardContent>
             {strengthRating ? (
@@ -812,10 +813,10 @@ export default function ProfilePage() {
                 <div className="flex justify-center py-4">
                   <div className="relative w-32 h-32">
                     <svg viewBox="0 0 36 36" className="w-32 h-32 -rotate-90">
-                      <circle cx="18" cy="18" r="15.5" fill="none" stroke="#22c55e" strokeWidth="2.5" opacity="0.2" />
+                      <circle cx="18" cy="18" r="15.5" fill="none" stroke={strengthRating.tier === 'elite' ? '#f59e0b' : strengthRating.tier === 'advanced' ? '#a855f7' : strengthRating.tier === 'intermediate' ? '#3b82f6' : strengthRating.tier === 'novice' ? '#0ea5e9' : '#22c55e'} strokeWidth="2.5" opacity="0.2" />
                       <circle
                         cx="18" cy="18" r="15.5" fill="none"
-                        stroke="#22c55e"
+                        stroke={strengthRating.tier === 'elite' ? '#f59e0b' : strengthRating.tier === 'advanced' ? '#a855f7' : strengthRating.tier === 'intermediate' ? '#3b82f6' : strengthRating.tier === 'novice' ? '#0ea5e9' : '#22c55e'}
                         strokeWidth="2.5"
                         strokeDasharray={`${(strengthRating.overall / 100) * 97.4} 97.4`}
                         strokeLinecap="round"
@@ -836,7 +837,7 @@ export default function ProfilePage() {
                     { id: 'shoulders', name: 'Shoulders', score: strengthRating.categories?.shoulders?.totalPoints || 0, tier: strengthRating.categories?.shoulders?.tier || 'beginner' },
                     { id: 'legs', name: 'Legs', score: strengthRating.categories?.legs?.totalPoints || strengthRating.legs, tier: strengthRating.categories?.legs?.tier || strengthRating.tier },
                   ].map((cat) => {
-                    const strokeColor = cat.tier === 'elite' ? '#f59e0b' : cat.tier === 'advanced' ? '#a855f7' : cat.tier === 'intermediate' ? '#3b82f6' : '#0ea5e9';
+                    const strokeColor = cat.tier === 'elite' ? '#f59e0b' : cat.tier === 'advanced' ? '#a855f7' : cat.tier === 'intermediate' ? '#3b82f6' : cat.tier === 'novice' ? '#0ea5e9' : '#22c55e';
                     const scoreVal = typeof cat.score === 'number' ? cat.score : 0;
                     return (
                       <button
@@ -846,7 +847,7 @@ export default function ProfilePage() {
                       >
                         <div className="relative w-20 h-20 mb-2">
                           <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
-                            <circle cx="18" cy="18" r="15.5" fill="none" stroke="#22c55e" strokeWidth="2.5" opacity="0.15" />
+                            <circle cx="18" cy="18" r="15.5" fill="none" stroke={strokeColor} strokeWidth="2.5" opacity="0.15" />
                             <circle
                               cx="18" cy="18" r="15.5" fill="none"
                               stroke={strokeColor}
