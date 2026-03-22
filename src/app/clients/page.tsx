@@ -83,7 +83,7 @@ function ClientsPageContent() {
   const [newClientEmail, setNewClientEmail] = useState('');
   const [newClientPhone, setNewClientPhone] = useState('');
   const [newClientGender, setNewClientGender] = useState<'male' | 'female' | 'other'>('other');
-  const [newClientPassword, setNewClientPassword] = useState('client123');
+  const [newClientPassword, setNewClientPassword] = useState('');
   
   // Link existing account state
   const [supabaseUsers, setSupabaseUsers] = useState<any[]>([]);
@@ -194,6 +194,14 @@ function ClientsPageContent() {
       )
     : supabaseUsers;
 
+  // Generate a random client password (8 chars, alphanumeric)
+  const generateClientPassword = () => {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let pwd = '';
+    for (let i = 0; i < 8; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    return pwd;
+  };
+
   // Generate a proper UUID for Supabase
   const generateUUID = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -278,8 +286,9 @@ function ClientsPageContent() {
       }
     }
 
-    // Generate proper UUID for Supabase (not client-XXXX format)
+    // Generate proper UUID and random password for this client
     const newClientId = generateUUID();
+    const clientPassword = newClientPassword || generateClientPassword();
     
     // Use provided email or generate placeholder
     const clientEmail = newClientEmail.trim() 
@@ -302,7 +311,8 @@ function ClientsPageContent() {
       followers: [],
       following: [],
       trainerId: user?.id, // Link client to their trainer
-      password: hashPassword(newClientPassword), // Hash password for login matching
+      accountStatus: 'placeholder' as const,
+      password: hashPassword(clientPassword), // Hash password for login matching
     };
     
     // Add to local storage users (for local login)
@@ -312,7 +322,7 @@ function ClientsPageContent() {
     
     // Sync to Supabase so client can log in from any device
     try {
-      const synced = await registerUserToSupabase(newClientUser as any, newClientPassword, 'placeholder');
+      const synced = await registerUserToSupabase(newClientUser as any, clientPassword, 'placeholder');
       if (synced) {
         console.log('Client account synced to Supabase:', clientEmail);
       } else {
@@ -334,7 +344,7 @@ function ClientsPageContent() {
     setNewClientEmail('');
     setNewClientPhone('');
     setNewClientGender('other');
-    setNewClientPassword('client123');
+    setNewClientPassword('');
     // Create notification to set up session package
     useSocialStore.getState().addNotification({
       userId: user?.id || '',
@@ -345,7 +355,7 @@ function ClientsPageContent() {
     });
     
     toast.success(newClientEmail.trim() 
-      ? `Added ${newClientName} as a client. Login: ${clientEmail} / ${newClientPassword}`
+      ? `Added ${newClientName} — invite them to set up their account`
       : `Added ${newClientName} as a client (no email — add later)`);
     
     return newClientId;

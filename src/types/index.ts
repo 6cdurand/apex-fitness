@@ -37,6 +37,7 @@ export interface User {
     website?: string;
   };
   // Gym affiliation
+  accountStatus?: 'active' | 'placeholder';
   gymId?: string;
   gymName?: string;
   // Health & service connections

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, hashPassword } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,7 +15,7 @@ import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail, Heart, S
 import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
-import { acceptInvitation, checkInvitationByToken, updatePasswordInSupabase } from '@/lib/supabaseSync';
+import { acceptInvitation, checkInvitationByToken, updatePasswordInSupabase, updateUserInSupabase } from '@/lib/supabaseSync';
 import { Loader2 } from 'lucide-react';
 
 type Step = 'credentials' | 'profile' | 'goals' | 'connections';
@@ -120,48 +120,41 @@ function AuthPageContent() {
     
     setIsSettingUp(true);
     
-    // First try to login with the default password (client123)
-    const defaultPassword = 'client123';
-    const loginSuccess = await login(inviteEmail, defaultPassword);
+    // Step 1: Check if a placeholder account exists locally — force-set password and login
+    const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+    const placeholderIdx = storedUsers.findIndex((u: any) =>
+      u.email?.toLowerCase() === inviteEmail.toLowerCase() &&
+      (u.accountStatus === 'placeholder' || u.email?.endsWith('@placeholder.local'))
+    );
     
-    if (loginSuccess) {
-      // Update the password to the new one
-      const updated = updatePassword(inviteEmail, defaultPassword, setupNewPassword);
-      if (updated) {
-        // Also sync new password to Supabase for cross-device login
-        await updatePasswordInSupabase(inviteEmail, setupNewPassword);
-        // Accept the invite
-        if (inviteToken) {
-          const loggedInUser = useAuthStore.getState().user;
-          if (loggedInUser) {
-            await acceptInvitation(inviteToken, loggedInUser.id);
-          }
-        }
-        toast.success('Password set! Welcome to Catalift!');
-        // Redirect to onboarding if profile incomplete, else today
-        const lu1 = useAuthStore.getState().user;
-        router.push(lu1 && !lu1.height && !lu1.weight ? '/onboarding/client' : '/today');
-        setIsSettingUp(false);
-        return;
-      }
+    if (placeholderIdx !== -1) {
+      // Force-set the password to the new one (placeholder passwords are random/unknown)
+      storedUsers[placeholderIdx].password = hashPassword(setupNewPassword);
+      storedUsers[placeholderIdx].accountStatus = 'active';
+      localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+      await updatePasswordInSupabase(inviteEmail, setupNewPassword);
     }
     
-    // Default password didn't work — try login with the new password (maybe already changed)
-    const retrySuccess = await login(inviteEmail, setupNewPassword);
-    if (retrySuccess) {
-      if (inviteToken) {
-        const loggedInUser = useAuthStore.getState().user;
-        if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
+    // Step 2: Try login with the chosen password
+    const loginSuccess = await login(inviteEmail, setupNewPassword);
+    
+    if (loginSuccess) {
+      // Upgrade placeholder → active
+      const lu1 = useAuthStore.getState().user;
+      if (lu1) {
+        await updateUserInSupabase(lu1.id, { accountStatus: 'active' } as any);
+        useAuthStore.getState().updateUser({ accountStatus: 'active' });
       }
-      toast.success('Welcome back to Catalift!');
-      const lu2 = useAuthStore.getState().user;
-      router.push(lu2 && !lu2.height && !lu2.weight ? '/onboarding/client' : '/today');
+      if (inviteToken && lu1) {
+        await acceptInvitation(inviteToken, lu1.id);
+      }
+      toast.success('Password set! Welcome to Catalift!');
+      router.push(lu1 && !lu1.height && !lu1.weight ? '/onboarding/client' : '/today');
       setIsSettingUp(false);
       return;
     }
     
-    // Account doesn't exist at all — register as new user with their chosen password
-    // Use the existing clientId from the invite so the account is linked to the trainer's client record
+    // Step 3: Account doesn't exist at all — register as new user
     const registered = await register({
       id: inviteClientId || undefined,
       email: inviteEmail,
@@ -171,9 +164,13 @@ function AuthPageContent() {
     } as any);
     
     if (registered) {
-      if (inviteToken) {
-        const loggedInUser = useAuthStore.getState().user;
-        if (loggedInUser) await acceptInvitation(inviteToken, loggedInUser.id);
+      const lu2 = useAuthStore.getState().user;
+      if (lu2) {
+        await updateUserInSupabase(lu2.id, { accountStatus: 'active' } as any);
+        useAuthStore.getState().updateUser({ accountStatus: 'active' });
+      }
+      if (inviteToken && lu2) {
+        await acceptInvitation(inviteToken, lu2.id);
       }
       toast.success('Account created! Welcome to Catalift!');
       router.push('/onboarding/client');

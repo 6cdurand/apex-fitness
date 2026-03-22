@@ -238,14 +238,24 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         
-        // Check if email exists locally
-        if (storedUsers.some((u: User) => u.email === userData.email)) {
+        // Check if a placeholder account with this email exists — reuse its ID instead of creating a duplicate
+        const existingPlaceholder = storedUsers.find((u: any) => 
+          u.email?.toLowerCase() === userData.email?.toLowerCase() &&
+          (u.accountStatus === 'placeholder' || u.email?.endsWith('@placeholder.local') || u.email?.endsWith('@client.apex'))
+        );
+        
+        // Check if a real (non-placeholder) account with this email exists — block duplicate
+        const existingActive = storedUsers.find((u: any) => 
+          u.email?.toLowerCase() === userData.email?.toLowerCase() &&
+          u.accountStatus !== 'placeholder' && !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex')
+        );
+        if (existingActive) {
           set({ isLoading: false });
           return false;
         }
 
         const newUser: User = {
-          id: userData.id || uuidv4(),
+          id: userData.id || existingPlaceholder?.id || uuidv4(),
           email: userData.email || '',
           username: userData.username || '',
           displayName: userData.displayName || userData.username || '',
@@ -258,14 +268,19 @@ export const useAuthStore = create<AuthState>()(
           isVerifiedTrainer: false,
           preferredUnit: userData.preferredUnit || 'kg',
           membershipTier: 'pro',
-          createdAt: new Date().toISOString(),
+          accountStatus: 'active',
+          createdAt: existingPlaceholder?.createdAt || new Date().toISOString(),
           followers: [],
           following: [],
+          trainerId: existingPlaceholder?.trainerId || undefined,
         };
 
-        // Save to localStorage (hashed password)
-        storedUsers.push({ ...newUser, password: hashPassword(userData.password) });
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+        // If upgrading a placeholder, replace it; otherwise add new
+        const filteredUsers = existingPlaceholder
+          ? storedUsers.filter((u: any) => u.id !== existingPlaceholder.id)
+          : storedUsers;
+        filteredUsers.push({ ...newUser, password: hashPassword(userData.password) });
+        localStorage.setItem('apex-users', JSON.stringify(filteredUsers));
         
         // Sync to Supabase for cross-device login
         try {
@@ -1816,6 +1831,15 @@ export const useSocialStore = create<SocialState>()(
         const { updateUser, user } = useAuthStore.getState();
         if (!user) return;
 
+        // Prevent following placeholder (client-file) accounts
+        try {
+          const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
+          const target = storedUsers.find((u: any) => u.id === userId);
+          if (target && (target.accountStatus === 'placeholder' || target.email?.endsWith('@placeholder.local'))) {
+            return;
+          }
+        } catch { /* ignore */ }
+
         updateUser({
           following: [...user.following, userId],
         });
@@ -2297,7 +2321,7 @@ export const useTrainerStore = create<TrainerState>()(
         clients.forEach(client => {
           // Create user account for the client
           const clientId = uuidv4();
-          const email = `${client.displayName.toLowerCase().replace(/\s+/g, '.')}@client.apex`;
+          const email = `${client.displayName.toLowerCase().replace(/\s+/g, '.')}@placeholder.local`;
           
           const newUser: User & { password: string; accountStatus?: string } = {
             id: clientId,
@@ -2313,7 +2337,7 @@ export const useTrainerStore = create<TrainerState>()(
             followers: [],
             following: [],
             trainerId,
-            password: hashPassword('client123'),
+            password: hashPassword((() => { const c = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'; let p = ''; for (let i = 0; i < 8; i++) p += c.charAt(Math.floor(Math.random() * c.length)); return p; })()),
             accountStatus: 'placeholder',
           };
           

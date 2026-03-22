@@ -184,7 +184,10 @@ export default function ClientOnboardingPage() {
     // Create new client
     const newClientId = generateUUID();
     const username = accountName.toLowerCase().replace(/\s+/g, '_');
-    const password = 'client123';
+    // Generate random password per client (never hardcoded)
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 8; i++) password += chars.charAt(Math.floor(Math.random() * chars.length));
     
     const newClientUser = {
       id: newClientId,
@@ -201,6 +204,7 @@ export default function ClientOnboardingPage() {
       followers: [],
       following: [],
       trainerId: user?.id,
+      accountStatus: 'placeholder' as const,
       password: hashPassword(password),
     };
     

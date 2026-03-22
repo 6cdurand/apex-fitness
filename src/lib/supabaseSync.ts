@@ -174,7 +174,6 @@ export async function loginFromSupabase(email: string, password: string): Promis
   const passwordHash = simpleHash(password);
   
   console.log('[Supabase Login] Attempting login for:', emailLower);
-  console.log('[Supabase Login] Password hash:', passwordHash);
   
   try {
     // First check if user exists by email only (to debug password issues)
@@ -189,9 +188,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
       return null;
     }
     
-    console.log('[Supabase Login] Found user, stored hash:', userByEmail.password_hash);
-    console.log('[Supabase Login] Provided hash:', passwordHash);
-    console.log('[Supabase Login] Hashes match:', userByEmail.password_hash === passwordHash);
+    console.log('[Supabase Login] Found user, hashes match:', userByEmail.password_hash === passwordHash);
     
     if (userByEmail.password_hash !== passwordHash) {
       console.log('[Supabase Login] ❌ Password mismatch');
@@ -253,13 +250,15 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
       .neq('account_status', 'placeholder');
     
     if (error) {
-      // Fallback if account_status column doesn't exist yet
+      // Fallback if account_status column doesn't exist yet — filter by email pattern
       if (error.message?.includes('account_status')) {
-        console.log('[Supabase] account_status column not found, fetching all users');
+        console.log('[Supabase] account_status column not found, fetching with email filter');
         const fallback = await supabase.from('users').select('*');
         if (fallback.error) return [];
-        const users = (fallback.data || []).map(mapUserFromSupabase);
-        console.log(`[Supabase] Found ${users.length} users (no account_status filter)`);
+        const users = (fallback.data || [])
+          .filter((u: any) => !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex'))
+          .map(mapUserFromSupabase);
+        console.log(`[Supabase] Found ${users.length} users (email-filtered fallback)`);
         return users;
       }
       console.error('[Supabase] Error fetching users:', error.message);
