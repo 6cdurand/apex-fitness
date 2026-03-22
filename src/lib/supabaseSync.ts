@@ -1877,34 +1877,19 @@ export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[
 // ============ CLIENT PROGRAMS SYNC ============
 
 export async function syncClientProgramToSupabase(program: any): Promise<boolean> {
-  if (!isSupabaseConfigured()) {
-    console.warn('[Program Sync] ❌ Supabase not configured');
-    return false;
-  }
+  if (!isSupabaseConfigured()) return false;
   
-  console.log('[Program Sync] === Starting program sync ===');
-  console.log('[Program Sync] Program ID:', program.id);
-  console.log('[Program Sync] Trainer ID:', program.trainerId);
-  console.log('[Program Sync] Client ID:', program.clientId);
-  console.log('[Program Sync] Name:', program.templateName || program.name);
+  console.log('[Program Sync] Syncing program:', program.id, program.templateName || program.name);
   
   try {
-    // Pre-flight: ensure trainer exists in users table (FK constraint)
-    if (program.trainerId) {
-      const { data: trainerExists } = await supabase
-        .from('users')
-        .select('id')
-        .eq('id', program.trainerId)
-        .maybeSingle();
-      if (!trainerExists) {
-        console.error('[Program Sync] ❌ Trainer not found in Supabase users table! FK will fail. trainerId:', program.trainerId);
-        console.error('[Program Sync] 💡 Go to Settings → Sync All Data to push your user account first.');
-        return false;
-      }
-      console.log('[Program Sync] ✓ Trainer exists in users table');
-    }
-    
-    const trainingDaysJson = {
+    // Pack ALL program data into the `days` JSONB column (guaranteed to exist in base schema)
+    // This avoids depending on migration columns that may not exist
+    const programPayload = {
+      weeklyPlan: program.weeklyPlan || [],
+      templateId: program.templateId || null,
+      templateName: program.templateName || null,
+      phase: program.phase || null,
+      goal: program.goal || null,
       scheduleMode: program.scheduleMode || null,
       trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
       selectedDays: program.selectedDays || null,
@@ -1914,79 +1899,64 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       autoRepeat: program.autoRepeat || false,
       sessionType: program.sessionType || null,
     };
+    
+    // Only use columns from the base schema (always exist)
     const dbProgram: Record<string, any> = {
       id: program.id,
       client_id: program.clientId,
       trainer_id: program.trainerId,
-      // Base schema requires `name` NOT NULL — use templateName as the value
       name: program.templateName || program.name || 'Program',
       description: program.description || null,
+      days: programPayload,  // JSONB column from base schema — stores everything
+      status: program.status || 'active',
+      start_date: program.startDate || null,
+      end_date: program.endDate || null,
+      created_at: program.createdAt || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    
+    // Try with migration columns first (if migration has been run)
+    const extendedProgram = {
+      ...dbProgram,
       template_id: program.templateId || null,
       template_name: program.templateName || null,
       phase: program.phase || null,
       goal: program.goal || null,
       weekly_plan: program.weeklyPlan || null,
-      // Top-level columns (from older migration — always exist)
       training_days_per_week: program.trainingDaysPerWeek ?? null,
       selected_days: program.selectedDays || null,
       cycle_across_weeks: program.cycleAcrossWeeks || false,
       session_type: program.sessionType || null,
-      start_date: program.startDate || null,
-      end_date: program.endDate || null,
-      status: program.status || 'active',
-      created_at: program.createdAt || new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      training_days: programPayload,
     };
-    // Also write JSONB column if it exists (from new migration)
-    // We try with it first; if it fails we retry without
-    dbProgram.training_days = trainingDaysJson;
     
-    console.log('[Program Sync] Sending upsert to Supabase...');
-    console.log('[Program Sync] dbProgram keys:', Object.keys(dbProgram).join(', '));
+    let { data, error } = await supabase
+      .from('client_programs')
+      .upsert(extendedProgram, { onConflict: 'id' })
+      .select();
     
-    // Use .select() to detect silent RLS rejections (Supabase returns no error but 0 rows)
-    let { data, error, status, statusText } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' }).select();
-    console.log('[Program Sync] Response status:', status, statusText, '| Rows returned:', data?.length ?? 0);
-    
-    if (error && error.message?.includes('training_days')) {
-      console.log('[Program Sync] training_days column missing, retrying without it...');
-      delete dbProgram.training_days;
-      const retry = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' }).select();
+    // If migration columns don't exist, fall back to base schema only
+    if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
+      console.log('[Program Sync] Migration columns missing, using base schema (days JSONB)...');
+      const retry = await supabase
+        .from('client_programs')
+        .upsert(dbProgram, { onConflict: 'id' })
+        .select();
       data = retry.data;
       error = retry.error;
-      console.log('[Program Sync] Retry status:', retry.status, retry.statusText, '| Rows:', retry.data?.length ?? 0);
     }
+    
     if (error) {
-      console.error('[Program Sync] ❌ UPSERT FAILED');
-      console.error('[Program Sync] Error message:', error.message);
-      console.error('[Program Sync] Error code:', error.code);
-      console.error('[Program Sync] Error hint:', error.hint);
-      console.error('[Program Sync] Error details:', error.details);
-      if (error.code === '42501' || error.message?.includes('policy') || error.message?.includes('RLS')) {
-        console.error('[Program Sync] 🔒 RLS issue. Run in Supabase SQL Editor:');
-        console.error(`  ALTER TABLE client_programs DISABLE ROW LEVEL SECURITY;`);
-      }
-      if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('violates')) {
-        console.error('[Program Sync] 🔗 Foreign key violation — trainer_id must exist in users table');
-      }
-      if (error.code === '23502' || error.message?.includes('null value') || error.message?.includes('not-null')) {
-        console.error('[Program Sync] 🚫 NOT NULL violation — a required column is missing');
-      }
+      console.error('[Program Sync] ❌ Error:', error.code, error.message);
       return false;
     }
     
-    // Check for silent RLS rejection: no error but also no rows returned
     if (!data || data.length === 0) {
-      console.error('[Program Sync] ❌ SILENT FAILURE — upsert returned no error but 0 rows.');
-      console.error('[Program Sync] 🔒 This is almost certainly an RLS (Row Level Security) issue.');
-      console.error('[Program Sync] 💡 Run this SQL in your Supabase SQL Editor to fix:');
-      console.error(`  ALTER TABLE client_programs DISABLE ROW LEVEL SECURITY;`);
-      console.error(`  -- OR add a permissive policy:`);
-      console.error(`  CREATE POLICY "Allow all program access" ON client_programs FOR ALL USING (true) WITH CHECK (true);`);
+      console.error('[Program Sync] ❌ Silent RLS rejection (0 rows). Disable RLS or add permissive policy on client_programs.');
       return false;
     }
     
-    console.log('[Program Sync] ✅ Program synced successfully:', program.id);
+    console.log('[Program Sync] ✅ Synced:', program.id);
     return true;
   } catch (e) {
     console.error('[Program Sync] ❌ Exception:', e);
@@ -2016,25 +1986,27 @@ export async function fetchClientProgramsFromSupabase(trainerId: string): Promis
 }
 
 function mapProgramFromSupabase(p: any) {
+  // `days` JSONB is the universal storage — always populated by sync
+  // Migration columns (training_days, weekly_plan, etc.) are optional extras
+  const d = p.days || {};
   const td = p.training_days || {};
-  // Prefer JSONB training_days, fallback to top-level columns (older migration)
   return {
     id: p.id,
     clientId: p.client_id,
     trainerId: p.trainer_id,
-    templateId: p.template_id,
-    templateName: p.template_name,
-    phase: p.phase,
-    goal: p.goal,
-    weeklyPlan: p.weekly_plan || [],
-    scheduleMode: td.scheduleMode || undefined,
-    trainingDaysPerWeek: td.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
-    selectedDays: td.selectedDays || p.selected_days || undefined,
-    cycleAcrossWeeks: td.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
-    sessionPTMap: td.sessionPTMap || undefined,
-    nextWorkoutIndex: td.nextWorkoutIndex || 0,
-    autoRepeat: td.autoRepeat || false,
-    sessionType: td.sessionType || p.session_type || undefined,
+    templateId: d.templateId || p.template_id || null,
+    templateName: d.templateName || p.template_name || p.name || null,
+    phase: d.phase || p.phase || null,
+    goal: d.goal || p.goal || null,
+    weeklyPlan: d.weeklyPlan || p.weekly_plan || [],
+    scheduleMode: d.scheduleMode || td.scheduleMode || undefined,
+    trainingDaysPerWeek: d.trainingDaysPerWeek ?? td.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
+    selectedDays: d.selectedDays || td.selectedDays || p.selected_days || undefined,
+    cycleAcrossWeeks: d.cycleAcrossWeeks ?? td.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
+    sessionPTMap: d.sessionPTMap || td.sessionPTMap || undefined,
+    nextWorkoutIndex: d.nextWorkoutIndex ?? td.nextWorkoutIndex ?? 0,
+    autoRepeat: d.autoRepeat ?? td.autoRepeat ?? false,
+    sessionType: d.sessionType || td.sessionType || p.session_type || undefined,
     startDate: p.start_date,
     endDate: p.end_date,
     status: p.status,
