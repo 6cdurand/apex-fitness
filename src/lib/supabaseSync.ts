@@ -1894,6 +1894,9 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       id: program.id,
       client_id: program.clientId,
       trainer_id: program.trainerId,
+      // Base schema requires `name` NOT NULL — use templateName as the value
+      name: program.templateName || program.name || 'Program',
+      description: program.description || null,
       template_id: program.templateId || null,
       template_name: program.templateName || null,
       phase: program.phase || null,
@@ -1907,6 +1910,7 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       start_date: program.startDate || null,
       end_date: program.endDate || null,
       status: program.status || 'active',
+      created_at: program.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     // Also write JSONB column if it exists (from new migration)
