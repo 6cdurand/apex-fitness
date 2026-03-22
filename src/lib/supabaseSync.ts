@@ -1876,41 +1876,12 @@ export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[
 
 // ============ CLIENT PROGRAMS SYNC ============
 
-// Cache discovered columns so we only probe once per session
-let _programColumnsCache: Set<string> | null = null;
-
-async function discoverProgramColumns(): Promise<Set<string>> {
-  if (_programColumnsCache) return _programColumnsCache;
-  try {
-    // Fetch one row (or empty set) to discover actual column names
-    const { data, error } = await supabase
-      .from('client_programs')
-      .select('*')
-      .limit(1);
-    if (!error && data) {
-      const cols = data.length > 0
-        ? new Set(Object.keys(data[0]))
-        : null; // empty table — can't discover from data
-      if (cols) {
-        console.log('[Program Sync] Discovered columns:', [...cols].join(', '));
-        _programColumnsCache = cols;
-        return cols;
-      }
-    }
-  } catch (e) { /* fall through */ }
-  // If table is empty or query failed, return null — we'll discover via trial and error
-  return new Set<string>();
-}
-
 export async function syncClientProgramToSupabase(program: any): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   
   try {
-    // Discover actual table columns
-    const knownCols = await discoverProgramColumns();
-    
-    // All program data packed as JSON — stored in whichever JSONB column exists
-    const fullPayload = {
+    // Pack ALL program data into a single JSONB column
+    const programData = {
       weeklyPlan: program.weeklyPlan || [],
       templateId: program.templateId || null,
       templateName: program.templateName || null,
@@ -1926,81 +1897,36 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       sessionType: program.sessionType || null,
     };
     
-    // Build the full column map — every possible column we might want to write
-    const allColumns: Record<string, any> = {
+    const dbProgram = {
       id: program.id,
-      client_id: program.clientId,
       trainer_id: program.trainerId,
+      client_id: program.clientId,
       name: program.templateName || program.name || 'Program',
-      description: program.description || null,
-      days: fullPayload,
-      weekly_plan: program.weeklyPlan || null,
-      training_days: fullPayload,
-      template_id: program.templateId || null,
-      template_name: program.templateName || null,
-      phase: program.phase || null,
-      goal: program.goal || null,
-      training_days_per_week: program.trainingDaysPerWeek ?? null,
-      selected_days: program.selectedDays || null,
-      cycle_across_weeks: program.cycleAcrossWeeks || false,
-      session_type: program.sessionType || null,
       status: program.status || 'active',
       start_date: program.startDate || null,
       end_date: program.endDate || null,
+      program_data: programData,
       created_at: program.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
     
-    // If we know the columns, filter to only those that exist
-    let dbProgram: Record<string, any>;
-    if (knownCols.size > 0) {
-      dbProgram = {};
-      for (const [key, val] of Object.entries(allColumns)) {
-        if (knownCols.has(key)) dbProgram[key] = val;
-      }
-      // Always include id for upsert
-      dbProgram.id = program.id;
-    } else {
-      // Don't know columns yet — start with allColumns and strip on error
-      dbProgram = { ...allColumns };
+    const { data, error } = await supabase
+      .from('client_programs')
+      .upsert(dbProgram, { onConflict: 'id' })
+      .select();
+    
+    if (error) {
+      console.error('[Program Sync] ❌ Error:', error.code, error.message);
+      return false;
     }
     
-    // Retry loop: strip missing columns on PGRST204 errors
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const { data, error } = await supabase
-        .from('client_programs')
-        .upsert(dbProgram, { onConflict: 'id' })
-        .select();
-      
-      if (error && error.code === 'PGRST204' && error.message) {
-        // Extract missing column name from error: "Could not find the 'X' column"
-        const match = error.message.match(/Could not find the '([^']+)' column/);
-        if (match) {
-          const missingCol = match[1];
-          console.log(`[Program Sync] Column '${missingCol}' missing, removing and retrying...`);
-          delete dbProgram[missingCol];
-          continue;
-        }
-      }
-      
-      if (error) {
-        console.error('[Program Sync] ❌ Error:', error.code, error.message);
-        return false;
-      }
-      
-      if (!data || data.length === 0) {
-        console.error('[Program Sync] ❌ 0 rows returned — likely RLS blocking writes.');
-        return false;
-      }
-      
-      // Success — cache the columns we now know work
-      _programColumnsCache = new Set(Object.keys(dbProgram));
-      console.log('[Program Sync] ✅ Synced:', program.id, `(${Object.keys(dbProgram).length} cols)`);
-      return true;
+    if (!data || data.length === 0) {
+      console.error('[Program Sync] ❌ 0 rows — RLS may be blocking. Disable RLS on client_programs.');
+      return false;
     }
     
-    console.error('[Program Sync] ❌ Too many missing columns, giving up');
-    return false;
+    console.log('[Program Sync] ✅ Synced:', program.id);
+    return true;
   } catch (e) {
     console.error('[Program Sync] ❌ Exception:', e);
     return false;
@@ -2029,27 +1955,25 @@ export async function fetchClientProgramsFromSupabase(trainerId: string): Promis
 }
 
 function mapProgramFromSupabase(p: any) {
-  // Program data may be stored in any of these JSONB columns depending on schema
-  const d = p.days || p.training_days || p.weekly_plan || {};
-  // d may contain the full payload if stored via our sync, or legacy data
-  const payload = (typeof d === 'object' && d !== null && 'weeklyPlan' in d) ? d : {};
+  // program_data JSONB holds all program details
+  const pd = p.program_data || {};
   return {
     id: p.id,
     clientId: p.client_id,
     trainerId: p.trainer_id,
-    templateId: payload.templateId || p.template_id || null,
-    templateName: payload.templateName || p.template_name || p.name || null,
-    phase: payload.phase || p.phase || null,
-    goal: payload.goal || p.goal || null,
-    weeklyPlan: payload.weeklyPlan || (Array.isArray(d) ? d : p.weekly_plan) || [],
-    scheduleMode: payload.scheduleMode || undefined,
-    trainingDaysPerWeek: payload.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
-    selectedDays: payload.selectedDays || p.selected_days || undefined,
-    cycleAcrossWeeks: payload.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
-    sessionPTMap: payload.sessionPTMap || undefined,
-    nextWorkoutIndex: payload.nextWorkoutIndex ?? 0,
-    autoRepeat: payload.autoRepeat ?? false,
-    sessionType: payload.sessionType || p.session_type || undefined,
+    templateId: pd.templateId || null,
+    templateName: pd.templateName || p.name || null,
+    phase: pd.phase || null,
+    goal: pd.goal || null,
+    weeklyPlan: pd.weeklyPlan || [],
+    scheduleMode: pd.scheduleMode || undefined,
+    trainingDaysPerWeek: pd.trainingDaysPerWeek ?? undefined,
+    selectedDays: pd.selectedDays || undefined,
+    cycleAcrossWeeks: pd.cycleAcrossWeeks ?? false,
+    sessionPTMap: pd.sessionPTMap || undefined,
+    nextWorkoutIndex: pd.nextWorkoutIndex ?? 0,
+    autoRepeat: pd.autoRepeat ?? false,
+    sessionType: pd.sessionType || undefined,
     startDate: p.start_date,
     endDate: p.end_date,
     status: p.status,
