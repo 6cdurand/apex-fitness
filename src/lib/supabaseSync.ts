@@ -1876,15 +1876,41 @@ export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[
 
 // ============ CLIENT PROGRAMS SYNC ============
 
+// Cache discovered columns so we only probe once per session
+let _programColumnsCache: Set<string> | null = null;
+
+async function discoverProgramColumns(): Promise<Set<string>> {
+  if (_programColumnsCache) return _programColumnsCache;
+  try {
+    // Fetch one row (or empty set) to discover actual column names
+    const { data, error } = await supabase
+      .from('client_programs')
+      .select('*')
+      .limit(1);
+    if (!error && data) {
+      const cols = data.length > 0
+        ? new Set(Object.keys(data[0]))
+        : null; // empty table — can't discover from data
+      if (cols) {
+        console.log('[Program Sync] Discovered columns:', [...cols].join(', '));
+        _programColumnsCache = cols;
+        return cols;
+      }
+    }
+  } catch (e) { /* fall through */ }
+  // If table is empty or query failed, return null — we'll discover via trial and error
+  return new Set<string>();
+}
+
 export async function syncClientProgramToSupabase(program: any): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   
-  console.log('[Program Sync] Syncing program:', program.id, program.templateName || program.name);
-  
   try {
-    // Pack ALL program data into the `days` JSONB column (guaranteed to exist in base schema)
-    // This avoids depending on migration columns that may not exist
-    const programPayload = {
+    // Discover actual table columns
+    const knownCols = await discoverProgramColumns();
+    
+    // All program data packed as JSON — stored in whichever JSONB column exists
+    const fullPayload = {
       weeklyPlan: program.weeklyPlan || [],
       templateId: program.templateId || null,
       templateName: program.templateName || null,
@@ -1900,14 +1926,24 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       sessionType: program.sessionType || null,
     };
     
-    // Only use columns from the base schema (always exist)
-    const dbProgram: Record<string, any> = {
+    // Build the full column map — every possible column we might want to write
+    const allColumns: Record<string, any> = {
       id: program.id,
       client_id: program.clientId,
       trainer_id: program.trainerId,
       name: program.templateName || program.name || 'Program',
       description: program.description || null,
-      days: programPayload,  // JSONB column from base schema — stores everything
+      days: fullPayload,
+      weekly_plan: program.weeklyPlan || null,
+      training_days: fullPayload,
+      template_id: program.templateId || null,
+      template_name: program.templateName || null,
+      phase: program.phase || null,
+      goal: program.goal || null,
+      training_days_per_week: program.trainingDaysPerWeek ?? null,
+      selected_days: program.selectedDays || null,
+      cycle_across_weeks: program.cycleAcrossWeeks || false,
+      session_type: program.sessionType || null,
       status: program.status || 'active',
       start_date: program.startDate || null,
       end_date: program.endDate || null,
@@ -1915,49 +1951,56 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
       updated_at: new Date().toISOString(),
     };
     
-    // Try with migration columns first (if migration has been run)
-    const extendedProgram = {
-      ...dbProgram,
-      template_id: program.templateId || null,
-      template_name: program.templateName || null,
-      phase: program.phase || null,
-      goal: program.goal || null,
-      weekly_plan: program.weeklyPlan || null,
-      training_days_per_week: program.trainingDaysPerWeek ?? null,
-      selected_days: program.selectedDays || null,
-      cycle_across_weeks: program.cycleAcrossWeeks || false,
-      session_type: program.sessionType || null,
-      training_days: programPayload,
-    };
+    // If we know the columns, filter to only those that exist
+    let dbProgram: Record<string, any>;
+    if (knownCols.size > 0) {
+      dbProgram = {};
+      for (const [key, val] of Object.entries(allColumns)) {
+        if (knownCols.has(key)) dbProgram[key] = val;
+      }
+      // Always include id for upsert
+      dbProgram.id = program.id;
+    } else {
+      // Don't know columns yet — start with allColumns and strip on error
+      dbProgram = { ...allColumns };
+    }
     
-    let { data, error } = await supabase
-      .from('client_programs')
-      .upsert(extendedProgram, { onConflict: 'id' })
-      .select();
-    
-    // If migration columns don't exist, fall back to base schema only
-    if (error && (error.code === 'PGRST204' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
-      console.log('[Program Sync] Migration columns missing, using base schema (days JSONB)...');
-      const retry = await supabase
+    // Retry loop: strip missing columns on PGRST204 errors
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const { data, error } = await supabase
         .from('client_programs')
         .upsert(dbProgram, { onConflict: 'id' })
         .select();
-      data = retry.data;
-      error = retry.error;
+      
+      if (error && error.code === 'PGRST204' && error.message) {
+        // Extract missing column name from error: "Could not find the 'X' column"
+        const match = error.message.match(/Could not find the '([^']+)' column/);
+        if (match) {
+          const missingCol = match[1];
+          console.log(`[Program Sync] Column '${missingCol}' missing, removing and retrying...`);
+          delete dbProgram[missingCol];
+          continue;
+        }
+      }
+      
+      if (error) {
+        console.error('[Program Sync] ❌ Error:', error.code, error.message);
+        return false;
+      }
+      
+      if (!data || data.length === 0) {
+        console.error('[Program Sync] ❌ 0 rows returned — likely RLS blocking writes.');
+        return false;
+      }
+      
+      // Success — cache the columns we now know work
+      _programColumnsCache = new Set(Object.keys(dbProgram));
+      console.log('[Program Sync] ✅ Synced:', program.id, `(${Object.keys(dbProgram).length} cols)`);
+      return true;
     }
     
-    if (error) {
-      console.error('[Program Sync] ❌ Error:', error.code, error.message);
-      return false;
-    }
-    
-    if (!data || data.length === 0) {
-      console.error('[Program Sync] ❌ Silent RLS rejection (0 rows). Disable RLS or add permissive policy on client_programs.');
-      return false;
-    }
-    
-    console.log('[Program Sync] ✅ Synced:', program.id);
-    return true;
+    console.error('[Program Sync] ❌ Too many missing columns, giving up');
+    return false;
   } catch (e) {
     console.error('[Program Sync] ❌ Exception:', e);
     return false;
@@ -1986,27 +2029,27 @@ export async function fetchClientProgramsFromSupabase(trainerId: string): Promis
 }
 
 function mapProgramFromSupabase(p: any) {
-  // `days` JSONB is the universal storage — always populated by sync
-  // Migration columns (training_days, weekly_plan, etc.) are optional extras
-  const d = p.days || {};
-  const td = p.training_days || {};
+  // Program data may be stored in any of these JSONB columns depending on schema
+  const d = p.days || p.training_days || p.weekly_plan || {};
+  // d may contain the full payload if stored via our sync, or legacy data
+  const payload = (typeof d === 'object' && d !== null && 'weeklyPlan' in d) ? d : {};
   return {
     id: p.id,
     clientId: p.client_id,
     trainerId: p.trainer_id,
-    templateId: d.templateId || p.template_id || null,
-    templateName: d.templateName || p.template_name || p.name || null,
-    phase: d.phase || p.phase || null,
-    goal: d.goal || p.goal || null,
-    weeklyPlan: d.weeklyPlan || p.weekly_plan || [],
-    scheduleMode: d.scheduleMode || td.scheduleMode || undefined,
-    trainingDaysPerWeek: d.trainingDaysPerWeek ?? td.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
-    selectedDays: d.selectedDays || td.selectedDays || p.selected_days || undefined,
-    cycleAcrossWeeks: d.cycleAcrossWeeks ?? td.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
-    sessionPTMap: d.sessionPTMap || td.sessionPTMap || undefined,
-    nextWorkoutIndex: d.nextWorkoutIndex ?? td.nextWorkoutIndex ?? 0,
-    autoRepeat: d.autoRepeat ?? td.autoRepeat ?? false,
-    sessionType: d.sessionType || td.sessionType || p.session_type || undefined,
+    templateId: payload.templateId || p.template_id || null,
+    templateName: payload.templateName || p.template_name || p.name || null,
+    phase: payload.phase || p.phase || null,
+    goal: payload.goal || p.goal || null,
+    weeklyPlan: payload.weeklyPlan || (Array.isArray(d) ? d : p.weekly_plan) || [],
+    scheduleMode: payload.scheduleMode || undefined,
+    trainingDaysPerWeek: payload.trainingDaysPerWeek ?? p.training_days_per_week ?? undefined,
+    selectedDays: payload.selectedDays || p.selected_days || undefined,
+    cycleAcrossWeeks: payload.cycleAcrossWeeks ?? p.cycle_across_weeks ?? false,
+    sessionPTMap: payload.sessionPTMap || undefined,
+    nextWorkoutIndex: payload.nextWorkoutIndex ?? 0,
+    autoRepeat: payload.autoRepeat ?? false,
+    sessionType: payload.sessionType || p.session_type || undefined,
     startDate: p.start_date,
     endDate: p.end_date,
     status: p.status,
