@@ -1877,9 +1877,33 @@ export async function fetchPaymentsFromSupabase(trainerId: string): Promise<any[
 // ============ CLIENT PROGRAMS SYNC ============
 
 export async function syncClientProgramToSupabase(program: any): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+  if (!isSupabaseConfigured()) {
+    console.warn('[Program Sync] ❌ Supabase not configured');
+    return false;
+  }
+  
+  console.log('[Program Sync] === Starting program sync ===');
+  console.log('[Program Sync] Program ID:', program.id);
+  console.log('[Program Sync] Trainer ID:', program.trainerId);
+  console.log('[Program Sync] Client ID:', program.clientId);
+  console.log('[Program Sync] Name:', program.templateName || program.name);
   
   try {
+    // Pre-flight: ensure trainer exists in users table (FK constraint)
+    if (program.trainerId) {
+      const { data: trainerExists } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', program.trainerId)
+        .maybeSingle();
+      if (!trainerExists) {
+        console.error('[Program Sync] ❌ Trainer not found in Supabase users table! FK will fail. trainerId:', program.trainerId);
+        console.error('[Program Sync] 💡 Go to Settings → Sync All Data to push your user account first.');
+        return false;
+      }
+      console.log('[Program Sync] ✓ Trainer exists in users table');
+    }
+    
     const trainingDaysJson = {
       scheduleMode: program.scheduleMode || null,
       trainingDaysPerWeek: program.trainingDaysPerWeek ?? null,
@@ -1917,21 +1941,55 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
     // We try with it first; if it fails we retry without
     dbProgram.training_days = trainingDaysJson;
     
-    let { error } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+    console.log('[Program Sync] Sending upsert to Supabase...');
+    console.log('[Program Sync] dbProgram keys:', Object.keys(dbProgram).join(', '));
+    
+    // Use .select() to detect silent RLS rejections (Supabase returns no error but 0 rows)
+    let { data, error, status, statusText } = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' }).select();
+    console.log('[Program Sync] Response status:', status, statusText, '| Rows returned:', data?.length ?? 0);
+    
     if (error && error.message?.includes('training_days')) {
-      // training_days JSONB column doesn't exist yet — retry without it
+      console.log('[Program Sync] training_days column missing, retrying without it...');
       delete dbProgram.training_days;
-      const retry = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' });
+      const retry = await supabase.from('client_programs').upsert(dbProgram, { onConflict: 'id' }).select();
+      data = retry.data;
       error = retry.error;
+      console.log('[Program Sync] Retry status:', retry.status, retry.statusText, '| Rows:', retry.data?.length ?? 0);
     }
     if (error) {
-      console.error('[Program Sync] Error:', error.message);
+      console.error('[Program Sync] ❌ UPSERT FAILED');
+      console.error('[Program Sync] Error message:', error.message);
+      console.error('[Program Sync] Error code:', error.code);
+      console.error('[Program Sync] Error hint:', error.hint);
+      console.error('[Program Sync] Error details:', error.details);
+      if (error.code === '42501' || error.message?.includes('policy') || error.message?.includes('RLS')) {
+        console.error('[Program Sync] 🔒 RLS issue. Run in Supabase SQL Editor:');
+        console.error(`  ALTER TABLE client_programs DISABLE ROW LEVEL SECURITY;`);
+      }
+      if (error.code === '23503' || error.message?.includes('foreign key') || error.message?.includes('violates')) {
+        console.error('[Program Sync] 🔗 Foreign key violation — trainer_id must exist in users table');
+      }
+      if (error.code === '23502' || error.message?.includes('null value') || error.message?.includes('not-null')) {
+        console.error('[Program Sync] 🚫 NOT NULL violation — a required column is missing');
+      }
       return false;
     }
-    console.log('[Program Sync] ✅ Program synced:', program.id);
+    
+    // Check for silent RLS rejection: no error but also no rows returned
+    if (!data || data.length === 0) {
+      console.error('[Program Sync] ❌ SILENT FAILURE — upsert returned no error but 0 rows.');
+      console.error('[Program Sync] 🔒 This is almost certainly an RLS (Row Level Security) issue.');
+      console.error('[Program Sync] 💡 Run this SQL in your Supabase SQL Editor to fix:');
+      console.error(`  ALTER TABLE client_programs DISABLE ROW LEVEL SECURITY;`);
+      console.error(`  -- OR add a permissive policy:`);
+      console.error(`  CREATE POLICY "Allow all program access" ON client_programs FOR ALL USING (true) WITH CHECK (true);`);
+      return false;
+    }
+    
+    console.log('[Program Sync] ✅ Program synced successfully:', program.id);
     return true;
   } catch (e) {
-    console.error('[Program Sync] Exception:', e);
+    console.error('[Program Sync] ❌ Exception:', e);
     return false;
   }
 }
