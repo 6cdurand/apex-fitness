@@ -37,7 +37,8 @@ import {
   Share2,
   MessageCircle,
   Trash2,
-  FileText
+  FileText,
+  Heart
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -237,6 +238,12 @@ export default function TodayPage() {
 
   const handleStartEmpty = () => {
     startWorkout('Quick Workout');
+    router.push('/workout/active');
+  };
+
+  const handleStartWithType = (type: 'strength' | 'circuit' | 'cardio') => {
+    const names = { strength: 'Strength', circuit: 'Circuit', cardio: 'Cardio' };
+    startWorkout(names[type], undefined, undefined, type);
     router.push('/workout/active');
   };
 
@@ -481,21 +488,23 @@ export default function TodayPage() {
 
         {/* Medals Earned Today — removed per user request */}
 
-        {/* Booked PT Sessions — client view (purple) */}
+        {/* Booked PT Sessions — client view (purple) — STRICTLY type==='session' only */}
         {user.mode !== 'trainer' && (() => {
           const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-          const todaySessions = clientScheduledSessions.filter(s => {
+          const todayPTSessions = clientScheduledSessions.filter(s => {
             if (!s.date) return false;
-            return format(new Date(s.date), 'yyyy-MM-dd') === selectedDateStr;
+            if (format(new Date(s.date), 'yyyy-MM-dd') !== selectedDateStr) return false;
+            // Only actual PT sessions (type=session) — NOT program workouts
+            return s.type === 'session';
           });
-          if (todaySessions.length === 0) return null;
+          if (todayPTSessions.length === 0) return null;
           return (
             <section className="space-y-2">
               <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 Booked Sessions
               </h2>
-              {todaySessions.map(session => (
+              {todayPTSessions.map(session => (
                 <Card key={session.id} className="border-purple-300 bg-gradient-to-r from-purple-500/10 to-violet-500/10 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">
@@ -545,12 +554,116 @@ export default function TodayPage() {
           );
         })()}
 
-        {/* Next Workout — client mode, active program */}
+        {/* Scheduled Program Workouts — startable by client (sky blue) */}
+        {user.mode !== 'trainer' && (() => {
+          const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+          const todayProgramWorkouts = clientScheduledSessions.filter(s => {
+            if (!s.date) return false;
+            if (format(new Date(s.date), 'yyyy-MM-dd') !== selectedDateStr) return false;
+            // Program workouts: type 'workout' (not PT sessions)
+            return s.type === 'workout';
+          });
+          if (todayProgramWorkouts.length === 0) return null;
+          return (
+            <section className="space-y-2">
+              <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
+                <Dumbbell className="w-4 h-4" />
+                Scheduled Workouts
+              </h2>
+              {todayProgramWorkouts.map(event => (
+                <Card key={event.id} className="border-sky-300 bg-gradient-to-r from-sky-500/10 to-blue-500/10 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                          <Dumbbell className="w-5 h-5 text-sky-500" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">{event.title || 'Workout'}</h3>
+                          <p className="text-xs text-gray-500">
+                            {event.startTime && event.endTime
+                              ? `${event.startTime} – ${event.endTime}`
+                              : ''}
+                            {event.notes ? ` • ${event.notes}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className="bg-sky-500/20 text-sky-600 border-0 text-[10px]">
+                        Program
+                      </Badge>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                      onClick={() => {
+                        startWorkout(event.title || 'Workout');
+                        // Mark event as completed
+                        const { updateCalendarEvent: updateEvt } = useTrainerStore.getState();
+                        updateEvt(event.id, { status: 'completed' });
+                        router.push('/workout/active');
+                      }}
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Start {event.title || 'Workout'}
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </section>
+          );
+        })()}
+
+        {/* Next Workout — client mode, active program (schedule-aware) */}
         {user.mode !== 'trainer' && isToday && (() => {
           const next = getNextProgramWorkout(user.id);
           if (!next) return null;
-          const { program, dayIndex, day, remainingThisWeek, sessionType } = next;
+          const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, isScheduledToday, nextScheduledDay } = next;
           const totalEx = day?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+          
+          // Helper to start a specific program day
+          const startDay = (idx: number, d: any) => {
+            const exercises = (d?.blocks || []).flatMap((block: any) =>
+              (block.exercises || []).map((ex: any) => ({
+                id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                exerciseId: ex.exerciseId || ex.id,
+                exercise: {
+                  id: ex.exerciseId || ex.id,
+                  name: ex.exerciseName || ex.name || 'Exercise',
+                  category: 'strength',
+                  muscleGroups: [],
+                },
+                sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
+                  id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                  setNumber: si + 1,
+                  targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                  reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
+                  weight: 0,
+                  completed: false,
+                })),
+                restTimerSeconds: parseInt(ex.rest) || 90,
+                notes: ex.notes || '',
+              }))
+            );
+            if (exercises.length > 0) {
+              startFromTemplate({
+                id: `program-${program.id}-${idx}`,
+                name: `${d?.dayLabel || 'Workout'} - ${program.templateName}`,
+                description: `From ${program.templateName}`,
+                exercises,
+                category: 'strength',
+                estimatedDuration: 60,
+                createdAt: new Date().toISOString(),
+                createdBy: user.id,
+                isPublic: false,
+                updatedAt: new Date().toISOString(),
+              } as any);
+              router.push('/workout/active');
+            }
+          };
+          
+          // Badge label: only show "PT Session" if explicitly marked PT, otherwise "Program"
+          const badgeLabel = sessionType === 'pt' ? 'PT Session' : 'Program';
+          const badgeClass = sessionType === 'pt' ? 'bg-purple-500/20 text-purple-600' : 'bg-sky-500/20 text-sky-600';
           
           if (remainingThisWeek <= 0) {
             return (
@@ -566,6 +679,89 @@ export default function TodayPage() {
             );
           }
           
+          // FLEXIBLE schedule — show all available workouts as a picker
+          if (program.scheduleMode === 'flexible') {
+            return (
+              <section>
+                <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
+                  <Dumbbell className="w-4 h-4" />
+                  Your Program — {program.templateName}
+                </h2>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
+                    <p className="text-xs text-gray-500">{remainingThisWeek} of {program.trainingDaysPerWeek || program.weeklyPlan.length} left this week</p>
+                  </div>
+                  {program.weeklyPlan.map((wd: any, idx: number) => {
+                    const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                    const isDone = completedDayIndices.includes(idx);
+                    const isNext = idx === dayIndex;
+                    return (
+                      <Card
+                        key={wd.id || idx}
+                        className={`shadow-sm cursor-pointer transition-all ${
+                          isDone 
+                            ? 'bg-emerald-50 border-emerald-200 opacity-60' 
+                            : isNext
+                            ? 'bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30'
+                            : 'bg-white border-gray-200 hover:border-sky-300'
+                        }`}
+                        onClick={() => !isDone && startDay(idx, wd)}
+                      >
+                        <CardContent className="p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                              isDone ? 'bg-emerald-500 text-white' : isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {isDone ? <Check className="w-4 h-4" /> : String.fromCharCode(65 + idx)}
+                            </div>
+                            <div>
+                              <p className={`font-medium text-sm ${isDone ? 'text-emerald-700 line-through' : 'text-gray-900'}`}>{wd.dayLabel}</p>
+                              <p className="text-[10px] text-gray-500">{wdEx} exercises</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {isDone && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-600 border-0">Done</Badge>}
+                            {isNext && !isDone && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Up Next</Badge>}
+                            {!isDone && <Play className="w-4 h-4 text-gray-400" />}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          }
+          
+          // FIXED schedule — only show start button on scheduled days
+          if (!isScheduledToday && program.scheduleMode === 'fixed') {
+            return (
+              <Card className="bg-gray-50 border-gray-200 shadow-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center">
+                      <Calendar className="w-5 h-5 text-gray-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500 font-medium">{program.templateName}</p>
+                      <h3 className="font-semibold text-gray-900">Rest Day</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Next workout: <span className="font-medium text-sky-600 capitalize">{nextScheduledDay || 'soon'}</span>
+                        {' '}— {day?.dayLabel || 'Workout'} ({totalEx} exercises)
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
+                      <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} left</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }
+          
+          // FIXED schedule — today IS a scheduled day, show start button
           return (
             <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
               <CardContent className="p-4">
@@ -575,64 +771,21 @@ export default function TodayPage() {
                       <Dumbbell className="w-5 h-5 text-sky-500" />
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 font-medium">Next Workout</p>
+                      <p className="text-xs text-gray-500 font-medium">Today's Workout</p>
                       <h3 className="font-semibold text-gray-900">{day?.dayLabel || 'Workout'}</h3>
                     </div>
                   </div>
                   <div className="text-right">
-                    <Badge className={`text-[10px] border-0 ${sessionType === 'pt' ? 'bg-sky-500/20 text-sky-600' : 'bg-gray-200 text-gray-600'}`}>
-                      {sessionType === 'pt' ? 'PT Session' : 'Personal'}
-                    </Badge>
+                    <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
                     <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} more this week</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs text-gray-500">{totalEx} exercises • {program.templateName}</p>
-                  {program.scheduleMode === 'flexible' && (
-                    <Badge className="text-[9px] bg-amber-500/10 text-amber-600 border-0">Cycling</Badge>
-                  )}
                 </div>
                 <Button
                   className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                  onClick={() => {
-                    const exercises = (day?.blocks || []).flatMap((block: any) =>
-                      (block.exercises || []).map((ex: any) => ({
-                        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        exerciseId: ex.exerciseId || ex.id,
-                        exercise: {
-                          id: ex.exerciseId || ex.id,
-                          name: ex.exerciseName || ex.name || 'Exercise',
-                          category: 'strength',
-                          muscleGroups: [],
-                        },
-                        sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                          id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                          setNumber: si + 1,
-                          targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                          reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                          weight: 0,
-                          completed: false,
-                        })),
-                        restTimerSeconds: parseInt(ex.rest) || 90,
-                        notes: ex.notes || '',
-                      }))
-                    );
-                    if (exercises.length > 0) {
-                      startFromTemplate({
-                        id: `program-${program.id}-${dayIndex}`,
-                        name: `${day?.dayLabel || 'Workout'} - ${program.templateName}`,
-                        description: `From ${program.templateName}`,
-                        exercises,
-                        category: 'strength',
-                        estimatedDuration: 60,
-                        createdAt: new Date().toISOString(),
-                        createdBy: user.id,
-                        isPublic: false,
-                        updatedAt: new Date().toISOString(),
-                      } as any);
-                      router.push('/workout/active');
-                    }
-                  }}
+                  onClick={() => startDay(dayIndex, day)}
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Start {day?.dayLabel || 'Workout'}
@@ -657,31 +810,65 @@ export default function TodayPage() {
               <DialogContent className="bg-white border-gray-200 max-w-md">
                 <DialogHeader>
                   <DialogTitle className="text-gray-900">Start Workout</DialogTitle>
-                  <DialogDescription className="text-gray-500">Choose how to begin</DialogDescription>
+                  <DialogDescription className="text-gray-500">What are you training today?</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-3 pt-2">
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 border-gray-200 hover:bg-gray-50 justify-start"
-                    onClick={() => { handleStartEmpty(); setShowStartOptions(false); }}
-                  >
-                    <Zap className="w-5 h-5 text-sky-500 mr-3" />
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">Quick Start</p>
-                      <p className="text-xs text-gray-500">Empty workout, add exercises as you go</p>
-                    </div>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full h-auto py-4 border-gray-200 hover:bg-gray-50 justify-start"
-                    onClick={() => { setShowStartOptions(false); setShowTemplates(true); }}
-                  >
-                    <Dumbbell className="w-5 h-5 text-sky-500 mr-3" />
-                    <div className="text-left">
-                      <p className="font-medium text-gray-900">From Template</p>
-                      <p className="text-xs text-gray-500">Choose a pre-built workout</p>
-                    </div>
-                  </Button>
+                <div className="space-y-4 pt-2">
+                  {/* Primary: 2×2 type grid */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => { handleStartWithType('strength'); setShowStartOptions(false); }}
+                      className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-sky-400 hover:bg-sky-50 transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-sky-100 group-hover:bg-sky-200 flex items-center justify-center transition-colors">
+                        <Dumbbell className="w-6 h-6 text-sky-600" />
+                      </div>
+                      <span className="font-semibold text-gray-900 text-sm">Strength</span>
+                      <span className="text-[10px] text-gray-400">Weights & sets</span>
+                    </button>
+                    <button
+                      onClick={() => { handleStartWithType('circuit'); setShowStartOptions(false); }}
+                      className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center transition-colors">
+                        <Zap className="w-6 h-6 text-orange-600" />
+                      </div>
+                      <span className="font-semibold text-gray-900 text-sm">Circuit</span>
+                      <span className="text-[10px] text-gray-400">Timer & rounds</span>
+                    </button>
+                    <button
+                      onClick={() => { handleStartWithType('cardio'); setShowStartOptions(false); }}
+                      className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-rose-400 hover:bg-rose-50 transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-rose-100 group-hover:bg-rose-200 flex items-center justify-center transition-colors">
+                        <Heart className="w-6 h-6 text-rose-600" />
+                      </div>
+                      <span className="font-semibold text-gray-900 text-sm">Cardio</span>
+                      <span className="text-[10px] text-gray-400">Run, bike, row</span>
+                    </button>
+                    <button
+                      onClick={() => { handleStartEmpty(); setShowStartOptions(false); }}
+                      className="flex flex-col items-center gap-2 p-5 rounded-xl border-2 border-gray-200 hover:border-purple-400 hover:bg-purple-50 transition-all group"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-purple-100 group-hover:bg-purple-200 flex items-center justify-center transition-colors">
+                        <Plus className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <span className="font-semibold text-gray-900 text-sm">Mixed</span>
+                      <span className="text-[10px] text-gray-400">Build as you go</span>
+                    </button>
+                  </div>
+                  {/* Secondary: From Template */}
+                  <div className="border-t border-gray-100 pt-3">
+                    <button
+                      onClick={() => { setShowStartOptions(false); setShowTemplates(true); }}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors text-left"
+                    >
+                      <FileText className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">From Template</p>
+                        <p className="text-[10px] text-gray-400">Use a saved or pre-built workout</p>
+                      </div>
+                    </button>
+                  </div>
                 </div>
               </DialogContent>
             </Dialog>

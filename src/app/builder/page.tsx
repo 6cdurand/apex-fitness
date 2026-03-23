@@ -98,7 +98,7 @@ export default function BuilderPage() {
                   <Card
                     key={program.id}
                     className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-emerald-500/30 transition-colors"
-                    onClick={() => router.push(`/clients/${program.clientId}/program/builder?programId=${program.id}`)}
+                    onClick={() => router.push(`/trainer/clients/${program.clientId}?tab=program`)}
                   >
                     <CardContent className="p-3 flex items-center justify-between">
                       <div className="flex items-center gap-3">

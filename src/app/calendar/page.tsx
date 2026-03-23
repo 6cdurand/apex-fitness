@@ -80,6 +80,7 @@ export default function CalendarPage() {
   const [showWorkoutPicker, setShowWorkoutPicker] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedProgramDay, setSelectedProgramDay] = useState<number>(-1); // -1 = no program day selected
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -107,11 +108,17 @@ export default function CalendarPage() {
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   // Show events for the day — trainers see their bookings, users see their own events
+  // Trainers: only see PT sessions (type=session) and events they created — NOT client program workouts
   const getEventsForDay = (date: Date) => {
     return calendarEvents.filter(event => {
       if (event.status === 'cancelled') return false;
       if (!isSameDay(new Date(event.date), date)) return false;
-      if (isTrainer) return event.trainerId === user?.id;
+      if (isTrainer) {
+        if (event.trainerId !== user?.id) return false;
+        // Hide program workouts assigned to clients (type=workout with a different clientId)
+        if (event.type === 'workout' && event.clientId && event.clientId !== user?.id) return false;
+        return true;
+      }
       return event.clientId === user?.id || event.trainerId === user?.id;
     });
   };
@@ -180,7 +187,13 @@ export default function CalendarPage() {
     
     const clientName = newEventClient ? getClientNameUtil(newEventClient) : null;
     const contactName = (!newEventClient && newEventType === 'consultation') ? newEventTitle : undefined;
-    const title = newEventTitle || (clientName 
+    
+    // If borrowing from program, use the program day label as the title
+    const activeProgram = newEventClient ? getActiveProgram(newEventClient) : undefined;
+    const programDay = activeProgram && selectedProgramDay >= 0 ? activeProgram.weeklyPlan?.[selectedProgramDay] : null;
+    const programTitle = programDay ? `${programDay.dayLabel} - ${activeProgram!.templateName}` : null;
+    
+    const title = newEventTitle || programTitle || (clientName 
       ? `${newEventType === 'consultation' ? 'Consultation' : 'Session'} with ${clientName}`
       : contactName ? `Consultation — ${contactName}` : 'Consultation');
     
@@ -197,9 +210,11 @@ export default function CalendarPage() {
         clientId: newEventClient || undefined,
         trainerId: user?.id,
         status: 'scheduled',
-        notes: newEventRecurrence !== 'none' ? `Recurring: ${newEventRecurrence}` : '',
+        notes: newEventRecurrence !== 'none' ? `Recurring: ${newEventRecurrence}` : (programDay ? `From program: ${activeProgram!.templateName}` : ''),
         recurrenceGroup,
         contactName: contactName || undefined,
+        programId: activeProgram && selectedProgramDay >= 0 ? activeProgram.id : undefined,
+        programDayIndex: selectedProgramDay >= 0 ? selectedProgramDay : undefined,
       } as any);
     };
     
@@ -265,6 +280,7 @@ export default function CalendarPage() {
     setNewEventEndTime('10:00');
     setNewEventRecurrence('none');
     setNewEventType('session');
+    setSelectedProgramDay(-1);
   };
 
   const openAddEvent = () => {
@@ -977,6 +993,36 @@ export default function CalendarPage() {
                 })}
               </select>
             </div>
+
+            {/* Borrow from Program — shown when client has an active program and type is session */}
+            {newEventType === 'session' && newEventClient && (() => {
+              const prog = getActiveProgram(newEventClient);
+              if (!prog || !prog.weeklyPlan?.length) return null;
+              return (
+                <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sky-700 font-medium text-xs">Borrow from Program</Label>
+                    <Badge className="bg-sky-100 text-sky-600 border-0 text-[10px]">{prog.templateName}</Badge>
+                  </div>
+                  <select
+                    value={selectedProgramDay}
+                    onChange={(e) => setSelectedProgramDay(parseInt(e.target.value))}
+                    className="w-full p-2 bg-white border border-sky-200 rounded-md text-gray-900 text-sm"
+                  >
+                    <option value={-1}>Custom session (no program)</option>
+                    {prog.weeklyPlan.map((day: any, idx: number) => {
+                      const exCount = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                      return (
+                        <option key={idx} value={idx}>
+                          {day.dayLabel} — {exCount} exercises
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <p className="text-[10px] text-gray-500">Select a workout day to use for this PT session. This counts toward the client's package.</p>
+                </div>
+              );
+            })()}
 
             {/* Consultation name field when no client selected */}
             {newEventType === 'consultation' && !newEventClient && (

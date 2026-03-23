@@ -403,9 +403,10 @@ interface WorkoutState {
   workoutTimer: TimerState;
   restTimer: TimerState;
   currentClientId: string | null; // Track which client we're training (null = training self)
+  initialBlockType: 'strength' | 'circuit' | 'cardio' | null; // Auto-create this block type on mount
 
   // Workout actions
-  startWorkout: (name: string, templateId?: string, clientId?: string) => void;
+  startWorkout: (name: string, templateId?: string, clientId?: string, initialBlockType?: 'strength' | 'circuit' | 'cardio') => void;
   startWorkoutForClient: (name: string, clientId: string, templateId?: string) => void;
   startFromTemplate: (template: WorkoutTemplate, clientId?: string) => void;
   clearCurrentClient: () => void;
@@ -496,6 +497,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
       restTimer: { isRunning: false, seconds: 0, type: 'rest' },
       currentClientId: null,
+      initialBlockType: null,
 
       getActiveUserId: () => {
         // Returns the ID of who we're training: client ID if training a client, otherwise logged-in user
@@ -504,7 +506,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         return useAuthStore.getState().user?.id || '';
       },
 
-      startWorkout: (name, templateId, clientId) => {
+      startWorkout: (name, templateId, clientId, initialBlockType) => {
         // Use clientId if provided (training a client), otherwise use logged-in user's ID
         const loggedInUserId = useAuthStore.getState().user?.id || '';
         const targetUserId = clientId || loggedInUserId;
@@ -525,6 +527,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           activeWorkout: workout,
           workoutTimer: { isRunning: true, seconds: 0, type: 'workout', startTimestamp: Date.now(), accumulatedSeconds: 0 },
           currentClientId: clientId || null,
+          initialBlockType: initialBlockType || null,
         });
       },
 
@@ -1661,7 +1664,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           userId,
           completedWorkout,
           normalizeExerciseId,
-          medalDeps: { hasMedal, earnMedal, revokeMedalsForUser, normalizeExerciseId },
+          medalDeps: { hasMedal, earnMedal, revokeMedalsForUser, normalizeExerciseId, getStrengthRating: useMedalStore.getState().getStrengthRating },
           calculateStrengthRatingForUser,
         });
 
@@ -2066,7 +2069,7 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
-  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[] } | null;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
@@ -3199,7 +3202,29 @@ export const useTrainerStore = create<TrainerState>()(
         const slotInWeek = completedThisWeek % freq;
         const sessionType = program.sessionPTMap?.[slotInWeek] === 'pt' ? 'pt' : 'personal';
         
-        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices };
+        // Schedule awareness: check if today is a scheduled day for fixed programs
+        const todayDayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const todayDayName = todayDayNames[now.getDay()];
+        let isScheduledToday = true;
+        let nextScheduledDay: string | null = null;
+        
+        if (program.scheduleMode === 'fixed' && program.selectedDays?.length) {
+          isScheduledToday = program.selectedDays.includes(todayDayName as any);
+          if (!isScheduledToday) {
+            // Find the next scheduled day from today
+            for (let offset = 1; offset <= 7; offset++) {
+              const checkIdx = (now.getDay() + offset) % 7;
+              const checkName = todayDayNames[checkIdx];
+              if (program.selectedDays.includes(checkName as any)) {
+                nextScheduledDay = checkName;
+                break;
+              }
+            }
+          }
+        }
+        // Flexible programs: always available (user picks which workout)
+        
+        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, isScheduledToday, nextScheduledDay };
       },
 
       rotateProgramDay: (clientId, dayIndex) => {
@@ -3471,43 +3496,75 @@ export const useTrainerStore = create<TrainerState>()(
         return get().workoutLibrary.find(w => w.id === workoutId);
       },
 
-      // Circuit Library
+      // Circuit Library — now delegates to savedBlocks with type='circuit'
       saveCircuitTemplate: (circuit) => {
-        const trainerId = useAuthStore.getState().user?.id || '';
-        const newCircuit: CircuitTemplate = {
-          ...circuit,
-          id: uuidv4(),
-          trainerId,
-          createdAt: new Date().toISOString(),
-        };
-        set(state => ({
-          circuitLibrary: [...state.circuitLibrary, newCircuit],
-        }));
-        // Sync to Supabase
-        syncCircuitLibraryToSupabase(newCircuit);
-        return newCircuit;
+        const savedBlock = get().saveBlock({
+          name: circuit.name,
+          type: 'circuit',
+          exercises: (circuit.exercises || []).map((ex: any, i: number) => ({
+            id: ex.id || `ex-${i}`,
+            exerciseId: ex.exerciseId || ex.id || `ex-${i}`,
+            exerciseName: ex.exerciseName || ex.name || 'Exercise',
+            sets: ex.sets || 1,
+            reps: String(ex.reps || 10),
+            rest: ex.rest || '30s',
+          })),
+          circuitStyle: circuit.circuitStyle,
+          circuitRounds: circuit.rounds,
+          circuitDuration: circuit.duration,
+          circuitRestBetween: circuit.restBetweenRounds ? parseInt(circuit.restBetweenRounds) : undefined,
+        });
+        // Return as CircuitTemplate shape for backward compatibility
+        return {
+          id: savedBlock.id,
+          name: savedBlock.name,
+          trainerId: savedBlock.trainerId,
+          exercises: circuit.exercises,
+          circuitStyle: circuit.circuitStyle,
+          rounds: circuit.rounds,
+          duration: circuit.duration,
+          restBetweenRounds: circuit.restBetweenRounds,
+          createdAt: savedBlock.createdAt,
+        } as CircuitTemplate;
       },
 
       updateCircuitTemplate: (circuitId, updates) => {
-        set(state => ({
-          circuitLibrary: state.circuitLibrary.map(c => 
-            c.id === circuitId ? { ...c, ...updates } : c
-          ),
-        }));
-        // Sync to Supabase
-        const updated = get().circuitLibrary.find(c => c.id === circuitId);
-        if (updated) syncCircuitLibraryToSupabase(updated);
+        get().updateBlock(circuitId, {
+          ...(updates.name && { name: updates.name }),
+          ...(updates.exercises && { exercises: updates.exercises.map((ex: any, i: number) => ({
+            id: ex.id || `ex-${i}`,
+            exerciseId: ex.exerciseId || ex.id || `ex-${i}`,
+            exerciseName: ex.exerciseName || ex.name || 'Exercise',
+            sets: ex.sets || 1,
+            reps: String(ex.reps || 10),
+            rest: ex.rest || '30s',
+          })) }),
+          ...(updates.circuitStyle && { circuitStyle: updates.circuitStyle }),
+          ...(updates.rounds != null && { circuitRounds: updates.rounds }),
+          ...(updates.duration != null && { circuitDuration: updates.duration }),
+        });
       },
 
       deleteCircuitTemplate: (circuitId) => {
-        set(state => ({
-          circuitLibrary: state.circuitLibrary.filter(c => c.id !== circuitId),
-        }));
-        // Delete from Supabase
-        deleteCircuitLibraryFromSupabase(circuitId);
+        get().deleteBlock(circuitId);
       },
 
       getCircuitTemplate: (circuitId) => {
+        // Check savedBlocks first, then fall back to legacy circuitLibrary
+        const block = get().savedBlocks.find(b => b.id === circuitId && b.type === 'circuit');
+        if (block) {
+          return {
+            id: block.id,
+            name: block.name,
+            trainerId: block.trainerId,
+            exercises: block.exercises,
+            circuitStyle: block.circuitStyle || 'rounds',
+            rounds: block.circuitRounds,
+            duration: block.circuitDuration,
+            restBetweenRounds: block.circuitRestBetween ? String(block.circuitRestBetween) : undefined,
+            createdAt: block.createdAt,
+          } as CircuitTemplate;
+        }
         return get().circuitLibrary.find(c => c.id === circuitId);
       },
 
@@ -3713,6 +3770,8 @@ export const useTrainerStore = create<TrainerState>()(
             totalPaid: sb.totalPaid ?? localClient?.totalPaid ?? 0,
             totalSessionsOffset: sb.totalSessionsOffset,
             totalPaidOffset: sb.totalPaidOffset,
+            // Nested client user info for name resolution
+            client: sb.client || localClient?.client,
           };
         });
         const localOnlyClients = currentClients.filter(

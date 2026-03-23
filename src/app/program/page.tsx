@@ -94,13 +94,17 @@ interface SavedProgram {
 
 function loadSavedPrograms(userId: string): SavedProgram[] {
   try {
-    const data = localStorage.getItem(`apex-programs-${userId}`);
-    return data ? JSON.parse(data) : [];
+    // Primary key (matches program builder)
+    const data = localStorage.getItem(`apex-program-library-${userId}`);
+    if (data) return JSON.parse(data);
+    // Fallback: old key for existing data
+    const legacy = localStorage.getItem(`apex-programs-${userId}`);
+    return legacy ? JSON.parse(legacy) : [];
   } catch { return []; }
 }
 
 function saveProgramsList(userId: string, programs: SavedProgram[]) {
-  localStorage.setItem(`apex-programs-${userId}`, JSON.stringify(programs));
+  localStorage.setItem(`apex-program-library-${userId}`, JSON.stringify(programs));
 }
 
 export default function ProgramPage() {
@@ -507,8 +511,8 @@ export default function ProgramPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <Badge className={`text-[10px] border-0 ${nextWorkout.sessionType === 'pt' ? 'bg-sky-500/20 text-sky-600' : 'bg-gray-200 text-gray-600'}`}>
-                          {nextWorkout.sessionType === 'pt' ? 'PT' : 'Personal'}
+                        <Badge className={`text-[10px] border-0 ${nextWorkout.sessionType === 'pt' ? 'bg-purple-500/20 text-purple-600' : 'bg-sky-500/20 text-sky-600'}`}>
+                          {nextWorkout.sessionType === 'pt' ? 'PT Session' : 'Program'}
                         </Badge>
                         <p className="text-[10px] text-gray-500 mt-0.5">{nextWorkout.remainingThisWeek} left this week</p>
                       </div>

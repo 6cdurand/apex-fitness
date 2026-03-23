@@ -878,25 +878,28 @@ function WorkoutBuilderContent() {
     setActiveCircuitBlockId(null);
   };
 
-  const handleLoadCircuitTemplate = (circuit: typeof circuitLibrary[0]) => {
+  // Circuits from unified block library
+  const circuitBlockLibrary = savedBlocks.filter(b => b.type === 'circuit');
+
+  const handleLoadCircuitTemplate = (circuit: typeof circuitBlockLibrary[0] | typeof circuitLibrary[0]) => {
     if (!activeCircuitBlockId) return;
+    
+    // Normalize fields — savedBlocks use circuitRounds/circuitStyle, legacy uses rounds/circuitStyle
+    const name = circuit.name;
+    const exercises = circuit.exercises;
+    const style = ('circuitStyle' in circuit ? circuit.circuitStyle : undefined) || 'rounds';
+    const rounds = ('circuitRounds' in circuit ? (circuit as any).circuitRounds : (circuit as any).rounds) || 3;
+    const restBetween = ('circuitRestBetween' in circuit ? String((circuit as any).circuitRestBetween) : (circuit as any).restBetweenRounds) || undefined;
     
     setBlocks(blocks.map(b => 
       b.id === activeCircuitBlockId 
-        ? { 
-            ...b, 
-            name: circuit.name,
-            exercises: circuit.exercises,
-            circuitStyle: circuit.circuitStyle,
-            rounds: circuit.rounds,
-            restBetweenRounds: circuit.restBetweenRounds,
-          } 
+        ? { ...b, name, exercises: exercises as any, circuitStyle: style, rounds, restBetweenRounds: restBetween } 
         : b
     ));
     
     setShowCircuitLibraryDialog(false);
     setActiveCircuitBlockId(null);
-    toast.success(`Loaded "${circuit.name}" circuit`);
+    toast.success(`Loaded "${name}" circuit`);
   };
 
   // Block Library handlers
@@ -1356,7 +1359,7 @@ function WorkoutBuilderContent() {
                           <span className="text-sm font-medium text-orange-400">Circuit Style</span>
                         </div>
                         <div className="flex gap-1">
-                          {circuitLibrary.length > 0 && (
+                          {(circuitBlockLibrary.length > 0 || circuitLibrary.length > 0) && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -2530,14 +2533,36 @@ function WorkoutBuilderContent() {
             <DialogTitle>📚 Circuit Library</DialogTitle>
           </DialogHeader>
           <ScrollArea className="h-[400px] pr-4">
-            {circuitLibrary.length === 0 ? (
+            {circuitBlockLibrary.length === 0 && circuitLibrary.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <p>No saved circuits yet.</p>
                 <p className="text-sm mt-2">Save circuits to reuse them in future workouts!</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {circuitLibrary.map((circuit) => (
+                {circuitBlockLibrary.map((block) => (
+                  <Card 
+                    key={block.id} 
+                    className="bg-gray-800 border-gray-700 cursor-pointer hover:border-orange-500/50 transition-colors"
+                    onClick={() => handleLoadCircuitTemplate(block)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h4 className="font-semibold text-white">{block.name}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {block.exercises?.length || 0} exercises • {block.circuitStyle || 'rounds'} • {block.circuitRounds || '?'} rounds
+                          </p>
+                        </div>
+                        <Button size="sm" variant="ghost" className="text-orange-400">
+                          Load
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+                {/* Legacy circuits not yet migrated */}
+                {circuitLibrary.filter(c => !circuitBlockLibrary.find(b => b.id === c.id)).map((circuit) => (
                   <Card 
                     key={circuit.id} 
                     className="bg-gray-800 border-gray-700 cursor-pointer hover:border-orange-500/50 transition-colors"

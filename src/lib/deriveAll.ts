@@ -188,6 +188,7 @@ export interface MedalCheckerDeps {
   earnMedal: (id: string, userId: string) => void;
   revokeMedalsForUser?: (userId: string) => void;
   normalizeExerciseId?: (id: string) => string;
+  getStrengthRating?: () => { categories: { chest: { totalPoints: number }; back: { totalPoints: number }; shoulders: { totalPoints: number }; legs: { totalPoints: number } } } | null;
 }
 
 export function checkAllMedals(
@@ -287,6 +288,94 @@ export function checkAllMedals(
   if (totalAmraps >= 1) award('amrap-first');
   if (totalEmoms >= 10) award('emom-10');
   if (totalEmoms >= 1) award('emom-first');
+
+  // --- Expanded circuit medals ---
+  // Circuit Finisher / No Quit — count circuits where all rounds were completed
+  let completedCircuits = 0;
+  userWorkouts.forEach(w => {
+    const blocks = (w as any).blocks || [];
+    blocks.forEach((b: any) => {
+      if (b.type === 'circuit' && b.completed) completedCircuits++;
+    });
+  });
+  if (completedCircuits >= 10) { award('no-quit'); award('circuit-finisher'); }
+  else if (completedCircuits >= 5) award('circuit-finisher');
+
+  // AMRAP Beast — 10+ rounds in a single AMRAP
+  let maxAmrapRounds = 0;
+  userWorkouts.forEach(w => {
+    const blocks = (w as any).blocks || [];
+    blocks.forEach((b: any) => {
+      if (b.circuitStyle === 'amrap' && b.completedRounds) {
+        maxAmrapRounds = Math.max(maxAmrapRounds, b.completedRounds);
+      }
+    });
+  });
+  if (maxAmrapRounds >= 10) award('amrap-beast');
+
+  // --- Behaviour / Special medals ---
+  if (completedWorkout) {
+    const startHour = new Date(completedWorkout.startTime).getHours();
+    // Early Bird — before 7am (updated from 6am)
+    if (startHour < 7) award('early-bird');
+    // Night Owl — after 10pm
+    if (startHour >= 22) award('night-owl');
+    // Marathon Session — 2+ hours
+    if ((completedWorkout.duration || 0) >= 7200) award('marathon-session');
+    // Perfectionist — 100% set completion
+    const totalSets = completedWorkout.exercises.reduce((sum, ex) => sum + (ex.sets?.length || 0), 0);
+    const completedSets = completedWorkout.exercises.reduce((sum, ex) => sum + (ex.sets?.filter(s => s.completed)?.length || 0), 0);
+    if (totalSets > 0 && completedSets === totalSets) award('perfectionist');
+    // Weekend Warrior — workout on Saturday (6) or Sunday (0)
+    const dayOfWeek = new Date(completedWorkout.startTime).getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) award('weekend-warrior');
+  }
+
+  // Double Session — 2 workouts in one day
+  const workoutsByDate: Record<string, number> = {};
+  userWorkouts.forEach(w => {
+    const dateKey = new Date(w.startTime).toISOString().slice(0, 10);
+    workoutsByDate[dateKey] = (workoutsByDate[dateKey] || 0) + 1;
+  });
+  if (Object.values(workoutsByDate).some(count => count >= 2)) award('double-session');
+
+  // Consistency King — 3+ workouts in a week (Mon-Sun)
+  const workoutsByWeek: Record<string, number> = {};
+  userWorkouts.forEach(w => {
+    const d = new Date(w.startTime);
+    const dayOW = d.getDay();
+    const diff = d.getDate() - dayOW + (dayOW === 0 ? -6 : 1);
+    const weekStart = new Date(d.getFullYear(), d.getMonth(), diff).toISOString().slice(0, 10);
+    workoutsByWeek[weekStart] = (workoutsByWeek[weekStart] || 0) + 1;
+  });
+  if (Object.values(workoutsByWeek).some(count => count >= 3)) award('consistency-king');
+  // Weekly Warrior — 5+ workouts in a single week
+  if (Object.values(workoutsByWeek).some(count => count >= 5)) award('weekly-warrior');
+
+  // Variety King — 20 different exercises
+  const uniqueExercises = new Set<string>();
+  userWorkouts.forEach(w => {
+    w.exercises?.forEach(ex => { if (ex.exerciseId) uniqueExercises.add(ex.exerciseId); });
+  });
+  if (uniqueExercises.size >= 20) award('variety-king');
+
+  // --- Category-based strength medals (from strength rating) ---
+  if (deps.getStrengthRating) {
+    const rating = deps.getStrengthRating();
+    if (rating?.categories) {
+      const checkCat = (cat: string, points: number) => {
+        if (points >= 95) { award(`cat-${cat}-legendary`); award(`cat-${cat}-epic`); award(`cat-${cat}-rare`); award(`cat-${cat}-uncommon`); award(`cat-${cat}-common`); }
+        else if (points >= 80) { award(`cat-${cat}-epic`); award(`cat-${cat}-rare`); award(`cat-${cat}-uncommon`); award(`cat-${cat}-common`); }
+        else if (points >= 60) { award(`cat-${cat}-rare`); award(`cat-${cat}-uncommon`); award(`cat-${cat}-common`); }
+        else if (points >= 40) { award(`cat-${cat}-uncommon`); award(`cat-${cat}-common`); }
+        else if (points >= 20) { award(`cat-${cat}-common`); }
+      };
+      checkCat('chest', rating.categories.chest?.totalPoints || 0);
+      checkCat('back', rating.categories.back?.totalPoints || 0);
+      checkCat('legs', rating.categories.legs?.totalPoints || 0);
+      checkCat('shoulders', rating.categories.shoulders?.totalPoints || 0);
+    }
+  }
 
   // --- Powerlifting club medals (scan ALL workouts) ---
   userWorkouts.forEach(w => {
@@ -415,14 +504,14 @@ export function deriveAll(deps: DeriveAllDeps): DeriveResult {
   // 1. Recompute PBs
   const personalBests = recomputePBs(workouts, userId, normalizeExerciseId);
 
-  // 2. Check medals
-  const medalsAwarded = checkAllMedals(workouts, userId, completedWorkout, medalDeps);
-
-  // 3. Volume rollups
+  // 2. Volume rollups
   const volumeRollup = computeVolumeRollup(workouts, userId);
 
-  // 4. Strength rating
+  // 3. Strength rating (must run BEFORE medal checks so category medals have data)
   calculateStrengthRatingForUser(userId);
+
+  // 4. Check medals (includes category-based strength medals that read from strength rating)
+  const medalsAwarded = checkAllMedals(workouts, userId, completedWorkout, medalDeps);
 
   console.log(`[deriveAll] userId=${userId}: ${personalBests.length} PBs, ${medalsAwarded.length} new medals, lifetime vol=${volumeRollup.totalLifetime}`);
 

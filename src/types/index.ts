@@ -345,7 +345,8 @@ export interface StrengthRating {
 
 // Medals & Achievements
 export type MedalTier = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
-export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special' | 'trainer' | 'cardio' | 'circuit' | 'stretch';
+export type MedalCategory = 'workout' | 'strength' | 'consistency' | 'social' | 'milestone' | 'special' | 'trainer' | 'cardio' | 'circuit' | 'stretch' | 'running';
+export type EvolutionSpeed = 'fast' | 'medium' | 'slow' | 'very_slow';
 export type EvolutionGlowTier = 'base' | 'gold_glow' | 'diamond_glow' | 'pink_diamond_glow';
 export type MedalRarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
 
@@ -360,6 +361,8 @@ export interface MedalDefinition {
   requirement: string;
   target?: number;
   canEvolve?: boolean; // false for streaks and one-time milestones
+  evolutionSpeed?: EvolutionSpeed; // fast=3/10/25, medium=5/15/40, slow=5/20/50, very_slow=10/30/75
+  deferredCheck?: boolean; // true = medal exists but checking logic not yet implemented
 }
 
 export interface Medal {
@@ -510,6 +513,8 @@ export interface CalendarEvent {
   clientConfirmedAt?: string;
   recurrenceGroup?: string; // Links recurring events for bulk delete
   contactName?: string; // Name for consultations without a registered client
+  programId?: string; // Links to a ClientProgram — distinguishes program workouts from PT sessions
+  programDayIndex?: number; // Which day in the program this workout corresponds to
 }
 
 // Booking Request (for trainer-client scheduling)

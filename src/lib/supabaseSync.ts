@@ -1613,6 +1613,25 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       return [];
     }
     
+    // Fetch display names from users table for all client IDs
+    const clientIds = (data || []).map(c => c.client_id).filter(Boolean);
+    let userMap: Record<string, { displayName?: string; username?: string; profilePhoto?: string }> = {};
+    if (clientIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, display_name, username, profile_photo')
+        .in('id', clientIds);
+      if (users) {
+        users.forEach((u: any) => {
+          userMap[u.id] = {
+            displayName: u.display_name,
+            username: u.username,
+            profilePhoto: u.profile_photo,
+          };
+        });
+      }
+    }
+
     const clients = (data || []).map(c => ({
       id: c.id,
       trainerId: c.trainer_id,
@@ -1626,6 +1645,8 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       totalPaid: c.total_paid ?? undefined,
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
+      // Attach client user info so getClientDisplayInfo finds it
+      client: userMap[c.client_id] || undefined,
     }));
     
     console.log(`[Client Fetch] Found ${clients.length} clients for trainer`);

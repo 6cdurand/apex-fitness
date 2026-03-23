@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
-import { getMedalDefinition } from '@/lib/medals';
+import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { ExerciseImage } from '@/components/ExerciseImage';
@@ -89,7 +89,7 @@ export default function ActiveWorkoutPage() {
   const _medalStore = useMedalStore();
   const { lastDeriveResult } = useWorkoutStore();
   const { createPost } = useSocialStore();
-  const { clients, saveToWorkoutLibrary, saveCircuitTemplate, getBestBlockPerformance, getBlockPerformances } = useTrainerStore();
+  const { clients, saveToWorkoutLibrary, saveCircuitTemplate, saveBlock, getBestBlockPerformance, getBlockPerformances } = useTrainerStore();
   
   // Get client name if this is a PT session — centralized resolution
   const resolvedClientId = currentClientId || (activeWorkout?.assignedBy ? activeWorkout.userId : null);
@@ -258,6 +258,30 @@ export default function ActiveWorkoutPage() {
       console.log('[Active Workout] Initialized blocks:', initialBlocks.map(b => ({ id: b.id, type: b.type, name: b.name })));
     }
   }, [activeWorkout?.blocks]);
+
+  // Auto-create initial block based on entry flow type selection
+  useEffect(() => {
+    const { initialBlockType } = useWorkoutStore.getState();
+    if (!initialBlockType || !activeWorkout || workoutBlocks.length > 0) return;
+    
+    if (initialBlockType === 'strength') {
+      const newBlock = {
+        id: `block-${Date.now()}`,
+        type: 'strength' as const,
+        name: 'Strength',
+      };
+      setWorkoutBlocks([newBlock]);
+      setActiveBlockId(newBlock.id);
+      setShowExerciseModal(true);
+    } else if (initialBlockType === 'circuit') {
+      setShowCircuitDialog(true);
+    } else if (initialBlockType === 'cardio') {
+      setShowCardioDialog(true);
+    }
+    
+    // Clear the initialBlockType so it doesn't re-trigger
+    useWorkoutStore.setState({ initialBlockType: null });
+  }, [activeWorkout?.id]);
 
   // Workout timer
   useEffect(() => {
@@ -1099,38 +1123,101 @@ export default function ActiveWorkoutPage() {
               </div>
             )}
 
-            {/* Medals Earned — top 3 with expand */}
+            {/* Medals Earned — priority sorted with rarity + progress bars */}
             {lastDeriveResult?.medalsAwarded && lastDeriveResult.medalsAwarded.length > 0 && (() => {
-              const medals = lastDeriveResult.medalsAwarded;
+              const rarityOrder: Record<string, number> = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+              const rarityColors: Record<string, string> = { legendary: 'text-amber-300 bg-amber-500/20', epic: 'text-purple-300 bg-purple-500/20', rare: 'text-blue-300 bg-blue-500/20', uncommon: 'text-green-300 bg-green-500/20', common: 'text-gray-300 bg-gray-500/20' };
+              const medals = [...lastDeriveResult.medalsAwarded].sort((a, b) => {
+                const defA = getMedalDefinition(a);
+                const defB = getMedalDefinition(b);
+                return (rarityOrder[defA?.rarity || 'common'] || 4) - (rarityOrder[defB?.rarity || 'common'] || 4);
+              });
               const showAll = (completedWorkoutData as any)?._showAllMedals;
-              const visibleMedals = showAll ? medals : medals.slice(0, 3);
+              const mainMedals = medals.slice(0, 2);
+              const overflowMedals = medals.slice(2);
+              const visibleOverflow = showAll ? overflowMedals : [];
+
+              // Find close-to-evolving medals from user's existing medals
+              const userMedals = useMedalStore.getState().medals.filter(m => m.userId === (currentUser?.id || ''));
+              const closeToEvolving = userMedals
+                .filter(m => m.earned && m.timesEarned > 0)
+                .map(m => ({ medal: m, ...isCloseToEvolving(m.timesEarned, m.definitionId) }))
+                .filter(m => m.close && m.next)
+                .sort((a, b) => a.remaining - b.remaining)
+                .slice(0, 3);
+
               return (
-                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3">
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <span className="text-base">🏅</span>
                     <span className="font-semibold text-purple-400 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
                   </div>
-                  <div className="flex flex-wrap gap-1 justify-center">
-                    {visibleMedals.map((medalId, idx) => {
+                  {/* Main medals — top 2 by rarity, shown prominently */}
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {mainMedals.map((medalId, idx) => {
                       const def = getMedalDefinition(medalId);
-                      return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                      const rColor = rarityColors[def?.rarity || 'common'] || rarityColors.common;
+                      return (
+                        <div key={idx} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 ${rColor}`}>
+                          <span className="text-sm">{def?.icon || '🏅'}</span>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium leading-tight">{def?.name || medalId}</span>
+                            <span className="text-[9px] opacity-70 capitalize">{def?.rarity || 'common'}</span>
+                          </div>
+                        </div>
+                      );
                     })}
                   </div>
-                  {medals.length > 3 && !showAll && (
+                  {/* Overflow medals — compact badges */}
+                  {visibleOverflow.length > 0 && (
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {visibleOverflow.map((medalId, idx) => {
+                        const def = getMedalDefinition(medalId);
+                        return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                      })}
+                    </div>
+                  )}
+                  {overflowMedals.length > 0 && !showAll && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: true } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300"
                     >
-                      Show all {medals.length} medals
+                      +{overflowMedals.length} more medal{overflowMedals.length > 1 ? 's' : ''}
                     </button>
                   )}
-                  {showAll && medals.length > 3 && (
+                  {showAll && overflowMedals.length > 0 && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: false } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300"
                     >
                       Show less
                     </button>
+                  )}
+                  {/* Close to evolving — progress bars */}
+                  {closeToEvolving.length > 0 && (
+                    <div className="pt-1.5 border-t border-purple-500/20 space-y-1.5">
+                      <span className="text-[10px] text-purple-400/70 uppercase tracking-wider font-medium">Close to evolving</span>
+                      {closeToEvolving.map(({ medal, next, remaining }) => {
+                        const def = getMedalDefinition(medal.definitionId);
+                        const progress = next ? ((next - remaining) / next) * 100 : 0;
+                        const nextGlow = next ? getEvolutionGlowTier(next, medal.definitionId) : 'gold_glow';
+                        const nextLabel = getEvolutionLabel(nextGlow);
+                        return (
+                          <div key={medal.definitionId} className="flex items-center gap-2">
+                            <span className="text-xs">{def?.icon || '🏅'}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-gray-400 truncate">{def?.name || medal.definitionId}</span>
+                                <span className="text-[9px] text-purple-400">{remaining} to {nextLabel}</span>
+                              </div>
+                              <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                                <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               );
@@ -1649,17 +1736,17 @@ export default function ActiveWorkoutPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
-                        {block.type === 'circuit' && (
+                        {blockExercises.length > 0 && (
                           <DropdownMenuItem 
                             className="text-purple-500 focus:text-purple-600"
                             onClick={() => {
-                              setSaveCircuitName(block.name || 'Circuit');
+                              setSaveCircuitName(block.name || 'Block');
                               setCircuitToSave(block);
                               setShowSaveCircuitDialog(true);
                             }}
                           >
                             <Copy className="w-4 h-4 mr-2" />
-                            Save Circuit to Library
+                            Save to Block Library
                           </DropdownMenuItem>
                         )}
                         <DropdownMenuSeparator className="bg-gray-700" />
@@ -1722,138 +1809,212 @@ export default function ActiveWorkoutPage() {
                 
                 {/* Block Exercises - Different layout for circuits vs other blocks */}
                 {block.type === 'circuit' ? (
-                  // CIRCUIT LAYOUT - Exercise list with reps + round tracking
-                  <div className="p-3 space-y-3">
-                    {/* Exercise List */}
-                    <div className="space-y-1">
-                      {blockExercises.map((workoutExercise: any, idx: number) => (
-                        <div 
-                          key={workoutExercise.id} 
-                          className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
-                        >
-                          <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs flex items-center justify-center font-bold">
-                            {idx + 1}
-                          </span>
-                          <div className="flex-1 flex items-center gap-1.5">
-                            <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-6 !h-6 !rounded-full flex-shrink-0" />
-                            <p className="text-gray-900 font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
-                            <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                  // CIRCUIT LAYOUT - Enhanced with prominent timer + current/next exercise
+                  <div className="space-y-0">
+                    {/* Active Timer Section — shown when timer is running or round in progress */}
+                    {(block.timerRunning || block.currentRoundStart) && blockExercises.length > 0 && (() => {
+                      const currentRoundIdx = block.roundsCompleted?.length || 0;
+                      const totalRounds = block.circuitRounds || 5;
+                      const progressPct = Math.min(100, (currentRoundIdx / totalRounds) * 100);
+                      // Determine current exercise index based on elapsed time within round (for EMOM)
+                      const currentExIdx = block.circuitStyle === 'emom' && block.timerSeconds != null && block.circuitDuration
+                        ? Math.floor(((block.circuitDuration - (block.timerSeconds || 0)) % (blockExercises.length * 60)) / 60) % blockExercises.length
+                        : 0;
+                      const currentEx = blockExercises[currentExIdx];
+                      const nextEx = blockExercises[(currentExIdx + 1) % blockExercises.length];
+                      return (
+                        <div className="bg-gradient-to-b from-orange-500/10 to-transparent p-4 space-y-4">
+                          {/* Round Progress Bar */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-orange-400 font-semibold">Round {currentRoundIdx + 1} of {totalRounds}</span>
+                              <span className="text-gray-500">{block.circuitStyle?.toUpperCase()}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-2">
+                              <div 
+                                className="bg-orange-500 h-2 rounded-full transition-all duration-300"
+                                style={{ width: `${progressPct}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Input
-                              type="number"
-                              inputMode="numeric"
-                              pattern="[0-9]*"
-                              value={circuitExerciseReps[workoutExercise.id] || (workoutExercise.sets || [])[0]?.reps || ''}
-                              onChange={(e) => {
-                                const reps = parseInt(e.target.value) || 0;
-                                setCircuitExerciseReps(prev => ({ ...prev, [workoutExercise.id]: reps }));
-                                if ((workoutExercise.sets || [])[0]) {
-                                  updateSet(workoutExercise.id, (workoutExercise.sets || [])[0].id, { reps });
-                                }
-                              }}
-                              className="w-14 h-7 text-center text-sm bg-gray-50 border-gray-200"
-                              placeholder="reps"
-                            />
-                            <span className="text-xs text-gray-500">reps</span>
-                          </div>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeExercise(workoutExercise.id)}
-                            className="h-6 w-6 text-gray-500 hover:text-red-400"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Round Tracking */}
-                    {blockExercises.length > 0 && (
-                      <div className="border-t border-orange-500/20 pt-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-sm font-medium text-orange-400">Rounds</p>
-                          <span className="text-xs text-gray-500">
-                            {(block.roundsCompleted?.length || 0)}/{block.circuitRounds || '∞'} completed
-                          </span>
-                        </div>
-                        
-                        {/* Round checkboxes */}
-                        <div className="flex flex-wrap gap-2 mb-3">
-                          {Array.from({ length: block.circuitRounds || 5 }).map((_, idx) => {
-                            const roundNum = idx + 1;
-                            const completedRound = block.roundsCompleted?.find(r => r.roundNumber === roundNum);
-                            const isCompleted = !!completedRound;
-                            
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() => !isCompleted && completeCircuitRound(block.id)}
-                                disabled={isCompleted || (block.roundsCompleted?.length || 0) !== idx}
-                                className={cn(
-                                  "w-12 h-12 rounded-lg border-2 flex flex-col items-center justify-center transition-all",
-                                  isCompleted 
-                                    ? "bg-orange-500 border-orange-500 text-white" 
-                                    : (block.roundsCompleted?.length || 0) === idx
-                                      ? "border-orange-500 text-orange-400 hover:bg-orange-500/20 cursor-pointer"
-                                      : "border-gray-700 text-gray-600 cursor-not-allowed"
-                                )}
-                              >
-                                {isCompleted ? (
-                                  <>
-                                    <Check className="w-4 h-4" />
-                                    <span className="text-[10px]">{formatTime(completedRound.duration)}</span>
-                                  </>
-                                ) : (
-                                  <span className="font-bold">{roundNum}</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                          {/* Add Round Button */}
-                          <button
-                            onClick={() => addCircuitRound(block.id)}
-                            className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-600 flex items-center justify-center text-gray-500 hover:border-orange-500 hover:text-orange-400 transition-all"
-                          >
-                            <Plus className="w-5 h-5" />
-                          </button>
-                        </div>
-                        
-                        {/* Start/Complete Round Button */}
-                        {block.circuitComplete ? (
-                          <div className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg text-center">
-                            <p className="text-green-400 font-medium">Circuit Complete! 🎉</p>
-                          </div>
-                        ) : !block.currentRoundStart ? (
-                          <Button
-                            onClick={() => startCircuitRound(block.id)}
-                            className="w-full bg-orange-500 hover:bg-orange-600"
-                          >
-                            <Play className="w-4 h-4 mr-2" />
-                            Start Round {(block.roundsCompleted?.length || 0) + 1}
-                          </Button>
-                        ) : (
-                          <div className="space-y-2">
+
+                          {/* Current Exercise Highlight */}
+                          {currentEx && (
+                            <div className="text-center space-y-1">
+                              <p className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Now</p>
+                              <div className="flex items-center justify-center gap-2">
+                                <ExerciseImage exerciseId={currentEx.exerciseId} size="sm" className="!w-8 !h-8 !rounded-full" />
+                                <p className="text-lg font-bold text-gray-900">{currentEx.exercise?.name || 'Exercise'}</p>
+                              </div>
+                              <p className="text-sm text-orange-500 font-medium">
+                                {circuitExerciseReps[currentEx.id] || (currentEx.sets || [])[0]?.reps || '—'} reps
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Next Exercise Preview */}
+                          {nextEx && blockExercises.length > 1 && (
+                            <div className="text-center">
+                              <p className="text-[10px] uppercase tracking-wider text-gray-400">Next</p>
+                              <p className="text-sm text-gray-500">{nextEx.exercise?.name || 'Exercise'}</p>
+                            </div>
+                          )}
+
+                          {/* Controls Row */}
+                          <div className="flex items-center justify-center gap-3">
                             <Button
-                              onClick={() => completeCircuitRound(block.id)}
+                              size="sm"
                               variant="outline"
-                              className="w-full border-orange-500 text-orange-400 hover:bg-orange-500/20"
+                              onClick={() => toggleCircuitTimer(block.id)}
+                              className={cn(
+                                "px-4",
+                                block.timerRunning 
+                                  ? "border-yellow-500 text-yellow-500 hover:bg-yellow-500/10" 
+                                  : "border-orange-500 text-orange-500 hover:bg-orange-500/10"
+                              )}
                             >
-                              <Check className="w-4 h-4 mr-2" />
-                              Complete Round {(block.roundsCompleted?.length || 0) + 1}
+                              {block.timerRunning ? <Pause className="w-4 h-4 mr-1" /> : <Play className="w-4 h-4 mr-1" />}
+                              {block.timerRunning ? 'Pause' : 'Resume'}
                             </Button>
                             <Button
-                              onClick={() => finishCircuit(block.id)}
-                              className="w-full bg-green-500 hover:bg-green-600"
+                              size="sm"
+                              onClick={() => completeCircuitRound(block.id)}
+                              className="px-4 bg-orange-500 hover:bg-orange-600 text-white"
                             >
-                              <Check className="w-4 h-4 mr-2" />
-                              Finish Circuit
+                              <Check className="w-4 h-4 mr-1" />
+                              Round Done
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => finishCircuit(block.id)}
+                              className="px-4 border-green-500 text-green-500 hover:bg-green-500/10"
+                            >
+                              Finish
                             </Button>
                           </div>
-                        )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Exercise List — always visible for editing */}
+                    <div className="p-3 space-y-3">
+                      <div className="space-y-1">
+                        {blockExercises.map((workoutExercise: any, idx: number) => (
+                          <div 
+                            key={workoutExercise.id} 
+                            className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"
+                          >
+                            <span className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 text-xs flex items-center justify-center font-bold">
+                              {idx + 1}
+                            </span>
+                            <div className="flex-1 flex items-center gap-1.5">
+                              <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-6 !h-6 !rounded-full flex-shrink-0" />
+                              <p className="text-gray-900 font-medium text-sm">{workoutExercise.exercise?.name || 'Exercise'}</p>
+                              <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="number"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={circuitExerciseReps[workoutExercise.id] || (workoutExercise.sets || [])[0]?.reps || ''}
+                                onChange={(e) => {
+                                  const reps = parseInt(e.target.value) || 0;
+                                  setCircuitExerciseReps(prev => ({ ...prev, [workoutExercise.id]: reps }));
+                                  if ((workoutExercise.sets || [])[0]) {
+                                    updateSet(workoutExercise.id, (workoutExercise.sets || [])[0].id, { reps });
+                                  }
+                                }}
+                                className="w-14 h-7 text-center text-sm bg-gray-50 border-gray-200"
+                                placeholder="reps"
+                              />
+                              <span className="text-xs text-gray-500">reps</span>
+                            </div>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => removeExercise(workoutExercise.id)}
+                              className="h-6 w-6 text-gray-500 hover:text-red-400"
+                            >
+                              <X className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
                       </div>
-                    )}
+                      
+                      {/* Round Tracking */}
+                      {blockExercises.length > 0 && (
+                        <div className="border-t border-orange-500/20 pt-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-medium text-orange-400">Rounds</p>
+                            <span className="text-xs text-gray-500">
+                              {(block.roundsCompleted?.length || 0)}/{block.circuitRounds || '∞'} completed
+                            </span>
+                          </div>
+                          
+                          {/* Round checkboxes */}
+                          <div className="flex flex-wrap gap-2 mb-3">
+                            {Array.from({ length: block.circuitRounds || 5 }).map((_, idx) => {
+                              const roundNum = idx + 1;
+                              const completedRound = block.roundsCompleted?.find(r => r.roundNumber === roundNum);
+                              const isCompleted = !!completedRound;
+                              
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() => !isCompleted && completeCircuitRound(block.id)}
+                                  disabled={isCompleted || (block.roundsCompleted?.length || 0) !== idx}
+                                  className={cn(
+                                    "w-12 h-12 rounded-lg border-2 flex flex-col items-center justify-center transition-all",
+                                    isCompleted 
+                                      ? "bg-orange-500 border-orange-500 text-white" 
+                                      : (block.roundsCompleted?.length || 0) === idx
+                                        ? "border-orange-500 text-orange-400 hover:bg-orange-500/20 cursor-pointer"
+                                        : "border-gray-200 text-gray-400 cursor-not-allowed"
+                                  )}
+                                >
+                                  {isCompleted ? (
+                                    <>
+                                      <Check className="w-4 h-4" />
+                                      <span className="text-[10px]">{formatTime(completedRound.duration)}</span>
+                                    </>
+                                  ) : (
+                                    <span className="font-bold">{roundNum}</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                            {/* Add Round Button */}
+                            <button
+                              onClick={() => addCircuitRound(block.id)}
+                              className="w-12 h-12 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-orange-500 hover:text-orange-400 transition-all"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          </div>
+                          
+                          {/* Start/Complete Round Button — only when timer NOT running */}
+                          {!(block.timerRunning || block.currentRoundStart) && (
+                            <>
+                              {block.circuitComplete ? (
+                                <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+                                  <p className="text-green-600 font-medium">Circuit Complete!</p>
+                                </div>
+                              ) : (
+                                <Button
+                                  onClick={() => startCircuitRound(block.id)}
+                                  className="w-full bg-orange-500 hover:bg-orange-600"
+                                >
+                                  <Play className="w-4 h-4 mr-2" />
+                                  Start Round {(block.roundsCompleted?.length || 0) + 1}
+                                </Button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : block.type === 'cardio' ? (
                   // CARDIO LAYOUT - Timer with activity-specific controls
@@ -2225,9 +2386,27 @@ export default function ActiveWorkoutPage() {
                                   </>
                                 ) : (
                                   <>
-                                    {/* Previous */}
+                                    {/* Previous — tap to fill */}
                                     <div className="col-span-3">
-                                      <span className="text-xs text-gray-500">{previousDisplay}</span>
+                                      {previousDisplay !== '—' ? (
+                                        <button
+                                          onClick={() => {
+                                            if (!set.completed && set.previousWeight != null && set.previousReps) {
+                                              updateSet(workoutExercise.id, set.id, { 
+                                                weight: Math.abs(set.previousWeight), 
+                                                reps: set.previousReps 
+                                              });
+                                            }
+                                          }}
+                                          disabled={set.completed}
+                                          className="text-xs text-sky-500 hover:text-sky-400 active:scale-95 transition-all disabled:text-gray-500 disabled:cursor-default"
+                                          title="Tap to fill"
+                                        >
+                                          {previousDisplay}
+                                        </button>
+                                      ) : (
+                                        <span className="text-xs text-gray-500">—</span>
+                                      )}
                                     </div>
                                     {/* Weight Input */}
                                     <div className="col-span-3">
@@ -2235,7 +2414,7 @@ export default function ActiveWorkoutPage() {
                                         type="number"
                                         inputMode="decimal"
                                         pattern="[0-9.]*"
-                                        placeholder="0"
+                                        placeholder={set.previousWeight != null ? String(Math.abs(set.previousWeight)) : '0'}
                                         min="0"
                                         step="any"
                                         value={set.weight != null && set.weight !== undefined ? set.weight : ''}
@@ -2249,7 +2428,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.weight == null && set.previousWeight != null && "placeholder:text-sky-300")}
                                       />
                                     </div>
                                     {/* Reps Input */}
@@ -2258,7 +2437,7 @@ export default function ActiveWorkoutPage() {
                                         type="number"
                                         inputMode="numeric"
                                         pattern="[0-9]*"
-                                        placeholder="0"
+                                        placeholder={set.previousReps != null ? String(set.previousReps) : '0'}
                                         min="0"
                                         value={set.reps != null && set.reps !== undefined ? set.reps : ''}
                                         onFocus={(e) => e.target.select()}
@@ -2271,7 +2450,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50")}
+                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.reps == null && set.previousReps != null && "placeholder:text-sky-300")}
                                       />
                                     </div>
                                   </>
@@ -2307,6 +2486,7 @@ export default function ActiveWorkoutPage() {
                                       }
                                       disabled={isTimedSet ? !set.duration : (set.weight == null || !set.reps)}
                                       className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
+                                      title="Complete set"
                                     >
                                       <Check className="w-5 h-5" />
                                     </Button>
@@ -3336,35 +3516,60 @@ export default function ActiveWorkoutPage() {
               </div>
             )}
 
-            {/* Medals — top 3 with expand */}
+            {/* Medals — priority sorted with rarity */}
             {lastDeriveResult?.medalsAwarded && lastDeriveResult.medalsAwarded.length > 0 && (() => {
-              const medals = lastDeriveResult.medalsAwarded;
+              const rarityOrder: Record<string, number> = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
+              const rarityColors: Record<string, string> = { legendary: 'text-amber-600 bg-amber-100', epic: 'text-purple-600 bg-purple-100', rare: 'text-blue-600 bg-blue-100', uncommon: 'text-green-600 bg-green-100', common: 'text-gray-600 bg-gray-100' };
+              const medals = [...lastDeriveResult.medalsAwarded].sort((a, b) => {
+                const defA = getMedalDefinition(a);
+                const defB = getMedalDefinition(b);
+                return (rarityOrder[defA?.rarity || 'common'] || 4) - (rarityOrder[defB?.rarity || 'common'] || 4);
+              });
               const showAll = (completedWorkoutData as any)?._showAllMedals;
-              const visibleMedals = showAll ? medals : medals.slice(0, 3);
+              const mainMedals = medals.slice(0, 2);
+              const overflowMedals = medals.slice(2);
+              const visibleOverflow = showAll ? overflowMedals : [];
               return (
-                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3">
+                <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <span className="text-base">🏅</span>
-                    <span className="font-semibold text-purple-400 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
+                    <span className="font-semibold text-purple-600 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
                   </div>
-                  <div className="flex flex-wrap gap-1 justify-center">
-                    {visibleMedals.map((medalId, idx) => {
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {mainMedals.map((medalId, idx) => {
                       const def = getMedalDefinition(medalId);
-                      return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                      const rColor = rarityColors[def?.rarity || 'common'] || rarityColors.common;
+                      return (
+                        <div key={idx} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 ${rColor}`}>
+                          <span className="text-sm">{def?.icon || '🏅'}</span>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-medium leading-tight">{def?.name || medalId}</span>
+                            <span className="text-[9px] opacity-70 capitalize">{def?.rarity || 'common'}</span>
+                          </div>
+                        </div>
+                      );
                     })}
                   </div>
-                  {medals.length > 3 && !showAll && (
+                  {visibleOverflow.length > 0 && (
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      {visibleOverflow.map((medalId, idx) => {
+                        const def = getMedalDefinition(medalId);
+                        return <Badge key={idx} variant="secondary" className="bg-purple-100 text-purple-600 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                      })}
+                    </div>
+                  )}
+                  {overflowMedals.length > 0 && !showAll && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: true } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                      className="w-full text-center text-xs text-purple-500 hover:text-purple-600"
                     >
-                      Show all {medals.length} medals
+                      +{overflowMedals.length} more medal{overflowMedals.length > 1 ? 's' : ''}
                     </button>
                   )}
-                  {showAll && medals.length > 3 && (
+                  {showAll && overflowMedals.length > 0 && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: false } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300 mt-2"
+                      className="w-full text-center text-xs text-purple-500 hover:text-purple-600"
                     >
                       Show less
                     </button>

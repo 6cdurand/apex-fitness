@@ -2063,15 +2063,20 @@ export function getExerciseById(id: string): Exercise | undefined {
 }
 
 // Search exercises by name, muscles, equipment, and category
+// Word-order-independent: "tricep rope extension" matches "Rope Tricep Extension"
 export function searchExercises(query: string): Exercise[] {
-  const lowerQuery = query.toLowerCase();
-  return exerciseLibrary.filter(e => 
-    e.name.toLowerCase().includes(lowerQuery) ||
-    e.primaryMuscles.some(m => m.toLowerCase().includes(lowerQuery)) ||
-    e.secondaryMuscles.some(m => m.toLowerCase().includes(lowerQuery)) ||
-    e.equipment.toLowerCase().includes(lowerQuery) ||
-    e.category.toLowerCase().includes(lowerQuery)
-  );
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return exerciseLibrary;
+  return exerciseLibrary.filter(e => {
+    const haystack = [
+      e.name.toLowerCase(),
+      ...e.primaryMuscles.map(m => m.toLowerCase()),
+      ...e.secondaryMuscles.map(m => m.toLowerCase()),
+      e.equipment.toLowerCase(),
+      e.category.toLowerCase(),
+    ].join(' ');
+    return words.every(w => haystack.includes(w));
+  });
 }
 
 // Get exercises by muscle group
@@ -2301,21 +2306,22 @@ export function filterExercisesBySearch(
   query: string,
   blockType?: string | null,
 ): typeof exercises {
-  const search = query.toLowerCase().trim();
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
 
   return exercises.filter(ex => {
-    // Search filter
-    if (search) {
+    // Search filter — word-order-independent
+    if (words.length > 0) {
       const libEntry = exerciseLibraryMap.get(ex.id);
-      const matchesSearch =
-        ex.name.toLowerCase().includes(search) ||
-        (ex.aliases?.some(a => a.toLowerCase().includes(search)) ?? false) ||
-        (libEntry?.primaryMuscles?.some(m => m.toLowerCase().includes(search)) ?? false) ||
-        (libEntry?.secondaryMuscles?.some(m => m.toLowerCase().includes(search)) ?? false) ||
-        (libEntry?.equipment?.toLowerCase().includes(search) ?? false) ||
-        (libEntry?.category?.toLowerCase().includes(search) ?? false) ||
-        (ex.pattern?.toLowerCase().includes(search) ?? false);
-      if (!matchesSearch) return false;
+      const haystack = [
+        ex.name.toLowerCase(),
+        ...(ex.aliases?.map(a => a.toLowerCase()) ?? []),
+        ...(libEntry?.primaryMuscles?.map(m => m.toLowerCase()) ?? []),
+        ...(libEntry?.secondaryMuscles?.map(m => m.toLowerCase()) ?? []),
+        libEntry?.equipment?.toLowerCase() ?? '',
+        libEntry?.category?.toLowerCase() ?? '',
+        ex.pattern?.toLowerCase() ?? '',
+      ].join(' ');
+      if (!words.every(w => haystack.includes(w))) return false;
     }
 
     // Block type filter

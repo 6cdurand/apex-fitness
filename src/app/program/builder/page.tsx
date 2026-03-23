@@ -294,6 +294,12 @@ function ProgramBuilderContent() {
   // ── Schedule state ──
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   
+  // ── Save block to library dialog ──
+  const [showSaveBlockDialog, setShowSaveBlockDialog] = useState(false);
+  const [saveBlockName, setSaveBlockName] = useState('');
+  const [saveBlockFolder, setSaveBlockFolder] = useState('');
+  const [saveBlockId, setSaveBlockId] = useState<string | null>(null);
+  
   // ── Save dialog ──
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveToLibrary, setSaveToLibrary] = useState(false);
@@ -1009,20 +1015,10 @@ function ProgramBuilderContent() {
                           className="h-7 w-7 text-gray-500 hover:text-sky-400"
                           title="Save block to library"
                           onClick={() => {
-                            const { saveBlock } = useTrainerStore.getState();
-                            saveBlock({
-                              name: block.name,
-                              type: block.type,
-                              exercises: block.exercises.map(e => ({
-                                id: e.id,
-                                exerciseId: e.exerciseId,
-                                exerciseName: e.exerciseName,
-                                sets: e.sets,
-                                reps: e.reps,
-                                rest: e.rest,
-                              })),
-                            });
-                            toast.success(`"${block.name}" saved to library`);
+                            setSaveBlockId(block.id);
+                            setSaveBlockName(block.name);
+                            setSaveBlockFolder('');
+                            setShowSaveBlockDialog(true);
                           }}
                         >
                           <Save className="w-3.5 h-3.5" />
@@ -1900,6 +1896,94 @@ function ProgramBuilderContent() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Save Block to Library Dialog ── */}
+      <Dialog open={showSaveBlockDialog} onOpenChange={setShowSaveBlockDialog}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle>Save Block to Library</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Block Name</Label>
+              <Input
+                value={saveBlockName}
+                onChange={(e) => setSaveBlockName(e.target.value)}
+                placeholder="e.g., Upper Body Strength, Leg Day Warmup"
+                className="mt-2"
+              />
+            </div>
+            <div>
+              <Label>Folder <span className="text-gray-500 font-normal">(optional)</span></Label>
+              <Input
+                value={saveBlockFolder}
+                onChange={(e) => setSaveBlockFolder(e.target.value)}
+                placeholder="e.g., Jason's workouts, Push Day"
+                className="mt-2"
+                list="program-folder-suggestions"
+              />
+              <datalist id="program-folder-suggestions">
+                {[...new Set(savedBlocks.map(b => b.folder).filter(Boolean))].map(f => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Save this block to reuse it in future workouts and programs.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowSaveBlockDialog(false);
+                  setSaveBlockId(null);
+                }}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!saveBlockName.trim() || !saveBlockId) {
+                    toast.error('Please enter a block name');
+                    return;
+                  }
+                  const currentDay = days[activeDayIndex];
+                  const block = currentDay?.blocks.find(b => b.id === saveBlockId);
+                  if (!block) {
+                    toast.error('Block not found');
+                    return;
+                  }
+                  const { saveBlock } = useTrainerStore.getState();
+                  saveBlock({
+                    name: saveBlockName.trim(),
+                    type: block.type,
+                    folder: saveBlockFolder.trim() || undefined,
+                    exercises: block.exercises.map(e => ({
+                      id: e.id,
+                      exerciseId: e.exerciseId,
+                      exerciseName: e.exerciseName,
+                      sets: e.sets,
+                      reps: e.reps,
+                      repType: e.repType,
+                      rest: e.rest,
+                      tempo: e.tempo,
+                      notes: e.notes,
+                      setStyle: e.setStyle,
+                    })),
+                  });
+                  toast.success(`"${saveBlockName.trim()}" saved to library`);
+                  setShowSaveBlockDialog(false);
+                  setSaveBlockId(null);
+                }}
+                className="flex-1 bg-purple-500 hover:bg-purple-600"
+              >
+                <Save className="h-4 w-4 mr-2" /> Save Block
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
