@@ -117,6 +117,9 @@ export default function ActiveWorkoutPage() {
     startTime: string;
     endTime: string;
     previousRating?: { overall: number; overallTier: string; categories: Record<string, { tier: string; score: number }> };
+    isProgramWorkout?: boolean;
+    programDayLabel?: string;
+    templateId?: string;
   } | null>(null);
   const [editingTimes, setEditingTimes] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
@@ -127,6 +130,7 @@ export default function ActiveWorkoutPage() {
   const [workoutNotes, setWorkoutNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
+  const [saveProgramChanges, setSaveProgramChanges] = useState(true); // default ON for program workouts
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
@@ -773,6 +777,10 @@ export default function ActiveWorkoutPage() {
 
       // Show summary popup instead of redirecting
       const endTimeStr = completed.endTime || new Date().toISOString();
+      // Detect if this workout came from a program
+      const tplId = completed.templateId || '';
+      const isProgramWorkout = tplId.startsWith('program-') || tplId.startsWith('sched-');
+      
       setCompletedWorkoutData({
         id: completed.id,
         name: workoutName,
@@ -786,6 +794,9 @@ export default function ActiveWorkoutPage() {
         startTime: completed.startTime,
         endTime: endTimeStr,
         previousRating,
+        isProgramWorkout,
+        programDayLabel: workoutName,
+        templateId: tplId,
       });
       // Pre-fill editable time fields
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -927,11 +938,102 @@ export default function ActiveWorkoutPage() {
       }
     }
     
+    // Save edited workout back to program (if from a program and user opted in)
+    if (completedWorkoutData?.isProgramWorkout && saveProgramChanges) {
+      const userId = currentUser?.id;
+      if (userId) {
+        try {
+          // Get the completed workout from history to extract current exercises
+          const completedWk = useWorkoutStore.getState().workoutHistory.find(w => w.id === completedWorkoutData.id);
+          if (completedWk) {
+            // Build updated blocks from completed exercises
+            const blockMap = new Map<string, any[]>();
+            (completedWk.exercises || []).forEach((ex: any) => {
+              const blockKey = ex.blockName || ex.blockType || 'Strength';
+              if (!blockMap.has(blockKey)) blockMap.set(blockKey, []);
+              blockMap.get(blockKey)!.push({
+                exerciseId: ex.exerciseId,
+                exerciseName: ex.exercise?.name || 'Exercise',
+                name: ex.exercise?.name || 'Exercise',
+                sets: ex.sets?.length || 3,
+                reps: String(ex.sets?.[0]?.reps || ex.sets?.[0]?.targetReps || 10),
+                rest: `${ex.restTimerSeconds || ex.restBetweenSets || 90}s`,
+                notes: ex.notes || '',
+              });
+            });
+            const updatedBlocks = Array.from(blockMap.entries()).map(([name, exercises], bi) => ({
+              id: `block-${Date.now()}-${bi}`,
+              name,
+              type: (name.toLowerCase().includes('warm') ? 'warmup' : name.toLowerCase().includes('cardio') ? 'cardio' : 'work') as 'warmup' | 'work' | 'cooldown' | 'cardio' | 'circuit',
+              exercises,
+            }));
+
+            // Update localStorage saved programs
+            const key = `apex-program-library-${userId}`;
+            const raw = localStorage.getItem(key);
+            if (raw) {
+              const programs = JSON.parse(raw);
+              let updated = false;
+              for (const prog of programs) {
+                if (!prog.days?.length) continue;
+                const dayIdx = prog.days.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+                if (dayIdx >= 0) {
+                  prog.days[dayIdx].blocks = updatedBlocks;
+                  updated = true;
+                  break;
+                }
+              }
+              if (updated) localStorage.setItem(key, JSON.stringify(programs));
+            }
+
+            // Also update trainer-assigned program (clientPrograms in store)
+            const trainerStore = useTrainerStore.getState();
+            const activeProgram = trainerStore.clientPrograms.find(
+              (p: any) => p.clientId === userId && p.status === 'active'
+            );
+            if (activeProgram?.weeklyPlan) {
+              const dayIdx = activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+              if (dayIdx >= 0) {
+                const updatedPlan = [...activeProgram.weeklyPlan];
+                updatedPlan[dayIdx] = { ...updatedPlan[dayIdx], blocks: updatedBlocks };
+                trainerStore.updateClientProgram(activeProgram.id, { weeklyPlan: updatedPlan });
+              }
+            }
+          }
+        } catch (e) {
+          console.error('[SaveProgramChanges] Error saving edits back to program:', e);
+        }
+      }
+    }
+
+    // Notify trainer of client workout completion (non-PT program workouts)
+    if (completedWorkoutData && !completedWorkoutData.isPTSession && currentUser) {
+      try {
+        // Find the trainer for this client
+        const trainerStore = useTrainerStore.getState();
+        const activeProgram = trainerStore.clientPrograms.find(
+          (p: any) => p.clientId === currentUser.id && p.status === 'active'
+        );
+        const trainerId = activeProgram?.trainerId || currentUser.trainerId;
+        if (trainerId && trainerId !== currentUser.id) {
+          const clientName = currentUser.displayName || currentUser.username || 'Client';
+          const edited = completedWorkoutData.isProgramWorkout && saveProgramChanges ? ' (exercises edited)' : '';
+          useSocialStore.getState().addNotification({
+            userId: trainerId,
+            type: 'workout_assigned' as any,
+            title: `${clientName} completed workout`,
+            message: `${clientName} completed "${completedWorkoutData.name}" — ${completedWorkoutData.sets} sets, ${Math.round(completedWorkoutData.totalVolume)}kg volume${edited}`,
+          });
+        }
+      } catch {}
+    }
+
     setShowSummary(false);
     setCompletedWorkoutData(null);
     setWorkoutNotes('');
     setSessionPaid(false);
     setShareToFeed(false);
+    setSaveProgramChanges(true);
     setAiFeedback(null);
     setAiFeedbackLoading(false);
     // Clear derive result so medals don't persist to next workout
@@ -1313,6 +1415,19 @@ export default function ActiveWorkoutPage() {
                   <div className="text-left">
                     <span className="text-gray-900 font-medium text-sm">Session Paid</span>
                     <p className="text-[11px] text-gray-500">Check if client has paid for this session</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Save changes to program — only for program workouts */}
+            {completedWorkoutData?.isProgramWorkout && (
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={saveProgramChanges} onChange={(e) => setSaveProgramChanges(e.target.checked)} className="w-5 h-5 rounded border-sky-300 bg-white text-sky-500 focus:ring-sky-500" />
+                  <div className="text-left">
+                    <span className="text-gray-900 font-medium text-sm">Save changes to program</span>
+                    <p className="text-[11px] text-gray-500">Update this workout in your program with any exercise edits</p>
                   </div>
                 </label>
               </div>
@@ -3636,6 +3751,19 @@ export default function ActiveWorkoutPage() {
                   <div className="text-left">
                     <span className="text-gray-900 font-medium text-sm">Session Paid</span>
                     <p className="text-[11px] text-gray-500">Check if client has paid for this session</p>
+                  </div>
+                </label>
+              </div>
+            )}
+
+            {/* Save changes to program — only for program workouts */}
+            {completedWorkoutData?.isProgramWorkout && (
+              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={saveProgramChanges} onChange={(e) => setSaveProgramChanges(e.target.checked)} className="w-5 h-5 rounded border-sky-300 bg-white text-sky-500 focus:ring-sky-500" />
+                  <div className="text-left">
+                    <span className="text-gray-900 font-medium text-sm">Save changes to program</span>
+                    <p className="text-[11px] text-gray-500">Update this workout in your program with any exercise edits</p>
                   </div>
                 </label>
               </div>

@@ -125,6 +125,7 @@ export default function ProgramPage() {
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
   const [trainerName, setTrainerName] = useState<string>('');
   const [showSwapDialog, setShowSwapDialog] = useState(false);
+  const [showWorkoutDays, setShowWorkoutDays] = useState(false);
   
   // Load client programs from Supabase
   useEffect(() => {
@@ -570,10 +571,19 @@ export default function ProgramPage() {
                   </div>
                 )}
 
-                {/* Workout day list */}
+                {/* Workout day list — collapsed by default */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-semibold text-gray-500 mt-1">Workout Days</p>
-                  {activeProgram.weeklyPlan?.map((day: any, idx: number) => {
+                  <button
+                    className="w-full flex items-center justify-between text-left"
+                    onClick={() => setShowWorkoutDays(!showWorkoutDays)}
+                  >
+                    <p className="text-xs font-semibold text-gray-500 mt-1">Workout Days</p>
+                    <div className="flex items-center gap-1 text-gray-400">
+                      <p className="text-[10px]">{showWorkoutDays ? 'Hide' : 'View all'}</p>
+                      {showWorkoutDays ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </div>
+                  </button>
+                  {showWorkoutDays && activeProgram.weeklyPlan?.map((day: any, idx: number) => {
                     const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                     const isExpanded = expandedDay === idx;
                     const isNext = nextWorkout?.dayIndex === idx;

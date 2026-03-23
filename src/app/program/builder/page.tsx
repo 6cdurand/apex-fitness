@@ -683,8 +683,8 @@ function ProgramBuilderContent() {
       toast.info(`Replaced ${conflictsReplaced} conflicting event${conflictsReplaced > 1 ? 's' : ''} on the calendar`);
     }
     
-    // Save to library if requested
-    if (saveToLibrary && libraryName.trim()) {
+    // Save to library if requested — only for programs targeting the user themselves (not trainer→client)
+    if (saveToLibrary && libraryName.trim() && targetClientId === user.id) {
       const savedPrograms = JSON.parse(localStorage.getItem(`apex-program-library-${user.id}`) || '[]');
       savedPrograms.push({
         id: uuidv4(),

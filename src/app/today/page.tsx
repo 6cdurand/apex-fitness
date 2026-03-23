@@ -38,7 +38,8 @@ import {
   MessageCircle,
   Trash2,
   FileText,
-  Heart
+  Heart,
+  ArrowLeftRight
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -77,6 +78,7 @@ export default function TodayPage() {
   const [showDateConfirm, setShowDateConfirm] = useState(false);
   const [pendingStartEvent, setPendingStartEvent] = useState<any>(null);
   const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
+  const [showSwapWorkout, setShowSwapWorkout] = useState(false);
   const { updateCalendarEvent } = useTrainerStore();
 
   useEffect(() => {
@@ -755,58 +757,101 @@ export default function TodayPage() {
             );
           }
           
-          // FLEXIBLE schedule — show all available workouts as a picker
+          // FLEXIBLE schedule — show only today's workout with swap option
           if (program.scheduleMode === 'flexible') {
+            const availableSwaps = program.weeklyPlan
+              .map((wd: any, idx: number) => ({ ...wd, idx }))
+              .filter((_: any, idx: number) => !completedDayIndices.includes(idx) && idx !== dayIndex);
+            
             return (
-              <section>
-                <h2 className="text-sm font-semibold text-gray-500 mb-3 flex items-center gap-2">
-                  <Dumbbell className="w-4 h-4" />
-                  Your Program — {program.templateName}
-                </h2>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
-                    <p className="text-xs text-gray-500">{remainingThisWeek} of {program.trainingDaysPerWeek || program.weeklyPlan.length} left this week</p>
-                  </div>
-                  {program.weeklyPlan.map((wd: any, idx: number) => {
-                    const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
-                    const isDone = completedDayIndices.includes(idx);
-                    const isNext = idx === dayIndex;
-                    return (
-                      <Card
-                        key={wd.id || idx}
-                        className={`shadow-sm cursor-pointer transition-all ${
-                          isDone 
-                            ? 'bg-emerald-50 border-emerald-200 opacity-60' 
-                            : isNext
-                            ? 'bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30'
-                            : 'bg-white border-gray-200 hover:border-sky-300'
-                        }`}
-                        onClick={() => !isDone && startDay(idx, wd)}
+              <>
+                <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
+                          <Dumbbell className="w-5 h-5 text-sky-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-500 font-medium">{program.templateName}</p>
+                          <h3 className="font-semibold text-gray-900">{day?.dayLabel || 'Workout'}</h3>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
+                        <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} left this week</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-3">{totalEx} exercises</p>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
+                        onClick={() => startDay(dayIndex, day)}
                       >
-                        <CardContent className="p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
-                              isDone ? 'bg-emerald-500 text-white' : isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
-                            }`}>
-                              {isDone ? <Check className="w-4 h-4" /> : String.fromCharCode(65 + idx)}
+                        <Play className="w-4 h-4 mr-2" />
+                        Start {day?.dayLabel || 'Workout'}
+                      </Button>
+                      {availableSwaps.length > 0 && (
+                        <Button
+                          variant="outline"
+                          className="border-gray-200 text-gray-600"
+                          onClick={() => setShowSwapWorkout(true)}
+                        >
+                          <ArrowLeftRight className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Swap Workout Dialog */}
+                <Dialog open={showSwapWorkout} onOpenChange={setShowSwapWorkout}>
+                  <DialogContent className="bg-white border-gray-200 max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Swap Workout</DialogTitle>
+                      <DialogDescription className="text-gray-500">Pick a different workout for today</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 pt-1">
+                      {program.weeklyPlan.map((wd: any, idx: number) => {
+                        const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                        const isDone = completedDayIndices.includes(idx);
+                        const isCurrent = idx === dayIndex;
+                        if (isDone) return null;
+                        return (
+                          <button
+                            key={wd.id || idx}
+                            className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                              isCurrent
+                                ? 'border-sky-300 bg-sky-50'
+                                : 'border-gray-200 hover:border-sky-300 hover:bg-sky-50/50'
+                            }`}
+                            onClick={() => {
+                              setShowSwapWorkout(false);
+                              startDay(idx, wd);
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                isCurrent ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {String.fromCharCode(65 + idx)}
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm text-gray-900">{wd.dayLabel}</p>
+                                <p className="text-[10px] text-gray-500">{wdEx} exercises</p>
+                              </div>
                             </div>
-                            <div>
-                              <p className={`font-medium text-sm ${isDone ? 'text-emerald-700 line-through' : 'text-gray-900'}`}>{wd.dayLabel}</p>
-                              <p className="text-[10px] text-gray-500">{wdEx} exercises</p>
+                            <div className="flex items-center gap-1.5">
+                              {isCurrent && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
+                              <Play className="w-4 h-4 text-gray-400" />
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {isDone && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-600 border-0">Done</Badge>}
-                            {isNext && !isDone && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Up Next</Badge>}
-                            {!isDone && <Play className="w-4 h-4 text-gray-400" />}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              </section>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </>
             );
           }
           
