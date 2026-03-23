@@ -90,6 +90,7 @@ interface SavedProgram {
   weeks: number;
   createdAt: string;
   goal?: string;
+  days?: { dayLabel: string; blocks: any[] }[]; // Full workout data
 }
 
 function loadSavedPrograms(userId: string): SavedProgram[] {
@@ -107,11 +108,18 @@ function saveProgramsList(userId: string, programs: SavedProgram[]) {
   localStorage.setItem(`apex-program-library-${userId}`, JSON.stringify(programs));
 }
 
+// Load full program data by program id
+function loadProgramData(userId: string, programId: string): { dayLabel: string; blocks: any[] }[] | null {
+  const programs = loadSavedPrograms(userId);
+  const prog = programs.find(p => p.id === programId);
+  return prog?.days || null;
+}
+
 export default function ProgramPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { startFromTemplate } = useWorkoutStore();
-  const { clientPrograms, getNextProgramWorkout, loadClientDataFromSupabase } = useTrainerStore();
+  const { clientPrograms, getNextProgramWorkout, loadClientDataFromSupabase, calendarEvents, deleteCalendarEvent, updateClientProgram } = useTrainerStore();
   
   // Active trainer-assigned program
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
@@ -279,9 +287,10 @@ export default function ProgramPage() {
       });
     }
     
-    // Also save to My Programs
+    // Also save to My Programs — include full workout data so Start works
+    const programId = `ai-${Date.now()}`;
     const newSaved: SavedProgram = {
-      id: `ai-${Date.now()}`,
+      id: programId,
       name: generatedProgram.name,
       description: generatedProgram.description,
       source: 'ai',
@@ -289,6 +298,22 @@ export default function ProgramPage() {
       weeks: generatedProgram.blockLengthWeeks,
       createdAt: new Date().toISOString(),
       goal: generatedProgram.goal,
+      days: generatedProgram.days.map(day => ({
+        dayLabel: day.dayLabel,
+        blocks: day.blocks.map(block => ({
+          name: block.name,
+          type: block.type,
+          exercises: block.exercises.map(ex => ({
+            exerciseId: ex.exerciseId,
+            exerciseName: ex.name,
+            name: ex.name,
+            sets: ex.sets,
+            reps: String(ex.reps),
+            rest: `${ex.restSeconds}s`,
+            notes: ex.notes || '',
+          })),
+        })),
+      })),
     };
     const updated = [newSaved, ...savedPrograms];
     setSavedPrograms(updated);
@@ -606,6 +631,21 @@ export default function ProgramPage() {
                   })}
                 </div>
 
+                {/* Remove Program */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-red-200 text-red-500 hover:bg-red-50 text-xs"
+                  onClick={() => {
+                    if (confirm('Remove this program? You can always be assigned a new one.')) {
+                      updateClientProgram(activeProgram.id, { status: 'completed' as any, endDate: new Date().toISOString() });
+                    }
+                  }}
+                >
+                  <X className="w-3 h-3 mr-1" />
+                  Remove Program
+                </Button>
+
                 {/* PT Session info */}
                 {activeProgram.sessionPTMap && Object.values(activeProgram.sessionPTMap).some(v => v === 'pt') && (
                   <div className="bg-sky-50 rounded-lg p-2.5 border border-sky-200">
@@ -653,9 +693,19 @@ export default function ProgramPage() {
                         variant="ghost"
                         className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                         onClick={() => {
+                          // Remove from saved programs
                           const updated = savedPrograms.filter(p => p.id !== prog.id);
                           setSavedPrograms(updated);
                           saveProgramsList(user.id, updated);
+                          // Also delete associated calendar events
+                          calendarEvents
+                            .filter(e => 
+                              e.clientId === user.id && 
+                              e.type === 'workout' && 
+                              e.status === 'scheduled' &&
+                              (e.programId === prog.id || (e.notes && e.notes.includes(prog.name)))
+                            )
+                            .forEach(e => deleteCalendarEvent(e.id));
                         }}
                       >
                         <X className="w-4 h-4" />
@@ -1942,7 +1992,7 @@ export default function ProgramPage() {
                             }
                           }
 
-                          // Save to My Programs
+                          // Save to My Programs — include full workout data
                           const newSaved: SavedProgram = {
                             id: `tmpl-${selectedProgram.id}-${Date.now()}`,
                             name: selectedProgram.name,
@@ -1953,6 +2003,22 @@ export default function ProgramPage() {
                             weeks: selectedProgram.weeks,
                             createdAt: new Date().toISOString(),
                             goal: selectedProgram.goals[0],
+                            days: selectedProgram.days.map(day => ({
+                              dayLabel: day.dayLabel,
+                              blocks: day.blocks.map(block => ({
+                                name: block.name,
+                                type: block.type,
+                                exercises: block.exercises.map(ex => ({
+                                  exerciseId: ex.defaultExercise.toLowerCase().replace(/\s+/g, '_'),
+                                  exerciseName: ex.defaultExercise,
+                                  name: ex.defaultExercise,
+                                  sets: ex.sets,
+                                  reps: ex.reps,
+                                  rest: ex.rest,
+                                  notes: ex.notes || '',
+                                })),
+                              })),
+                            })),
                           };
                           const updatedPrograms = [newSaved, ...savedPrograms];
                           setSavedPrograms(updatedPrograms);
