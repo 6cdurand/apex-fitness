@@ -29,13 +29,13 @@ import { calculate1RM } from '../exercises';
 import { hashPassword } from './authStore';
 import { syncWorkoutTemplateToSupabase, fetchWorkoutTemplatesFromSupabase } from '../supabaseSync';
 
-// Lazy imports to avoid circular deps
-let _socialStore: any = null;
-let _workoutStore: any = null;
-let _medalStore: any = null;
-const getSocialStore = () => { if (!_socialStore) _socialStore = require('./socialStore').useSocialStore; return _socialStore; };
-const getWorkoutStore = () => { if (!_workoutStore) _workoutStore = require('./workoutStore').useWorkoutStore; return _workoutStore; };
-const getMedalStore = () => { if (!_medalStore) _medalStore = require('./medalStore').useMedalStore; return _medalStore; };
+// Cross-store references (resolved at runtime via .getState() — no circular issues)
+import { useSocialStore } from './socialStore';
+import { useWorkoutStore } from './workoutStore';
+import { useMedalStore } from './medalStore';
+const getSocialStore = () => useSocialStore;
+const getWorkoutStore = () => useWorkoutStore;
+const getMedalStore = () => useMedalStore;
 
 // Session workout created in builder
 interface SessionWorkout {

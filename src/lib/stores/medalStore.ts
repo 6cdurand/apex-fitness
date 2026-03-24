@@ -4,10 +4,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { Medal, StrengthRating, PersonalBest, Workout } from '@/types';
 import { useAuthStore } from './authStore';
 import { syncMedalToSupabase } from '../supabaseSync';
+import { getEvolutionGlowTier, getEvolutionLabel, milestoneMedals } from '../medals';
+import { calculateFullStrengthRating } from '../strengthRating';
+import { normalizeExerciseId } from '../exerciseStats';
 
-// Lazy import to avoid circular dep with workoutStore
-let _workoutStore: any = null;
-const getWorkoutStore = () => { if (!_workoutStore) _workoutStore = require('./workoutStore').useWorkoutStore; return _workoutStore; };
+// Cross-store reference (resolved at runtime via .getState())
+import { useWorkoutStore } from './workoutStore';
+const getWorkoutStore = () => useWorkoutStore;
 
 interface MedalState {
   medals: Medal[];
@@ -43,7 +46,6 @@ export const useMedalStore = create<MedalState>()(
         
         // If already earned, increment timesEarned counter and update evolution
         if (existingMedal?.earned) {
-          const { getEvolutionGlowTier, getEvolutionLabel } = require('../medals');
           const newTimesEarned = (existingMedal.timesEarned || 1) + 1;
           const oldEvolutionTier = existingMedal.evolutionTier || 'base';
           const newEvolutionTier = getEvolutionGlowTier(newTimesEarned, definitionId);
@@ -61,8 +63,6 @@ export const useMedalStore = create<MedalState>()(
           return;
         }
 
-        // Import medal definitions dynamically to avoid circular deps
-        const { milestoneMedals } = require('../medals');
         const definition = milestoneMedals.find((m: any) => m.id === definitionId);
         if (!definition) return;
         
@@ -152,8 +152,6 @@ export const useMedalStore = create<MedalState>()(
 
         const isMale = user.gender === 'male';
         
-        // Use the new comprehensive strength rating calculation
-        const { calculateFullStrengthRating } = require('../strengthRating');
         const rating = calculateFullStrengthRating(userPBs, isMale);
 
         set({ strengthRating: rating });
@@ -191,7 +189,6 @@ export const useMedalStore = create<MedalState>()(
         
         console.log(`[MedalStore] Calculating strength rating for ${userId} (${isMale ? 'male' : 'female'}), ${userPBs.length} PBs`);
         
-        const { calculateFullStrengthRating } = require('../strengthRating');
         const rating = calculateFullStrengthRating(userPBs, isMale);
         
         // Store in state if this is the current user
@@ -250,7 +247,6 @@ export function checkAllMedalsRetroactive(userId: string) {
   }
 
   // --- STRENGTH MEDALS (from existing PBs) ---
-  const { normalizeExerciseId } = require('../exerciseStats');
   
   // Map of exercise ID patterns → medal checks
   const strengthChecks: { match: string[]; medals: [string, number][] }[] = [

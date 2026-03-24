@@ -6,18 +6,18 @@ import {
   PersonalBest, TimerState, Exercise,
 } from '@/types';
 import { useAuthStore } from './authStore';
-import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight } from '../exercises';
+import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
+import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
-// useTrainerStore and useMedalStore are imported lazily to avoid module-level circular deps
-let _trainerStore: any = null;
-let _medalStore: any = null;
-let _socialStore: any = null;
-const getTrainerStore = () => { if (!_trainerStore) _trainerStore = require('./trainerStore').useTrainerStore; return _trainerStore; };
-const getMedalStore = () => { if (!_medalStore) _medalStore = require('./medalStore').useMedalStore; return _medalStore; };
-const getSocialStore = () => { if (!_socialStore) _socialStore = require('./socialStore').useSocialStore; return _socialStore; };
+import { useTrainerStore } from './trainerStore';
+import { useMedalStore } from './medalStore';
+import { useSocialStore } from './socialStore';
+const getTrainerStore = () => useTrainerStore;
+const getMedalStore = () => useMedalStore;
+const getSocialStore = () => useSocialStore;
 
 interface WorkoutState {
   activeWorkout: Workout | null;
@@ -275,7 +275,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetBW = getUserBodyweight(activeWorkout.userId);
         let totalVolume = 0;
         activeWorkout.exercises.forEach(ex => {
-          const { isAssistedExercise } = require('../exercises');
           const exAssisted = isAssistedExercise(ex.exerciseId, ex.exercise?.name);
           ex.sets.forEach(s => {
             if (s.completed && s.reps) {
@@ -391,7 +390,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
         
         // Auto-detect assisted exercises by name
-        const { isAssistedExercise } = require('../exercises');
         const exerciseName = exercise.name || (exerciseData as any)?.name || '';
         const autoAssisted = isAssistedExercise(exercise.id, exerciseName);
         
@@ -487,7 +485,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         }
 
         // Auto-detect assisted exercises by name
-        const { isAssistedExercise } = require('../exercises');
         const exerciseName = exercise.exercise?.name || '';
         const autoAssisted = isAssistedExercise(exercise.exerciseId, exerciseName) || lastSet?.isAssisted;
 
@@ -760,11 +757,9 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetUserId = getActiveUserId();
         
         // Normalize exercise ID for consistent matching
-        const { normalizeExerciseId } = require('../exerciseStats');
         const normalizedId = normalizeExerciseId(exerciseId);
         
         // Check if this is an assisted exercise (lower weight = better)
-        const { isAssistedExercise } = require('../exercises');
         const isAssisted = isAssistedExercise(normalizedId, exerciseId);
         
         const existingPB = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
@@ -1220,9 +1215,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         const workouts = get().workoutHistory.filter(w => w.userId === userId && !w.deletedAt);
         const newPBs: Record<string, PersonalBest> = {};
         
-        // Import normalizeExerciseId for consistent exercise ID matching
-        const { normalizeExerciseId } = require('../exerciseStats');
-        const { isAssistedExercise } = require('../exercises');
         
         // Go through all workouts and find best lifts for each exercise
         workouts.forEach(workout => {
@@ -1280,7 +1272,6 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       runDeriveAll: (userId: string, completedWorkout: Workout | null = null) => {
-        const { normalizeExerciseId } = require('../exerciseStats');
         const { earnMedal, hasMedal, revokeMedalsForUser, calculateStrengthRatingForUser } = getMedalStore().getState();
 
         const result = deriveAll({

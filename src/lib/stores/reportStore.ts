@@ -5,11 +5,11 @@ import { WeeklyReport, MuscleGroup, Workout, WorkoutExercise, WorkoutSet, Person
 import { useAuthStore } from './authStore';
 import { exerciseLibraryMap } from '../exercises';
 
-// Lazy imports to avoid circular deps
-let _workoutStore: any = null;
-let _socialStore: any = null;
-const getWorkoutStore = () => { if (!_workoutStore) _workoutStore = require('./workoutStore').useWorkoutStore; return _workoutStore; };
-const getSocialStore = () => { if (!_socialStore) _socialStore = require('./socialStore').useSocialStore; return _socialStore; };
+// Cross-store references (resolved at runtime via .getState())
+import { useWorkoutStore } from './workoutStore';
+import { useSocialStore } from './socialStore';
+const getWorkoutStore = () => useWorkoutStore;
+const getSocialStore = () => useSocialStore;
 
 interface ReportState {
   weeklyReports: WeeklyReport[];
