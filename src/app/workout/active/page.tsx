@@ -114,6 +114,7 @@ export default function ActiveWorkoutPage() {
     pbs: string[];
     isPTSession: boolean;
     clientId?: string;
+    assignedBy?: string;
     startTime: string;
     endTime: string;
     previousRating?: { overall: number; overallTier: string; categories: Record<string, { tier: string; score: number }> };
@@ -128,6 +129,7 @@ export default function ActiveWorkoutPage() {
   const [autoRestEnabled, setAutoRestEnabled] = useState(true);
   const [newPBs, setNewPBs] = useState<string[]>([]);
   const [workoutNotes, setWorkoutNotes] = useState('');
+  const [sharedNotes, setSharedNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
   const [saveProgramChanges, setSaveProgramChanges] = useState(true); // default ON for program workouts
@@ -745,7 +747,7 @@ export default function ActiveWorkoutPage() {
       ),
     } : undefined;
 
-    const completed = endWorkout(workoutNotes);
+    const completed = endWorkout(workoutNotes, sharedNotes);
     if (completed) {
       // Feed post is now opt-in — created in handleCloseSummary if shareToFeed is checked
 
@@ -791,6 +793,7 @@ export default function ActiveWorkoutPage() {
         pbs: newPBs,
         isPTSession: isPT,
         clientId: isPT ? clientId : undefined,
+        assignedBy: trainerId || undefined,
         startTime: completed.startTime,
         endTime: endTimeStr,
         previousRating,
@@ -855,17 +858,19 @@ export default function ActiveWorkoutPage() {
       });
       setEditingTimes(false);
     }
-    // Save notes — PT session notes go to trainerNotes (private), personal workout notes go to notes (visible)
+    // Save private notes (always go to privateNotes — only visible to creator)
     if (workoutNotes.trim() && completedWorkoutData?.id) {
-      if (completedWorkoutData.isPTSession) {
-        // Trainer's notes are private — save to trainerNotes field
-        useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, { 
-          trainerNotes: workoutNotes.trim() 
-        });
-      } else {
-        // Personal workout — notes visible to user
-        useWorkoutStore.getState().updateWorkoutNotes(completedWorkoutData.id, workoutNotes.trim());
-      }
+      useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, { 
+        privateNotes: workoutNotes.trim(),
+        notes: workoutNotes.trim(), // Keep legacy field in sync
+        ...(completedWorkoutData.isPTSession ? { trainerNotes: workoutNotes.trim() } : {}),
+      });
+    }
+    // Save shared notes (visible to trainer/client)
+    if (sharedNotes.trim() && completedWorkoutData?.id) {
+      useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, { 
+        sharedNotes: sharedNotes.trim(),
+      });
     }
     
     // Share to feed (opt-in only)
@@ -1031,6 +1036,7 @@ export default function ActiveWorkoutPage() {
     setShowSummary(false);
     setCompletedWorkoutData(null);
     setWorkoutNotes('');
+    setSharedNotes('');
     setSessionPaid(false);
     setShareToFeed(false);
     setSaveProgramChanges(true);
@@ -1444,18 +1450,33 @@ export default function ActiveWorkoutPage() {
               </label>
             </div>
 
-            {/* Workout Notes */}
+            {/* Private Notes */}
             <div>
-              <label className="text-xs text-gray-500 mb-1.5 block text-left">
-                {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
+              <label className="text-xs text-gray-500 mb-1 block text-left flex items-center gap-1">
+                🔒 Private notes <span className="text-gray-400">(only you)</span>
               </label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
                 placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
-                className={`w-full h-16 px-3 py-2 bg-gray-50 border rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-200 focus:ring-sky-500'}`}
+                className="w-full h-14 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
+
+            {/* Shared Notes — only show when there's a trainer/client relationship */}
+            {(completedWorkoutData?.isPTSession || completedWorkoutData?.assignedBy) && (
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block text-left flex items-center gap-1">
+                  💬 Shared notes <span className="text-gray-400">(visible to {completedWorkoutData?.isPTSession ? 'client' : 'trainer'})</span>
+                </label>
+                <textarea
+                  value={sharedNotes}
+                  onChange={(e) => setSharedNotes(e.target.value)}
+                  placeholder={completedWorkoutData?.isPTSession ? "Feedback for your client..." : "Notes for your trainer..."}
+                  className="w-full h-14 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            )}
             
             {/* Bottom Done button */}
             <Button onClick={handleCloseSummary} className="w-full bg-sky-500 hover:bg-sky-600" size="lg">
@@ -3780,18 +3801,33 @@ export default function ActiveWorkoutPage() {
               </label>
             </div>
 
-            {/* Notes */}
+            {/* Private Notes */}
             <div>
-              <label className="text-xs text-gray-500 mb-1.5 block text-left">
-                {completedWorkoutData?.isPTSession ? 'Trainer notes (private)' : 'Notes (optional)'}
+              <label className="text-xs text-gray-500 mb-1 block text-left flex items-center gap-1">
+                🔒 Private notes <span className="text-gray-400">(only you)</span>
               </label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
                 placeholder={completedWorkoutData?.isPTSession ? "Session observations, form cues..." : "How did this workout feel?"}
-                className={`w-full h-16 px-3 py-2 bg-gray-50 border rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 ${completedWorkoutData?.isPTSession ? 'border-amber-500/30 focus:ring-amber-500' : 'border-gray-200 focus:ring-sky-500'}`}
+                className="w-full h-14 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
               />
             </div>
+
+            {/* Shared Notes — only show when there's a trainer/client relationship */}
+            {(completedWorkoutData?.isPTSession || completedWorkoutData?.assignedBy) && (
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block text-left flex items-center gap-1">
+                  💬 Shared notes <span className="text-gray-400">(visible to {completedWorkoutData?.isPTSession ? 'client' : 'trainer'})</span>
+                </label>
+                <textarea
+                  value={sharedNotes}
+                  onChange={(e) => setSharedNotes(e.target.value)}
+                  placeholder={completedWorkoutData?.isPTSession ? "Feedback for your client..." : "Notes for your trainer..."}
+                  className="w-full h-14 px-3 py-2 bg-sky-50 border border-sky-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
+            )}
             
             <Button onClick={handleCloseSummary} className="w-full bg-sky-500 hover:bg-sky-600" size="lg">
               Done

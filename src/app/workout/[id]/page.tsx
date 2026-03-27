@@ -51,8 +51,10 @@ export default function WorkoutDetailPage() {
   const { medals } = useMedalStore();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [notes, setNotes] = useState('');
+  const [sharedNotesText, setSharedNotesText] = useState('');
   const [trainerNotesText, setTrainerNotesText] = useState('');
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [isEditingSharedNotes, setIsEditingSharedNotes] = useState(false);
   const [isEditingTrainerNotes, setIsEditingTrainerNotes] = useState(false);
   const [isEditingWorkout, setIsEditingWorkout] = useState(false);
   const [editedExercises, setEditedExercises] = useState<Workout['exercises'] | null>(null);
@@ -72,7 +74,8 @@ export default function WorkoutDetailPage() {
         return;
       }
       setWorkout(found);
-      setNotes(found.notes || '');
+      setNotes(found.privateNotes || found.notes || '');
+      setSharedNotesText(found.sharedNotes || '');
       setTrainerNotesText(found.trainerNotes || '');
     } else {
       router.replace('/workout');
@@ -84,9 +87,17 @@ export default function WorkoutDetailPage() {
 
   const handleSaveNotes = () => {
     if (workout) {
-      updateWorkoutNotes(workout.id, notes);
+      updateCompletedWorkout(workout.id, { privateNotes: notes, notes });
       setIsEditingNotes(false);
-      toast.success('Notes saved');
+      toast.success('Private notes saved');
+    }
+  };
+
+  const handleSaveSharedNotes = () => {
+    if (workout) {
+      updateCompletedWorkout(workout.id, { sharedNotes: sharedNotesText });
+      setIsEditingSharedNotes(false);
+      toast.success('Shared notes saved');
     }
   };
 
@@ -358,51 +369,101 @@ export default function WorkoutDetailPage() {
             </Card>
           )}
 
-          {/* Notes Section — visible to the workout owner */}
-          <Card className="bg-white border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-600 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Notes
-                </h3>
-                {!isEditingNotes ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditingNotes(true)}
-                    className="text-gray-400 hover:text-gray-900"
-                  >
-                    <Edit2 className="w-4 h-4 mr-1" />
-                    {notes ? 'Edit' : 'Add Notes'}
-                  </Button>
+          {/* Private Notes — only visible to the workout creator */}
+          {user && workout.userId === user.id && (
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-600 flex items-center gap-2">
+                    🔒 Private Notes
+                    <span className="text-xs text-gray-400 font-normal">(only you)</span>
+                  </h3>
+                  {!isEditingNotes ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingNotes(true)}
+                      className="text-gray-400 hover:text-gray-900"
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      {notes ? 'Edit' : 'Add Notes'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSaveNotes}
+                      className="text-sky-400 hover:text-sky-300"
+                    >
+                      <Save className="w-4 h-4 mr-1" />
+                      Save
+                    </Button>
+                  )}
+                </div>
+                
+                {isEditingNotes ? (
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add private notes about this workout..."
+                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 min-h-[100px]"
+                  />
                 ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleSaveNotes}
-                    className="text-sky-400 hover:text-sky-300"
-                  >
-                    <Save className="w-4 h-4 mr-1" />
-                    Save
-                  </Button>
+                  <p className={notes ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
+                    {notes || 'No private notes'}
+                  </p>
                 )}
-              </div>
-              
-              {isEditingNotes ? (
-                <Textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add notes about this workout..."
-                  className="bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 min-h-[100px]"
-                />
-              ) : (
-                <p className={notes ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
-                  {notes || 'No notes for this workout'}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Shared Notes — visible to both trainer and client */}
+          {workout.assignedBy && (
+            <Card className="bg-sky-50 border-sky-200 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-sky-600 flex items-center gap-2">
+                    💬 Shared Notes
+                    <span className="text-xs text-sky-400 font-normal">(visible to {isSessionTrainer ? 'client' : 'trainer'})</span>
+                  </h3>
+                  {!isEditingSharedNotes ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingSharedNotes(true)}
+                      className="text-sky-400 hover:text-sky-300"
+                    >
+                      <Edit2 className="w-4 h-4 mr-1" />
+                      {sharedNotesText ? 'Edit' : 'Add'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleSaveSharedNotes}
+                      className="text-sky-400 hover:text-sky-300"
+                    >
+                      <Save className="w-4 h-4 mr-1" />
+                      Save
+                    </Button>
+                  )}
+                </div>
+                
+                {isEditingSharedNotes ? (
+                  <Textarea
+                    value={sharedNotesText}
+                    onChange={(e) => setSharedNotesText(e.target.value)}
+                    placeholder={isSessionTrainer ? "Feedback for your client..." : "Notes for your trainer..."}
+                    className="bg-white border-sky-200 text-gray-900 placeholder-gray-400 min-h-[80px]"
+                  />
+                ) : (
+                  <p className={sharedNotesText ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
+                    {sharedNotesText || 'No shared notes'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Exercises */}
           <section>

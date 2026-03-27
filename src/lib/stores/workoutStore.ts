@@ -35,7 +35,7 @@ interface WorkoutState {
   startFromTemplate: (template: WorkoutTemplate, clientId?: string) => void;
   clearCurrentClient: () => void;
   getActiveUserId: () => string; // Get the ID of who we're currently training
-  endWorkout: (notes?: string) => Workout | null;
+  endWorkout: (privateNotes?: string, sharedNotes?: string) => Workout | null;
   updateActiveWorkoutNotes: (notes: string) => void;
   cancelWorkout: () => void;
   

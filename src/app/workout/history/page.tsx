@@ -88,7 +88,7 @@ export default function WorkoutHistoryPage() {
     setSelectedWorkout(workout);
     setEditingTimes(false);
     setEditingNotes(false);
-    setEditNotes(workout.notes || '');
+    setEditNotes(workout.privateNotes || workout.notes || '');
     setEditStartTime(new Date(workout.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
     setEditEndTime(workout.endTime ? new Date(workout.endTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
   };
@@ -115,8 +115,8 @@ export default function WorkoutHistoryPage() {
 
   const handleSaveNotes = () => {
     if (!selectedWorkout) return;
-    updateWorkoutNotes(selectedWorkout.id, editNotes.trim());
-    setSelectedWorkout({ ...selectedWorkout, notes: editNotes.trim() });
+    updateCompletedWorkout(selectedWorkout.id, { privateNotes: editNotes.trim(), notes: editNotes.trim() });
+    setSelectedWorkout({ ...selectedWorkout, notes: editNotes.trim(), privateNotes: editNotes.trim() });
     setEditingNotes(false);
   };
 
@@ -436,43 +436,56 @@ export default function WorkoutHistoryPage() {
                     </div>
                   </div>
 
-                  {/* Notes */}
-                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
-                        <StickyNote className="w-3 h-3" />
-                        Notes
-                      </span>
-                      {(user && (selectedWorkout.userId === user.id || selectedWorkout.assignedBy === user.id)) && (
-                        editingNotes ? (
+                  {/* Private Notes — only visible to workout creator */}
+                  {user && selectedWorkout.userId === user.id && (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-gray-500 font-medium flex items-center gap-1">
+                          🔒 Private Notes <span className="text-gray-400">(only you)</span>
+                        </span>
+                        {editingNotes ? (
                           <div className="flex gap-2">
                             <button onClick={() => setEditingNotes(false)} className="text-xs text-gray-500 hover:text-gray-300">Cancel</button>
                             <button onClick={handleSaveNotes} className="text-xs text-sky-400 hover:text-sky-300 font-medium">Save</button>
                           </div>
                         ) : (
                           <button
-                            onClick={() => { setEditNotes(selectedWorkout.notes || ''); setEditingNotes(true); }}
+                            onClick={() => { setEditNotes(selectedWorkout.privateNotes || selectedWorkout.notes || ''); setEditingNotes(true); }}
                             className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1"
                           >
                             <Edit className="w-3 h-3" />
-                            {selectedWorkout.notes ? 'Edit' : 'Add'}
+                            {(selectedWorkout.privateNotes || selectedWorkout.notes) ? 'Edit' : 'Add'}
                           </button>
-                        )
+                        )}
+                      </div>
+                      {editingNotes ? (
+                        <textarea
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="Add private notes..."
+                          className="w-full h-20 px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
+                        />
+                      ) : (
+                        <p className="text-sm text-gray-600">
+                          {selectedWorkout.privateNotes || selectedWorkout.notes || <span className="text-gray-600 italic">No private notes</span>}
+                        </p>
                       )}
                     </div>
-                    {editingNotes ? (
-                      <textarea
-                        value={editNotes}
-                        onChange={(e) => setEditNotes(e.target.value)}
-                        placeholder="Add workout notes..."
-                        className="w-full h-20 px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-400 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      />
-                    ) : (
+                  )}
+
+                  {/* Shared Notes — visible to both trainer and client */}
+                  {selectedWorkout.assignedBy && (
+                    <div className="p-3 bg-sky-50 border border-sky-200 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs text-sky-600 font-medium flex items-center gap-1">
+                          💬 Shared Notes
+                        </span>
+                      </div>
                       <p className="text-sm text-gray-600">
-                        {selectedWorkout.notes || <span className="text-gray-600 italic">No notes</span>}
+                        {selectedWorkout.sharedNotes || <span className="text-gray-500 italic">No shared notes</span>}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   {/* Save to Library */}
                   {showSaveToLibrary ? (

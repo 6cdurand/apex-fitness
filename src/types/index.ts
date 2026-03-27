@@ -260,7 +260,9 @@ export interface Workout {
   duration?: number; // seconds
   totalVolume: number; // kg
   userId: string;
-  notes?: string;
+  notes?: string; // DEPRECATED — migrated to privateNotes on hydration
+  privateNotes?: string; // Private notes visible only to the creator
+  sharedNotes?: string; // Notes visible to both trainer and client
   trainerNotes?: string; // Private notes visible only to the trainer who conducted the session
   status: 'active' | 'completed' | 'cancelled';
   assignedBy?: string; // Trainer ID if assigned
