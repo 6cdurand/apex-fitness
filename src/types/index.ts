@@ -517,6 +517,8 @@ export interface CalendarEvent {
   contactName?: string; // Name for consultations without a registered client
   programId?: string; // Links to a ClientProgram — distinguishes program workouts from PT sessions
   programDayIndex?: number; // Which day in the program this workout corresponds to
+  ownerUserId?: string; // Who sees this in their personal calendar
+  eventScope?: 'trainer_personal' | 'client_assigned' | 'shared_session';
 }
 
 // Booking Request (for trainer-client scheduling)

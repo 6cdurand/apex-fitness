@@ -77,8 +77,8 @@ const _rawExerciseLibrary: Exercise[] = [
   
   instructions: 'Lean forward on parallel bars, lower body by bending arms until chest is stretched, press back up.',},
   {
-    id: 'push-ups',
-    name: 'Push-Ups',
+    id: 'push-up',
+    name: 'Push-Up',
     primaryMuscles: ['chest'],
     secondaryMuscles: ['triceps', 'shoulders'],
     category: 'compound',

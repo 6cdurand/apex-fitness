@@ -97,6 +97,8 @@ export function normalizeExerciseId(name: string): string {
     'lat-pull-down': 'lat-pulldown',
     'lat-pull': 'lat-pulldown',
     'pulldown': 'lat-pulldown',
+    'push-ups': 'push-up',
+    'pushups': 'push-up',
     'pull-ups': 'pull-up',
     'pullups': 'pull-up',
     'chin-ups': 'chin-up',

@@ -449,14 +449,26 @@ function ClientsPageContent() {
   const pendingClients = trainerClients.filter(c => c.status === 'pending');
 
   const getClientUser = (clientId: string) => {
-    return allUsers.find(u => u.id === clientId);
+    // Primary: check allUsers (localStorage + Supabase users merge)
+    const fromUsers = allUsers.find(u => u.id === clientId);
+    if (fromUsers) return fromUsers;
+    // Fallback: use nested client data attached by fetchTrainerClientsFromSupabase
+    const tc = trainerClients.find(c => c.clientId === clientId);
+    const attached = (tc as any)?.client;
+    if (attached) {
+      return { id: clientId, displayName: attached.displayName, username: attached.username, profilePhoto: attached.profilePhoto };
+    }
+    console.warn(`[Clients] No user data found for client ${clientId.slice(0, 8)}...`);
+    return undefined;
   };
 
   const filteredClients = searchQuery
     ? trainerClients.filter(c => {
         const clientUser = getClientUser(c.clientId);
-        return clientUser?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-               clientUser?.displayName?.toLowerCase().includes(searchQuery.toLowerCase());
+        const name = clientUser?.displayName || clientUser?.username || '';
+        const email = clientUser?.email || '';
+        const q = searchQuery.toLowerCase();
+        return name.toLowerCase().includes(q) || email.toLowerCase().includes(q);
       })
     : trainerClients;
 

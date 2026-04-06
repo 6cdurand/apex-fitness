@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
+import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
@@ -948,6 +949,17 @@ export default function ActiveWorkoutPage() {
       const userId = currentUser?.id;
       if (userId) {
         try {
+          // Parse templateId for exact program and day index
+          // Format: "program-{programId}-{dayIndex}" or "sched-{eventId}"
+          const tplId = completedWorkoutData.templateId || '';
+          let parsedProgramId: string | null = null;
+          let parsedDayIndex: number | null = null;
+          const programMatch = tplId.match(/^program-(.+)-(\d+)$/);
+          if (programMatch) {
+            parsedProgramId = programMatch[1];
+            parsedDayIndex = parseInt(programMatch[2]);
+          }
+
           // Get the completed workout from history to extract current exercises
           const completedWk = useWorkoutStore.getState().workoutHistory.find(w => w.id === completedWorkoutData.id);
           if (completedWk) {
@@ -981,7 +993,14 @@ export default function ActiveWorkoutPage() {
               let updated = false;
               for (const prog of programs) {
                 if (!prog.days?.length) continue;
-                const dayIdx = prog.days.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+                // Prefer exact match by programId + dayIndex from templateId
+                let dayIdx = -1;
+                if (parsedProgramId && parsedProgramId === prog.id && parsedDayIndex !== null && parsedDayIndex < prog.days.length) {
+                  dayIdx = parsedDayIndex;
+                } else {
+                  // Fallback: match by day label name
+                  dayIdx = prog.days.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+                }
                 if (dayIdx >= 0) {
                   prog.days[dayIdx].blocks = updatedBlocks;
                   updated = true;
@@ -993,11 +1012,16 @@ export default function ActiveWorkoutPage() {
 
             // Also update trainer-assigned program (clientPrograms in store)
             const trainerStore = useTrainerStore.getState();
-            const activeProgram = trainerStore.clientPrograms.find(
-              (p: any) => p.clientId === userId && p.status === 'active'
-            );
+            // Prefer exact match by parsedProgramId, fallback to active program
+            const activeProgram = parsedProgramId
+              ? trainerStore.clientPrograms.find((p: any) => p.id === parsedProgramId)
+                || trainerStore.clientPrograms.find((p: any) => p.clientId === userId && p.status === 'active')
+              : trainerStore.clientPrograms.find((p: any) => p.clientId === userId && p.status === 'active');
             if (activeProgram?.weeklyPlan) {
-              const dayIdx = activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+              // Prefer exact dayIndex from templateId, fallback to label match
+              let dayIdx = (parsedDayIndex !== null && parsedDayIndex < activeProgram.weeklyPlan.length)
+                ? parsedDayIndex
+                : activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
               if (dayIdx >= 0) {
                 const updatedPlan = [...activeProgram.weeklyPlan];
                 updatedPlan[dayIdx] = { ...updatedPlan[dayIdx], blocks: updatedBlocks };
@@ -2291,11 +2315,12 @@ export default function ActiveWorkoutPage() {
                       const clientWorkoutHistory = workoutHistory.filter((w: any) => 
                         w.userId === workout.userId
                       );
+                      const normalizedExId = normalizeExerciseId(workoutExercise.exerciseId || '');
                       const lastWorkout = clientWorkoutHistory.find((w: any) => 
-                        w.exercises?.some((e: any) => e.exerciseId === workoutExercise.exerciseId)
+                        w.exercises?.some((e: any) => normalizeExerciseId(e.exerciseId || '') === normalizedExId)
                       );
                       const lastExerciseData = lastWorkout?.exercises?.find((e: any) => 
-                        e.exerciseId === workoutExercise.exerciseId
+                        normalizeExerciseId(e.exerciseId || '') === normalizedExId
                       );
                       const lastSets = lastExerciseData?.sets?.filter((s: any) => s.completed);
                       // Volume comparison
@@ -2613,19 +2638,30 @@ export default function ActiveWorkoutPage() {
                                     </button>
                                   )}
                                   {!set.completed ? (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => isTimedSet 
-                                        ? handleCompleteTimedSet(workoutExercise.id, set.id, workoutExercise.exercise?.name || 'Exercise')
-                                        : handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')
-                                      }
-                                      disabled={isTimedSet ? !set.duration : (set.weight == null || !set.reps)}
-                                      className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
-                                      title="Complete set"
-                                    >
-                                      <Check className="w-5 h-5" />
-                                    </Button>
+                                    <div className="flex items-center gap-0.5">
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => removeSet(workoutExercise.id, set.id)}
+                                        className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                                        title="Delete set"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => isTimedSet 
+                                          ? handleCompleteTimedSet(workoutExercise.id, set.id, workoutExercise.exercise?.name || 'Exercise')
+                                          : handleCompleteSet(workoutExercise.id, set.id, set.weight ?? 0, set.reps || 0, workoutExercise.exercise?.name || 'Exercise')
+                                        }
+                                        disabled={isTimedSet ? !set.duration : (set.weight == null || !set.reps)}
+                                        className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
+                                        title="Complete set"
+                                      >
+                                        <Check className="w-5 h-5" />
+                                      </Button>
+                                    </div>
                                   ) : (
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>

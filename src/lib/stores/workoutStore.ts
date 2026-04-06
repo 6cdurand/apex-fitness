@@ -89,6 +89,7 @@ interface WorkoutState {
   
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
+  recalcActiveExercisePB: (exerciseId: string) => void;
   
   // deriveAll pipeline — run after workout save/edit/delete
   runDeriveAll: (userId: string, completedWorkout?: Workout | null) => void;
@@ -370,13 +371,14 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (!activeWorkout) return;
 
         const targetUserId = getActiveUserId();
-        const pb = personalBests.find(p => p.exerciseId === exercise.id && p.userId === targetUserId);
+        const normalizedId = normalizeExerciseId(exercise.id);
+        const pb = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
         
         // Find last workout data for this exercise
         const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
         let lastSetData: { weight?: number; reps?: number; duration?: number } | undefined;
         for (const workout of userWorkoutHistory) {
-          const matchingEx = workout.exercises?.find(e => e.exerciseId === exercise.id);
+          const matchingEx = workout.exercises?.find(e => normalizeExerciseId(e.exerciseId || '') === normalizedId);
           if (matchingEx && matchingEx.sets?.length > 0) {
             const completedSet = matchingEx.sets.find(s => s.completed && (s.weight || s.duration));
             if (completedSet) {
@@ -466,7 +468,8 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (!exercise) return;
 
         const targetUserId = getActiveUserId();
-        const pb = personalBests.find(p => p.exerciseId === exercise.exerciseId && p.userId === targetUserId);
+        const normalizedExId = normalizeExerciseId(exercise.exerciseId || '');
+        const pb = personalBests.find(p => p.exerciseId === normalizedExId && p.userId === targetUserId);
         const lastSet = exercise.sets[exercise.sets.length - 1];
         const newSetIndex = exercise.sets.length;
         
@@ -474,7 +477,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
         let lastSetData: { weight?: number; reps?: number } | undefined;
         for (const workout of userWorkoutHistory) {
-          const matchingEx = workout.exercises?.find(e => e.exerciseId === exercise.exerciseId);
+          const matchingEx = workout.exercises?.find(e => normalizeExerciseId(e.exerciseId || '') === normalizedExId);
           if (matchingEx && matchingEx.sets?.length > newSetIndex) {
             const historicalSet = matchingEx.sets[newSetIndex];
             if (historicalSet?.completed && historicalSet.weight && historicalSet.reps) {
@@ -516,6 +519,10 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { activeWorkout } = get();
         if (!activeWorkout) return;
 
+        // Capture exercise info before removal for PB recalc
+        const exercise = activeWorkout.exercises.find(e => e.id === exerciseId);
+        const removedSet = exercise?.sets.find(s => s.id === setId);
+
         set({
           activeWorkout: {
             ...activeWorkout,
@@ -531,6 +538,11 @@ export const useWorkoutStore = create<WorkoutState>()(
             ),
           },
         });
+
+        // Recalculate PB if the removed set was completed with data
+        if (removedSet?.completed && removedSet.weight && removedSet.reps && exercise) {
+          get().recalcActiveExercisePB(exercise.exerciseId);
+        }
       },
 
       updateSet: (exerciseId, setId, updates) => {
@@ -588,6 +600,8 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { activeWorkout } = get();
         if (!activeWorkout) return;
 
+        const exercise = activeWorkout.exercises.find(e => e.id === exerciseId);
+
         set({
           activeWorkout: {
             ...activeWorkout,
@@ -603,6 +617,11 @@ export const useWorkoutStore = create<WorkoutState>()(
             ),
           },
         });
+
+        // Recalculate PB since an active-workout set was uncompleted
+        if (exercise) {
+          get().recalcActiveExercisePB(exercise.exerciseId);
+        }
       },
 
       startWorkoutTimer: () => {
@@ -800,8 +819,7 @@ export const useWorkoutStore = create<WorkoutState>()(
               : [...state.personalBests, newPB],
           }));
 
-          // Sync PB to Supabase
-          syncPBToSupabase(newPB);
+          // PB is NOT synced to Supabase here — deferred to workout finish (runDeriveAll)
 
           // Check PB medals and update strength rating (cascade)
           // Use targetUserId to attribute medals to correct user (client vs trainer)
@@ -1181,27 +1199,30 @@ export const useWorkoutStore = create<WorkoutState>()(
         const authUser = useAuthStore.getState().user;
         const userId = authUser?.id || '';
         const clientId = get().currentClientId;
+        const normId = normalizeExerciseId(exerciseId);
         // PT session: trainer is logged in, working with a client
         if (clientId && clientId !== userId) {
-          const trainerKey = `${userId}:${clientId}:${exerciseId}`;
-          return get().exerciseNotes[trainerKey] || '';
+          const trainerKey = `${userId}:${clientId}:${normId}`;
+          // Also check unnormalized key for backwards compat
+          return get().exerciseNotes[trainerKey] || get().exerciseNotes[`${userId}:${clientId}:${exerciseId}`] || '';
         }
         // Personal workout or client's own session
-        const personalKey = `${clientId || userId}:${exerciseId}`;
-        // Check new keyed format first, fall back to legacy key
-        return get().exerciseNotes[personalKey] || get().exerciseNotes[exerciseId] || '';
+        const personalKey = `${clientId || userId}:${normId}`;
+        // Check normalized, then unnormalized, then legacy key
+        return get().exerciseNotes[personalKey] || get().exerciseNotes[`${clientId || userId}:${exerciseId}`] || get().exerciseNotes[exerciseId] || '';
       },
 
       setExerciseNotes: (exerciseId: string, notes: string) => {
         const authUser = useAuthStore.getState().user;
         const userId = authUser?.id || '';
         const clientId = get().currentClientId;
+        const normId = normalizeExerciseId(exerciseId);
         // PT session: trainer is logged in, working with a client
         let key: string;
         if (clientId && clientId !== userId) {
-          key = `${userId}:${clientId}:${exerciseId}`;
+          key = `${userId}:${clientId}:${normId}`;
         } else {
-          key = `${clientId || userId}:${exerciseId}`;
+          key = `${clientId || userId}:${normId}`;
         }
         set(state => ({
           exerciseNotes: {
@@ -1209,6 +1230,91 @@ export const useWorkoutStore = create<WorkoutState>()(
             [key]: notes,
           },
         }));
+      },
+
+      recalcActiveExercisePB: (rawExerciseId: string) => {
+        const { activeWorkout, workoutHistory, personalBests, getActiveUserId } = get();
+        const userId = getActiveUserId();
+        const exerciseId = normalizeExerciseId(rawExerciseId);
+        const isAssisted = isAssistedExercise(exerciseId, rawExerciseId);
+        const userBW = getUserBodyweight(userId);
+
+        // Best from workout history
+        let bestRM = 0;
+        let bestWeight = 0;
+        let bestReps = 0;
+        let bestVolume = 0;
+        let bestWorkoutId = '';
+        let bestAt = '';
+
+        workoutHistory
+          .filter(w => w.userId === userId && !w.deletedAt)
+          .forEach(w => {
+            w.exercises?.forEach(ex => {
+              if (normalizeExerciseId(ex.exerciseId) !== exerciseId) return;
+              ex.sets?.filter(s => s.completed && s.weight && s.reps).forEach(s => {
+                const rm = calculate1RM(s.weight!, s.reps!);
+                if (rm === null) return;
+                const vol = getSetVolume(s.weight, s.reps!, isAssisted, userBW);
+                const better = isAssisted ? s.weight! < bestWeight || !bestWeight : rm > bestRM;
+                if (better) {
+                  bestRM = isAssisted ? s.weight! : rm;
+                  bestWeight = s.weight!;
+                  bestReps = s.reps!;
+                  bestVolume = Math.max(vol, bestVolume);
+                  bestWorkoutId = w.id;
+                  bestAt = w.endTime || w.startTime || '';
+                }
+              });
+            });
+          });
+
+        // Also check remaining completed sets in active workout
+        if (activeWorkout) {
+          activeWorkout.exercises.forEach(ex => {
+            if (normalizeExerciseId(ex.exerciseId) !== exerciseId) return;
+            ex.sets.filter(s => s.completed && s.weight && s.reps).forEach(s => {
+              const rm = calculate1RM(s.weight!, s.reps!);
+              if (rm === null) return;
+              const vol = getSetVolume(s.weight, s.reps!, isAssisted, userBW);
+              const better = isAssisted ? s.weight! < bestWeight || !bestWeight : rm > bestRM;
+              if (better) {
+                bestRM = isAssisted ? s.weight! : rm;
+                bestWeight = s.weight!;
+                bestReps = s.reps!;
+                bestVolume = Math.max(vol, bestVolume);
+                bestWorkoutId = activeWorkout.id;
+                bestAt = new Date().toISOString();
+              }
+            });
+          });
+        }
+
+        const existing = personalBests.find(p => p.exerciseId === exerciseId && p.userId === userId);
+
+        if (bestWeight && bestReps) {
+          const updatedPB: PersonalBest = {
+            id: existing?.id || uuidv4(),
+            exerciseId,
+            userId,
+            oneRepMax: bestRM,
+            bestWeight,
+            bestReps,
+            bestVolume,
+            achievedAt: bestAt,
+            workoutId: bestWorkoutId,
+          };
+          set(state => ({
+            personalBests: existing
+              ? state.personalBests.map(p => p.id === existing.id ? updatedPB : p)
+              : [...state.personalBests, updatedPB],
+          }));
+        } else if (existing) {
+          // No valid sets remain — remove PB
+          set(state => ({
+            personalBests: state.personalBests.filter(p => p.id !== existing.id),
+          }));
+        }
       },
 
       recalculatePBsForUser: (userId: string) => {
@@ -1298,6 +1404,9 @@ export const useWorkoutStore = create<WorkoutState>()(
             volumeRollup: result.volumeRollup,
           },
         }));
+
+        // Batch sync all PBs to Supabase now that workout is finalized
+        result.personalBests.forEach(pb => syncPBToSupabase(pb));
       },
 
       loadWorkoutHistoryFromSupabase: async (userId: string, isTrainer: boolean = false) => {

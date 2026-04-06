@@ -1681,7 +1681,7 @@ export async function syncCalendarEventToSupabase(event: any): Promise<boolean> 
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const dbEvent = {
+    const dbEvent: Record<string, any> = {
       id: event.id,
       title: event.title,
       type: event.type,
@@ -1699,6 +1699,9 @@ export async function syncCalendarEventToSupabase(event: any): Promise<boolean> 
       client_confirmed_at: event.clientConfirmedAt || null,
       recurrence_group: event.recurrenceGroup || null,
       contact_name: event.contactName || null,
+      program_id: event.programId || null,
+      owner_user_id: event.ownerUserId || null,
+      event_scope: event.eventScope || null,
     };
     
     const { error } = await supabase.from('calendar_events').upsert(dbEvent, { onConflict: 'id' });
@@ -1721,36 +1724,51 @@ export async function fetchCalendarEventsFromSupabase(trainerId: string): Promis
     const { data, error } = await supabase
       .from('calendar_events')
       .select('*')
-      .eq('trainer_id', trainerId);
+      .eq('trainer_id', trainerId)
+      .in('event_scope', ['trainer_personal', 'shared_session']);
     
     if (error) {
+      // Fallback: if event_scope column filter fails, fetch all and filter in JS
+      if (error.message?.includes('event_scope')) {
+        console.warn('[Calendar Fetch] event_scope column not found, fetching all');
+        const { data: allData } = await supabase.from('calendar_events').select('*').eq('trainer_id', trainerId);
+        const filtered = (allData || []).filter(e => e.event_scope !== 'client_assigned');
+        return filtered.map(mapCalendarEventFromDB);
+      }
       console.error('[Calendar Fetch] Error:', error.message);
       return [];
     }
     
-    return (data || []).map(e => ({
-      id: e.id,
-      title: e.title,
-      type: e.type,
-      date: e.date,
-      startTime: e.start_time,
-      endTime: e.end_time,
-      duration: e.duration,
-      clientId: e.client_id,
-      trainerId: e.trainer_id,
-      workoutId: e.workout_id,
-      notes: e.notes,
-      status: e.status,
-      color: e.color,
-      clientConfirmed: e.client_confirmed,
-      clientConfirmedAt: e.client_confirmed_at,
-      recurrenceGroup: e.recurrence_group || undefined,
-      contactName: e.contact_name || undefined,
-    }));
+    return (data || []).map(mapCalendarEventFromDB);
   } catch (e) {
     console.error('[Calendar Fetch] Exception:', e);
     return [];
   }
+}
+
+function mapCalendarEventFromDB(e: any) {
+  return {
+    id: e.id,
+    title: e.title,
+    type: e.type,
+    date: e.date,
+    startTime: e.start_time,
+    endTime: e.end_time,
+    duration: e.duration,
+    clientId: e.client_id,
+    trainerId: e.trainer_id,
+    workoutId: e.workout_id,
+    notes: e.notes,
+    status: e.status,
+    color: e.color,
+    clientConfirmed: e.client_confirmed,
+    clientConfirmedAt: e.client_confirmed_at,
+    recurrenceGroup: e.recurrence_group || undefined,
+    contactName: e.contact_name || undefined,
+    programId: e.program_id || undefined,
+    ownerUserId: e.owner_user_id || undefined,
+    eventScope: e.event_scope || undefined,
+  };
 }
 
 export async function fetchCalendarEventsForUser(clientId: string): Promise<any[]> {
@@ -1767,25 +1785,7 @@ export async function fetchCalendarEventsForUser(clientId: string): Promise<any[
       return [];
     }
     
-    return (data || []).map(e => ({
-      id: e.id,
-      title: e.title,
-      type: e.type,
-      date: e.date,
-      startTime: e.start_time,
-      endTime: e.end_time,
-      duration: e.duration,
-      clientId: e.client_id,
-      trainerId: e.trainer_id,
-      workoutId: e.workout_id,
-      notes: e.notes,
-      status: e.status,
-      color: e.color,
-      clientConfirmed: e.client_confirmed,
-      clientConfirmedAt: e.client_confirmed_at,
-      recurrenceGroup: e.recurrence_group || undefined,
-      contactName: e.contact_name || undefined,
-    }));
+    return (data || []).map(mapCalendarEventFromDB);
   } catch (e) {
     console.error('[Calendar Fetch For User] Exception:', e);
     return [];
@@ -1950,6 +1950,22 @@ export async function syncClientProgramToSupabase(program: any): Promise<boolean
     return true;
   } catch (e) {
     console.error('[Program Sync] ❌ Exception:', e);
+    return false;
+  }
+}
+
+export async function deleteClientProgramFromSupabase(programId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase.from('client_programs').delete().eq('id', programId);
+    if (error) {
+      console.error('[Program Delete] Error:', error.message);
+      return false;
+    }
+    console.log('[Program Delete] ✅ Deleted program:', programId);
+    return true;
+  } catch (e) {
+    console.error('[Program Delete] Exception:', e);
     return false;
   }
 }

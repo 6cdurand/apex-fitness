@@ -161,19 +161,41 @@ export default function CalendarPage() {
     setEditingEvent(null);
   };
 
+  // Auto-detect recurring siblings: events sharing title + clientId + trainerId + startTime
+  const getRecurringSiblings = (event: any) => {
+    if (event.recurrenceGroup) {
+      return calendarEvents.filter(e => e.recurrenceGroup === event.recurrenceGroup);
+    }
+    // Fallback: detect by matching pattern (same title, client, trainer, start time)
+    return calendarEvents.filter(e =>
+      e.id !== event.id &&
+      e.title === event.title &&
+      e.clientId === event.clientId &&
+      e.trainerId === event.trainerId &&
+      e.startTime === event.startTime &&
+      e.type === event.type
+    );
+  };
+
   const handleDeleteEvent = (mode: 'single' | 'future' | 'all') => {
     if (!editingEvent) return;
-    if (mode === 'all' && editingEvent.recurrenceGroup) {
-      // Delete all events in this recurrence group
-      const group = editingEvent.recurrenceGroup;
-      const toDelete = calendarEvents.filter(e => e.recurrenceGroup === group);
-      toDelete.forEach(e => deleteCalendarEvent(e.id));
-    } else if (mode === 'future' && editingEvent.recurrenceGroup) {
-      // Delete this event and all future events in this recurrence group
-      const group = editingEvent.recurrenceGroup;
+    const siblings = getRecurringSiblings(editingEvent);
+    const hasSiblings = editingEvent.recurrenceGroup ? siblings.length > 0 : siblings.length > 0;
+
+    if (mode === 'all' && hasSiblings) {
+      // Delete all events in this series (including the current one)
+      const allInSeries = editingEvent.recurrenceGroup
+        ? siblings
+        : [editingEvent, ...siblings];
+      allInSeries.forEach((e: any) => deleteCalendarEvent(e.id));
+    } else if (mode === 'future' && hasSiblings) {
+      // Delete this event and all future events in the series
       const eventDate = editingEvent.date;
-      const toDelete = calendarEvents.filter(e => e.recurrenceGroup === group && e.date >= eventDate);
-      toDelete.forEach(e => deleteCalendarEvent(e.id));
+      const allInSeries = editingEvent.recurrenceGroup
+        ? siblings
+        : [editingEvent, ...siblings];
+      const toDelete = allInSeries.filter((e: any) => e.date >= eventDate);
+      toDelete.forEach((e: any) => deleteCalendarEvent(e.id));
     } else {
       deleteCalendarEvent(editingEvent.id);
     }
@@ -866,26 +888,31 @@ export default function CalendarPage() {
                     <Trash2 className="w-3 h-3 mr-2" />
                     Delete This Event Only
                   </Button>
-                  {editingEvent?.recurrenceGroup && (
-                    <>
-                      <Button
-                        size="sm"
-                        className="w-full bg-red-700 hover:bg-red-800 text-white"
-                        onClick={() => handleDeleteEvent('future')}
-                      >
-                        <Trash2 className="w-3 h-3 mr-2" />
-                        Delete This &amp; All Future ({calendarEvents.filter(e => e.recurrenceGroup === editingEvent.recurrenceGroup && e.date >= editingEvent.date).length})
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="w-full bg-red-800 hover:bg-red-900 text-white"
-                        onClick={() => handleDeleteEvent('all')}
-                      >
-                        <Trash2 className="w-3 h-3 mr-2" />
-                        Delete Entire Series ({calendarEvents.filter(e => e.recurrenceGroup === editingEvent.recurrenceGroup).length} events)
-                      </Button>
-                    </>
-                  )}
+                  {editingEvent && (() => {
+                    const siblings = getRecurringSiblings(editingEvent);
+                    const allInSeries = editingEvent.recurrenceGroup ? siblings : [editingEvent, ...siblings];
+                    if (siblings.length === 0) return null;
+                    return (
+                      <>
+                        <Button
+                          size="sm"
+                          className="w-full bg-red-700 hover:bg-red-800 text-white"
+                          onClick={() => handleDeleteEvent('future')}
+                        >
+                          <Trash2 className="w-3 h-3 mr-2" />
+                          Delete This &amp; All Future ({allInSeries.filter((e: any) => e.date >= editingEvent.date).length})
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="w-full bg-red-800 hover:bg-red-900 text-white"
+                          onClick={() => handleDeleteEvent('all')}
+                        >
+                          <Trash2 className="w-3 h-3 mr-2" />
+                          Delete Entire Series ({allInSeries.length} events)
+                        </Button>
+                      </>
+                    );
+                  })()}
                   <Button
                     size="sm"
                     variant="outline"

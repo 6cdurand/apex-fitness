@@ -13,10 +13,12 @@ import {
   syncWorkoutLibraryToSupabase, fetchWorkoutLibraryFromSupabase, deleteWorkoutLibraryFromSupabase,
   fetchCircuitLibraryFromSupabase,
   syncPaymentToSupabase, fetchPaymentsFromSupabase, deletePaymentFromSupabase,
-  syncClientProgramToSupabase, fetchClientProgramsFromSupabase,
+  syncClientProgramToSupabase, fetchClientProgramsFromSupabase, deleteClientProgramFromSupabase,
+  linkClientToTrainer,
   syncBookingRequestToSupabase, fetchBookingRequestsFromSupabase,
   deleteTrainerClientFromSupabase, deleteClientFromSupabase,
   fetchSavedBlocksFromSupabase, fetchBlockPerformancesFromSupabase,
+  syncSavedBlockToSupabase, deleteSavedBlockFromSupabase,
   syncClientProfileToSupabase, fetchClientProfilesFromSupabase,
   syncTrainerSessionToSupabase, syncSessionPackageToSupabase,
   fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase,
@@ -320,6 +322,25 @@ export const useTrainerStore = create<TrainerState>()(
           }
         }).catch(err => {
           console.error('[Trainer Store] ❌ Exception syncing client:', err);
+        });
+        
+        // Link client → trainer in users table so client can see the trainer
+        linkClientToTrainer(clientId, trainerId).then(success => {
+          if (success) {
+            console.log('[Trainer Store] ✅ Client linked to trainer in users table:', clientId);
+          } else {
+            console.error('[Trainer Store] ❌ Failed to link client to trainer:', clientId);
+          }
+        });
+        
+        // Notify client that they have been connected to a trainer
+        const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+        getSocialStore().getState().addNotification({
+          userId: clientId,
+          type: 'session_booked' as any,
+          title: 'Trainer Connected',
+          message: `${trainerName} has added you as a client. You can now view your programs and sessions.`,
+          link: '/trainer',
         });
       },
 
@@ -705,9 +726,23 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       addCalendarEvent: (event) => {
+        // Auto-set scoping fields if not already provided
+        const scope: CalendarEvent['eventScope'] = event.eventScope || (
+          event.type === 'workout' && event.clientId ? 'client_assigned' :
+          !event.clientId ? 'trainer_personal' :
+          'shared_session'
+        );
+        const owner = event.ownerUserId || (
+          scope === 'client_assigned' ? event.clientId :
+          scope === 'trainer_personal' ? event.trainerId :
+          event.trainerId // shared_session: trainer owns it
+        );
+        
         const newEvent: CalendarEvent = {
           id: uuidv4(),
           ...event,
+          ownerUserId: owner,
+          eventScope: scope,
         };
 
         set(state => ({
@@ -1218,6 +1253,16 @@ export const useTrainerStore = create<TrainerState>()(
         get().clientPrograms
           .filter(p => p.clientId === program.clientId && p.status === 'completed')
           .forEach(p => syncClientProgramToSupabase(p));
+        
+        // Notify client about new program assignment
+        const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+        getSocialStore().getState().addNotification({
+          userId: program.clientId,
+          type: 'program_assigned',
+          title: 'New Program Assigned',
+          message: `${trainerName} assigned you a new program: ${program.templateName || 'Training Program'}`,
+          link: '/program',
+        });
       },
 
       updateClientProgram: (programId, updates) => {
@@ -1232,9 +1277,33 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       deleteClientProgram: (programId) => {
+        // Find the program before deleting so we can clean up calendar events
+        const program = get().clientPrograms.find(p => p.id === programId);
+        
         set(state => ({
           clientPrograms: state.clientPrograms.filter(p => p.id !== programId),
         }));
+        // Delete from Supabase
+        deleteClientProgramFromSupabase(programId);
+        
+        // Cascade: delete related calendar events
+        if (program) {
+          const relatedEvents = get().calendarEvents.filter(e => {
+            // Match by programId field
+            if ((e as any).programId === programId) return true;
+            // Match by client + trainer + workout type + scheduled status
+            if (e.clientId === program.clientId && e.trainerId === program.trainerId && e.type === 'workout' && e.status === 'scheduled') {
+              // Check if title matches any day label in the program
+              const dayLabels = program.weeklyPlan?.map((d: any) => d.dayLabel) || [];
+              return dayLabels.some((label: string) => e.title?.includes(label));
+            }
+            return false;
+          });
+          relatedEvents.forEach(e => get().deleteCalendarEvent(e.id));
+          if (relatedEvents.length > 0) {
+            console.log(`[Trainer Store] 🗑️ Cascade deleted ${relatedEvents.length} calendar events for program ${programId}`);
+          }
+        }
       },
 
       getClientPrograms: (clientId) => {
@@ -1495,6 +1564,9 @@ export const useTrainerStore = create<TrainerState>()(
               : e
           ),
         }));
+        // Sync confirmation to Supabase
+        const confirmed = get().calendarEvents.find(e => e.id === eventId);
+        if (confirmed) syncCalendarEventToSupabase(confirmed);
       },
 
       // Session workouts (created in builder)
@@ -1677,23 +1749,9 @@ export const useTrainerStore = create<TrainerState>()(
           savedBlocks: [...state.savedBlocks, newBlock],
         }));
         // Sync to Supabase for cross-device access
-        import('../supabaseSync').then(async ({ syncSavedBlockToSupabase }) => {
-          console.log('[Store] Syncing new block to Supabase:', newBlock.id, newBlock.name);
-          const success = await syncSavedBlockToSupabase({
-            id: newBlock.id,
-            name: newBlock.name,
-            type: newBlock.type,
-            trainerId: newBlock.trainerId,
-            exercises: newBlock.exercises,
-            circuitStyle: newBlock.circuitStyle,
-            circuitRounds: newBlock.circuitRounds,
-            circuitDuration: newBlock.circuitDuration,
-            circuitRestBetween: newBlock.circuitRestBetween,
-            createdAt: newBlock.createdAt,
-            updatedAt: newBlock.updatedAt,
-          });
+        syncSavedBlockToSupabase(newBlock).then(success => {
           console.log('[Store] Block sync result:', success);
-        }).catch(err => console.error('[Store] Error importing supabaseSync:', err));
+        }).catch(err => console.error('[Store] Error syncing block:', err));
         return newBlock;
       },
 
@@ -1706,21 +1764,7 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync updated block to Supabase
         const updated = get().savedBlocks.find(b => b.id === blockId);
         if (updated) {
-          import('../supabaseSync').then(async ({ syncSavedBlockToSupabase }) => {
-            console.log('[Store] Syncing updated block to Supabase:', updated.id, updated.name);
-            const success = await syncSavedBlockToSupabase({
-              id: updated.id,
-              name: updated.name,
-              type: updated.type,
-              trainerId: updated.trainerId,
-              exercises: updated.exercises,
-              circuitStyle: updated.circuitStyle,
-              circuitRounds: updated.circuitRounds,
-              circuitDuration: updated.circuitDuration,
-              circuitRestBetween: updated.circuitRestBetween,
-              createdAt: updated.createdAt,
-              updatedAt: updated.updatedAt,
-            });
+          syncSavedBlockToSupabase(updated).then(success => {
             console.log('[Store] Block update sync result:', success);
           }).catch(err => console.error('[Store] Error syncing updated block:', err));
         }
@@ -1731,8 +1775,8 @@ export const useTrainerStore = create<TrainerState>()(
           savedBlocks: state.savedBlocks.filter(b => b.id !== blockId),
         }));
         // Delete from Supabase
-        import('../supabaseSync').then(({ deleteSavedBlockFromSupabase }) => {
-          deleteSavedBlockFromSupabase(blockId);
+        deleteSavedBlockFromSupabase(blockId).catch(err => {
+          console.error('[Store] Error deleting block from Supabase:', err);
         });
       },
 
@@ -1930,9 +1974,7 @@ export const useTrainerStore = create<TrainerState>()(
         );
         // Sync local-only blocks to Supabase
         localOnlyBlocks.forEach(block => {
-          import('../supabaseSync').then(({ syncSavedBlockToSupabase }) => {
-            syncSavedBlockToSupabase(block);
-          });
+          syncSavedBlockToSupabase(block);
         });
         
         // Map block performances from Supabase

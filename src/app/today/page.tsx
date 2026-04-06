@@ -556,146 +556,12 @@ export default function TodayPage() {
           );
         })()}
 
-        {/* Scheduled Program Workouts — startable by client (sky blue) */}
-        {user.mode !== 'trainer' && (() => {
-          const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-          const todayProgramWorkouts = clientScheduledSessions.filter(s => {
-            if (!s.date) return false;
-            if (format(new Date(s.date), 'yyyy-MM-dd') !== selectedDateStr) return false;
-            // Program workouts: type 'workout' (not PT sessions)
-            return s.type === 'workout';
-          });
-          if (todayProgramWorkouts.length === 0) return null;
-
-          // Helper: find program day data from localStorage saved programs
-          const findProgramDayData = (event: any) => {
-            try {
-              const data = localStorage.getItem(`apex-program-library-${user.id}`);
-              if (!data) return null;
-              const programs = JSON.parse(data);
-              // Match by programId first, then by name in notes
-              for (const prog of programs) {
-                if (!prog.days?.length) continue;
-                if (event.programId && event.programId === prog.id) {
-                  const dayIdx = event.programDayIndex ?? prog.days.findIndex((d: any) => d.dayLabel === event.title);
-                  if (dayIdx >= 0 && prog.days[dayIdx]) return prog.days[dayIdx];
-                }
-                // Fallback: match by title
-                const match = prog.days.find((d: any) => d.dayLabel === event.title);
-                if (match) return match;
-              }
-            } catch {}
-            return null;
-          };
-
-          // Helper: start a scheduled workout with full exercise data
-          const startScheduledWorkout = (event: any) => {
-            const dayData = findProgramDayData(event);
-            if (dayData && dayData.blocks?.length) {
-              const exercises = (dayData.blocks || []).flatMap((block: any) =>
-                (block.exercises || []).map((ex: any) => ({
-                  id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                  exerciseId: ex.exerciseId || ex.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown',
-                  exercise: {
-                    id: ex.exerciseId || ex.name?.toLowerCase().replace(/\s+/g, '_') || 'unknown',
-                    name: ex.exerciseName || ex.name || 'Exercise',
-                    category: 'strength',
-                    muscleGroups: [],
-                  },
-                  sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                    id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                    setNumber: si + 1,
-                    targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                    reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                    weight: 0,
-                    completed: false,
-                  })),
-                  restTimerSeconds: parseInt(ex.rest) || 90,
-                  notes: ex.notes || '',
-                }))
-              );
-              if (exercises.length > 0) {
-                startFromTemplate({
-                  id: `sched-${event.id}`,
-                  name: event.title || 'Workout',
-                  description: event.notes || '',
-                  exercises,
-                  category: 'strength',
-                  estimatedDuration: 60,
-                  createdAt: new Date().toISOString(),
-                  createdBy: user.id,
-                  isPublic: false,
-                  updatedAt: new Date().toISOString(),
-                } as any);
-              } else {
-                startWorkout(event.title || 'Workout');
-              }
-            } else {
-              // No saved block data — start empty workout
-              startWorkout(event.title || 'Workout');
-            }
-            // Mark event as completed
-            const { updateCalendarEvent: updateEvt } = useTrainerStore.getState();
-            updateEvt(event.id, { status: 'completed' });
-            router.push('/workout/active');
-          };
-
-          return (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold text-gray-500 flex items-center gap-2">
-                <Dumbbell className="w-4 h-4" />
-                Scheduled Workouts
-              </h2>
-              {todayProgramWorkouts.map(event => (
-                <Card key={event.id} className="border-sky-300 bg-gradient-to-r from-sky-500/10 to-blue-500/10 shadow-sm">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center">
-                          <Dumbbell className="w-5 h-5 text-sky-500" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{event.title || 'Workout'}</h3>
-                          <p className="text-xs text-gray-500">
-                            {event.startTime && event.endTime
-                              ? `${event.startTime} – ${event.endTime}`
-                              : ''}
-                            {event.notes ? ` • ${event.notes}` : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Badge className="bg-sky-500/20 text-sky-600 border-0 text-[10px]">
-                          Program
-                        </Badge>
-                        <button
-                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
-                          onClick={() => deleteCalendarEvent(event.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                      onClick={() => startScheduledWorkout(event)}
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Start {event.title || 'Workout'}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </section>
-          );
-        })()}
-
-        {/* Next Workout — client mode, active program (schedule-aware) */}
+        {/* Next Workout — client mode, active program (today only) */}
         {user.mode !== 'trainer' && isToday && (() => {
           const next = getNextProgramWorkout(user.id);
           if (!next) return null;
           const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, isScheduledToday, nextScheduledDay } = next;
+
           const totalEx = day?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
           
           // Helper to start a specific program day
@@ -797,7 +663,8 @@ export default function TodayPage() {
                           className="border-gray-200 text-gray-600"
                           onClick={() => setShowSwapWorkout(true)}
                         >
-                          <ArrowLeftRight className="w-4 h-4" />
+                          <ArrowLeftRight className="w-4 h-4 mr-1" />
+                          Swap
                         </Button>
                       )}
                     </div>
