@@ -1288,12 +1288,14 @@ export const useTrainerStore = create<TrainerState>()(
         
         // Cascade: delete related calendar events
         if (program) {
+          const recurrenceKey = `program-${programId}`;
           const relatedEvents = get().calendarEvents.filter(e => {
-            // Match by programId field
+            // Match by programId field (new events)
             if ((e as any).programId === programId) return true;
-            // Match by client + trainer + workout type + scheduled status
+            // Match by recurrenceGroup (builder-created events)
+            if ((e as any).recurrenceGroup === recurrenceKey) return true;
+            // Fallback: match by client + trainer + workout type + scheduled status + title
             if (e.clientId === program.clientId && e.trainerId === program.trainerId && e.type === 'workout' && e.status === 'scheduled') {
-              // Check if title matches any day label in the program
               const dayLabels = program.weeklyPlan?.map((d: any) => d.dayLabel) || [];
               return dayLabels.some((label: string) => e.title?.includes(label));
             }
@@ -1501,28 +1503,17 @@ export const useTrainerStore = create<TrainerState>()(
           const currentPrograms = get().clientPrograms;
           const currentEvents = get().calendarEvents;
           
-          // Merge: add programs not already in local store
-          const newPrograms = programs.filter(
-            (p: any) => !currentPrograms.find(cp => cp.id === p.id)
-          );
-          // Update existing programs with fresh Supabase data
-          const updatedPrograms = currentPrograms.map(cp => {
-            const fresh = programs.find((p: any) => p.id === cp.id);
-            return fresh ? { ...cp, ...fresh } : cp;
-          });
+          // Supabase is source of truth for this client's programs:
+          // Keep programs for OTHER clients, replace this client's with Supabase data
+          const otherClientPrograms = currentPrograms.filter(cp => cp.clientId !== clientId);
           
-          // Merge events: add new, update existing
-          const newEvents = events.filter(
-            (e: any) => !currentEvents.find(ce => ce.id === e.id)
-          );
-          const updatedEvents = currentEvents.map(ce => {
-            const fresh = events.find((e: any) => e.id === ce.id);
-            return fresh ? { ...ce, ...fresh } : ce;
-          });
+          // Supabase is source of truth for this client's events:
+          // Keep events for OTHER clients, replace this client's with Supabase data
+          const otherClientEvents = currentEvents.filter(ce => ce.clientId !== clientId);
           
           set({
-            clientPrograms: [...updatedPrograms, ...newPrograms],
-            calendarEvents: [...updatedEvents, ...newEvents],
+            clientPrograms: [...otherClientPrograms, ...programs],
+            calendarEvents: [...otherClientEvents, ...events],
           });
           
           // Load notifications into social store for this client
@@ -1936,12 +1927,8 @@ export const useTrainerStore = create<TrainerState>()(
           return sbEvent;
         });
         
-        // Also include local events that don't exist in Supabase yet (newly created)
-        const localOnlyEvents = currentCalendarEvents.filter(
-          localEvent => !supabaseCalendarEvents.find((sbEvent: any) => sbEvent.id === localEvent.id)
-        );
-        // Sync these to Supabase
-        localOnlyEvents.forEach(event => syncCalendarEventToSupabase(event));
+        // Supabase is source of truth — do NOT re-upload local-only events
+        // (they were likely deleted on another device)
         
         // Same for session workouts - preserve local ones not yet synced
         const currentSessionWorkouts = get().sessionWorkouts;
@@ -2005,14 +1992,15 @@ export const useTrainerStore = create<TrainerState>()(
           clients: [...clients, ...localOnlyClients],
           sessions: supabaseSessions,
           sessionPackages: supabasePackages,
-          calendarEvents: [...mergedCalendarEvents, ...localOnlyEvents],
+          calendarEvents: mergedCalendarEvents,
           payments: supabasePayments,
           clientPrograms: (() => {
             const currentPrograms = get().clientPrograms;
-            // Merge: Supabase programs with local scheduling fields preserved
+            // Supabase is source of truth — do NOT re-upload local-only programs
+            // (they were likely deleted on another device)
             const merged = supabasePrograms.map((sbProg: any) => {
               const localProg = currentPrograms.find((lp: any) => lp.id === sbProg.id);
-              // If Supabase lost trainingDaysPerWeek but local has it, preserve local
+              // If Supabase lost trainingDaysPerWeek but local has it, preserve & re-sync
               if (localProg && localProg.trainingDaysPerWeek && !sbProg.trainingDaysPerWeek) {
                 const restored = { ...sbProg, trainingDaysPerWeek: localProg.trainingDaysPerWeek, scheduleMode: localProg.scheduleMode, selectedDays: localProg.selectedDays, cycleAcrossWeeks: localProg.cycleAcrossWeeks, sessionPTMap: localProg.sessionPTMap, nextWorkoutIndex: localProg.nextWorkoutIndex, autoRepeat: localProg.autoRepeat, sessionType: localProg.sessionType };
                 syncClientProgramToSupabase(restored);
@@ -2020,12 +2008,7 @@ export const useTrainerStore = create<TrainerState>()(
               }
               return sbProg;
             });
-            // Also keep local-only programs not yet in Supabase
-            const localOnly = currentPrograms.filter(
-              (lp: any) => !supabasePrograms.find((sp: any) => sp.id === lp.id)
-            );
-            localOnly.forEach((p: any) => syncClientProgramToSupabase(p));
-            return [...merged, ...localOnly];
+            return merged;
           })(),
           bookingRequests: supabaseBookings,
           sessionWorkouts: [...supabaseSessionWorkouts, ...localOnlyWorkouts],

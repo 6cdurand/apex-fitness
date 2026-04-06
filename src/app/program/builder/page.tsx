@@ -617,6 +617,7 @@ function ProgramBuilderContent() {
             status: 'scheduled',
             notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
             recurrenceGroup: programRecurrenceGroup,
+            programId: program.id,
           });
           cycleIdx++;
         });
@@ -651,6 +652,7 @@ function ProgramBuilderContent() {
             status: 'scheduled',
             notes: `${totalEx} exercises • ${isPT ? 'PT Session' : 'Personal'} • Week ${week + 1}`,
             recurrenceGroup: programRecurrenceGroup,
+            programId: program.id,
           });
           cycleIdx++;
         }
