@@ -1741,8 +1741,9 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         // Sync to Supabase for cross-device access
         syncSavedBlockToSupabase(newBlock).then(success => {
-          console.log('[Store] Block sync result:', success);
-        }).catch(err => console.error('[Store] Error syncing block:', err));
+          if (!success) console.error('[Store] ❌ Block sync FAILED for:', newBlock.id, newBlock.name);
+          else console.log('[Store] ✅ Block synced:', newBlock.id, newBlock.name);
+        }).catch(err => console.error('[Store] ❌ Block sync exception:', err));
         return newBlock;
       },
 
@@ -1756,8 +1757,9 @@ export const useTrainerStore = create<TrainerState>()(
         const updated = get().savedBlocks.find(b => b.id === blockId);
         if (updated) {
           syncSavedBlockToSupabase(updated).then(success => {
-            console.log('[Store] Block update sync result:', success);
-          }).catch(err => console.error('[Store] Error syncing updated block:', err));
+            if (!success) console.error('[Store] ❌ Block update sync FAILED for:', blockId);
+            else console.log('[Store] ✅ Block updated:', blockId);
+          }).catch(err => console.error('[Store] ❌ Block update sync exception:', err));
         }
       },
 

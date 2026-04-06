@@ -2618,7 +2618,7 @@ export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<b
   console.log('[Supabase] Syncing saved block:', block.id, block.name);
 
   try {
-    const dbBlock = {
+    const dbBlock: Record<string, any> = {
       id: block.id,
       trainer_id: block.trainerId,
       name: block.name,
@@ -2632,8 +2632,6 @@ export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<b
       created_at: block.createdAt || new Date().toISOString(),
       updated_at: block.updatedAt || new Date().toISOString(),
     };
-    
-    console.log('[Supabase] Saved block data to upsert:', JSON.stringify(dbBlock, null, 2));
 
     const { data, error } = await supabase
       .from('saved_blocks')
@@ -2642,6 +2640,21 @@ export async function syncSavedBlockToSupabase(block: SavedBlockData): Promise<b
 
     if (error) {
       console.error('[Supabase] Error syncing saved block:', error.message, error.details, error.hint);
+      // Retry without optional 'folder' column in case it doesn't exist yet
+      if (error.message?.includes('folder') || error.message?.includes('column')) {
+        console.log('[Supabase] Retrying block sync without folder column...');
+        const { folder, ...dbBlockNoFolder } = dbBlock;
+        const { data: retryData, error: retryError } = await supabase
+          .from('saved_blocks')
+          .upsert(dbBlockNoFolder, { onConflict: 'id' })
+          .select();
+        if (retryError) {
+          console.error('[Supabase] Retry also failed:', retryError.message);
+          return false;
+        }
+        console.log('[Supabase] Block synced (without folder):', block.id, retryData);
+        return true;
+      }
       return false;
     }
 
