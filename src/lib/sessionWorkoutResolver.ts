@@ -189,7 +189,7 @@ export async function getOrCreateSessionWorkoutForEvent(
   eventId: string,
   trainerId: string,
   clientId: string,
-  programData?: { weeklyPlan?: any[]; programId?: string },
+  programData?: { weeklyPlan?: any[]; programId?: string; programDayIndex?: number },
 ): Promise<SessionWorkoutResult | null> {
   // Idempotency: if already resolving this event, return same promise
   const inflight = _inflightResolves.get(eventId);
@@ -212,7 +212,7 @@ async function _resolveSessionWorkout(
   eventId: string,
   trainerId: string,
   clientId: string,
-  programData?: { weeklyPlan?: any[]; programId?: string },
+  programData?: { weeklyPlan?: any[]; programId?: string; programDayIndex?: number },
 ): Promise<SessionWorkoutResult | null> {
   console.debug('[SessionResolver] start_session_requested', { eventId });
 
@@ -254,6 +254,21 @@ async function _resolveSessionWorkout(
 
       if (sw) {
         if (sw.event_id === eventId) {
+          // If existing workout has empty blocks but we have program data, backfill
+          const existingBlocks = typeof sw.blocks === 'string' ? JSON.parse(sw.blocks) : (sw.blocks || []);
+          const hasExercises = existingBlocks.some((b: any) => (b.exercises || []).length > 0);
+          if (!hasExercises && programData?.weeklyPlan) {
+            const rebuilt = _reconstructBlocks(event, programData);
+            const rebuiltHasExercises = rebuilt.some((b: any) => (b.exercises || []).length > 0);
+            if (rebuiltHasExercises) {
+              await supabase
+                .from('session_workouts')
+                .update({ blocks: JSON.stringify(rebuilt) })
+                .eq('id', sw.id);
+              sw.blocks = JSON.stringify(rebuilt);
+              console.debug('[SessionResolver] session_workout_blocks_backfilled', { eventId, workoutId: sw.id });
+            }
+          }
           const result = _mapSessionWorkout(sw, 'existing');
           console.debug('[SessionResolver] session_workout_resolved', {
             eventId, workoutId: sw.id, source: 'existing',
@@ -291,6 +306,21 @@ async function _resolveSessionWorkout(
           .from('calendar_events')
           .update({ workout_id: byEvent.id })
           .eq('id', eventId);
+      }
+      // Backfill empty blocks if program data is now available
+      const existingBlocks = typeof byEvent.blocks === 'string' ? JSON.parse(byEvent.blocks) : (byEvent.blocks || []);
+      const hasExercises = existingBlocks.some((b: any) => (b.exercises || []).length > 0);
+      if (!hasExercises && programData?.weeklyPlan) {
+        const rebuilt = _reconstructBlocks(event, programData);
+        const rebuiltHasExercises = rebuilt.some((b: any) => (b.exercises || []).length > 0);
+        if (rebuiltHasExercises) {
+          await supabase
+            .from('session_workouts')
+            .update({ blocks: JSON.stringify(rebuilt) })
+            .eq('id', byEvent.id);
+          byEvent.blocks = JSON.stringify(rebuilt);
+          console.debug('[SessionResolver] session_workout_blocks_backfilled', { eventId, workoutId: byEvent.id });
+        }
       }
       const result = _mapSessionWorkout(byEvent, 'existing');
       console.debug('[SessionResolver] session_workout_resolved', {
@@ -403,28 +433,44 @@ function _mapSessionWorkout(row: any, source: 'existing' | 'created'): SessionWo
  */
 function _reconstructBlocks(
   event: any,
-  programData?: { weeklyPlan?: any[]; programId?: string },
+  programData?: { weeklyPlan?: any[]; programId?: string; programDayIndex?: number },
 ): any[] {
   const programId = event.program_id;
-  const dayIndex = event.program_day_index;
+  // Use programData.programDayIndex (from local CalendarEvent) since DB column doesn't exist
+  const dayIndex = programData?.programDayIndex;
 
-  // If event has program reference and programData is provided, use exact day
-  if (programId && dayIndex != null && programData?.weeklyPlan) {
+  // If programData provides an exact day index, use it
+  if (dayIndex != null && programData?.weeklyPlan) {
     const day = programData.weeklyPlan[dayIndex];
-    if (day && day.blocks) {
+    if (day && day.blocks && day.blocks.some((b: any) => (b.exercises || []).length > 0)) {
+      console.debug('[SessionResolver] blocks_from_program_day_index', { dayIndex });
       return day.blocks;
     }
   }
 
-  // If event has program reference, try matching by programId in provided data
-  if (programId && programData?.programId === programId && programData?.weeklyPlan?.length) {
-    // Try matching by event title to find correct day
+  // Try matching by event title against program day labels
+  if (programData?.weeklyPlan?.length) {
     const titleLower = (event.title || '').toLowerCase().trim();
     if (titleLower) {
+      // Exact match on dayLabel
       const matchByLabel = programData.weeklyPlan.find(
         (d: any) => (d.dayLabel || '').toLowerCase().trim() === titleLower
       );
-      if (matchByLabel?.blocks) return matchByLabel.blocks;
+      if (matchByLabel?.blocks?.some((b: any) => (b.exercises || []).length > 0)) {
+        console.debug('[SessionResolver] blocks_from_title_exact_match');
+        return matchByLabel.blocks;
+      }
+      // Substring match: event title contains dayLabel or vice versa
+      const matchBySubstring = programData.weeklyPlan.find(
+        (d: any) => {
+          const label = (d.dayLabel || '').toLowerCase().trim();
+          return label && (titleLower.includes(label) || label.includes(titleLower));
+        }
+      );
+      if (matchBySubstring?.blocks?.some((b: any) => (b.exercises || []).length > 0)) {
+        console.debug('[SessionResolver] blocks_from_title_substring_match');
+        return matchBySubstring.blocks;
+      }
     }
     // Do NOT fall back to first/last day — return empty scaffold instead
   }

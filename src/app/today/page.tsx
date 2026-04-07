@@ -155,7 +155,7 @@ export default function TodayPage() {
         event.id,
         user?.id || '',
         event.clientId || '',
-        program ? { weeklyPlan: program.weeklyPlan, programId: program.id } : undefined,
+        program ? { weeklyPlan: program.weeklyPlan, programId: program.id, programDayIndex: event.programDayIndex } : undefined,
       );
 
       if (sw && sw.blocks && sw.blocks.length > 0) {
