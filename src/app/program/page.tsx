@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
+import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -141,41 +142,14 @@ export default function ProgramPage() {
   const startProgramDay = (dayIndex: number) => {
     if (!user || !activeProgram?.weeklyPlan?.[dayIndex]) return;
     const day = activeProgram.weeklyPlan[dayIndex];
-    const exercises = (day.blocks || []).flatMap((block: any) =>
-      (block.exercises || []).map((ex: any) => ({
-        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        exerciseId: ex.exerciseId || ex.id,
-        exercise: {
-          id: ex.exerciseId || ex.id,
-          name: ex.exerciseName || ex.name || 'Exercise',
-          category: 'strength',
-          muscleGroups: [],
-        },
-        sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-          id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-          setNumber: si + 1,
-          targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-          reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-          weight: 0,
-          completed: false,
-        })),
-        restTimerSeconds: parseInt(ex.rest) || 90,
-        notes: ex.notes || '',
-      }))
-    );
-    if (exercises.length > 0) {
-      startFromTemplate({
-        id: `program-${activeProgram.id}-${dayIndex}`,
-        name: `${day.dayLabel || 'Workout'} - ${activeProgram.templateName}`,
-        description: `From ${activeProgram.templateName}`,
-        exercises,
-        category: 'strength',
-        estimatedDuration: 60,
-        createdAt: new Date().toISOString(),
-        createdBy: user.id,
-        isPublic: false,
-        updatedAt: new Date().toISOString(),
-      } as any);
+    const template = convertProgramDayToTemplate(day, {
+      programId: activeProgram.id,
+      dayIndex,
+      programName: activeProgram.templateName,
+      userId: user.id,
+    });
+    if (template.exercises.length > 0) {
+      startFromTemplate(template as any);
       router.push('/workout/active');
     }
   };
@@ -809,6 +783,8 @@ export default function ProgramPage() {
             {activeProgram?.weeklyPlan?.map((day: any, idx: number) => {
               const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
               const isScheduled = nextWorkout?.dayIndex === idx;
+              const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
+              if (isDoneThisWeek) return null;
               return (
                 <button
                   key={day.id || idx}

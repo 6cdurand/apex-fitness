@@ -2336,8 +2336,10 @@ export function filterExercisesBySearch(
           return pattern === 'warmup' || category === 'stretching';
         case 'cardio':
           return pattern === 'cardio' || category === 'cardio';
-        case 'work':
         case 'circuit':
+          // Circuits can include strength AND cardio exercises
+          return category !== 'warmup' && category !== 'stretching' && category !== 'activation';
+        case 'work':
         default:
           return pattern !== 'warmup' && pattern !== 'cardio' &&
             category !== 'warmup' && category !== 'cardio' &&

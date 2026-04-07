@@ -43,6 +43,7 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
+import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday } from 'date-fns';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -566,41 +567,14 @@ export default function TodayPage() {
           
           // Helper to start a specific program day
           const startDay = (idx: number, d: any) => {
-            const exercises = (d?.blocks || []).flatMap((block: any) =>
-              (block.exercises || []).map((ex: any) => ({
-                id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                exerciseId: ex.exerciseId || ex.id,
-                exercise: {
-                  id: ex.exerciseId || ex.id,
-                  name: ex.exerciseName || ex.name || 'Exercise',
-                  category: 'strength',
-                  muscleGroups: [],
-                },
-                sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                  id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                  setNumber: si + 1,
-                  targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                  reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                  weight: 0,
-                  completed: false,
-                })),
-                restTimerSeconds: parseInt(ex.rest) || 90,
-                notes: ex.notes || '',
-              }))
-            );
-            if (exercises.length > 0) {
-              startFromTemplate({
-                id: `program-${program.id}-${idx}`,
-                name: `${d?.dayLabel || 'Workout'} - ${program.templateName}`,
-                description: `From ${program.templateName}`,
-                exercises,
-                category: 'strength',
-                estimatedDuration: 60,
-                createdAt: new Date().toISOString(),
-                createdBy: user.id,
-                isPublic: false,
-                updatedAt: new Date().toISOString(),
-              } as any);
+            const template = convertProgramDayToTemplate(d, {
+              programId: program.id,
+              dayIndex: idx,
+              programName: program.templateName,
+              userId: user.id,
+            });
+            if (template.exercises.length > 0) {
+              startFromTemplate(template as any);
               router.push('/workout/active');
             }
           };
@@ -1072,44 +1046,18 @@ export default function TodayPage() {
                                           : null;
                                         
                                         if (sw && sw.blocks) {
-                                          // Start from session workout — convert builder block format to WorkoutExercise format
-                                          const exercises = sw.blocks.flatMap((block: any) =>
-                                            (block.exercises || []).map((ex: any) => {
-                                              // Builder stores sets as a number; convert to array of set objects
-                                              const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
-                                              const targetReps = typeof ex.reps === 'string' ? (parseInt(ex.reps) || 10) : (ex.reps || 10);
-                                              const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
-                                                id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                                                setNumber: si + 1,
-                                                type: 'normal',
-                                                targetReps,
-                                                reps: targetReps,
-                                                weight: 0,
-                                                completed: false,
-                                              }));
-                                              return {
-                                                id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                                exerciseId: ex.exerciseId || ex.id,
-                                                exercise: {
-                                                  id: ex.exerciseId || ex.id,
-                                                  name: ex.exerciseName || ex.name || 'Exercise',
-                                                  category: 'strength',
-                                                  muscleGroups: [],
-                                                },
-                                                sets: setsArray,
-                                                restTimerSeconds: parseInt(ex.rest) || 90,
-                                                notes: ex.notes || '',
-                                              };
-                                            })
-                                          );
+                                          // Start from session workout — use convertProgramDayToTemplate to preserve pyramid/block structure
+                                          const swTemplate = convertProgramDayToTemplate({ blocks: sw.blocks, dayLabel: sw.name }, {
+                                            programId: `session-${event.id}`,
+                                            dayIndex: 0,
+                                            programName: 'PT Session',
+                                            userId: user?.id || '',
+                                          });
                                           startFromTemplate({
+                                            ...swTemplate,
                                             id: `session-${event.id}`,
                                             name: sw.name || `Session - ${displayName}`,
                                             description: `PT Session`,
-                                            exercises,
-                                            blocks: sw.blocks,
-                                            category: 'strength',
-                                            estimatedDuration: 60,
                                             isClientSession: true,
                                             clientId: event.clientId,
                                             trainerId: user?.id,
@@ -1117,22 +1065,16 @@ export default function TodayPage() {
                                           router.push('/workout/active');
                                         } else if (program && program.weeklyPlan?.length > 0) {
                                           // Start from the next program day
-                                          const dayIdx = 0; // Default to first day
+                                          const dayIdx = 0;
                                           const day = program.weeklyPlan[dayIdx];
-                                          const exercises = (day.blocks || []).flatMap((block: any) =>
-                                            (block.exercises || []).map((ex: any) => ({
-                                              ...ex,
-                                              id: ex.id || `ex-${Date.now()}-${Math.random()}`,
-                                              sets: (ex.sets || [{ id: `s1`, setNumber: 1, type: 'normal', weight: 0, reps: 0, completed: false }]),
-                                            }))
-                                          );
+                                          const pTemplate = convertProgramDayToTemplate(day, {
+                                            programId: program.id,
+                                            dayIndex: dayIdx,
+                                            programName: program.templateName,
+                                            userId: user?.id || '',
+                                          });
                                           startFromTemplate({
-                                            id: `program-${program.id}-${dayIdx}`,
-                                            name: `${day.dayLabel || 'Workout'} - ${displayName}`,
-                                            description: `From ${program.templateName}`,
-                                            exercises,
-                                            category: 'strength',
-                                            estimatedDuration: 60,
+                                            ...pTemplate,
                                             isClientSession: true,
                                             clientId: event.clientId,
                                             trainerId: user?.id,
@@ -1514,42 +1456,17 @@ export default function TodayPage() {
                   : null;
                 
                 if (sw && sw.blocks) {
-                  const exercises = sw.blocks.flatMap((block: any) =>
-                    (block.exercises || []).map((ex: any) => {
-                      const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
-                      const targetReps = typeof ex.reps === 'string' ? (parseInt(ex.reps) || 10) : (ex.reps || 10);
-                      const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
-                        id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                        setNumber: si + 1,
-                        type: 'normal',
-                        targetReps,
-                        reps: targetReps,
-                        weight: 0,
-                        completed: false,
-                      }));
-                      return {
-                        id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        exerciseId: ex.exerciseId || ex.id,
-                        exercise: {
-                          id: ex.exerciseId || ex.id,
-                          name: ex.exerciseName || ex.name || 'Exercise',
-                          category: 'strength',
-                          muscleGroups: [],
-                        },
-                        sets: setsArray,
-                        restTimerSeconds: parseInt(ex.rest) || 90,
-                        notes: ex.notes || '',
-                      };
-                    })
-                  );
+                  const swTemplate2 = convertProgramDayToTemplate({ blocks: sw.blocks, dayLabel: sw.name }, {
+                    programId: `session-${event.id}`,
+                    dayIndex: 0,
+                    programName: 'PT Session',
+                    userId: user?.id || '',
+                  });
                   startFromTemplate({
+                    ...swTemplate2,
                     id: `session-${event.id}`,
                     name: sw.name || `Session - ${displayName}`,
                     description: `PT Session`,
-                    exercises,
-                    blocks: sw.blocks,
-                    category: 'strength',
-                    estimatedDuration: 60,
                     isClientSession: true,
                     clientId: event.clientId,
                     trainerId: user?.id,
