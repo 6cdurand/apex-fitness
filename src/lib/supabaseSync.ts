@@ -753,17 +753,23 @@ export async function fetchClientWorkoutsFromSupabase(trainerId: string): Promis
     
     const clientIds = clients.map(c => c.client_id);
     
-    // Fetch workouts for all clients
-    const { data, error } = await supabase
-      .from('workouts')
-      .select('*')
-      .in('user_id', clientIds)
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('[ClientWorkouts Fetch] Error:', error.message);
-      return [];
+    // Fetch workouts for all clients in chunks to avoid URL length limits
+    const { chunkArray } = await import('./userFetchUtils');
+    const chunks = chunkArray(clientIds, 25);
+    let allData: any[] = [];
+    for (const chunk of chunks) {
+      const { data: chunkData, error } = await supabase
+        .from('workouts')
+        .select('*')
+        .in('user_id', chunk)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('[ClientWorkouts Fetch] Chunk error:', error.message);
+        continue; // partial success — skip failed chunk
+      }
+      if (chunkData) allData = allData.concat(chunkData);
     }
+    const data = allData;
     
     // Map from DB format to app format
     return (data || []).map(w => ({
@@ -1613,22 +1619,23 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       return [];
     }
     
-    // Fetch display names from users table for all client IDs
+    // Fetch display names from users table for all client IDs (chunked to avoid URL length limits)
     const clientIds = (data || []).map(c => c.client_id).filter(Boolean);
     let userMap: Record<string, { displayName?: string; username?: string; profilePhoto?: string }> = {};
     if (clientIds.length > 0) {
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, display_name, username, profile_photo')
-        .in('id', clientIds);
-      if (users) {
-        users.forEach((u: any) => {
-          userMap[u.id] = {
-            displayName: u.display_name,
-            username: u.username,
-            profilePhoto: u.profile_photo,
-          };
-        });
+      const { fetchUsersByIdsChunked, writeProfileCache } = await import('./userFetchUtils');
+      const { usersById, failedIds } = await fetchUsersByIdsChunked(clientIds);
+      Object.entries(usersById).forEach(([id, profile]) => {
+        userMap[id] = {
+          displayName: profile.displayName,
+          username: profile.username,
+          profilePhoto: profile.profilePhoto,
+        };
+      });
+      // Cache successful results for offline / cross-page use
+      writeProfileCache(usersById);
+      if (failedIds.length > 0) {
+        console.warn(`[Client Fetch] Failed to resolve ${failedIds.length} user profiles`);
       }
     }
 

@@ -143,6 +143,10 @@ export function SupabaseSync() {
       console.log('[SupabaseSync] Is trainer:', user.isTrainer);
       
       try {
+        // Invalidate stale profile cache on each auth session (24h TTL handled inside)
+        const { readProfileCache } = await import('@/lib/userFetchUtils');
+        readProfileCache(); // triggers TTL check and auto-invalidation
+        
         // IMPORTANT: Ensure this user exists in Supabase users table first
         // This is required for foreign key relationships (trainer_clients, etc.)
         await ensureUserExistsInSupabase(user);
