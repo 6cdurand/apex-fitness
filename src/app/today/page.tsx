@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useMedalStore, checkAllMedalsRetroactive } from '@/lib/store';
 import { milestoneMedals, evolvingMedals, isCloseToEvolving, getEvolutionGlowClass, getEvolutionFrameClass, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
@@ -44,6 +44,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { convertProgramDayToTemplate, parseRepsPerSet } from '@/lib/programStartUtils';
+import { isEventCompleted, resolveWorkoutForSession, createWorkoutForSession } from '@/lib/sessionWorkoutResolver';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday } from 'date-fns';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -81,6 +82,7 @@ export default function TodayPage() {
   const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
   const [showSwapWorkout, setShowSwapWorkout] = useState(false);
   const { updateCalendarEvent } = useTrainerStore();
+  const startingSessionRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -907,12 +909,12 @@ export default function TodayPage() {
                       const clientInfo = event.clientId ? getClientDisplayInfo(event.clientId) : null;
                       const displayName = clientInfo?.displayName || (event as any).contactName || event.title || 'New Client';
                       const initial = displayName[0] || '?';
-                      const completedWorkout = eventType === 'session' ? workoutHistory.find(w => 
+                      const sessionDone = eventType === 'session' ? isEventCompleted(event) : false;
+                      const completedWorkout = sessionDone ? workoutHistory.find(w => 
                         w.userId === event.clientId && 
                         !w.deletedAt &&
                         format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
                       ) : null;
-                      const sessionDone = !!completedWorkout;
                       // Check if a workout has been assigned/created for this session
                       const matchedWorkout = eventType === 'session' ? sessionWorkouts.find(
                         (sw: any) => sw.eventId === event.id
@@ -1030,6 +1032,11 @@ export default function TodayPage() {
                                       }`}
                                       onClick={(e) => {
                                         e.stopPropagation();
+                                        
+                                        // Debounce: prevent duplicate taps
+                                        if (startingSessionRef.current === event.id) return;
+                                        startingSessionRef.current = event.id;
+                                        setTimeout(() => { startingSessionRef.current = null; }, 2000);
                                         
                                         // If not today, ask confirmation and update date
                                         const todayDate = new Date();
