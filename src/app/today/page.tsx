@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
-import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
+import { convertProgramDayToTemplate, parseRepsPerSet } from '@/lib/programStartUtils';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday } from 'date-fns';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -1046,18 +1046,44 @@ export default function TodayPage() {
                                           : null;
                                         
                                         if (sw && sw.blocks) {
-                                          // Start from session workout — use convertProgramDayToTemplate to preserve pyramid/block structure
-                                          const swTemplate = convertProgramDayToTemplate({ blocks: sw.blocks, dayLabel: sw.name }, {
-                                            programId: `session-${event.id}`,
-                                            dayIndex: 0,
-                                            programName: 'PT Session',
-                                            userId: user?.id || '',
-                                          });
+                                          // Start from session workout — convert builder block format to WorkoutExercise format
+                                          const exercises = sw.blocks.flatMap((block: any) =>
+                                            (block.exercises || []).map((ex: any) => {
+                                              // Builder stores sets as a number; convert to array of set objects
+                                              const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
+                                              const repsPerSet = parseRepsPerSet(ex.reps, setCount);
+                                              const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
+                                                id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                                                setNumber: si + 1,
+                                                type: 'normal',
+                                                targetReps: repsPerSet[si],
+                                                reps: repsPerSet[si],
+                                                weight: 0,
+                                                completed: false,
+                                              }));
+                                              return {
+                                                id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                                                exerciseId: ex.exerciseId || ex.id,
+                                                exercise: {
+                                                  id: ex.exerciseId || ex.id,
+                                                  name: ex.exerciseName || ex.name || 'Exercise',
+                                                  category: 'strength',
+                                                  muscleGroups: [],
+                                                },
+                                                sets: setsArray,
+                                                restTimerSeconds: parseInt(ex.rest) || 90,
+                                                notes: ex.notes || '',
+                                              };
+                                            })
+                                          );
                                           startFromTemplate({
-                                            ...swTemplate,
                                             id: `session-${event.id}`,
                                             name: sw.name || `Session - ${displayName}`,
                                             description: `PT Session`,
+                                            exercises,
+                                            blocks: sw.blocks,
+                                            category: 'strength',
+                                            estimatedDuration: 60,
                                             isClientSession: true,
                                             clientId: event.clientId,
                                             trainerId: user?.id,
@@ -1456,17 +1482,42 @@ export default function TodayPage() {
                   : null;
                 
                 if (sw && sw.blocks) {
-                  const swTemplate2 = convertProgramDayToTemplate({ blocks: sw.blocks, dayLabel: sw.name }, {
-                    programId: `session-${event.id}`,
-                    dayIndex: 0,
-                    programName: 'PT Session',
-                    userId: user?.id || '',
-                  });
+                  const exercises = sw.blocks.flatMap((block: any) =>
+                    (block.exercises || []).map((ex: any) => {
+                      const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
+                      const repsPerSet = parseRepsPerSet(ex.reps, setCount);
+                      const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
+                        id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                        setNumber: si + 1,
+                        type: 'normal',
+                        targetReps: repsPerSet[si],
+                        reps: repsPerSet[si],
+                        weight: 0,
+                        completed: false,
+                      }));
+                      return {
+                        id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        exerciseId: ex.exerciseId || ex.id,
+                        exercise: {
+                          id: ex.exerciseId || ex.id,
+                          name: ex.exerciseName || ex.name || 'Exercise',
+                          category: 'strength',
+                          muscleGroups: [],
+                        },
+                        sets: setsArray,
+                        restTimerSeconds: parseInt(ex.rest) || 90,
+                        notes: ex.notes || '',
+                      };
+                    })
+                  );
                   startFromTemplate({
-                    ...swTemplate2,
                     id: `session-${event.id}`,
                     name: sw.name || `Session - ${displayName}`,
                     description: `PT Session`,
+                    exercises,
+                    blocks: sw.blocks,
+                    category: 'strength',
+                    estimatedDuration: 60,
                     isClientSession: true,
                     clientId: event.clientId,
                     trainerId: user?.id,
