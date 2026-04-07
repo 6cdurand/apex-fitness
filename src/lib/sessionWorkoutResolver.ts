@@ -154,6 +154,290 @@ export async function createWorkoutForSession(opts: {
   }
 }
 
+// ============ GET OR CREATE SESSION WORKOUT FOR EVENT ============
+
+export interface SessionWorkoutResult {
+  id: string;
+  name: string;
+  clientId: string;
+  eventId: string;
+  trainerId: string;
+  blocks: any[];
+  createdAt: string;
+  source: 'existing' | 'created';
+}
+
+// In-flight request guard keyed by eventId — prevents duplicate creates on rapid tap
+const _inflightResolves = new Map<string, Promise<SessionWorkoutResult | null>>();
+
+/**
+ * Canonical resolver: get or create a session_workout for a calendar event.
+ * 
+ * 1. Fetch calendar_events by id, validate type='session'.
+ * 2. If event.workout_id set → try session_workouts.id = workout_id.
+ *    - If found and event_id matches → return it.
+ *    - If found but event_id mismatch → log, ignore.
+ * 3. Fallback: also check session_workouts by event_id (local-first created rows).
+ * 4. If not found → create new session_workouts row:
+ *    - Reconstruct blocks from program if event has programId + programDayIndex.
+ *    - PATCH calendar_events.workout_id to new row's id.
+ * 5. Return the session workout.
+ * 
+ * Concurrency: de-duplicates in-flight requests per eventId.
+ */
+export async function getOrCreateSessionWorkoutForEvent(
+  eventId: string,
+  trainerId: string,
+  clientId: string,
+  programData?: { weeklyPlan?: any[]; programId?: string },
+): Promise<SessionWorkoutResult | null> {
+  // Idempotency: if already resolving this event, return same promise
+  const inflight = _inflightResolves.get(eventId);
+  if (inflight) {
+    console.debug('[SessionResolver] start_session_deduplicated', { eventId });
+    return inflight;
+  }
+
+  const promise = _resolveSessionWorkout(eventId, trainerId, clientId, programData);
+  _inflightResolves.set(eventId, promise);
+
+  try {
+    return await promise;
+  } finally {
+    _inflightResolves.delete(eventId);
+  }
+}
+
+async function _resolveSessionWorkout(
+  eventId: string,
+  trainerId: string,
+  clientId: string,
+  programData?: { weeklyPlan?: any[]; programId?: string },
+): Promise<SessionWorkoutResult | null> {
+  console.debug('[SessionResolver] start_session_requested', { eventId });
+
+  // 1. Fetch calendar event
+  let event: any;
+  try {
+    const { data, error } = await supabase
+      .from('calendar_events')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.debug('[SessionResolver] event_not_found', { eventId });
+      return null;
+    }
+    event = data;
+  } catch (e) {
+    console.debug('[SessionResolver] event_fetch_exception', { eventId });
+    return null;
+  }
+
+  // 2. Validate type
+  if (event.type !== 'session') {
+    console.debug('[SessionResolver] event_not_session', { eventId, type: event.type });
+    return null;
+  }
+
+  const workoutId = event.workout_id;
+
+  // 3. Try resolving by workout_id on the event
+  if (workoutId) {
+    try {
+      const { data: sw } = await supabase
+        .from('session_workouts')
+        .select('*')
+        .eq('id', workoutId)
+        .maybeSingle();
+
+      if (sw) {
+        if (sw.event_id === eventId) {
+          const result = _mapSessionWorkout(sw, 'existing');
+          console.debug('[SessionResolver] session_workout_resolved', {
+            eventId, workoutId: sw.id, source: 'existing',
+          });
+          return result;
+        } else {
+          console.debug('[SessionResolver] workout_event_mismatch', {
+            eventId, workoutId: sw.id, actualEventId: sw.event_id,
+          });
+          // Fall through — this workout belongs to a different event
+        }
+      } else {
+        console.debug('[SessionResolver] session_workout_missing_link', {
+          eventId, workoutId,
+        });
+      }
+    } catch (e) {
+      console.debug('[SessionResolver] session_workout_fetch_exception', { eventId, workoutId });
+    }
+  }
+
+  // 4. Fallback: check session_workouts by event_id (handles locally-created rows)
+  try {
+    const { data: byEvent } = await supabase
+      .from('session_workouts')
+      .select('*')
+      .eq('event_id', eventId)
+      .limit(1)
+      .maybeSingle();
+
+    if (byEvent) {
+      // Also patch the event's workout_id if it was stale/missing
+      if (event.workout_id !== byEvent.id) {
+        await supabase
+          .from('calendar_events')
+          .update({ workout_id: byEvent.id })
+          .eq('id', eventId);
+      }
+      const result = _mapSessionWorkout(byEvent, 'existing');
+      console.debug('[SessionResolver] session_workout_resolved', {
+        eventId, workoutId: byEvent.id, source: 'existing',
+      });
+      return result;
+    }
+  } catch (e) {
+    // Non-fatal, continue to create
+  }
+
+  // 5. Re-read event before insert (concurrency guard)
+  try {
+    const { data: freshEvent } = await supabase
+      .from('calendar_events')
+      .select('workout_id')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (freshEvent?.workout_id && freshEvent.workout_id !== workoutId) {
+      // Another request created a workout between our reads — try to use it
+      const { data: lateSw } = await supabase
+        .from('session_workouts')
+        .select('*')
+        .eq('id', freshEvent.workout_id)
+        .maybeSingle();
+
+      if (lateSw) {
+        console.debug('[SessionResolver] session_workout_resolved', {
+          eventId, workoutId: lateSw.id, source: 'existing',
+        });
+        return _mapSessionWorkout(lateSw, 'existing');
+      }
+    }
+  } catch (e) {
+    // Non-fatal
+  }
+
+  // 6. Create new session_workout
+  const shortRandom = Math.random().toString(36).substr(2, 6);
+  const newId = `session-workout-${Date.now()}-${shortRandom}`;
+  const eventTitle = event.title || 'Session Workout';
+  const blocks = _reconstructBlocks(event, programData);
+
+  try {
+    const dbRow = {
+      id: newId,
+      event_id: eventId,
+      client_id: clientId,
+      trainer_id: trainerId,
+      name: eventTitle,
+      blocks: JSON.stringify(blocks),
+      created_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('session_workouts')
+      .insert(dbRow);
+
+    if (error) {
+      console.error('[SessionResolver] create_session_workout_failed', { eventId, error: error.message });
+      return null;
+    }
+
+    // 7. PATCH calendar_events.workout_id
+    await supabase
+      .from('calendar_events')
+      .update({ workout_id: newId })
+      .eq('id', eventId);
+
+    const result: SessionWorkoutResult = {
+      id: newId,
+      name: eventTitle,
+      clientId,
+      eventId,
+      trainerId,
+      blocks,
+      createdAt: dbRow.created_at,
+      source: 'created',
+    };
+
+    console.debug('[SessionResolver] session_workout_resolved', {
+      eventId, workoutId: newId, source: 'created',
+    });
+
+    return result;
+  } catch (e) {
+    console.error('[SessionResolver] create_session_workout_exception', { eventId });
+    return null;
+  }
+}
+
+function _mapSessionWorkout(row: any, source: 'existing' | 'created'): SessionWorkoutResult {
+  const blocks = typeof row.blocks === 'string' ? JSON.parse(row.blocks) : (row.blocks || []);
+  return {
+    id: row.id,
+    name: row.name,
+    clientId: row.client_id,
+    eventId: row.event_id,
+    trainerId: row.trainer_id,
+    blocks,
+    createdAt: row.created_at,
+    source,
+  };
+}
+
+/**
+ * Reconstruct blocks from the program day matching this event's programId + programDayIndex.
+ * Returns empty scaffold if no program data available.
+ */
+function _reconstructBlocks(
+  event: any,
+  programData?: { weeklyPlan?: any[]; programId?: string },
+): any[] {
+  const programId = event.program_id;
+  const dayIndex = event.program_day_index;
+
+  // If event has program reference and programData is provided, use exact day
+  if (programId && dayIndex != null && programData?.weeklyPlan) {
+    const day = programData.weeklyPlan[dayIndex];
+    if (day && day.blocks) {
+      return day.blocks;
+    }
+  }
+
+  // If event has program reference, try matching by programId in provided data
+  if (programId && programData?.programId === programId && programData?.weeklyPlan?.length) {
+    // Try matching by event title to find correct day
+    const titleLower = (event.title || '').toLowerCase().trim();
+    if (titleLower) {
+      const matchByLabel = programData.weeklyPlan.find(
+        (d: any) => (d.dayLabel || '').toLowerCase().trim() === titleLower
+      );
+      if (matchByLabel?.blocks) return matchByLabel.blocks;
+    }
+    // Do NOT fall back to first/last day — return empty scaffold instead
+  }
+
+  // Empty scaffold: single empty strength block
+  return [{
+    id: `block-${Date.now()}`,
+    type: 'strength',
+    name: event.title || 'Session',
+    exercises: [],
+  }];
+}
+
 // ============ EVENT-SCOPED STATUS ============
 
 /**

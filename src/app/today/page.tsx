@@ -44,7 +44,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { convertProgramDayToTemplate, parseRepsPerSet } from '@/lib/programStartUtils';
-import { isEventCompleted, resolveWorkoutForSession, createWorkoutForSession } from '@/lib/sessionWorkoutResolver';
+import { isEventCompleted, getOrCreateSessionWorkoutForEvent, type SessionWorkoutResult } from '@/lib/sessionWorkoutResolver';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday } from 'date-fns';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -83,6 +83,7 @@ export default function TodayPage() {
   const [showSwapWorkout, setShowSwapWorkout] = useState(false);
   const { updateCalendarEvent } = useTrainerStore();
   const startingSessionRef = useRef<string | null>(null);
+  const [startingEventId, setStartingEventId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -123,6 +124,100 @@ export default function TodayPage() {
     const saved = localStorage.getItem(todayKey);
     if (saved) setDailySteps(parseInt(saved));
   }, []);
+
+  // Shared session start handler — uses canonical resolver, no dangerous fallbacks
+  const handleStartSessionEvent = async (event: any, eventType: string, displayName: string) => {
+    // Debounce + loading guard
+    if (startingEventId) return;
+    setStartingEventId(event.id);
+
+    try {
+      if (eventType === 'workout' && !event.clientId) {
+        // Solo workout — start empty
+        startWorkout('Solo Training');
+        router.push('/workout/active');
+        return;
+      }
+
+      if (eventType !== 'session') {
+        // Non-session event type with no special handling — start empty for client
+        startWorkout(`Session - ${displayName}`, undefined, event.clientId || undefined);
+        router.push('/workout/active');
+        return;
+      }
+
+      // Session event: use canonical resolver
+      const program = event.clientId
+        ? clientPrograms.find(p => p.clientId === event.clientId && p.status === 'active')
+        : null;
+
+      const sw = await getOrCreateSessionWorkoutForEvent(
+        event.id,
+        user?.id || '',
+        event.clientId || '',
+        program ? { weeklyPlan: program.weeklyPlan, programId: program.id } : undefined,
+      );
+
+      if (sw && sw.blocks && sw.blocks.length > 0) {
+        // Convert builder block format to WorkoutExercise format
+        const hasExercises = sw.blocks.some((b: any) => (b.exercises || []).length > 0);
+        if (hasExercises) {
+          const exercises = sw.blocks.flatMap((block: any) =>
+            (block.exercises || []).map((ex: any) => {
+              const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
+              const repsPerSet = parseRepsPerSet(ex.reps, setCount);
+              const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
+                id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
+                setNumber: si + 1,
+                type: 'normal',
+                targetReps: repsPerSet[si],
+                reps: repsPerSet[si],
+                weight: 0,
+                completed: false,
+              }));
+              return {
+                id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                exerciseId: ex.exerciseId || ex.id,
+                exercise: {
+                  id: ex.exerciseId || ex.id,
+                  name: ex.exerciseName || ex.name || 'Exercise',
+                  category: 'strength',
+                  muscleGroups: [],
+                },
+                sets: setsArray,
+                restTimerSeconds: parseInt(ex.rest) || 90,
+                notes: ex.notes || '',
+              };
+            })
+          );
+          startFromTemplate({
+            id: `session-${event.id}`,
+            name: sw.name || `Session - ${displayName}`,
+            description: 'PT Session',
+            exercises,
+            blocks: sw.blocks,
+            category: 'strength',
+            estimatedDuration: 60,
+            isClientSession: true,
+            clientId: event.clientId,
+            trainerId: user?.id,
+          } as any, event.clientId || undefined);
+          router.push('/workout/active');
+          return;
+        }
+      }
+
+      // Resolved but empty blocks — start empty session for client
+      startWorkout(
+        sw?.name || `Session - ${displayName}`,
+        undefined,
+        event.clientId || undefined,
+      );
+      router.push('/workout/active');
+    } finally {
+      setStartingEventId(null);
+    }
+  };
 
   if (!isAuthenticated || !user) return null;
 
@@ -1025,6 +1120,7 @@ export default function TodayPage() {
                                   ) : (
                                     <Button 
                                       size="sm" 
+                                      disabled={startingEventId === event.id}
                                       className={`h-7 text-xs ${
                                         eventType === 'workout' 
                                           ? 'bg-orange-500 hover:bg-orange-600' 
@@ -1033,98 +1129,21 @@ export default function TodayPage() {
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         
-                                        // Debounce: prevent duplicate taps
-                                        if (startingSessionRef.current === event.id) return;
-                                        startingSessionRef.current = event.id;
-                                        setTimeout(() => { startingSessionRef.current = null; }, 2000);
-                                        
                                         // If not today, ask confirmation and update date
-                                        const todayDate = new Date();
                                         if (!isDateToday(selectedDate)) {
                                           setPendingStartEvent({ event, eventType, displayName });
                                           setShowDateConfirm(true);
                                           return;
                                         }
                                         
-                                        // Try to start from assigned workout or program
-                                        const sw = sessionWorkouts.find((w: any) => w.eventId === event.id);
-                                        const program = event.clientId 
-                                          ? clientPrograms.find(p => p.clientId === event.clientId && p.status === 'active')
-                                          : null;
-                                        
-                                        if (sw && sw.blocks) {
-                                          // Start from session workout — convert builder block format to WorkoutExercise format
-                                          const exercises = sw.blocks.flatMap((block: any) =>
-                                            (block.exercises || []).map((ex: any) => {
-                                              // Builder stores sets as a number; convert to array of set objects
-                                              const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
-                                              const repsPerSet = parseRepsPerSet(ex.reps, setCount);
-                                              const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
-                                                id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                                                setNumber: si + 1,
-                                                type: 'normal',
-                                                targetReps: repsPerSet[si],
-                                                reps: repsPerSet[si],
-                                                weight: 0,
-                                                completed: false,
-                                              }));
-                                              return {
-                                                id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                                exerciseId: ex.exerciseId || ex.id,
-                                                exercise: {
-                                                  id: ex.exerciseId || ex.id,
-                                                  name: ex.exerciseName || ex.name || 'Exercise',
-                                                  category: 'strength',
-                                                  muscleGroups: [],
-                                                },
-                                                sets: setsArray,
-                                                restTimerSeconds: parseInt(ex.rest) || 90,
-                                                notes: ex.notes || '',
-                                              };
-                                            })
-                                          );
-                                          startFromTemplate({
-                                            id: `session-${event.id}`,
-                                            name: sw.name || `Session - ${displayName}`,
-                                            description: `PT Session`,
-                                            exercises,
-                                            blocks: sw.blocks,
-                                            category: 'strength',
-                                            estimatedDuration: 60,
-                                            isClientSession: true,
-                                            clientId: event.clientId,
-                                            trainerId: user?.id,
-                                          } as any, event.clientId || undefined);
-                                          router.push('/workout/active');
-                                        } else if (program && program.weeklyPlan?.length > 0) {
-                                          // Start from the next program day
-                                          const dayIdx = 0;
-                                          const day = program.weeklyPlan[dayIdx];
-                                          const pTemplate = convertProgramDayToTemplate(day, {
-                                            programId: program.id,
-                                            dayIndex: dayIdx,
-                                            programName: program.templateName,
-                                            userId: user?.id || '',
-                                          });
-                                          startFromTemplate({
-                                            ...pTemplate,
-                                            isClientSession: true,
-                                            clientId: event.clientId,
-                                            trainerId: user?.id,
-                                          } as any, event.clientId || undefined);
-                                          router.push('/workout/active');
-                                        } else if (eventType === 'workout') {
-                                          // Solo workout — start empty
-                                          startWorkout('Solo Training');
-                                          router.push('/workout/active');
-                                        } else {
-                                          // Session with no workout — start empty session for client
-                                          startWorkout(`Session - ${displayName}`, undefined, event.clientId || undefined);
-                                          router.push('/workout/active');
-                                        }
+                                        handleStartSessionEvent(event, eventType, displayName);
                                       }}
                                     >
-                                      <Play className="w-3 h-3 mr-1" /> Start
+                                      {startingEventId === event.id ? (
+                                        <span className="animate-pulse">Starting...</span>
+                                      ) : (
+                                        <><Play className="w-3 h-3 mr-1" /> Start</>
+                                      )}
                                     </Button>
                                   )}
                                 </div>
@@ -1482,61 +1501,8 @@ export default function TodayPage() {
                 // Also move selectedDate to today
                 setSelectedDate(new Date());
                 
-                // Now start the workout (same logic as the Start button)
-                const sw = sessionWorkouts.find((w: any) => w.eventId === event.id);
-                const program = event.clientId 
-                  ? clientPrograms.find(p => p.clientId === event.clientId && p.status === 'active')
-                  : null;
-                
-                if (sw && sw.blocks) {
-                  const exercises = sw.blocks.flatMap((block: any) =>
-                    (block.exercises || []).map((ex: any) => {
-                      const setCount = typeof ex.sets === 'number' ? ex.sets : (Array.isArray(ex.sets) ? ex.sets.length : 3);
-                      const repsPerSet = parseRepsPerSet(ex.reps, setCount);
-                      const setsArray = Array.isArray(ex.sets) ? ex.sets : Array.from({ length: setCount }, (_, si) => ({
-                        id: `set-${Date.now()}-${si}-${Math.random().toString(36).substr(2, 5)}`,
-                        setNumber: si + 1,
-                        type: 'normal',
-                        targetReps: repsPerSet[si],
-                        reps: repsPerSet[si],
-                        weight: 0,
-                        completed: false,
-                      }));
-                      return {
-                        id: ex.id || `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                        exerciseId: ex.exerciseId || ex.id,
-                        exercise: {
-                          id: ex.exerciseId || ex.id,
-                          name: ex.exerciseName || ex.name || 'Exercise',
-                          category: 'strength',
-                          muscleGroups: [],
-                        },
-                        sets: setsArray,
-                        restTimerSeconds: parseInt(ex.rest) || 90,
-                        notes: ex.notes || '',
-                      };
-                    })
-                  );
-                  startFromTemplate({
-                    id: `session-${event.id}`,
-                    name: sw.name || `Session - ${displayName}`,
-                    description: `PT Session`,
-                    exercises,
-                    blocks: sw.blocks,
-                    category: 'strength',
-                    estimatedDuration: 60,
-                    isClientSession: true,
-                    clientId: event.clientId,
-                    trainerId: user?.id,
-                  } as any, event.clientId || undefined);
-                  router.push('/workout/active');
-                } else if (eventType === 'workout') {
-                  startWorkout('Solo Training');
-                  router.push('/workout/active');
-                } else {
-                  startWorkout(`Session - ${displayName}`, undefined, event.clientId || undefined);
-                  router.push('/workout/active');
-                }
+                // Now start the workout via canonical resolver
+                handleStartSessionEvent(event, eventType, displayName);
                 
                 setShowDateConfirm(false);
                 setPendingStartEvent(null);
