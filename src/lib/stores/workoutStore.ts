@@ -549,6 +549,12 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { activeWorkout } = get();
         if (!activeWorkout) return;
 
+        // Check if this edit touches weight/reps on a completed set (PB-relevant)
+        const exercise = activeWorkout.exercises.find(e => e.id === exerciseId);
+        const existingSet = exercise?.sets.find(s => s.id === setId);
+        const needsPBRecalc = existingSet?.completed && 
+          (updates.weight !== undefined || updates.reps !== undefined);
+
         set({
           activeWorkout: {
             ...activeWorkout,
@@ -564,6 +570,11 @@ export const useWorkoutStore = create<WorkoutState>()(
             ),
           },
         });
+
+        // Recalculate PB if a completed set's weight/reps changed
+        if (needsPBRecalc && exercise) {
+          get().recalcActiveExercisePB(exercise.exerciseId);
+        }
       },
 
       completeSet: (exerciseId, setId) => {
@@ -1441,6 +1452,9 @@ export const useWorkoutStore = create<WorkoutState>()(
       name: 'apex-workout',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
+        activeWorkout: state.activeWorkout,
+        workoutTimer: state.workoutTimer,
+        currentClientId: state.currentClientId,
         workoutHistory: state.workoutHistory,
         templates: state.templates,
         personalBests: state.personalBests,

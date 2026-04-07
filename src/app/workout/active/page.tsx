@@ -4322,15 +4322,27 @@ function SetRow({
         
         <div className="col-span-1 flex justify-end">
           {!set.completed ? (
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={handleComplete}
-              disabled={!reps || (weight === '' && reps === '')}
-              className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
-            >
-              <Check className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={onRemove}
+                className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
+                title="Delete set"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleComplete}
+                disabled={!reps || (weight === '' && reps === '')}
+                className="h-9 w-9 text-sky-400 hover:text-sky-300 hover:bg-sky-500/20 disabled:opacity-30"
+                title="Complete set"
+              >
+                <Check className="w-5 h-5" />
+              </Button>
+            </div>
           ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
