@@ -10,6 +10,7 @@ import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAs
 import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
+import { supabase } from '../supabase';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
 import { useTrainerStore } from './trainerStore';
@@ -303,6 +304,31 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         // Sync workout to Supabase for cross-device access
         syncWorkoutToSupabase(completedWorkout);
+
+        // Patch source calendar event status to 'completed'
+        // templateId is set to 'session-{eventId}' when started from a booked session
+        const templateId = completedWorkout.templateId || '';
+        if (templateId.startsWith('session-')) {
+          const sourceEventId = templateId.replace('session-', '');
+          if (sourceEventId) {
+            console.debug('[WorkoutStore] completion_event_sync', { eventId: sourceEventId });
+            // 1. Direct Supabase patch (works even if event not in local store)
+            supabase
+              .from('calendar_events')
+              .update({ status: 'completed' })
+              .eq('id', sourceEventId)
+              .then(({ error }) => {
+                if (error) {
+                  console.error('[WorkoutStore] Failed to patch calendar_events.status:', error.message);
+                } else {
+                  console.debug('[WorkoutStore] ✅ calendar_events.status patched to completed', { eventId: sourceEventId });
+                }
+              });
+            // 2. Also update local trainerStore for immediate UI reflection
+            const trainerStore = getTrainerStore().getState();
+            trainerStore.updateCalendarEvent(sourceEventId, { status: 'completed' });
+          }
+        }
 
         // Auto-create calendar event + session record for PT workouts
         if (completedWorkout.assignedBy && completedWorkout.userId !== completedWorkout.assignedBy) {
