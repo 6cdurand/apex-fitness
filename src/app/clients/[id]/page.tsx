@@ -246,10 +246,31 @@ export default function ClientDetailPage() {
 
   // Get client data
   const clientRelation = useMemo(() => getClientById(clientId), [clientId, clients]);
-  const clientUser = useMemo(() => 
+  const clientUserRaw = useMemo(() => 
     allUsers.find((u: UserType) => u.id === clientId), 
     [allUsers, clientId]
   );
+  // For placeholder clients (no user record), build a fallback from trainer_clients data
+  const isPlaceholder = !!clientRelation && !clientUserRaw;
+  const clientUser = useMemo(() => {
+    if (clientUserRaw) return clientUserRaw;
+    if (!clientRelation) return undefined;
+    // Construct minimal synthetic user from clientRelation + display info waterfall
+    const info = getClientNameUtil(clientId);
+    return {
+      id: clientId,
+      displayName: (clientRelation as any).displayName || (clientRelation.client?.displayName) || info || 'Client',
+      username: (clientRelation as any).username || clientRelation.client?.username || '',
+      email: (clientRelation as any).email || clientRelation.client?.email || '',
+      profilePhoto: (clientRelation as any).profilePhoto || clientRelation.client?.profilePhoto || '',
+      gender: (clientRelation as any).gender || clientRelation.client?.gender || 'other',
+      mode: 'user' as const,
+      preferredUnit: 'kg' as const,
+      createdAt: clientRelation.startDate || new Date().toISOString(),
+      height: (clientRelation as any).height,
+      weight: (clientRelation as any).weight,
+    } as UserType;
+  }, [clientUserRaw, clientRelation, clientId]);
   
   const sessions = useMemo(() => getSessionsForClient(clientId), [clientId]);
   const payments = useMemo(() => getPaymentsForClient(clientId), [clientId]);
@@ -595,19 +616,26 @@ export default function ClientDetailPage() {
               <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
               <p className="text-sm text-rose-100">@{clientUser.username}</p>
             </div>
-            <Badge 
-              variant={clientRelation.status === 'active' ? 'default' : 'secondary'}
-              className={`cursor-pointer hover:opacity-80 transition-opacity ${
-                clientRelation.status === 'active' ? 'bg-white/20 text-white border-white/30' : 'bg-rose-800 text-rose-200'
-              }`}
-              onClick={() => {
-                const newStatus = clientRelation.status === 'active' ? 'paused' : 'active';
-                updateClient(clientId, { status: newStatus });
-                toast.success(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
-              }}
-            >
-              {clientRelation.status === 'active' ? 'Active' : clientRelation.status === 'paused' ? 'Paused' : clientRelation.status}
-            </Badge>
+            <div className="flex items-center gap-1">
+              {isPlaceholder && (
+                <Badge variant="secondary" className="bg-amber-500/20 text-amber-200 border-amber-400/30 text-[10px]">
+                  Pending Signup
+                </Badge>
+              )}
+              <Badge 
+                variant={clientRelation.status === 'active' ? 'default' : 'secondary'}
+                className={`cursor-pointer hover:opacity-80 transition-opacity ${
+                  clientRelation.status === 'active' ? 'bg-white/20 text-white border-white/30' : 'bg-rose-800 text-rose-200'
+                }`}
+                onClick={() => {
+                  const newStatus = clientRelation.status === 'active' ? 'paused' : 'active';
+                  updateClient(clientId, { status: newStatus });
+                  toast.success(`Client ${newStatus === 'active' ? 'activated' : 'paused'}`);
+                }}
+              >
+                {clientRelation.status === 'active' ? 'Active' : clientRelation.status === 'paused' ? 'Paused' : clientRelation.status}
+              </Badge>
+            </div>
             <Button 
               variant="ghost" 
               size="icon"
