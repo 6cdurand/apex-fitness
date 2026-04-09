@@ -1385,19 +1385,36 @@ export default function ClientDetailPage() {
                               ) || [];
                               
                               if (exercises.length > 0) {
+                                // Create calendar event so completion syncs to Today page
+                                const eventId = crypto.randomUUID();
+                                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                                const sessionName = `${day.dayLabel} - ${clientUser.displayName}`;
+                                addCalendarEvent({
+                                  id: eventId,
+                                  title: sessionName,
+                                  type: 'session',
+                                  date: todayStr,
+                                  clientId,
+                                  trainerId: user?.id,
+                                  status: 'scheduled',
+                                  programId: activeProgram.id,
+                                  notes: `Session from ${activeProgram.templateName}`,
+                                } as any);
+
                                 const { startFromTemplate } = useWorkoutStore.getState();
                                 startFromTemplate({
-                                  id: `session-${Date.now()}`,
-                                  name: `${day.dayLabel} - ${clientUser.displayName}`,
+                                  id: `session-${eventId}`,
+                                  name: sessionName,
                                   description: `Session from ${activeProgram.templateName}`,
                                   exercises,
+                                  blocks: day.blocks,
                                   category: 'strength',
                                   estimatedDuration: 60,
                                   createdAt: new Date().toISOString(),
                                   createdBy: user?.id || '',
                                   isPublic: false,
                                   updatedAt: new Date().toISOString(),
-                                }, clientId);
+                                } as any, clientId);
                                 router.push('/workout/active');
                               }
                             }}
@@ -2787,10 +2804,22 @@ export default function ClientDetailPage() {
           <Button 
             className="flex-1 bg-blue-500 hover:bg-blue-600"
             onClick={() => {
-              // Start a blank workout for this client
+              // Create calendar event so completion syncs to Today page
+              const eventId = crypto.randomUUID();
+              const todayStr = format(new Date(), 'yyyy-MM-dd');
+              const sessionName = `Session - ${getClientNameUtil(clientId)}`;
+              addCalendarEvent({
+                id: eventId,
+                title: sessionName,
+                type: 'session',
+                date: todayStr,
+                clientId,
+                trainerId: user?.id,
+                status: 'scheduled',
+              } as any);
+
               const { startWorkout } = useWorkoutStore.getState();
-              // Parameters: name, templateId (undefined for blank), clientId
-              startWorkout(`Session - ${getClientNameUtil(clientId)}`, undefined, clientId);
+              startWorkout(sessionName, `session-${eventId}`, clientId);
               router.push('/workout/active');
             }}
           >
