@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
 import { registerUserToSupabase, loginFromSupabase, updateUserInSupabase } from '../supabaseSync';
@@ -306,7 +307,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'apex-auth',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
       onRehydrateStorage: () => (state) => {
         // Repair: if user is in trainer mode but isTrainer was incorrectly set to false, restore it
         if (state?.user && state.user.mode === 'trainer' && !state.user.isTrainer) {

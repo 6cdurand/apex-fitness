@@ -809,9 +809,13 @@ function WorkoutBuilderContent() {
     // Save to trainer store (automatically persisted)
     addSessionWorkout(workoutData);
     
-    // Also save to localStorage for backward compatibility
-    const existingWorkouts = JSON.parse(localStorage.getItem('apex-session-workouts') || '[]');
-    localStorage.setItem('apex-session-workouts', JSON.stringify([...existingWorkouts, workoutData]));
+    // Also save to localStorage for backward compatibility (non-critical — catch quota errors)
+    try {
+      const existingWorkouts = JSON.parse(localStorage.getItem('apex-session-workouts') || '[]');
+      localStorage.setItem('apex-session-workouts', JSON.stringify([...existingWorkouts, workoutData]));
+    } catch (e) {
+      console.warn('[Builder] localStorage write failed (quota?), Supabase sync is primary:', e);
+    }
     
     toast.success('Workout saved and linked to session!');
     router.back();

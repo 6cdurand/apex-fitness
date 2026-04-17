@@ -333,10 +333,28 @@ export async function cleanupDeletedClients(
     console.log('[Supabase] No valid IDs found, skipping cleanup');
     return 0;
   }
+
+  // Also check trainer_clients table — placeholder clients exist there but not in users
+  let trainerClientIds = new Set<string>();
+  try {
+    const trainerId = (await import('./store')).useAuthStore.getState().user?.id;
+    if (trainerId) {
+      const { data } = await supabase
+        .from('trainer_clients')
+        .select('client_id')
+        .eq('trainer_id', trainerId);
+      if (data) {
+        trainerClientIds = new Set(data.map(r => r.client_id));
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase] Could not fetch trainer_clients for cleanup check:', e);
+  }
   
   let removedCount = 0;
   for (const client of currentClients) {
-    if (!validIds.has(client.clientId)) {
+    // Only remove if client is in NEITHER users table NOR trainer_clients table
+    if (!validIds.has(client.clientId) && !trainerClientIds.has(client.clientId)) {
       console.log(`[Supabase] Removing deleted client: ${client.clientId}`);
       removeClient(client.clientId);
       removedCount++;

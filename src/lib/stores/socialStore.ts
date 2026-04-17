@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { FeedPost, Notification } from '@/types';
 import { useAuthStore } from './authStore';
@@ -212,7 +213,7 @@ export const useSocialStore = create<SocialState>()(
     }),
     {
       name: 'apex-social',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );

@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from './safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { syncMessageToSupabase, syncConversationToSupabase } from './supabaseSync';
 
@@ -134,7 +135,7 @@ export const useMessageStore = create<MessageState>()(
     }),
     {
       name: 'apex-messages',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );

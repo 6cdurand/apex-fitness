@@ -11,6 +11,7 @@ import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
+import { safeLocalStorage } from '../safeStorage';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
 import { useTrainerStore } from './trainerStore';
@@ -1476,7 +1477,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'apex-workout',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
       partialize: (state) => ({
         activeWorkout: state.activeWorkout,
         workoutTimer: state.workoutTimer,

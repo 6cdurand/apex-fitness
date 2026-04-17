@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import {
   TrainerClient, ClientGroup, CalendarEvent, ClientSession, ClientPayment,
@@ -2196,7 +2197,7 @@ export const useTrainerStore = create<TrainerState>()(
     }),
     {
       name: 'apex-trainer',
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeLocalStorage),
     }
   )
 );
