@@ -2419,9 +2419,14 @@ export default function ClientDetailPage() {
                             }
                           }}
                         >
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 flex-wrap">
                             <Dumbbell className="w-4 h-4 text-rose-500" />
                             {day.dayLabel}
+                            {day.lastEditedBy === 'client' && day.lastEditedAt && (
+                              <Badge variant="secondary" className="bg-amber-50 text-amber-700 border border-amber-200 text-[9px] px-1.5 py-0 h-4">
+                                Client edited {formatDistanceToNow(new Date(day.lastEditedAt), { addSuffix: true })}
+                              </Badge>
+                            )}
                           </span>
                           <span className="text-xs text-gray-500">
                             {day.blocks?.reduce((sum: number, b: any) => sum + (b.exercises?.length || 0), 0) || 0} exercises

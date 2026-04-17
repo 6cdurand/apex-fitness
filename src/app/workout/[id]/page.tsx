@@ -28,6 +28,7 @@ import {
   FileText,
   Save,
   Edit2,
+  Sparkles,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -275,6 +276,25 @@ export default function WorkoutDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* AI Coach Summary */}
+          {workout.aiSummary && (
+            <Card className="bg-gradient-to-br from-sky-50 to-purple-50 border-sky-200 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-purple-500 flex items-center justify-center flex-shrink-0">
+                    <Sparkles className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-sky-700 mb-1">AI Coach</p>
+                    <p className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                      {workout.aiSummary}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* PBs Achieved */}
           {workoutPBs.length > 0 && (

@@ -502,6 +502,10 @@ function toDbWorkout(workout: Workout): any {
   if (workout.deletedAt) {
     dbWorkout.deleted_at = workout.deletedAt;
   }
+  // AI-generated summary (nullable — column added in 20260417 migration)
+  if (workout.aiSummary !== undefined) {
+    dbWorkout.ai_summary = workout.aiSummary || null;
+  }
   return dbWorkout;
 }
 
@@ -521,6 +525,7 @@ function fromDbWorkout(dbWorkout: any): Workout {
     assignedBy: dbWorkout.assigned_by,
     templateId: dbWorkout.template_id,
     deletedAt: dbWorkout.deleted_at || undefined,
+    aiSummary: dbWorkout.ai_summary || undefined,
   };
 }
 

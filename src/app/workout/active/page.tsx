@@ -808,35 +808,96 @@ export default function ActiveWorkoutPage() {
       setShowFinishDialog(false);
       setShowSummary(true);
 
-      // Fetch AI feedback asynchronously
-      const isPro = currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer';
-      if (isPro) {
-        setAiFeedbackLoading(true);
-        setAiFeedback(null);
-        const exerciseNames = completed.exercises
-          ?.slice(0, 5)
-          .map((ex: any) => ex.exercise?.name)
-          .filter(Boolean)
-          .join(', ') || '';
-        fetch('/api/workout-feedback', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workoutName,
-            duration,
-            totalVolume: completed.totalVolume,
-            exerciseCount,
-            setCount: completedSetsCount,
-            pbCount: newPBs.length,
-            medalCount: useWorkoutStore.getState().lastDeriveResult?.medalsAwarded?.length || 0,
-            exercises: exerciseNames,
-          }),
+      // Fetch AI feedback asynchronously — FREE FOR ALL USERS
+      setAiFeedbackLoading(true);
+      setAiFeedback(null);
+      const exerciseNames = completed.exercises
+        ?.slice(0, 5)
+        .map((ex: any) => ex.exercise?.name)
+        .filter(Boolean)
+        .join(', ') || '';
+
+      // Build PB details with improvement % against previous 1RM
+      const wsState = useWorkoutStore.getState();
+      const pbsAfter = wsState.personalBests;
+      const pbsList = completed.exercises
+        ?.map((ex: any) => {
+          if (!newPBs.includes(ex.exercise?.name)) return null;
+          const pb = pbsAfter.find((p: any) => p.exerciseId === ex.exerciseId && p.userId === completed.userId);
+          if (!pb) return null;
+          // Previous best 1RM: look at historical workouts (excluding this one) for the best 1RM
+          const prevBest = wsState.workoutHistory
+            .filter((w: any) => w.id !== completed.id && w.userId === completed.userId && w.status === 'completed' && !w.deletedAt)
+            .flatMap((w: any) => w.exercises || [])
+            .filter((e: any) => e.exerciseId === ex.exerciseId)
+            .flatMap((e: any) => e.sets || [])
+            .filter((s: any) => s.completed && s.weight && s.reps)
+            .reduce((best: number, s: any) => {
+              const orm = s.weight * (1 + s.reps / 30);
+              return orm > best ? orm : best;
+            }, 0);
+          const improvementPct = prevBest > 0 ? ((pb.oneRepMax - prevBest) / prevBest) * 100 : null;
+          return {
+            name: ex.exercise?.name || 'Exercise',
+            weight: pb.bestWeight,
+            reps: pb.bestReps,
+            oneRepMax: pb.oneRepMax,
+            prevOneRepMax: prevBest || null,
+            improvementPct,
+          };
         })
-          .then(r => r.json())
-          .then(data => { if (data.feedback) setAiFeedback(data.feedback); })
-          .catch(() => {})
-          .finally(() => setAiFeedbackLoading(false));
+        .filter(Boolean) || [];
+
+      // Compute volume delta vs avg of last 4 same-name (or same-templateId) workouts
+      let volumeDelta: { prevAvgVolume: number; deltaPct: number } | null = null;
+      const priorSameWorkouts = wsState.workoutHistory
+        .filter((w: any) =>
+          w.id !== completed.id &&
+          w.userId === completed.userId &&
+          w.status === 'completed' &&
+          !w.deletedAt &&
+          ((w.templateId && completed.templateId && w.templateId === completed.templateId) ||
+            (w.name && w.name === completed.name))
+        )
+        .slice(0, 4);
+      if (priorSameWorkouts.length > 0) {
+        const prevAvgVolume = priorSameWorkouts.reduce((sum: number, w: any) => sum + (w.totalVolume || 0), 0) / priorSameWorkouts.length;
+        if (prevAvgVolume > 0) {
+          const deltaPct = ((completed.totalVolume - prevAvgVolume) / prevAvgVolume) * 100;
+          volumeDelta = { prevAvgVolume, deltaPct };
+        }
       }
+
+      fetch('/api/workout-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workoutName,
+          duration,
+          totalVolume: completed.totalVolume,
+          exerciseCount,
+          setCount: completedSetsCount,
+          pbCount: newPBs.length,
+          medalCount: useWorkoutStore.getState().lastDeriveResult?.medalsAwarded?.length || 0,
+          exercises: exerciseNames,
+          pbDetails: pbsList,
+          volumeDelta,
+          isProgramWorkout,
+          programDayLabel: workoutName,
+        }),
+      })
+        .then(r => r.json())
+        .then(data => {
+          if (data.feedback) {
+            setAiFeedback(data.feedback);
+            // Persist to workout so it's visible in history
+            useWorkoutStore.getState().updateCompletedWorkout(completed.id, { aiSummary: data.feedback });
+          }
+        })
+        .catch((err) => {
+          console.warn('[AI Feedback] Failed to fetch:', err);
+        })
+        .finally(() => setAiFeedbackLoading(false));
     }
   };
 
@@ -945,6 +1006,8 @@ export default function ActiveWorkoutPage() {
     }
     
     // Save edited workout back to program (if from a program and user opted in)
+    // Tracks diff so we can include "added/removed" counts in trainer notification
+    let programEditDiff: { added: number; removed: number } | null = null;
     if (completedWorkoutData?.isProgramWorkout && saveProgramChanges) {
       const userId = currentUser?.id;
       if (userId) {
@@ -963,12 +1026,13 @@ export default function ActiveWorkoutPage() {
           // Get the completed workout from history to extract current exercises
           const completedWk = useWorkoutStore.getState().workoutHistory.find(w => w.id === completedWorkoutData.id);
           if (completedWk) {
-            // Build updated blocks from completed exercises
-            const blockMap = new Map<string, any[]>();
+            // Group exercises by blockId (preserves block identity for user-added blocks)
+            // Falls back to blockName when blockId is missing on older data
+            const blockMap = new Map<string, { name: string; type: string; exercises: any[] }>();
             (completedWk.exercises || []).forEach((ex: any) => {
-              const blockKey = ex.blockName || ex.blockType || 'Strength';
-              if (!blockMap.has(blockKey)) blockMap.set(blockKey, []);
-              blockMap.get(blockKey)!.push({
+              const key = ex.blockId || ex.blockName || ex.blockType || 'Strength';
+              const existing = blockMap.get(key);
+              const exEntry = {
                 exerciseId: ex.exerciseId,
                 exerciseName: ex.exercise?.name || 'Exercise',
                 name: ex.exercise?.name || 'Exercise',
@@ -976,38 +1040,63 @@ export default function ActiveWorkoutPage() {
                 reps: String(ex.sets?.[0]?.reps || ex.sets?.[0]?.targetReps || 10),
                 rest: `${ex.restTimerSeconds || ex.restBetweenSets || 90}s`,
                 notes: ex.notes || '',
-              });
+                movementPattern: (ex as any).movementPattern,
+              };
+              if (existing) {
+                existing.exercises.push(exEntry);
+              } else {
+                blockMap.set(key, {
+                  name: ex.blockName || 'Strength',
+                  // Map runtime block type back to persisted program block type
+                  type: ex.blockType === 'strength' ? 'work' : (ex.blockType || 'work'),
+                  exercises: [exEntry],
+                });
+              }
             });
-            const updatedBlocks = Array.from(blockMap.entries()).map(([name, exercises], bi) => ({
-              id: `block-${Date.now()}-${bi}`,
-              name,
-              type: (name.toLowerCase().includes('warm') ? 'warmup' : name.toLowerCase().includes('cardio') ? 'cardio' : 'work') as 'warmup' | 'work' | 'cooldown' | 'cardio' | 'circuit',
-              exercises,
+            const updatedBlocks = Array.from(blockMap.entries()).map(([id, block], bi) => ({
+              id: String(id).startsWith('block-') ? id : `block-${Date.now()}-${bi}`,
+              name: block.name,
+              type: block.type as 'warmup' | 'work' | 'cooldown' | 'cardio' | 'circuit',
+              exercises: block.exercises,
             }));
+
+            const nowIso = new Date().toISOString();
 
             // Update localStorage saved programs
             const key = `apex-program-library-${userId}`;
             const raw = localStorage.getItem(key);
             if (raw) {
-              const programs = JSON.parse(raw);
-              let updated = false;
-              for (const prog of programs) {
-                if (!prog.days?.length) continue;
-                // Prefer exact match by programId + dayIndex from templateId
-                let dayIdx = -1;
-                if (parsedProgramId && parsedProgramId === prog.id && parsedDayIndex !== null && parsedDayIndex < prog.days.length) {
-                  dayIdx = parsedDayIndex;
-                } else {
-                  // Fallback: match by day label name
-                  dayIdx = prog.days.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+              try {
+                const programs = JSON.parse(raw);
+                let updated = false;
+                for (const prog of programs) {
+                  if (!prog.days?.length) continue;
+                  // Prefer exact match by programId + dayIndex from templateId
+                  let dayIdx = -1;
+                  if (parsedProgramId && parsedProgramId === prog.id && parsedDayIndex !== null && parsedDayIndex < prog.days.length) {
+                    dayIdx = parsedDayIndex;
+                  } else {
+                    // Fallback: match by day label name
+                    dayIdx = prog.days.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+                  }
+                  if (dayIdx >= 0) {
+                    prog.days[dayIdx].blocks = updatedBlocks;
+                    prog.days[dayIdx].lastEditedAt = nowIso;
+                    prog.days[dayIdx].lastEditedBy = 'client';
+                    updated = true;
+                    break;
+                  }
                 }
-                if (dayIdx >= 0) {
-                  prog.days[dayIdx].blocks = updatedBlocks;
-                  updated = true;
-                  break;
+                if (updated) {
+                  try {
+                    localStorage.setItem(key, JSON.stringify(programs));
+                  } catch (e) {
+                    console.warn('[SaveProgramChanges] localStorage write failed (quota?):', e);
+                  }
                 }
+              } catch (e) {
+                console.warn('[SaveProgramChanges] Could not parse localStorage programs:', e);
               }
-              if (updated) localStorage.setItem(key, JSON.stringify(programs));
             }
 
             // Also update trainer-assigned program (clientPrograms in store)
@@ -1019,12 +1108,30 @@ export default function ActiveWorkoutPage() {
               : trainerStore.clientPrograms.find((p: any) => p.clientId === userId && p.status === 'active');
             if (activeProgram?.weeklyPlan) {
               // Prefer exact dayIndex from templateId, fallback to label match
-              let dayIdx = (parsedDayIndex !== null && parsedDayIndex < activeProgram.weeklyPlan.length)
+              const dayIdx = (parsedDayIndex !== null && parsedDayIndex < activeProgram.weeklyPlan.length)
                 ? parsedDayIndex
                 : activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
               if (dayIdx >= 0) {
+                // Compute diff (added/removed) vs original program day's exercises
+                const originalExerciseIds = new Set<string>(
+                  (activeProgram.weeklyPlan[dayIdx]?.blocks || [])
+                    .flatMap((b: any) => b.exercises || [])
+                    .map((e: any) => e.exerciseId)
+                );
+                const newExerciseIds = new Set<string>(
+                  updatedBlocks.flatMap((b: any) => b.exercises.map((e: any) => e.exerciseId))
+                );
+                const added = Array.from(newExerciseIds).filter(id => !originalExerciseIds.has(id)).length;
+                const removed = Array.from(originalExerciseIds).filter(id => !newExerciseIds.has(id)).length;
+                programEditDiff = { added, removed };
+
                 const updatedPlan = [...activeProgram.weeklyPlan];
-                updatedPlan[dayIdx] = { ...updatedPlan[dayIdx], blocks: updatedBlocks };
+                updatedPlan[dayIdx] = {
+                  ...updatedPlan[dayIdx],
+                  blocks: updatedBlocks,
+                  lastEditedAt: nowIso,
+                  lastEditedBy: 'client',
+                };
                 trainerStore.updateClientProgram(activeProgram.id, { weeklyPlan: updatedPlan });
               }
             }
@@ -1046,12 +1153,22 @@ export default function ActiveWorkoutPage() {
         const trainerId = activeProgram?.trainerId || currentUser.trainerId;
         if (trainerId && trainerId !== currentUser.id) {
           const clientName = currentUser.displayName || currentUser.username || 'Client';
-          const edited = completedWorkoutData.isProgramWorkout && saveProgramChanges ? ' (exercises edited)' : '';
+          const wasEdited = completedWorkoutData.isProgramWorkout && saveProgramChanges;
+          let editSuffix = '';
+          if (wasEdited && programEditDiff && (programEditDiff.added > 0 || programEditDiff.removed > 0)) {
+            const parts: string[] = [];
+            if (programEditDiff.added > 0) parts.push(`+${programEditDiff.added}`);
+            if (programEditDiff.removed > 0) parts.push(`-${programEditDiff.removed}`);
+            editSuffix = ` — edited program (${parts.join('/')})`;
+          } else if (wasEdited) {
+            editSuffix = ' — program updated';
+          }
           useSocialStore.getState().addNotification({
             userId: trainerId,
             type: 'workout_assigned' as any,
-            title: `${clientName} completed workout`,
-            message: `${clientName} completed "${completedWorkoutData.name}" — ${completedWorkoutData.sets} sets, ${Math.round(completedWorkoutData.totalVolume)}kg volume${edited}`,
+            title: `${clientName} completed workout${wasEdited ? ' & edited program' : ''}`,
+            message: `${clientName} completed "${completedWorkoutData.name}" — ${completedWorkoutData.sets} sets, ${Math.round(completedWorkoutData.totalVolume)}kg volume${editSuffix}`,
+            link: `/clients/${currentUser.id}`,
           });
         }
       } catch {}

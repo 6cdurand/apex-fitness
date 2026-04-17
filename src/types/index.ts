@@ -269,6 +269,7 @@ export interface Workout {
   scheduledDate?: string;
   blocks?: WorkoutBlock[]; // Session workout blocks
   deletedAt?: string; // Soft delete timestamp — null means active
+  aiSummary?: string; // AI-generated feedback summary shown on completion + workout history
 }
 
 // Personal Best / Records
@@ -963,6 +964,8 @@ export interface ClientWorkoutDay {
   dayLabel: string;
   scheduledDay?: 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
   blocks: ClientWorkoutBlock[];
+  lastEditedAt?: string; // ISO timestamp — last time this day's blocks were edited
+  lastEditedBy?: 'trainer' | 'client'; // Who made the most recent edit to this day
 }
 
 // A block in the client's workout
