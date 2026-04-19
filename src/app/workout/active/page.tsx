@@ -48,7 +48,8 @@ import {
   Flame,
   Zap,
   Heart,
-  Loader2
+  Loader2,
+  Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
@@ -122,6 +123,7 @@ export default function ActiveWorkoutPage() {
     isProgramWorkout?: boolean;
     programDayLabel?: string;
     templateId?: string;
+    awaitingReview?: boolean;
   } | null>(null);
   const [editingTimes, setEditingTimes] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
@@ -783,7 +785,16 @@ export default function ActiveWorkoutPage() {
       // Detect if this workout came from a program
       const tplId = completed.templateId || '';
       const isProgramWorkout = tplId.startsWith('program-') || tplId.startsWith('sched-');
-      
+
+      // PT Review Flow: when the CLIENT (not the trainer) finishes a PT session on
+      // their own device, the trainer must review + release the summary first.
+      const isClientFinishingPT = isPT && !!currentUser && currentUser.id === completed.userId && currentUser.id !== trainerId;
+      if (isClientFinishingPT) {
+        useWorkoutStore.getState().updateCompletedWorkout(completed.id, {
+          reviewStatus: 'pending',
+        });
+      }
+
       setCompletedWorkoutData({
         id: completed.id,
         name: workoutName,
@@ -801,6 +812,7 @@ export default function ActiveWorkoutPage() {
         isProgramWorkout,
         programDayLabel: workoutName,
         templateId: tplId,
+        awaitingReview: isClientFinishingPT,
       });
       // Pre-fill editable time fields
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -1142,6 +1154,20 @@ export default function ActiveWorkoutPage() {
       }
     }
 
+    // Notify trainer when a client finishes a PT session and is awaiting review
+    if (completedWorkoutData?.awaitingReview && completedWorkoutData.assignedBy && currentUser) {
+      try {
+        const clientName = currentUser.displayName || currentUser.username || 'Client';
+        useSocialStore.getState().addNotification({
+          userId: completedWorkoutData.assignedBy,
+          type: 'workout_assigned' as any,
+          title: `${clientName} finished PT session`,
+          message: `Review "${completedWorkoutData.name}" and send the summary to ${clientName}.`,
+          link: `/workout/${completedWorkoutData.id}`,
+        });
+      } catch {}
+    }
+
     // Notify trainer of client workout completion (non-PT program workouts)
     if (completedWorkoutData && !completedWorkoutData.isPTSession && currentUser) {
       try {
@@ -1283,6 +1309,56 @@ export default function ActiveWorkoutPage() {
 
   // When workout is finished and summary is showing, render ONLY the summary screen
   if (!activeWorkout && completedWorkoutData) {
+    // PT sessions that the client just finished: summary is hidden until the trainer releases it
+    if (completedWorkoutData.awaitingReview) {
+      return (
+        <div className="min-h-screen bg-white flex flex-col">
+          <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 px-4 pt-12 pb-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-lg font-bold text-gray-900">Session Complete</h1>
+              <Button onClick={handleCloseSummary} className="bg-sky-500 hover:bg-sky-600 h-9 px-5">
+                Done
+              </Button>
+            </div>
+          </header>
+          <div className="flex-1 overflow-y-auto px-4 py-6">
+            <div className="max-w-sm mx-auto space-y-4 text-center">
+              <div className="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-sky-400 to-sky-600 flex items-center justify-center">
+                <Check className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Great work!</h2>
+                <p className="text-sm text-gray-600 mt-1">{completedWorkoutData.name}</p>
+              </div>
+              <div className="p-4 bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-xl text-left">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0">
+                    <Loader2 className="w-4 h-4 text-white animate-spin" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-sky-900">Waiting for coach review</p>
+                    <p className="text-xs text-gray-700 leading-relaxed mt-1">
+                      Your coach will review this session and send you a summary with PRs, medals, and personalised feedback. You'll get a notification when it's ready.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-lg font-bold text-gray-900">{formatTime(completedWorkoutData.duration || 0)}</p>
+                  <p className="text-[10px] text-gray-500">Duration</p>
+                </div>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-lg font-bold text-gray-900">{completedWorkoutData.sets || 0}</p>
+                  <p className="text-[10px] text-gray-500">Sets Completed</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-white flex flex-col">
         {/* Sticky header with Done button */}
@@ -1359,14 +1435,14 @@ export default function ActiveWorkoutPage() {
             
             {/* New PRs */}
             {completedWorkoutData?.pbs && completedWorkoutData.pbs.length > 0 && (
-              <div className="bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-xl p-3">
+              <div className="bg-gradient-to-r from-amber-100 to-orange-100 border border-amber-300 rounded-xl p-3">
                 <div className="flex items-center justify-center gap-2 mb-1.5">
-                  <Trophy className="w-4 h-4 text-amber-400" />
-                  <span className="font-semibold text-amber-400 text-sm">{completedWorkoutData.pbs.length} New PR{completedWorkoutData.pbs.length > 1 ? 's' : ''}!</span>
+                  <Trophy className="w-4 h-4 text-amber-700" />
+                  <span className="font-semibold text-amber-800 text-sm">{completedWorkoutData.pbs.length} New PR{completedWorkoutData.pbs.length > 1 ? 's' : ''}!</span>
                 </div>
                 <div className="flex flex-wrap gap-1 justify-center">
                   {completedWorkoutData.pbs.map((pb, idx) => (
-                    <Badge key={idx} variant="secondary" className="bg-amber-500/20 text-amber-300 text-[11px]">{pb}</Badge>
+                    <Badge key={idx} variant="secondary" className="bg-white border border-amber-300 text-amber-900 text-[11px]">{pb}</Badge>
                   ))}
                 </div>
               </div>
@@ -1375,7 +1451,7 @@ export default function ActiveWorkoutPage() {
             {/* Medals Earned — priority sorted with rarity + progress bars */}
             {lastDeriveResult?.medalsAwarded && lastDeriveResult.medalsAwarded.length > 0 && (() => {
               const rarityOrder: Record<string, number> = { legendary: 0, epic: 1, rare: 2, uncommon: 3, common: 4 };
-              const rarityColors: Record<string, string> = { legendary: 'text-amber-300 bg-amber-500/20', epic: 'text-purple-300 bg-purple-500/20', rare: 'text-blue-300 bg-blue-500/20', uncommon: 'text-green-300 bg-green-500/20', common: 'text-gray-300 bg-gray-500/20' };
+              const rarityColors: Record<string, string> = { legendary: 'text-amber-900 bg-amber-100 border-amber-300', epic: 'text-purple-900 bg-purple-100 border-purple-300', rare: 'text-blue-900 bg-blue-100 border-blue-300', uncommon: 'text-green-900 bg-green-100 border-green-300', common: 'text-gray-900 bg-gray-100 border-gray-300' };
               const medals = [...lastDeriveResult.medalsAwarded].sort((a, b) => {
                 const defA = getMedalDefinition(a);
                 const defB = getMedalDefinition(b);
@@ -1396,10 +1472,10 @@ export default function ActiveWorkoutPage() {
                 .slice(0, 3);
 
               return (
-                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-xl p-3 space-y-2">
+                <div className="bg-gradient-to-r from-purple-100 to-pink-100 border border-purple-300 rounded-xl p-3 space-y-2">
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <span className="text-base">🏅</span>
-                    <span className="font-semibold text-purple-400 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
+                    <span className="font-semibold text-purple-800 text-sm">{medals.length} Medal{medals.length > 1 ? 's' : ''} Earned!</span>
                   </div>
                   {/* Main medals — top 2 by rarity, shown prominently */}
                   <div className="flex flex-wrap gap-1.5 justify-center">
@@ -1407,7 +1483,7 @@ export default function ActiveWorkoutPage() {
                       const def = getMedalDefinition(medalId);
                       const rColor = rarityColors[def?.rarity || 'common'] || rarityColors.common;
                       return (
-                        <div key={idx} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-white/10 ${rColor}`}>
+                        <div key={idx} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${rColor}`}>
                           <span className="text-sm">{def?.icon || '🏅'}</span>
                           <div className="flex flex-col">
                             <span className="text-xs font-medium leading-tight">{def?.name || medalId}</span>
@@ -1422,14 +1498,14 @@ export default function ActiveWorkoutPage() {
                     <div className="flex flex-wrap gap-1 justify-center">
                       {visibleOverflow.map((medalId, idx) => {
                         const def = getMedalDefinition(medalId);
-                        return <Badge key={idx} variant="secondary" className="bg-purple-500/20 text-purple-300 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
+                        return <Badge key={idx} variant="secondary" className="bg-white border border-purple-300 text-purple-900 text-[11px]">{def?.icon || '🏅'} {def?.name || medalId}</Badge>;
                       })}
                     </div>
                   )}
                   {overflowMedals.length > 0 && !showAll && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: true } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300"
+                      className="w-full text-center text-xs text-purple-700 hover:text-purple-900"
                     >
                       +{overflowMedals.length} more medal{overflowMedals.length > 1 ? 's' : ''}
                     </button>
@@ -1437,15 +1513,15 @@ export default function ActiveWorkoutPage() {
                   {showAll && overflowMedals.length > 0 && (
                     <button
                       onClick={() => setCompletedWorkoutData((prev: any) => prev ? { ...prev, _showAllMedals: false } : prev)}
-                      className="w-full text-center text-xs text-purple-400 hover:text-purple-300"
+                      className="w-full text-center text-xs text-purple-700 hover:text-purple-900"
                     >
                       Show less
                     </button>
                   )}
                   {/* Close to evolving — progress bars */}
                   {closeToEvolving.length > 0 && (
-                    <div className="pt-1.5 border-t border-purple-500/20 space-y-1.5">
-                      <span className="text-[10px] text-purple-400/70 uppercase tracking-wider font-medium">Close to evolving</span>
+                    <div className="pt-1.5 border-t border-purple-300 space-y-1.5">
+                      <span className="text-[10px] text-purple-700 uppercase tracking-wider font-medium">Close to evolving</span>
                       {closeToEvolving.map(({ medal, next, remaining }) => {
                         const def = getMedalDefinition(medal.definitionId);
                         const progress = next ? ((next - remaining) / next) * 100 : 0;
@@ -1456,10 +1532,10 @@ export default function ActiveWorkoutPage() {
                             <span className="text-xs">{def?.icon || '🏅'}</span>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-gray-400 truncate">{def?.name || medal.definitionId}</span>
-                                <span className="text-[9px] text-purple-400">{remaining} to {nextLabel}</span>
+                                <span className="text-[10px] text-gray-700 truncate">{def?.name || medal.definitionId}</span>
+                                <span className="text-[9px] text-purple-700">{remaining} to {nextLabel}</span>
                               </div>
-                              <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
+                              <div className="w-full h-1 bg-gray-200 rounded-full overflow-hidden">
                                 <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%` }} />
                               </div>
                             </div>
@@ -1472,23 +1548,24 @@ export default function ActiveWorkoutPage() {
               );
             })()}
 
-            {/* 🤖 AI Coach Feedback — Pro users only */}
-            {(currentUser?.membershipTier === 'pro' || currentUser?.membershipTier === 'trainer') && completedWorkoutData && (
-              <div className="bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-indigo-500/20 rounded-xl p-3.5">
+            {/* AI Coach Feedback — free for all users */}
+            {completedWorkoutData && (
+              <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border border-indigo-200 rounded-xl p-3.5">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xl">🤖</span>
-                  <span className="font-semibold text-indigo-400 text-sm">AI Coach</span>
-                  <Badge variant="outline" className="border-indigo-500/30 text-indigo-300 text-[9px] h-4 ml-auto">PRO</Badge>
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                    <Sparkles className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <span className="font-semibold text-indigo-700 text-sm">AI Coach</span>
                 </div>
                 {aiFeedbackLoading ? (
                   <div className="flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 text-indigo-400 animate-spin" />
-                    <p className="text-xs text-gray-500">Generating personalized feedback...</p>
+                    <Loader2 className="w-3.5 h-3.5 text-indigo-500 animate-spin" />
+                    <p className="text-xs text-gray-700">Generating personalized feedback...</p>
                   </div>
                 ) : aiFeedback ? (
-                  <p className="text-xs text-gray-600 leading-relaxed">{aiFeedback}</p>
+                  <p className="text-xs text-gray-900 leading-relaxed whitespace-pre-line">{aiFeedback}</p>
                 ) : (
-                  <p className="text-xs text-gray-600 leading-relaxed">
+                  <p className="text-xs text-gray-800 leading-relaxed">
                     {completedWorkoutData.totalVolume > 5000
                       ? `Solid session — ${Math.round(completedWorkoutData.totalVolume).toLocaleString()}kg total volume across ${completedWorkoutData.exercises} exercises. Keep pushing.`
                       : `${completedWorkoutData.exercises} exercises, ${completedWorkoutData.sets} sets completed. Every rep counts — keep showing up.`}

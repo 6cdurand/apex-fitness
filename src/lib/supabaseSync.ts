@@ -506,6 +506,16 @@ function toDbWorkout(workout: Workout): any {
   if (workout.aiSummary !== undefined) {
     dbWorkout.ai_summary = workout.aiSummary || null;
   }
+  // PT review flow (columns added in 20260417_add_pt_review_flow_to_workouts.sql)
+  if (workout.reviewStatus !== undefined) {
+    dbWorkout.review_status = workout.reviewStatus || null;
+  }
+  if (workout.coachNote !== undefined) {
+    dbWorkout.coach_note = workout.coachNote || null;
+  }
+  if (workout.releasedAt !== undefined) {
+    dbWorkout.released_at = workout.releasedAt || null;
+  }
   return dbWorkout;
 }
 
@@ -526,6 +536,9 @@ function fromDbWorkout(dbWorkout: any): Workout {
     templateId: dbWorkout.template_id,
     deletedAt: dbWorkout.deleted_at || undefined,
     aiSummary: dbWorkout.ai_summary || undefined,
+    reviewStatus: dbWorkout.review_status || undefined,
+    coachNote: dbWorkout.coach_note || undefined,
+    releasedAt: dbWorkout.released_at || undefined,
   };
 }
 

@@ -60,6 +60,9 @@ export default function WorkoutDetailPage() {
   const [isEditingWorkout, setIsEditingWorkout] = useState(false);
   const [editedExercises, setEditedExercises] = useState<Workout['exercises'] | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // PT Review flow
+  const [coachNoteDraft, setCoachNoteDraft] = useState('');
+  const [releasing, setReleasing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -78,10 +81,44 @@ export default function WorkoutDetailPage() {
       setNotes(found.privateNotes || found.notes || '');
       setSharedNotesText(found.sharedNotes || '');
       setTrainerNotesText(found.trainerNotes || '');
+      setCoachNoteDraft(found.coachNote || '');
     } else {
       router.replace('/workout');
     }
   }, [isAuthenticated, params.id, workoutHistory, router, user]);
+
+  const handleReleaseSummary = async () => {
+    if (!workout || !user) return;
+    setReleasing(true);
+    try {
+      const releasedAt = new Date().toISOString();
+      updateCompletedWorkout(workout.id, {
+        reviewStatus: 'released',
+        coachNote: coachNoteDraft.trim() || undefined,
+        releasedAt,
+      });
+      // Notify the client that their summary is ready
+      try {
+        const { useSocialStore } = await import('@/lib/store');
+        useSocialStore.getState().addNotification({
+          userId: workout.userId,
+          type: 'workout_assigned' as any,
+          title: 'Your session summary is ready',
+          message: `Your coach released the summary for "${workout.name}" — tap to view PRs, medals, and coach note.`,
+          link: `/workout/${workout.id}`,
+        });
+      } catch {}
+      setWorkout({
+        ...workout,
+        reviewStatus: 'released',
+        coachNote: coachNoteDraft.trim() || undefined,
+        releasedAt,
+      });
+      toast.success('Summary sent to client');
+    } finally {
+      setReleasing(false);
+    }
+  };
 
   // Is the current user the trainer who conducted this PT session?
   const isSessionTrainer = workout?.assignedBy && workout.assignedBy === user?.id;
@@ -276,6 +313,83 @@ export default function WorkoutDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* PT Review Flow — trainer release panel (only for the trainer when reviewStatus is pending) */}
+          {workout.reviewStatus === 'pending' && isSessionTrainer && (
+            <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-amber-300 shadow-sm">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-amber-900">Review & send summary to client</p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      Your client is waiting. Review the stats + AI feedback below, add a personal note if you'd like, then release the summary.
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-amber-900 font-medium mb-1 block">Coach note (optional)</label>
+                  <Textarea
+                    value={coachNoteDraft}
+                    onChange={(e) => setCoachNoteDraft(e.target.value)}
+                    placeholder="Great effort today — focus on full depth on squats next session."
+                    className="bg-white border-amber-200 text-gray-900 text-sm min-h-[72px]"
+                  />
+                </div>
+                <Button
+                  onClick={handleReleaseSummary}
+                  disabled={releasing}
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-white"
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  {releasing ? 'Sending...' : 'Send summary to client'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PT Review Flow — pending state shown to the client (defensive fallback — normally hidden) */}
+          {workout.reviewStatus === 'pending' && !isSessionTrainer && workout.userId === user?.id && (
+            <Card className="bg-gradient-to-br from-sky-50 to-indigo-50 border-sky-200 shadow-sm">
+              <CardContent className="p-4 flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-sky-500 flex items-center justify-center flex-shrink-0">
+                  <Clock className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-sky-900">Waiting for coach review</p>
+                  <p className="text-xs text-gray-700 mt-0.5">
+                    Your coach will release your session summary (PRs, medals, AI feedback) shortly. You'll get a notification when it's ready.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* PT Review Flow — coach note (shown to both trainer + client once released) */}
+          {workout.reviewStatus === 'released' && workout.coachNote && (
+            <Card className="bg-gradient-to-br from-emerald-50 to-sky-50 border-emerald-200 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-4 h-4 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-emerald-800 mb-1">Coach's Note</p>
+                    <p className="text-sm text-gray-900 whitespace-pre-line leading-relaxed">
+                      {workout.coachNote}
+                    </p>
+                    {workout.releasedAt && (
+                      <p className="text-[10px] text-gray-500 mt-2">
+                        Released {format(new Date(workout.releasedAt), 'MMM d, h:mm a')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* AI Coach Summary */}
           {workout.aiSummary && (

@@ -4,6 +4,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
+import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -1388,31 +1389,14 @@ export default function ClientDetailPage() {
                             size="sm"
                             className="w-full justify-between text-left"
                             onClick={() => {
-                              // Start workout with this day's exercises
-                              const exercises = day.blocks?.flatMap((block: any) => 
-                                block.exercises?.map((ex: any) => ({
-                                  id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                  exerciseId: ex.exerciseId || ex.id,
-                                  exercise: {
-                                    id: ex.exerciseId || ex.id,
-                                    name: ex.exerciseName || ex.name || 'Exercise',
-                                    category: 'strength',
-                                    muscleGroups: [],
-                                  },
-                                  sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                                    id: `set-${Date.now()}-${si}`,
-                                    setNumber: si + 1,
-                                    targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                    reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                    weight: 0,
-                                    completed: false,
-                                  })),
-                                  restTimerSeconds: parseInt(ex.rest) || 90,
-                                  notes: ex.notes || '',
-                                })) || []
-                              ) || [];
-                              
-                              if (exercises.length > 0) {
+                              // Use shared util to preserve pyramid / custom per-set reps
+                              const template = convertProgramDayToTemplate(day, {
+                                programId: activeProgram.id,
+                                dayIndex: i,
+                                programName: activeProgram.templateName || 'Program',
+                                userId: user?.id || '',
+                              });
+                              if (template.exercises.length > 0) {
                                 // Create calendar event so completion syncs to Today page
                                 const eventId = crypto.randomUUID();
                                 const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -1431,17 +1415,9 @@ export default function ClientDetailPage() {
 
                                 const { startFromTemplate } = useWorkoutStore.getState();
                                 startFromTemplate({
+                                  ...(template as any),
                                   id: `session-${eventId}`,
                                   name: sessionName,
-                                  description: `Session from ${activeProgram.templateName}`,
-                                  exercises,
-                                  blocks: day.blocks,
-                                  category: 'strength',
-                                  estimatedDuration: 60,
-                                  createdAt: new Date().toISOString(),
-                                  createdBy: user?.id || '',
-                                  isPublic: false,
-                                  updatedAt: new Date().toISOString(),
                                 } as any, clientId);
                                 router.push('/workout/active');
                               }
@@ -2378,42 +2354,19 @@ export default function ClientDetailPage() {
                           size="sm"
                           className="w-full justify-between text-left border-rose-200 hover:bg-rose-50"
                           onClick={() => {
-                            const exercises = day.blocks?.flatMap((block: any) => 
-                              block.exercises?.map((ex: any) => ({
-                                id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                                exerciseId: ex.exerciseId || ex.id,
-                                exercise: {
-                                  id: ex.exerciseId || ex.id,
-                                  name: ex.exerciseName || ex.name || 'Exercise',
-                                  category: 'strength',
-                                  muscleGroups: [],
-                                },
-                                sets: Array.from({ length: ex.sets || 3 }, (_, si) => ({
-                                  id: `set-${Date.now()}-${si}`,
-                                  setNumber: si + 1,
-                                  targetReps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                  reps: typeof ex.reps === 'string' ? parseInt(ex.reps) || 10 : ex.reps || 10,
-                                  weight: 0,
-                                  completed: false,
-                                })),
-                                restTimerSeconds: parseInt(ex.rest) || 90,
-                                notes: ex.notes || '',
-                              })) || []
-                            ) || [];
-                            
-                            if (exercises.length > 0) {
+                            // Use shared util to preserve pyramid / custom per-set reps
+                            const template = convertProgramDayToTemplate(day, {
+                              programId: activeProgram.id,
+                              dayIndex: i,
+                              programName: activeProgram.templateName || 'Program',
+                              userId: user?.id || '',
+                            });
+                            if (template.exercises.length > 0) {
                               const { startFromTemplate } = useWorkoutStore.getState();
                               startFromTemplate({
+                                ...(template as any),
                                 id: `session-${Date.now()}`,
                                 name: `${day.dayLabel} - ${clientUser.displayName}`,
-                                description: `Session from ${activeProgram.templateName}`,
-                                exercises,
-                                category: 'strength',
-                                estimatedDuration: 60,
-                                createdAt: new Date().toISOString(),
-                                createdBy: user?.id || '',
-                                isPublic: false,
-                                updatedAt: new Date().toISOString(),
                               } as any, clientId);
                               router.push('/workout/active');
                             }

@@ -270,6 +270,12 @@ export interface Workout {
   blocks?: WorkoutBlock[]; // Session workout blocks
   deletedAt?: string; // Soft delete timestamp — null means active
   aiSummary?: string; // AI-generated feedback summary shown on completion + workout history
+  // PT Session Review Flow — populated only for PT sessions the client opened on their own device.
+  // reviewStatus='pending' means client finished it and trainer must review+release.
+  // reviewStatus='released' means trainer has released the summary (with optional coach note).
+  reviewStatus?: 'pending' | 'released';
+  coachNote?: string; // Trainer's personal note included when releasing the summary
+  releasedAt?: string; // ISO timestamp when trainer released the summary to the client
 }
 
 // Personal Best / Records

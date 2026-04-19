@@ -39,7 +39,8 @@ import {
   Trash2,
   FileText,
   Heart,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Bell,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -560,28 +561,57 @@ export default function TodayPage() {
               Completed Today
             </h2>
             <div className="space-y-2">
-              {todayWorkouts.map((workout) => (
-                <Card
-                  key={workout.id}
-                  className="bg-white border-green-500/30 cursor-pointer hover:bg-gray-50 shadow-sm"
-                  onClick={() => router.push(`/workout/${workout.id}`)}
-                >
-                  <CardContent className="p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                        <Dumbbell className="w-4 h-4 text-green-400" />
+              {todayWorkouts.map((workout) => {
+                const isReleased = workout.reviewStatus === 'released';
+                const isPending = workout.reviewStatus === 'pending';
+                return (
+                  <Card
+                    key={workout.id}
+                    className={`cursor-pointer hover:bg-gray-50 shadow-sm bg-white ${
+                      isReleased
+                        ? 'border-sky-400 ring-1 ring-sky-200'
+                        : isPending
+                          ? 'border-amber-300'
+                          : 'border-green-500/30'
+                    }`}
+                    onClick={() => router.push(`/workout/${workout.id}`)}
+                  >
+                    <CardContent className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          isReleased ? 'bg-sky-100' : isPending ? 'bg-amber-100' : 'bg-green-500/20'
+                        }`}>
+                          {isReleased ? (
+                            <Bell className="w-4 h-4 text-sky-600" />
+                          ) : isPending ? (
+                            <Clock className="w-4 h-4 text-amber-600" />
+                          ) : (
+                            <Dumbbell className="w-4 h-4 text-green-400" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{workout.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {isReleased
+                              ? 'New summary from your coach — tap to view'
+                              : isPending
+                                ? 'Awaiting coach review'
+                                : `${workout.exercises.length} exercises • ${workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}`
+                            }
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900 text-sm">{workout.name}</p>
-                        <p className="text-xs text-gray-500">
-                          {workout.exercises.length} exercises • {workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge className="bg-green-500/20 text-green-400 text-xs">Done</Badge>
-                  </CardContent>
-                </Card>
-              ))}
+                      {isReleased ? (
+                        <Badge className="bg-sky-500 text-white text-[10px]">New Summary</Badge>
+                      ) : isPending ? (
+                        <Badge className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px]">Pending</Badge>
+                      ) : (
+                        <Badge className="bg-green-500/20 text-green-400 text-xs">Done</Badge>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           </section>
         )}
@@ -696,9 +726,14 @@ export default function TodayPage() {
           
           // FLEXIBLE schedule — show only today's workout with swap option
           if (program.scheduleMode === 'flexible') {
+            // Only offer swaps for days that actually have exercises, aren't the current day,
+            // and aren't already completed this week
             const availableSwaps = program.weeklyPlan
               .map((wd: any, idx: number) => ({ ...wd, idx }))
-              .filter((_: any, idx: number) => !completedDayIndices.includes(idx) && idx !== dayIndex);
+              .filter((wd: any, idx: number) => {
+                const count = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                return count > 0 && !completedDayIndices.includes(idx) && idx !== dayIndex;
+              });
             
             return (
               <>
@@ -754,7 +789,9 @@ export default function TodayPage() {
                         const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                         const isDone = completedDayIndices.includes(idx);
                         const isCurrent = idx === dayIndex;
-                        if (isDone) return null;
+                        // Hide completed days AND empty days (builder may auto-populate
+                        // unused day labels with 0 exercises; don't offer those)
+                        if (isDone || wdEx === 0) return null;
                         return (
                           <button
                             key={wd.id || idx}
