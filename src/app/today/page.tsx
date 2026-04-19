@@ -94,10 +94,26 @@ export default function TodayPage() {
 
   // No longer auto-redirect to active workout — bottom bar handles re-entry
 
-  // Load client programs + calendar events from Supabase (for non-trainer users)
+  // Load client programs + calendar events from Supabase (for non-trainer users),
+  // and re-load whenever the tab regains focus/visibility so a freshly-assigned
+  // program shows up without requiring a full page reload.
   useEffect(() => {
     if (!user?.id || user.isTrainer) return;
-    loadClientDataFromSupabase(user.id);
+    const uid = user.id;
+    loadClientDataFromSupabase(uid);
+
+    const refetch = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Today] 🔄 Foreground refetch for', uid);
+        loadClientDataFromSupabase(uid);
+      }
+    };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', refetch);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', refetch);
+    };
   }, [user?.id, user?.isTrainer]);
 
   // deriveAll consistency check — runs once per day on login

@@ -952,6 +952,60 @@ function ProgramBuilderContent() {
               </div>
             )}
             
+            {/* Training Phase / rep-set range selector — applies to new exercises on this day,
+                 and can be applied retroactively to every exercise in the current day. */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-gray-700">Rep / Set Range</span>
+                <span className="text-[10px] text-gray-500">Applies to new exercises</span>
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                {TRAINING_PHASES.map((tp) => {
+                  const isActive = phase === tp.id;
+                  return (
+                    <button
+                      key={tp.id}
+                      type="button"
+                      onClick={() => setPhase(tp.id as TrainingPhase)}
+                      className={`px-2 py-1.5 rounded-md border text-[11px] leading-tight text-left transition-colors ${
+                        isActive
+                          ? 'bg-sky-500 border-sky-500 text-white'
+                          : 'bg-white border-gray-200 text-gray-700 hover:border-sky-300'
+                      }`}
+                    >
+                      <div className="font-semibold">{tp.name}</div>
+                      {tp.id !== 'none' && (
+                        <div className={`text-[10px] ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
+                          {tp.sets}×{tp.reps} • {tp.rest}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              {(phase as string) !== 'none' && activeDay && activeDay.blocks.some(b => b.exercises.length > 0) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] border-sky-300 text-sky-700 hover:bg-sky-50 gap-1"
+                  onClick={() => {
+                    const tp = TRAINING_PHASES.find(p => p.id === phase);
+                    if (!tp || !activeDay) return;
+                    setDays(prev => prev.map((d, i) => i !== activeDayIndex ? d : {
+                      ...d,
+                      blocks: d.blocks.map(b => ({
+                        ...b,
+                        exercises: b.exercises.map(ex => ({ ...ex, sets: tp.sets, reps: tp.reps, rest: tp.rest })),
+                      })),
+                    }));
+                    toast.success(`${tp.name} range applied to ${activeDay.label}`);
+                  }}
+                >
+                  <RotateCcw className="h-3 w-3" /> Apply to all exercises in this day
+                </Button>
+              )}
+            </div>
+
             {/* Add Block: type buttons + library */}
             <div className="flex gap-1 flex-wrap items-center">
               <span className="text-xs text-gray-500 mr-1">Add Block:</span>

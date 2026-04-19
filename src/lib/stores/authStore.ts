@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
-import { registerUserToSupabase, loginFromSupabase, updateUserInSupabase } from '../supabaseSync';
+import { registerUserToSupabase, loginFromSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
 
 // Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
 export function hashPassword(password: string): string {
@@ -94,67 +94,87 @@ export const useAuthStore = create<AuthState>()(
       // Login with Supabase Auth user (from Google OAuth, etc.)
       loginWithSupabaseUser: async (supabaseUser) => {
         set({ isLoading: true });
-        
-        console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email);
-        
+
+        console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email, 'auth.id=', supabaseUser.id);
+
+        // STEP 1: resolve canonical public.users.id by email.
+        // auth.users.id and public.users.id are different; programs reference
+        // public.users.id. If a trainer created a placeholder for this email,
+        // we MUST reuse that canonical id or the client won't see their program.
+        const canonical = await resolveCanonicalUserByEmail(supabaseUser.email);
+        const canonicalId = canonical?.id || supabaseUser.id;
+        if (canonical) {
+          console.log('[Auth] ✅ Canonical public.users.id:', canonical.id, '(differs from auth id:', canonical.id !== supabaseUser.id, ')');
+        } else {
+          console.log('[Auth] No canonical public.users row yet; will create one with auth.id');
+        }
+
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        
-        // Check if user already exists locally (by email or id)
-        let existingUser = storedUsers.find((u: User) => 
-          u.id === supabaseUser.id || u.email?.toLowerCase() === supabaseUser.email.toLowerCase()
+
+        // Check if user already exists locally (by canonical id, auth id, or email)
+        let existingUser = storedUsers.find((u: User) =>
+          u.id === canonicalId || u.id === supabaseUser.id || u.email?.toLowerCase() === supabaseUser.email.toLowerCase()
         );
-        
+
         if (existingUser) {
-          console.log('[Auth] ✅ Found existing user, logging in');
-          // Update with latest info from Supabase
+          console.log('[Auth] ✅ Found existing local user, normalizing to canonical id');
+          // Update with latest info from Supabase AND reconcile to canonical id
+          const previousId = existingUser.id;
           existingUser = {
             ...existingUser,
-            id: supabaseUser.id, // Use Supabase ID
+            id: canonicalId, // Use CANONICAL public.users.id, not auth.users.id
+            email: supabaseUser.email,
             profilePhoto: supabaseUser.profilePhoto || existingUser.profilePhoto,
             displayName: supabaseUser.displayName || existingUser.displayName,
-            membershipTier: existingUser.membershipTier || 'pro', // Ensure existing users get Pro
+            membershipTier: existingUser.membershipTier || 'pro',
+            // Respect the trainer flag from public.users (source of truth)
+            isTrainer: canonical?.is_trainer ?? existingUser.isTrainer ?? false,
+            trainerId: canonical?.trainer_id ?? existingUser.trainerId,
           };
-          
-          // Update in localStorage
-          const updatedUsers = storedUsers.map((u: User) => 
-            u.email?.toLowerCase() === supabaseUser.email.toLowerCase() ? existingUser : u
-          );
+
+          // If the local id was different, drop the old row (avoid duplicates)
+          const cleanedUsers = storedUsers.filter((u: User) => u.id !== previousId || u.id === canonicalId);
+          const updatedUsers = cleanedUsers.filter((u: User) => u.id !== canonicalId);
+          updatedUsers.push(existingUser);
           localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
-          
+
           set({ user: existingUser, isAuthenticated: true, isLoading: false });
           return true;
         }
-        
-        // Create new user from Supabase auth
-        console.log('[Auth] Creating new user from Supabase auth');
+
+        // No local user; create one using canonical id (from public.users if it exists)
+        console.log('[Auth] Creating local user from Supabase auth with id:', canonicalId);
         const newUser: User = {
-          id: supabaseUser.id,
+          id: canonicalId,
           email: supabaseUser.email,
           username: supabaseUser.email.split('@')[0],
-          displayName: supabaseUser.displayName,
+          displayName: supabaseUser.displayName || canonical?.display_name || supabaseUser.email.split('@')[0],
           profilePhoto: supabaseUser.profilePhoto,
           gender: 'other',
-          mode: 'user',
-          isTrainer: false,
+          mode: (canonical?.mode as UserMode) || 'user',
+          isTrainer: canonical?.is_trainer || false,
           isVerifiedTrainer: false,
           preferredUnit: 'kg',
           membershipTier: 'pro',
+          trainerId: canonical?.trainer_id || undefined,
           createdAt: new Date().toISOString(),
           followers: [],
           following: [],
         };
-        
+
         // Save to localStorage (no password needed for OAuth users)
         storedUsers.push({ ...newUser, password: hashPassword(`oauth_${supabaseUser.id}`) });
         localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-        
-        // Sync to Supabase users table
-        try {
-          await registerUserToSupabase(newUser, `oauth_${supabaseUser.id}`);
-        } catch (e) {
-          console.error('[Auth] Supabase sync error:', e);
+
+        // Only register to Supabase if there's no canonical row yet — don't overwrite
+        if (!canonical) {
+          try {
+            await registerUserToSupabase(newUser, `oauth_${supabaseUser.id}`);
+          } catch (e) {
+            console.error('[Auth] Supabase sync error:', e);
+          }
         }
-        
+
         set({ user: newUser, isAuthenticated: true, isLoading: false });
         return true;
       },

@@ -1535,6 +1535,16 @@ export const useTrainerStore = create<TrainerState>()(
           }
           
           console.log(`[Trainer Store] ✅ Client data loaded: ${programs.length} programs, ${events.length} events`);
+
+          // Fire-and-forget: record a program receipt per program for this client.
+          // Helps diagnose cross-device visibility issues (who received what, when).
+          if (programs.length > 0) {
+            import('../supabaseSync').then(m => {
+              programs.forEach((p: any) => {
+                if (p?.id) m.markProgramReceived(p.id, clientId);
+              });
+            }).catch(() => {});
+          }
         } catch (e) {
           console.error('[Trainer Store] Error loading client data:', e);
         }

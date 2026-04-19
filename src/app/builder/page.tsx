@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -8,6 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Plus, 
   Dumbbell, 
@@ -16,14 +26,17 @@ import {
   Layers,
   Zap,
   CalendarDays,
-  Users
+  Users,
+  Trash2,
 } from 'lucide-react';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
+import { toast } from 'sonner';
 
 export default function BuilderPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { workoutLibrary, savedBlocks, circuitLibrary, clients, clientPrograms } = useTrainerStore();
+  const { workoutLibrary, savedBlocks, circuitLibrary, clients, clientPrograms, deleteClientProgram } = useTrainerStore();
+  const [programToDelete, setProgramToDelete] = useState<{ id: string; name: string; clientName: string } | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -98,21 +111,39 @@ export default function BuilderPage() {
                   <Card
                     key={program.id}
                     className="bg-white border-gray-200 shadow-sm cursor-pointer hover:border-emerald-500/30 transition-colors"
-                    onClick={() => router.push(`/trainer/clients/${program.clientId}?tab=program`)}
+                    onClick={() => router.push(`/clients/${program.clientId}?tab=program`)}
                   >
                     <CardContent className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                           <Users className="w-4 h-4 text-emerald-400" />
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{program.templateName}</p>
-                          <p className="text-xs text-gray-500">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 text-sm truncate">{program.templateName}</p>
+                          <p className="text-xs text-gray-500 truncate">
                             {clientInfo?.displayName || 'Client'} • {program.weeklyPlan?.length || 0} days/week • {program.phase}
                           </p>
                         </div>
                       </div>
-                      <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Active</Badge>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <Badge className="bg-emerald-500/20 text-emerald-400 text-xs">Active</Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-400 hover:text-red-500 hover:bg-red-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProgramToDelete({
+                              id: program.id,
+                              name: program.templateName,
+                              clientName: clientInfo?.displayName || 'Client',
+                            });
+                          }}
+                          aria-label="Delete program"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 );
@@ -251,6 +282,35 @@ export default function BuilderPage() {
           </section>
         )}
       </div>
+
+      {/* Delete program confirmation */}
+      <AlertDialog open={!!programToDelete} onOpenChange={(open) => { if (!open) setProgramToDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete program?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <span className="font-semibold">{programToDelete?.name}</span> from {programToDelete?.clientName}'s app — they'll no longer see it in their program tab, Today page, or calendar.
+              <br /><br />
+              Past workouts already completed stay in their history. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => {
+                if (programToDelete) {
+                  deleteClientProgram(programToDelete.id);
+                  toast.success(`Deleted ${programToDelete.name}`);
+                  setProgramToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </MainLayout>
   );
 }

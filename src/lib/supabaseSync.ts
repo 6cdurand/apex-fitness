@@ -163,6 +163,38 @@ export async function updatePasswordInSupabase(email: string, newPassword: strin
   }
 }
 
+// Resolve the canonical public.users row for an email address.
+// Critical for cross-device program visibility: auth.users and public.users use
+// different IDs, and programs ALWAYS reference public.users.id. When a client
+// signs in via OAuth (new auth.users.id) we must map them back to their
+// existing public.users.id so trainer-assigned programs remain visible.
+export async function resolveCanonicalUserByEmail(
+  email: string
+): Promise<{ id: string; email: string; display_name: string | null; is_trainer: boolean; mode: string | null; trainer_id: string | null } | null> {
+  if (!isSupabaseConfigured()) return null;
+  const emailLower = email.toLowerCase().trim();
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, display_name, is_trainer, mode, trainer_id, account_status')
+      .eq('email', emailLower)
+      .maybeSingle();
+    if (error) {
+      console.error('[Canonical User] Lookup error for', emailLower, ':', error.message);
+      return null;
+    }
+    if (!data) {
+      console.log('[Canonical User] No public.users row for', emailLower);
+      return null;
+    }
+    console.log('[Canonical User] ✅ Resolved', emailLower, '→ public.users.id =', data.id, '(account_status:', data.account_status, ')');
+    return data as any;
+  } catch (e) {
+    console.error('[Canonical User] Exception:', e);
+    return null;
+  }
+}
+
 // Login user from Supabase (cross-device)
 export async function loginFromSupabase(email: string, password: string): Promise<User | null> {
   if (!isSupabaseConfigured()) {
@@ -2063,23 +2095,79 @@ function mapProgramFromSupabase(p: any) {
 }
 
 export async function fetchClientProgramsForUser(clientId: string): Promise<any[]> {
-  if (!isSupabaseConfigured()) return [];
-  
+  if (!isSupabaseConfigured()) {
+    console.log('[Program Fetch For User] Supabase not configured — returning []');
+    return [];
+  }
+  if (!clientId) {
+    console.warn('[Program Fetch For User] ⚠️ Empty clientId — skipping fetch');
+    return [];
+  }
+
+  console.log('[Program Fetch For User] 🔎 Query filter client_id =', clientId);
   try {
     const { data, error } = await supabase
       .from('client_programs')
       .select('*')
       .eq('client_id', clientId);
-    
+
     if (error) {
-      console.error('[Program Fetch For User] Error:', error.message);
+      console.error('[Program Fetch For User] ❌ Error for client_id', clientId, ':', error.message);
       return [];
     }
-    
-    return (data || []).map(mapProgramFromSupabase);
+
+    const rows = data || [];
+    console.log('[Program Fetch For User] ✅ Returned', rows.length, 'program rows for client_id =', clientId);
+    if (rows.length === 0) {
+      console.warn(
+        '[Program Fetch For User] ⚠️ Zero rows for client_id =', clientId,
+        '— verify this matches public.users.id (NOT auth.users.id).',
+      );
+    } else {
+      rows.forEach((r: any) => {
+        console.log('[Program Fetch For User]   • row id=', r.id, 'status=', r.status, 'trainer_id=', r.trainer_id);
+      });
+    }
+    return rows.map(mapProgramFromSupabase);
   } catch (e) {
     console.error('[Program Fetch For User] Exception:', e);
     return [];
+  }
+}
+
+// ============ PROGRAM RECEIPTS ============
+// Tracks per-client acknowledgement that a program reached them.
+// Table schema (see supabase/migrations/20260419_add_program_receipts.sql):
+//   program_receipts (program_id text, client_id text, received_at timestamptz, PRIMARY KEY (program_id, client_id))
+//
+// Idempotent — safe to call every time a client loads their programs.
+export async function markProgramReceived(programId: string, clientId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  if (!programId || !clientId) {
+    console.warn('[Program Receipt] ⚠️ Missing programId or clientId — skipping');
+    return false;
+  }
+  try {
+    const { error } = await supabase
+      .from('program_receipts')
+      .upsert(
+        { program_id: programId, client_id: clientId, received_at: new Date().toISOString() },
+        { onConflict: 'program_id,client_id' }
+      );
+    if (error) {
+      // Unknown-relation is tolerated — the migration may not have been run yet in dev.
+      if ((error as any).code === '42P01') {
+        console.warn('[Program Receipt] program_receipts table missing — run the 20260419 migration.');
+        return false;
+      }
+      console.error('[Program Receipt] ❌ Error:', error.message);
+      return false;
+    }
+    console.log('[Program Receipt] ✅ Marked received:', programId, '→', clientId);
+    return true;
+  } catch (e) {
+    console.error('[Program Receipt] Exception:', e);
+    return false;
   }
 }
 

@@ -128,12 +128,26 @@ export default function ProgramPage() {
   const [showSwapDialog, setShowSwapDialog] = useState(false);
   const [showWorkoutDays, setShowWorkoutDays] = useState(false);
   
-  // Load client programs from Supabase
+  // Load client programs from Supabase, and re-fetch on foreground so a
+  // freshly-assigned program shows up without a manual reload.
   useEffect(() => {
-    if (user?.id && !user.isTrainer) {
-      loadClientDataFromSupabase(user.id);
-    }
-  }, [user?.id]);
+    if (!user?.id || user.isTrainer) return;
+    const uid = user.id;
+    loadClientDataFromSupabase(uid);
+
+    const refetch = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Program] 🔄 Foreground refetch for', uid);
+        loadClientDataFromSupabase(uid);
+      }
+    };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', refetch);
+    return () => {
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', refetch);
+    };
+  }, [user?.id, user?.isTrainer]);
   
   const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
   const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
