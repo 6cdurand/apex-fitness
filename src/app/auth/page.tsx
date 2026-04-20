@@ -26,7 +26,7 @@ function AuthPageContent() {
   const inviteToken = searchParams.get('invite');
   const modeParam = searchParams.get('mode');
   
-  const { login, signInWithPassword, register, isLoading, user, updatePassword, resetPassword } = useAuthStore();
+  const { login, signInWithPassword, register, signInAsDemo, isLoading, user, updatePassword, resetPassword } = useAuthStore();
 
   // Local loading state for OAuth (Supabase's signInWithOAuth returns
   // after initiating the redirect; the button would otherwise look
@@ -344,33 +344,15 @@ function AuthPageContent() {
     }
   };
 
-  // Quick login for testing - auto-create a demo user
-  const handleDemoLogin = async () => {
-    const demoEmail = 'demo@apex.fitness';
-    const demoPassword = 'demo123';
-    
-    // Try to login first
-    let success = await login(demoEmail, demoPassword);
-    
-    if (!success) {
-      // Create demo account if doesn't exist
-      await register({
-        email: demoEmail,
-        username: 'demo_user',
-        password: demoPassword,
-        displayName: 'Demo User',
-        gender: 'male',
-        height: 175,
-        weight: 75,
-        isTrainer: true,
-      });
-      success = true;
-    }
-    
-    if (success) {
-      toast.success('Welcome to Catalift!');
-      router.push('/workout');
-    }
+  // Pure client-side demo mode — deliberately does NOT call Supabase
+  // Auth. No auth.users row is created, no public.users row is
+  // touched, and the real identity-v2 flow is completely unaffected.
+  // Data created during a demo session lives in localStorage-persisted
+  // Zustand stores only; signing out clears it.
+  const handleDemoLogin = () => {
+    signInAsDemo();
+    toast.success("You're in demo mode \u2014 data stays in this browser.");
+    router.push('/workout');
   };
 
   return (

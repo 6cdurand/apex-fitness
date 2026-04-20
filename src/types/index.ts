@@ -38,6 +38,10 @@ export interface User {
   };
   // Gym affiliation
   accountStatus?: 'active' | 'placeholder';
+  // Pure-client demo mode: true only for the "Continue as Demo User"
+  // path. No Supabase Auth session or public.users row exists; all
+  // writes are best-effort local-only.
+  isDemo?: boolean;
   gymId?: string;
   gymName?: string;
   // Health & service connections

@@ -37,6 +37,32 @@ export type RegisterResult =
   | { ok: true; user: User }
   | { ok: false; reason: 'email_taken' | 'weak_password' | 'profile_update_failed' | 'unknown'; message?: string };
 
+/** Sentinel UUID for the local-only demo user. Real accounts never use
+ *  this id; it has a valid v4 shape so any downstream Supabase call
+ *  that does try to query with it fails safely (empty rows under RLS)
+ *  rather than with a type error. */
+const DEMO_USER_ID = '00000000-0000-4000-8000-000000000000';
+
+function buildDemoUser(): User {
+  return {
+    id: DEMO_USER_ID,
+    email: 'demo@catalift.local',
+    username: 'demo_user',
+    displayName: 'Demo User',
+    gender: 'male',
+    mode: 'user',
+    isTrainer: false,
+    isVerifiedTrainer: false,
+    preferredUnit: 'kg',
+    createdAt: new Date().toISOString(),
+    followers: [],
+    following: [],
+    membershipTier: 'pro',
+    accountStatus: 'active',
+    isDemo: true,
+  };
+}
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
@@ -48,6 +74,10 @@ interface AuthState {
   signInWithPassword: (email: string, password: string) => Promise<LoginResult>;
   signUpWithPassword: (args: { email: string; password: string; displayName?: string; username?: string }) => Promise<RegisterResult>;
   signInWithGoogle: () => Promise<void>;
+  /** Enter pure-client demo mode. Sets a deterministic local User and
+   *  marks the store as authenticated without creating any Supabase
+   *  Auth session or public.users row. Never throws. */
+  signInAsDemo: () => void;
 
   // Back-compat shims used throughout the app — same return shapes as v1.
   login: (email: string, password: string) => Promise<boolean>;
@@ -190,6 +220,15 @@ export const useAuthStore = create<AuthState>()(
       /** Sync Zustand state with the current Supabase Auth session. Call on app mount. */
       bootstrap: async () => {
         if (get().isBootstrapped && get().user) return;
+        // Demo user is a pure client session — no Supabase Auth session
+        // exists. Short-circuit so we don't bounce it back to signed-out
+        // on reload when getSession() returns null.
+        const persisted = get().user;
+        if (persisted?.isDemo) {
+          console.log('[Auth v2] bootstrap: demo session preserved');
+          set({ isAuthenticated: true, isBootstrapped: true, isLoading: false });
+          return;
+        }
         set({ isLoading: true });
         try {
           const { data: { session } } = await supabase.auth.getSession();
@@ -304,6 +343,20 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      signInAsDemo: () => {
+        // Pure client-side. Never calls supabase.auth.* — the persist
+        // middleware keeps the demo user across reloads, and bootstrap()
+        // + the onAuthStateChange listener both have matching guards so
+        // "no Supabase session" does not wipe demo state.
+        console.log('[Auth v2] signInAsDemo: entering demo mode');
+        set({
+          user: buildDemoUser(),
+          isAuthenticated: true,
+          isBootstrapped: true,
+          isLoading: false,
+        });
+      },
+
       // ---- back-compat shims ----
 
       login: async (email, password) => {
@@ -347,7 +400,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
-        await supabase.auth.signOut();
+        const u = get().user;
+        // Demo users have no Supabase session; calling signOut() would
+        // be a no-op but we skip it for clarity (and to avoid the SDK's
+        // own logging noise).
+        if (!u?.isDemo) {
+          await supabase.auth.signOut();
+        }
         set({ user: null, isAuthenticated: false });
       },
 
@@ -443,6 +502,9 @@ export function installAuthListener() {
     console.log('[Auth v2] onAuthStateChange:', event, 'user=', session?.user?.email);
     const store = useAuthStore.getState();
     if (event === 'SIGNED_OUT' || !session?.user) {
+      // In pure-client demo mode, Supabase "no session" events are
+      // expected (there IS no session) and must NOT wipe the demo user.
+      if (store.user?.isDemo) return;
       useAuthStore.setState({ user: null, isAuthenticated: false });
       return;
     }
