@@ -174,16 +174,49 @@ function ResetPasswordContent() {
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.auth.updateUser({ password });
-    setSubmitting(false);
-    if (error) {
-      console.error('[reset-password] updateUser failed:', error);
-      toast.error(error.message || 'Could not update password');
+
+    // Race updateUser against a 15s timeout so a hung network call surfaces
+    // as a clear error instead of an indefinite "Saving…" spinner.
+    const started = performance.now();
+    console.log('[reset-password] calling supabase.auth.updateUser…');
+    let result: Awaited<ReturnType<typeof supabase.auth.updateUser>> | null = null;
+    let timedOut = false;
+    try {
+      result = await Promise.race([
+        supabase.auth.updateUser({ password }),
+        new Promise<null>((_, reject) =>
+          setTimeout(() => {
+            timedOut = true;
+            reject(new Error('updateUser timed out after 15s'));
+          }, 15_000),
+        ),
+      ]);
+    } catch (e: any) {
+      console.error('[reset-password] updateUser threw:', e?.message ?? e);
+      setSubmitting(false);
+      toast.error(timedOut
+        ? 'Password update is taking too long. Check your connection and try again.'
+        : (e?.message ?? 'Could not update password'));
       return;
     }
+    const elapsed = Math.round(performance.now() - started);
+    console.log(`[reset-password] updateUser returned in ${elapsed}ms`, {
+      hasUser: !!result?.data?.user,
+      error: result?.error?.message ?? null,
+    });
+
+    if (result?.error) {
+      setSubmitting(false);
+      toast.error(result.error.message || 'Could not update password');
+      return;
+    }
+
+    // Success — redirect IMMEDIATELY and let the auth listener + background
+    // bootstrap refresh the profile. Blocking on bootstrap here can add
+    // multi-second latency (public.users fetch + RLS round-trip + trainer
+    // data load in SupabaseSync) that makes the UI feel frozen.
     toast.success('Password updated');
-    await bootstrap();
-    // Clean up the URL so a refresh doesn't reattempt the recovery flow.
+    void bootstrap();
     window.history.replaceState({}, '', '/today');
     router.replace('/today');
   };
