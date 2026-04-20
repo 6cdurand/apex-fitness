@@ -26,7 +26,7 @@ function AuthPageContent() {
   const inviteToken = searchParams.get('invite');
   const modeParam = searchParams.get('mode');
   
-  const { login, signInWithPassword, register, signInAsDemo, isLoading, user, updatePassword, resetPassword } = useAuthStore();
+  const { login, signInWithPassword, signUpWithPassword, register, signInAsDemo, isLoading, user, updatePassword, resetPassword } = useAuthStore();
 
   // Local loading state for OAuth (Supabase's signInWithOAuth returns
   // after initiating the redirect; the button would otherwise look
@@ -281,33 +281,52 @@ function AuthPageContent() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Build health connections from onboarding selections
-    const healthConnections: Record<string, any> = {};
-    if (onboardConnections.appleHealth) healthConnections.appleHealth = { connected: true, lastSync: new Date().toISOString() };
-    if (onboardConnections.googleHealth) healthConnections.googleHealth = { connected: true, lastSync: new Date().toISOString() };
-    if (onboardConnections.calendar) healthConnections.calendar = { connected: true };
-    if (onboardConnections.stripe) healthConnections.stripe = { connected: true };
-    
-    const success = await register({
+
+    // Use signUpWithPassword directly (not the `register` shim) so we
+    // can show the real error reason. The shim collapses every failure
+    // into `false`, which is why random emails used to incorrectly toast
+    // "Email already exists" when the real cause was often a weak
+    // password, a rate limit, an invalid-email rejection, or a
+    // profile/trigger failure.
+    const result = await signUpWithPassword({
       email,
-      username,
       password,
       displayName: displayName || username,
-      gender,
-      dateOfBirth,
-      height: height ? parseFloat(height) : undefined,
-      weight: weight ? parseFloat(weight) : undefined,
-      isTrainer,
-      healthConnections: Object.keys(healthConnections).length > 0 ? healthConnections : undefined,
+      username,
     });
 
-    if (success) {
-      toast.success('Account created successfully!');
-      router.push('/workout');
-    } else {
-      toast.error('Email already exists');
+    if (!result.ok) {
+      const msg =
+        result.reason === 'email_taken' ? 'An account with this email already exists. Try signing in instead.'
+        : result.reason === 'weak_password' ? (result.message || 'Password is too weak. Use at least 6 characters.')
+        : result.reason === 'invalid_email' ? 'That email address is not valid.'
+        : result.reason === 'rate_limited' ? 'Too many sign-up attempts. Please wait a few minutes and try again.'
+        : result.reason === 'profile_update_failed' ? 'Account created, but profile setup failed. Please contact support.'
+        : result.message || 'Sign-up failed. Please try again.';
+      toast.error(msg);
+      return;
     }
+
+    // Apply the extra profile fields that signUpWithPassword doesn't
+    // handle (gender, DOB, height, weight, isTrainer). Non-fatal: if
+    // this fails, the account is still created — the user can edit the
+    // profile later.
+    const extras: Record<string, any> = {};
+    if (gender) extras.gender = gender;
+    if (dateOfBirth) extras.date_of_birth = dateOfBirth;
+    if (height) extras.height = parseFloat(height);
+    if (weight) extras.weight = parseFloat(weight);
+    if (isTrainer !== undefined) extras.is_trainer = isTrainer;
+    if (Object.keys(extras).length > 0) {
+      extras.updated_at = new Date().toISOString();
+      const { error: updateErr } = await supabase.from('users').update(extras).eq('id', result.user.id);
+      if (updateErr) {
+        console.warn('[Auth] post-signup profile update failed (non-fatal):', updateErr.message);
+      }
+    }
+
+    toast.success('Account created successfully!');
+    router.push('/workout');
   };
 
   // Google Sign-In with Supabase Auth

@@ -35,7 +35,7 @@ export type LoginResult =
 
 export type RegisterResult =
   | { ok: true; user: User }
-  | { ok: false; reason: 'email_taken' | 'weak_password' | 'profile_update_failed' | 'unknown'; message?: string };
+  | { ok: false; reason: 'email_taken' | 'weak_password' | 'invalid_email' | 'rate_limited' | 'profile_update_failed' | 'unknown'; message?: string };
 
 /** Sentinel UUID for the local-only demo user. Real accounts never use
  *  this id; it has a valid v4 shape so any downstream Supabase call
@@ -295,10 +295,21 @@ export const useAuthStore = create<AuthState>()(
             },
           });
           if (error) {
-            const reason = /already/i.test(error.message) ? 'email_taken'
-              : /password/i.test(error.message) ? 'weak_password'
+            // Log the raw Supabase error so we can diagnose reports like
+            // "it says email already exists on a brand new email" — the
+            // real error is almost always something else (weak password,
+            // rate limit, invalid email, trigger/profile failure) that a
+            // classifier would otherwise hide.
+            const msg = error.message ?? '';
+            console.error('[Auth v2] signUpWithPassword failed:', msg, '| status:', (error as any)?.status);
+            type FailReason = Extract<RegisterResult, { ok: false }>['reason'];
+            const reason: FailReason =
+              /already.*register|user.*already.*exist|already.*exist/i.test(msg) ? 'email_taken'
+              : /rate\s*limit|too\s*many|try.*again.*later/i.test(msg) ? 'rate_limited'
+              : /invalid.*email|not.*valid.*email|email.*invalid/i.test(msg) ? 'invalid_email'
+              : /password/i.test(msg) ? 'weak_password'
               : 'unknown';
-            return { ok: false, reason, message: error.message };
+            return { ok: false, reason, message: msg };
           }
           if (!data.user) {
             return { ok: false, reason: 'unknown', message: 'no user returned' };
