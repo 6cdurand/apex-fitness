@@ -25,9 +25,17 @@
 --                                            can be added in a follow-up
 --                                            migration after operator
 --                                            reconciliation)
---   6. handle_new_auth_user() rewrite      (semantics preserved; Case B
---                                            now skips ambiguous emails
---                                            and falls through to Case C)
+--   6. handle_new_auth_user() rewrite      (semantics extended:
+--                                            ambiguous-email signins no
+--                                            longer fall through to an
+--                                            INSERT that duplicates the
+--                                            email; instead a fallback
+--                                            profile is created with
+--                                            email=NULL and
+--                                            auth_migration_status =
+--                                            'pending_review' so the
+--                                            "never duplicate an email"
+--                                            invariant holds strictly.)
 --
 -- Conservative throughout: no deletes, no merges, no clobbering an
 -- existing non-null auth_user_id, no destructive updates. Idempotent.
@@ -36,6 +44,24 @@
 -- 1. Column --------------------------------------------------
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS auth_user_id uuid;
+
+-- 1b. Extend the auth_migration_status CHECK constraint so the trigger
+--     can write 'pending_review' on the ambiguous-email fallback path.
+--     Idempotent: DROP IF EXISTS + ADD always leaves the table with the
+--     extended domain, whether this migration runs for the first time
+--     or is re-applied.
+ALTER TABLE public.users
+  DROP CONSTRAINT IF EXISTS users_auth_migration_status_check;
+
+ALTER TABLE public.users
+  ADD CONSTRAINT users_auth_migration_status_check
+  CHECK (auth_migration_status IN (
+    'pending',
+    'migrated',
+    'failed',
+    'skipped',
+    'pending_review'
+  ));
 
 -- 2. FK → auth.users(id). NOT VALID so pre-existing rows don't block it.
 DO $$
@@ -209,15 +235,31 @@ BEGIN
 END$$;
 
 -- 7. Trigger: handle_new_auth_user() --------------------------
---    Semantics preserved from the previous version:
---      Case A — public.users row with id = NEW.id: update in place.
---      Case B — exactly one public.users row with matching email and
---               auth_user_id IS NULL: link via auth_user_id.
---      Case C — no usable match: insert fresh (id = NEW.id,
---               auth_user_id = NEW.id).
---    Never creates a second profile for an email that already has one.
---    Ambiguous emails (>1 candidate rows) are logged and fall through
---    to Case C so the auth user still gets a profile row.
+--    Four-way dispatch. Hard invariant: NEVER creates a second
+--    public.users row carrying an email that already exists on another
+--    public.users row.
+--
+--      Case A  — public.users row with id = NEW.id exists.
+--                Update in place; promote placeholder → active.
+--      Case B  — exactly one public.users row with matching email
+--                (case-insensitive) AND auth_user_id IS NULL. Link
+--                via auth_user_id.
+--      Case B' — MORE than one candidate row shares NEW.email
+--                (ambiguous). Insert a FALLBACK profile instead of
+--                propagating the duplicate email:
+--                  id                    = NEW.id
+--                  auth_user_id          = NEW.id
+--                  email                 = NULL   -- blank on purpose
+--                  username              = NULL
+--                  auth_migration_status = 'pending_review'
+--                Log identity_events type
+--                'auth_user_email_ambiguous_fallback_profile_created'
+--                with the original email and candidate count. Operators
+--                reconcile via supabase/manual_followups.sql, then
+--                re-set the email on the fallback row.
+--      Case C  — no email match at all (NEW.email is NULL, or zero
+--                unlinked candidates). Insert fresh with NEW.email
+--                (safe here — there is no competing row).
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -303,16 +345,54 @@ BEGIN
       RETURN NEW;
 
     ELSIF v_email_matches > 1 THEN
-      -- Ambiguous — log and fall through to Case C so the auth user
-      -- still gets a profile row. Operators reconcile via identity_events.
+      -- Case B' — AMBIGUOUS email. Do NOT create another row carrying
+      -- NEW.email; that would compound the duplicate problem this
+      -- migration exists to prevent. Instead insert a fallback profile
+      -- with email = NULL and flag it for operator review.
+      INSERT INTO public.users (
+        id, email, auth_user_id, display_name, username,
+        avatar_url, account_status, auth_migration_status,
+        gender, preferred_unit, is_trainer, is_verified_trainer,
+        mode, created_at, updated_at
+      )
+      VALUES (
+        NEW.id,
+        NULL,                -- intentionally blank to uphold the
+                             -- "no duplicate email" invariant
+        NEW.id,              -- mirror auth id so the OR-clause's
+                             -- id.eq half resolves on first login
+        v_display_name,
+        NULL,                -- no username derivable without email;
+                             -- operator sets during review
+        v_avatar,
+        'active',
+        'pending_review',    -- flag; gates manual_followups.sql workflow
+        'other',
+        'kg',
+        false,
+        false,
+        'user',
+        now(),
+        now()
+      );
+
       INSERT INTO public.identity_events (event_type, user_id, payload)
-      VALUES ('auth_user_email_ambiguous', NEW.id,
-              jsonb_build_object('email', NEW.email,
-                                 'candidates', v_email_matches));
+      VALUES (
+        'auth_user_email_ambiguous_fallback_profile_created',
+        NEW.id,
+        jsonb_build_object(
+          'original_email',  NEW.email,
+          'candidate_count', v_email_matches
+        )
+      );
+
+      RETURN NEW;
     END IF;
   END IF;
 
-  -- Case C: no usable match — insert fresh.
+  -- Case C: no email match (NEW.email IS NULL, or zero unlinked
+  --         candidates). Safe to insert with NEW.email because no
+  --         existing public.users row carries it.
   --         id = auth.users.id so the primary-key half of the OR-clause
   --         resolves on first login.
   INSERT INTO public.users (
@@ -355,7 +435,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_auth_user();
 
 COMMENT ON TRIGGER on_auth_user_created ON auth.users IS
-'Mirrors auth.users → public.users: id first, then unambiguous email match, then insert. Never duplicates profiles by email.';
+'Mirrors auth.users → public.users. Dispatch: id match → update; single unlinked email → link via auth_user_id; ambiguous email → fallback row with email=NULL + auth_migration_status=pending_review; otherwise insert fresh. Never duplicates profiles by email.';
 
 COMMENT ON COLUMN public.users.auth_user_id IS
 'Back-reference to auth.users.id for accounts whose public.users.id predates Supabase Auth. Nullable; unique when set (partial unique index added in 20260421_01 if no residual duplicates).';
