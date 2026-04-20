@@ -204,6 +204,10 @@ export default function TodayPage() {
                 sets: setsArray,
                 restTimerSeconds: parseInt(ex.rest) || 90,
                 notes: ex.notes || '',
+                // Preserve superset grouping built in the workout/program builder
+                groupId: ex.groupId,
+                groupOrder: ex.groupOrder,
+                groupType: ex.groupId ? 'superset' : undefined,
               };
             })
           );

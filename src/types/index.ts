@@ -159,6 +159,9 @@ export interface WorkoutBlock {
     setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
     repType?: 'reps' | 'time';
     movementPattern?: string;
+    // Superset grouping (exercises with same groupId are performed back-to-back)
+    groupId?: string;
+    groupOrder?: string; // e.g. 'A1', 'A2', 'A3'
     // Cardio-specific fields
     isCardio?: boolean;
     cardioType?: 'distance' | 'time' | 'intervals';
@@ -189,6 +192,9 @@ export interface SavedBlock {
     tempo?: string;
     notes?: string;
     setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+    // Superset grouping (exercises with same groupId are performed back-to-back)
+    groupId?: string;
+    groupOrder?: string; // e.g. 'A1', 'A2', 'A3'
   }[];
   // Circuit-specific settings
   circuitStyle?: 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';

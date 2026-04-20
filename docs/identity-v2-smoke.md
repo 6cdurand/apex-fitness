@@ -13,6 +13,27 @@ Required env vars in the deployed app:
 - `INTEGRITY_ALERT_WEBHOOK` — optional; POSTed by `fn_integrity_report` when it finds anything.
 - `NEXT_PUBLIC_APP_URL` — used by the invite email to build the claim URL (`https://catalift.net` in prod).
 
+## Supabase dashboard configuration
+
+Go to **Authentication → URL Configuration** in the Supabase dashboard:
+
+- **Site URL**: `https://catalift.net`
+- **Redirect URLs (allowlist)** — each `redirectTo` the app ever passes must be listed here, or Supabase silently swaps it for the Site URL:
+  - `https://catalift.net/auth/callback` (Google OAuth)
+  - `https://catalift.net/auth/reset-password` (forgot-password link)
+  - `http://localhost:3000/auth/callback` (local dev)
+  - `http://localhost:3000/auth/reset-password` (local dev)
+
+Without these entries the password-reset email link never reaches `/auth/reset-password` — the user is bounced back to the Site URL and the "Choose a new password" screen never renders. The page now surfaces `?error=access_denied&error_code=...` responses as a visible "Reset link not accepted" screen instead of failing silently.
+
+**Email templates (Authentication → Email Templates → Reset Password)** — any of the three default shapes work with `/auth/reset-password`:
+
+- Legacy implicit hash: `{{ .SiteURL }}/auth/v1/verify?token={{ .Token }}&type=recovery&redirect_to={{ .RedirectTo }}` → lands with `#access_token=…&type=recovery`.
+- PKCE: same shape, lands with `?code=<code>` (the page calls `exchangeCodeForSession`).
+- Token-hash / OTP (newer default): `{{ .SiteURL }}/auth/reset-password?token_hash={{ .TokenHash }}&type=recovery` → the page calls `verifyOtp({ token_hash, type: 'recovery' })`.
+
+If you customise the template, keep the three query/hash shapes above — don't invent new parameter names.
+
 ## 1. Pre-cutover gate (read-only)
 
 Verify there are no blockers before running the cutover:
