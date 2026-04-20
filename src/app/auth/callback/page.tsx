@@ -6,85 +6,71 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { Loader2 } from 'lucide-react';
 
+/**
+ * OAuth callback — identity v2.
+ *
+ * Supabase Auth is canonical, so this page is a thin wrapper: wait for the
+ * session to appear (Supabase exchanges the code automatically in detectSession
+ * mode), then bootstrap the profile from public.users via the authStore.
+ *
+ * The on_auth_user_created trigger ensures a public.users row exists for
+ * every auth.users row, so no per-device id-reconciliation logic is needed.
+ */
 export default function AuthCallbackPage() {
   const router = useRouter();
-  const { loginWithSupabaseUser } = useAuthStore();
+  const bootstrap = useAuthStore((s) => s.bootstrap);
   const { loadFromSupabase } = useTrainerStore();
-  const [status, setStatus] = useState('Processing sign-in...');
+  const [status, setStatus] = useState('Finishing sign-in…');
 
   useEffect(() => {
-    const handleCallback = async () => {
+    const run = async () => {
       try {
-        // Get the session from URL hash (Supabase OAuth returns tokens in URL)
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('[AuthCallback] Error getting session:', error);
-          setStatus('Sign-in failed. Redirecting...');
-          setTimeout(() => router.push('/auth'), 2000);
+        // Supabase JS auto-detects the session from the URL in the current
+        // tab's localStorage — but for defensive coverage, also try the
+        // explicit code-for-session exchange.
+        const { data: first } = await supabase.auth.getSession();
+        if (!first.session) {
+          try {
+            await supabase.auth.exchangeCodeForSession(window.location.href);
+          } catch {
+            // fall through; second getSession call below is authoritative.
+          }
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+        if (error || !data.session?.user) {
+          console.error('[AuthCallback] no session after OAuth:', error?.message);
+          setStatus('Sign-in failed. Redirecting…');
+          setTimeout(() => router.replace('/auth'), 1200);
           return;
         }
 
-        if (!session?.user) {
-          console.log('[AuthCallback] No session found, checking URL hash...');
-          
-          // Try to exchange code for session
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-            window.location.href
-          );
-          
-          if (exchangeError || !data.session) {
-            console.error('[AuthCallback] Exchange error:', exchangeError);
-            setStatus('Sign-in failed. Redirecting...');
-            setTimeout(() => router.push('/auth'), 2000);
-            return;
-          }
+        setStatus('Loading your profile…');
+        await bootstrap();
+
+        const user = useAuthStore.getState().user;
+        if (!user) {
+          console.error('[AuthCallback] bootstrap returned no user');
+          setStatus('Profile not found. Redirecting…');
+          setTimeout(() => router.replace('/auth'), 1200);
+          return;
         }
 
-        // Get fresh session
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        
-        if (currentSession?.user) {
-          const supabaseUser = currentSession.user;
-          console.log('[AuthCallback] Got Supabase user:', supabaseUser.email);
-          
-          setStatus('Setting up your account...');
-          
-          // Login or register with our auth store
-          const success = await loginWithSupabaseUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            displayName: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || supabaseUser.email?.split('@')[0] || 'User',
-            profilePhoto: supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture,
-          });
-
-          if (success) {
-            // Check if user has trainer data to load
-            const user = useAuthStore.getState().user;
-            if (user?.isTrainer || user?.mode === 'trainer') {
-              setStatus('Loading trainer data...');
-              await loadFromSupabase(user.id);
-            }
-            
-            setStatus('Welcome! Redirecting...');
-            router.push('/today');
-          } else {
-            setStatus('Account setup failed. Redirecting...');
-            setTimeout(() => router.push('/auth'), 2000);
-          }
-        } else {
-          setStatus('No session found. Redirecting...');
-          setTimeout(() => router.push('/auth'), 2000);
+        if (user.isTrainer || user.mode === 'trainer') {
+          setStatus('Loading trainer data…');
+          await loadFromSupabase(user.id);
         }
+
+        setStatus('Welcome!');
+        router.replace('/today');
       } catch (e) {
-        console.error('[AuthCallback] Exception:', e);
-        setStatus('An error occurred. Redirecting...');
-        setTimeout(() => router.push('/auth'), 2000);
+        console.error('[AuthCallback] exception:', e);
+        setStatus('Something went wrong. Redirecting…');
+        setTimeout(() => router.replace('/auth'), 1500);
       }
     };
-
-    handleCallback();
-  }, [router, loginWithSupabaseUser, loadFromSupabase]);
+    run();
+  }, [router, bootstrap, loadFromSupabase]);
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center">

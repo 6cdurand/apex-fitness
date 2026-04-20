@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { installAuthListener } from '@/lib/stores/authStore';
 import { useMessageStore } from '@/lib/messageStore';
 import { 
   fetchAllUserDataFromSupabase, 
@@ -28,6 +29,14 @@ if (typeof window !== 'undefined') {
  */
 export function SupabaseSync() {
   const { user, isAuthenticated, updateUser } = useAuthStore();
+
+  // Identity v2: install the Supabase Auth listener once and bootstrap the
+  // profile from the current session. This must run before any other sync
+  // logic so useAuthStore reflects the real session on first render.
+  useEffect(() => {
+    installAuthListener();
+    useAuthStore.getState().bootstrap();
+  }, []);
 
   // Sync user data (workouts, PBs, medals, etc.) - on EVERY page load for cross-device sync
   useEffect(() => {

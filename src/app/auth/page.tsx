@@ -41,8 +41,7 @@ function AuthPageContent() {
   // Forgot password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
   
   // Check invite token and pre-fill email
   const emailParam = searchParams.get('email');
@@ -186,36 +185,21 @@ function AuthPageContent() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!forgotEmail.trim()) {
+    const email = forgotEmail.trim();
+    if (!email) {
       toast.error('Please enter your email');
       return;
     }
-    if (forgotNewPassword.length < 4) {
-      toast.error('Password must be at least 4 characters');
-      return;
-    }
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    
-    const success = resetPassword(forgotEmail.trim(), forgotNewPassword);
-    if (success) {
-      // Also sync to Supabase if configured
-      try {
-        await updatePasswordInSupabase(forgotEmail.trim(), forgotNewPassword);
-      } catch (e) {
-        // Local reset still succeeded
-      }
-      toast.success('Password reset! You can now sign in.');
-      setShowForgotPassword(false);
-      setLoginEmail(forgotEmail.trim());
-      setLoginPassword('');
-      setForgotEmail('');
-      setForgotNewPassword('');
-      setForgotConfirmPassword('');
+
+    const ok = await resetPassword(email);
+    if (ok) {
+      // Don't leak account existence: always show the same success state.
+      setForgotSent(true);
+      toast.success('If that email is registered, a reset link is on its way');
     } else {
-      toast.error('No account found with that email');
+      // Network / config failure only — still show the generic message.
+      setForgotSent(true);
+      toast.success('If that email is registered, a reset link is on its way');
     }
   };
 
@@ -898,55 +882,45 @@ function AuthPageContent() {
           <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl rounded-2xl">
             <CardHeader>
               <CardTitle className="text-white">Reset Password</CardTitle>
-              <CardDescription>Enter your email and choose a new password</CardDescription>
+              <CardDescription>
+                {forgotSent
+                  ? 'Check your inbox for a reset link'
+                  : 'Enter your email and we’ll send you a reset link'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">New Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter new password"
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                    minLength={4}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Confirm Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Re-enter new password"
-                    value={forgotConfirmPassword}
-                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit"
-                  className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                >
-                  Reset Password
-                </Button>
+                {!forgotSent && (
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="your@email.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
+                      required
+                    />
+                  </div>
+                )}
+                {forgotSent ? (
+                  <div className="text-sm text-gray-400 space-y-2">
+                    <p>We’ve sent a reset link to <span className="text-sky-400">{forgotEmail}</span>.</p>
+                    <p>Open the email on this device and click the link to choose a new password.</p>
+                  </div>
+                ) : (
+                  <Button
+                    type="submit"
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                  >
+                    Send reset link
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"
                   className="w-full text-gray-500 hover:text-gray-300 text-sm"
-                  onClick={() => { setShowForgotPassword(false); setForgotEmail(''); setForgotNewPassword(''); setForgotConfirmPassword(''); }}
+                  onClick={() => { setShowForgotPassword(false); setForgotEmail(''); setForgotSent(false); }}
                 >
                   Cancel
                 </Button>

@@ -40,6 +40,7 @@ import {
   Eye,
   ArrowLeftRight,
   Clock,
+  FolderOpen,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
 import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
@@ -225,7 +226,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   const { addNotification } = useSocialStore();
   
@@ -280,7 +281,11 @@ function ProgramBuilderContent() {
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
+  const [blockFolderFilter, setBlockFolderFilter] = useState<string>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
+  // Move-to-folder dialog state (reassigns an existing saved block to a folder)
+  const [moveBlockTarget, setMoveBlockTarget] = useState<{ id: string; name: string } | null>(null);
+  const [moveBlockFolder, setMoveBlockFolder] = useState('');
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>(existingProgram?.scheduleMode || 'fixed');
   const [trainingFrequency, setTrainingFrequency] = useState(existingProgram?.trainingDaysPerWeek || daysPerWeek);
   const [fixedDays, setFixedDays] = useState<Weekday[]>(existingProgram?.selectedDays as Weekday[] || []);
@@ -465,6 +470,9 @@ function ProgramBuilderContent() {
     if (blockLibraryFilter !== 'all') {
       blocks = blocks.filter(b => b.type === blockLibraryFilter);
     }
+    if (blockFolderFilter !== 'all') {
+      blocks = blocks.filter(b => blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter);
+    }
     if (blockLibrarySearch.trim()) {
       const q = blockLibrarySearch.toLowerCase();
       blocks = blocks.filter(b => 
@@ -473,7 +481,13 @@ function ProgramBuilderContent() {
       );
     }
     return blocks;
-  }, [savedBlocks, blockLibraryFilter, blockLibrarySearch]);
+  }, [savedBlocks, blockLibraryFilter, blockFolderFilter, blockLibrarySearch]);
+
+  // Unique folders across saved blocks (used by chip row and datalist suggestions)
+  const blockFolders = useMemo(
+    () => [...new Set((savedBlocks || []).map(b => b.folder).filter(Boolean))] as string[],
+    [savedBlocks]
+  );
 
   const addBlockFromLibrary = (savedBlock: any) => {
     setDays(prev => prev.map((day, i) => {
@@ -1488,6 +1502,35 @@ function ProgramBuilderContent() {
               ))}
             </div>
 
+            {blockFolders.length > 0 && (
+              <div className="flex gap-1 flex-wrap mb-3">
+                <Button
+                  size="sm"
+                  className={`h-7 text-xs ${blockFolderFilter === 'all' ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                  onClick={() => setBlockFolderFilter('all')}
+                >
+                  All Folders
+                </Button>
+                <Button
+                  size="sm"
+                  className={`h-7 text-xs ${blockFolderFilter === '' ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                  onClick={() => setBlockFolderFilter('')}
+                >
+                  Unfiled
+                </Button>
+                {blockFolders.map(f => (
+                  <Button
+                    key={f}
+                    size="sm"
+                    className={`h-7 text-xs gap-1 ${blockFolderFilter === f ? 'bg-purple-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                    onClick={() => setBlockFolderFilter(f)}
+                  >
+                    <FolderOpen className="w-3 h-3" /> {f}
+                  </Button>
+                ))}
+              </div>
+            )}
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <Input
@@ -1523,8 +1566,26 @@ function ProgramBuilderContent() {
                           <span className="flex-shrink-0">{blockIcon}</span>
                           <span className="text-sm text-white font-medium truncate">{sb.name}</span>
                           <Badge className={`text-[10px] ${styles.badge} border flex-shrink-0`}>{sb.type}</Badge>
+                          {sb.folder && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 flex-shrink-0 inline-flex items-center gap-1">
+                              <FolderOpen className="w-3 h-3" /> {sb.folder}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-400 hover:text-purple-400"
+                            title={sb.folder ? `In folder: ${sb.folder}` : 'Move to folder'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMoveBlockTarget({ id: sb.id, name: sb.name });
+                              setMoveBlockFolder(sb.folder || '');
+                            }}
+                          >
+                            <FolderOpen className="w-3.5 h-3.5" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2037,6 +2098,61 @@ function ProgramBuilderContent() {
                 className="flex-1 bg-purple-500 hover:bg-purple-600"
               >
                 <Save className="h-4 w-4 mr-2" /> Save Block
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Move Block to Folder Dialog ── */}
+      <Dialog open={!!moveBlockTarget} onOpenChange={(open) => { if (!open) { setMoveBlockTarget(null); setMoveBlockFolder(''); } }}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-purple-400" />
+              Move to Folder
+            </DialogTitle>
+            <DialogDescription>
+              {moveBlockTarget ? `Organise “${moveBlockTarget.name}” into a folder.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Folder <span className="text-gray-500 font-normal">(leave empty to unfile)</span></Label>
+              <Input
+                value={moveBlockFolder}
+                onChange={(e) => setMoveBlockFolder(e.target.value)}
+                placeholder="e.g., Foundation, Push Day"
+                className="mt-2"
+                list="program-move-folder-suggestions"
+                autoFocus
+              />
+              <datalist id="program-move-folder-suggestions">
+                {blockFolders.map(f => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setMoveBlockTarget(null); setMoveBlockFolder(''); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-purple-500 hover:bg-purple-600"
+                onClick={() => {
+                  if (!moveBlockTarget) return;
+                  const trimmed = moveBlockFolder.trim();
+                  updateBlock(moveBlockTarget.id, { folder: trimmed || undefined });
+                  toast.success(trimmed ? `Moved to “${trimmed}”` : 'Removed from folder');
+                  setMoveBlockTarget(null);
+                  setMoveBlockFolder('');
+                }}
+              >
+                <Save className="w-4 h-4 mr-2" /> Save
               </Button>
             </div>
           </div>

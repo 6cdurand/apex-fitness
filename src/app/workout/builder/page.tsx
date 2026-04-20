@@ -48,6 +48,7 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  FolderOpen,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
@@ -374,6 +375,7 @@ function WorkoutBuilderContent() {
     savedBlocks,
     saveBlock,
     deleteBlock,
+    updateBlock,
     getBlocksByType,
     loadFromSupabase,
     blockPerformances,
@@ -423,6 +425,9 @@ function WorkoutBuilderContent() {
   const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
   const [blockToDelete, setBlockToDelete] = useState<any>(null);
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
+  // Move-to-folder dialog state (reassigns an existing saved block to a folder)
+  const [moveBlockTarget, setMoveBlockTarget] = useState<{ id: string; name: string } | null>(null);
+  const [moveBlockFolder, setMoveBlockFolder] = useState('');
   
   // Custom exercise state
   const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
@@ -2836,6 +2841,19 @@ function WorkoutBuilderContent() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10"
+                                title={block.folder ? `In folder: ${block.folder}` : 'Move to folder'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMoveBlockTarget({ id: block.id, name: block.name });
+                                  setMoveBlockFolder(block.folder || '');
+                                }}
+                              >
+                                <FolderOpen className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -3096,6 +3114,61 @@ function WorkoutBuilderContent() {
         }}
         icon={<Trash2 className="w-5 h-5 text-red-400" />}
       />
+
+      {/* Move Block to Folder Dialog */}
+      <Dialog open={!!moveBlockTarget} onOpenChange={(open) => { if (!open) { setMoveBlockTarget(null); setMoveBlockFolder(''); } }}>
+        <DialogContent className="bg-gray-900 border-gray-800">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-purple-400" />
+              Move to Folder
+            </DialogTitle>
+            <DialogDescription>
+              {moveBlockTarget ? `Organise “${moveBlockTarget.name}” into a folder.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Folder <span className="text-gray-500 font-normal">(leave empty to unfile)</span></Label>
+              <Input
+                value={moveBlockFolder}
+                onChange={(e) => setMoveBlockFolder(e.target.value)}
+                placeholder="e.g., Foundation, Push Day"
+                className="mt-2"
+                list="workout-move-folder-suggestions"
+                autoFocus
+              />
+              <datalist id="workout-move-folder-suggestions">
+                {[...new Set(savedBlocks.map(b => b.folder).filter(Boolean))].map(f => (
+                  <option key={f} value={f} />
+                ))}
+              </datalist>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setMoveBlockTarget(null); setMoveBlockFolder(''); }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-purple-500 hover:bg-purple-600"
+                onClick={() => {
+                  if (!moveBlockTarget) return;
+                  const trimmed = moveBlockFolder.trim();
+                  updateBlock(moveBlockTarget.id, { folder: trimmed || undefined });
+                  toast.success(trimmed ? `Moved to “${trimmed}”` : 'Removed from folder');
+                  setMoveBlockTarget(null);
+                  setMoveBlockFolder('');
+                }}
+              >
+                <Save className="w-4 h-4 mr-2" /> Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Select from Program Dialog */}
       <Dialog open={showProgramDialog} onOpenChange={setShowProgramDialog}>
