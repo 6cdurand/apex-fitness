@@ -9,6 +9,7 @@
 import { supabase } from './supabase';
 import { v4 as uuidv4 } from 'uuid';
 import type { CalendarEvent } from '@/types';
+import { withTimeout } from './asyncUtils';
 
 // ============ UTILITIES ============
 
@@ -198,11 +199,26 @@ export async function getOrCreateSessionWorkoutForEvent(
     return inflight;
   }
 
-  const promise = _resolveSessionWorkout(eventId, trainerId, clientId, programData);
+  // Hard outer timeout on the whole resolve flow. The resolver makes
+  // up to ~6 sequential supabase-js calls and prior to this guard a
+  // single hung call would leave the UI "Start" button stuck on
+  // "Starting…" forever. 12s is well above typical P99 for this chain
+  // (~500ms) and below the user's patience threshold.
+  const promise = withTimeout(
+    _resolveSessionWorkout(eventId, trainerId, clientId, programData),
+    12000,
+    `getOrCreateSessionWorkoutForEvent(${eventId})`,
+  );
   _inflightResolves.set(eventId, promise);
 
   try {
     return await promise;
+  } catch (e: any) {
+    console.error('[SessionResolver] resolve_failed_or_timed_out', {
+      eventId,
+      error: e?.message ?? String(e),
+    });
+    return null;
   } finally {
     _inflightResolves.delete(eventId);
   }

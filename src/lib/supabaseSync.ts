@@ -1,5 +1,6 @@
 import { supabase, db } from './supabase';
 import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage } from '@/types';
+import { withTimeout } from './asyncUtils';
 
 /**
  * Supabase Sync Service
@@ -878,10 +879,13 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
       totalVolume: workout.totalVolume,
     });
     
-    const { error, data } = await supabase
-      .from('workouts')
-      .upsert(dbWorkout)
-      .select();
+    // Bounded: a hung upsert used to dangle forever, hiding RLS /
+    // schema / network failures behind an indefinite pending promise.
+    const { error, data } = await withTimeout(
+      supabase.from('workouts').upsert(dbWorkout).select(),
+      15000,
+      `syncWorkoutToSupabase(${workout.id})`,
+    );
     
     if (error) {
       console.error('[WorkoutSync] ❌ Error syncing workout:', error.message, error.details, error.hint);
@@ -891,8 +895,8 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
     
     console.log('[WorkoutSync] ✅ Workout synced successfully:', workout.id);
     return true;
-  } catch (e) {
-    console.error('[WorkoutSync] ❌ Exception:', e);
+  } catch (e: any) {
+    console.error('[WorkoutSync] ❌ Exception:', e?.message ?? e);
     return false;
   }
 }
@@ -902,18 +906,22 @@ export async function syncPBToSupabase(pb: PersonalBest): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const { error } = await supabase
-      .from('personal_bests')
-      .upsert(toDbPersonalBest(pb), { onConflict: 'user_id,exercise_id' });
+    const { error } = await withTimeout(
+      supabase
+        .from('personal_bests')
+        .upsert(toDbPersonalBest(pb), { onConflict: 'user_id,exercise_id' }),
+      10000,
+      `syncPBToSupabase(${pb.exerciseId})`,
+    );
     
     if (error) {
-      console.error('Error syncing PB:', error);
+      console.error('[PBSync] ❌ Error syncing PB:', error.message, error.details, error.hint);
       return false;
     }
-    console.log('PB synced to Supabase:', pb.exerciseId);
+    console.log('[PBSync] ✅ PB synced:', pb.exerciseId);
     return true;
-  } catch (e) {
-    console.error('Sync error:', e);
+  } catch (e: any) {
+    console.error('[PBSync] ❌ Exception:', e?.message ?? e);
     return false;
   }
 }
@@ -923,18 +931,22 @@ export async function syncMedalToSupabase(medal: Medal): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const { error } = await supabase
-      .from('medals')
-      .upsert(toDbMedal(medal), { onConflict: 'user_id,definition_id' });
+    const { error } = await withTimeout(
+      supabase
+        .from('medals')
+        .upsert(toDbMedal(medal), { onConflict: 'user_id,definition_id' }),
+      10000,
+      `syncMedalToSupabase(${medal.definitionId})`,
+    );
     
     if (error) {
-      console.error('Error syncing medal:', error);
+      console.error('[MedalSync] ❌ Error syncing medal:', error.message, error.details, error.hint);
       return false;
     }
-    console.log('Medal synced to Supabase:', medal.definitionId);
+    console.log('[MedalSync] ✅ Medal synced:', medal.definitionId);
     return true;
-  } catch (e) {
-    console.error('Sync error:', e);
+  } catch (e: any) {
+    console.error('[MedalSync] ❌ Exception:', e?.message ?? e);
     return false;
   }
 }

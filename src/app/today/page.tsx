@@ -142,11 +142,20 @@ export default function TodayPage() {
     if (saved) setDailySteps(parseInt(saved));
   }, []);
 
-  // Shared session start handler — uses canonical resolver, no dangerous fallbacks
+  // Shared session start handler — uses canonical resolver, no dangerous fallbacks.
+  //
+  // Safety net: the resolver has its own 12s timeout, but we also set a
+  // UI-level watchdog here so that even if something unexpected throws
+  // or hangs outside the resolver (e.g. router.push, template
+  // conversion), the 'Starting…' pill always unsticks within 15s.
   const handleStartSessionEvent = async (event: any, eventType: string, displayName: string) => {
     // Debounce + loading guard
     if (startingEventId) return;
     setStartingEventId(event.id);
+    const watchdog = setTimeout(() => {
+      setStartingEventId(null);
+      toast.error("Couldn't start this session in time. Please try again.");
+    }, 15000);
 
     try {
       if (eventType === 'workout' && !event.clientId) {
@@ -235,7 +244,16 @@ export default function TodayPage() {
         event.clientId || undefined,
       );
       router.push('/workout/active');
+    } catch (e: any) {
+      // Resolver threw, timed out, or a template conversion blew up.
+      // Surface the real reason and let the user retry instead of
+      // leaving them staring at an indefinite 'Starting…' pill.
+      console.error('[Today] handleStartSessionEvent failed:', e?.message ?? e);
+      toast.error(
+        `Couldn't start session: ${e?.message ?? 'unknown error'}. Please try again.`,
+      );
     } finally {
+      clearTimeout(watchdog);
       setStartingEventId(null);
     }
   };

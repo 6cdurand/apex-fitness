@@ -12,6 +12,7 @@ import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
+import { toast } from 'sonner';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
 import { useTrainerStore } from './trainerStore';
@@ -303,8 +304,27 @@ export const useWorkoutStore = create<WorkoutState>()(
           currentClientId: null,
         }));
 
-        // Sync workout to Supabase for cross-device access
-        syncWorkoutToSupabase(completedWorkout);
+        // Sync workout to Supabase for cross-device access.
+        // Fire-and-forget by design (we don't block the UI navigation
+        // to the summary screen), but we MUST surface the outcome: a
+        // silent RLS/schema/network failure used to leave the workout
+        // only in localStorage with no user-visible signal.
+        syncWorkoutToSupabase(completedWorkout)
+          .then((ok) => {
+            if (!ok) {
+              toast.error(
+                "Workout saved on this device, but couldn't sync to the cloud. Check your connection \u2014 it will retry automatically next time you open the app.",
+                { duration: 6000 },
+              );
+            }
+          })
+          .catch((e) => {
+            console.error('[WorkoutStore] sync completed workout threw:', e?.message ?? e);
+            toast.error(
+              "Workout saved on this device, but cloud sync errored. See devtools console for details.",
+              { duration: 6000 },
+            );
+          });
 
         // Patch source calendar event status to 'completed'
         // templateId is set to 'session-{eventId}' when started from a booked session
