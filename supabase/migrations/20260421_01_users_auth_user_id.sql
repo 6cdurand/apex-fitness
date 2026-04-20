@@ -25,7 +25,11 @@
 --                                            can be added in a follow-up
 --                                            migration after operator
 --                                            reconciliation)
---   6. handle_new_auth_user() rewrite      (semantics extended:
+--   6.5 RLS widen users_read_self / users_update_self to also
+--       allow auth_user_id = auth.uid() (otherwise the OR-clause
+--       in loadProfile() can’t see the row even if the column
+--       and backfill are correct).
+--   7. handle_new_auth_user() rewrite      (semantics extended:
 --                                            ambiguous-email signins no
 --                                            longer fall through to an
 --                                            INSERT that duplicates the
@@ -234,7 +238,40 @@ BEGIN
   END IF;
 END$$;
 
--- 7. Trigger: handle_new_auth_user() --------------------------
+-- 7. RLS policy widening --------------------------------------
+--    20260420_04_rls_tighten.sql installed:
+--      users_read_self   USING (id = auth.uid())
+--      users_update_self USING (id = auth.uid()) CHECK (id = auth.uid())
+--    Once this migration backfills auth_user_id on pre-cutover
+--    profiles, loadProfile() resolves them via
+--      .or(id.eq.${uid}, auth_user_id.eq.${uid}).maybeSingle()
+--    so RLS MUST also allow rows where auth_user_id = auth.uid();
+--    otherwise the row is invisible to the OR-clause and the user
+--    can never sign in.
+--
+--    Idempotent: DROP IF EXISTS + CREATE. users_insert_self is
+--    unchanged because newly-inserted rows always satisfy
+--    id = auth.uid() (trigger path and direct client inserts both).
+DROP POLICY IF EXISTS users_read_self ON public.users;
+CREATE POLICY users_read_self ON public.users
+  FOR SELECT USING (
+    id = auth.uid()
+    OR auth_user_id = auth.uid()
+  );
+
+DROP POLICY IF EXISTS users_update_self ON public.users;
+CREATE POLICY users_update_self ON public.users
+  FOR UPDATE
+  USING (
+    id = auth.uid()
+    OR auth_user_id = auth.uid()
+  )
+  WITH CHECK (
+    id = auth.uid()
+    OR auth_user_id = auth.uid()
+  );
+
+-- 8. Trigger: handle_new_auth_user() --------------------------
 --    Four-way dispatch. Hard invariant: NEVER creates a second
 --    public.users row carrying an email that already exists on another
 --    public.users row.

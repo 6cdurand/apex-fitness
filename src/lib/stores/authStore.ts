@@ -63,18 +63,53 @@ interface AuthState {
 }
 
 /** Fetch the public.users row for the given auth id.
- *  Resolves by either users.id OR users.auth_user_id to handle both
+ *  Primary path: .or(id.eq.X, auth_user_id.eq.X) — supports both
  *  trigger-mirrored rows (id = auth.users.id) and pre-cutover rows
- *  linked via auth_user_id by handle_new_auth_user(). See migration
- *  20260421_01_users_auth_user_id.sql. */
+ *  linked via auth_user_id by handle_new_auth_user().
+ *  Fallback path: .eq('id', X) — used automatically when the
+ *  auth_user_id column does not exist yet (migration
+ *  20260421_01_users_auth_user_id.sql not yet applied). Keeps
+ *  sign-in working during the migration transition. */
 async function loadProfile(userId: string): Promise<User | null> {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
-    .maybeSingle();
+  let data: any = null;
+  let error: any = null;
+
+  // Primary lookup.
+  try {
+    const r = await supabase
+      .from('users')
+      .select('*')
+      .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
+      .maybeSingle();
+    data = r.data;
+    error = r.error;
+  } catch (e) {
+    error = e;
+  }
+
+  // Fallback: auth_user_id column doesn't exist yet (pre-migration
+  // state). PostgREST surfaces this as code 42703 or a message
+  // referencing the missing column. Retry with an id-only filter so
+  // profiles whose id already equals auth.users.id resolve normally.
+  const columnMissing =
+    !!error &&
+    (error.code === '42703' ||
+      (typeof error.message === 'string' && /auth_user_id/i.test(error.message)));
+  if (columnMissing) {
+    console.warn(
+      '[Auth v2] loadProfile: auth_user_id column not present; falling back to id-only lookup. Apply migration 20260421_01_users_auth_user_id.sql to enable full OR-clause resolution.'
+    );
+    const r = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    data = r.data;
+    error = r.error;
+  }
+
   if (error || !data) {
-    console.error('[Auth v2] loadProfile failed:', error?.message);
+    if (error) console.error('[Auth v2] loadProfile failed:', error.message ?? error);
     return null;
   }
   return {
