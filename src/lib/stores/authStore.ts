@@ -62,12 +62,16 @@ interface AuthState {
   switchMode: (mode: UserMode) => void;
 }
 
-/** Fetch the public.users row for the given id and map it to the app User type. */
+/** Fetch the public.users row for the given auth id.
+ *  Resolves by either users.id OR users.auth_user_id to handle both
+ *  trigger-mirrored rows (id = auth.users.id) and pre-cutover rows
+ *  linked via auth_user_id by handle_new_auth_user(). See migration
+ *  20260421_01_users_auth_user_id.sql. */
 async function loadProfile(userId: string): Promise<User | null> {
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .eq('id', userId)
+    .or(`id.eq.${userId},auth_user_id.eq.${userId}`)
     .maybeSingle();
   if (error || !data) {
     console.error('[Auth v2] loadProfile failed:', error?.message);
