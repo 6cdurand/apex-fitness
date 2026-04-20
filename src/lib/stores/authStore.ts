@@ -209,6 +209,23 @@ async function waitForProfile(userId: string, attempts = 6): Promise<User | null
   return null;
 }
 
+/** Race a promise against a hard timeout. If `ms` elapses first, rejects
+ *  with a descriptive error so the caller's try/finally runs and
+ *  `isLoading` always clears. Without this, a hung supabase-js call
+ *  (network stall, misconfigured URL, stale token refresh) would leave
+ *  the UI stuck on 'Signing in…' forever. */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[Auth v2] ${label} timed out after ${ms}ms`));
+    }, ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -217,7 +234,12 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       isBootstrapped: false,
 
-      /** Sync Zustand state with the current Supabase Auth session. Call on app mount. */
+      /** Sync Zustand state with the current Supabase Auth session. Call on app mount.
+       *
+       *  Intentionally does NOT touch `isLoading`. `isLoading` is reserved
+       *  for user-initiated actions (signIn / signUp) so that a hung
+       *  bootstrap cannot disable the Sign In / Create Account buttons.
+       *  Bootstrap's own progress is signalled by `isBootstrapped`. */
       bootstrap: async () => {
         if (get().isBootstrapped && get().user) return;
         // Demo user is a pure client session — no Supabase Auth session
@@ -229,14 +251,21 @@ export const useAuthStore = create<AuthState>()(
           set({ isAuthenticated: true, isBootstrapped: true, isLoading: false });
           return;
         }
-        set({ isLoading: true });
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          const { data: { session } } = await withTimeout(
+            supabase.auth.getSession(),
+            5000,
+            'bootstrap: getSession',
+          );
           if (!session?.user) {
             set({ user: null, isAuthenticated: false, isBootstrapped: true });
             return;
           }
-          const profile = await loadProfile(session.user.id);
+          const profile = await withTimeout(
+            loadProfile(session.user.id),
+            5000,
+            'bootstrap: loadProfile',
+          );
           if (profile) {
             console.log('[Auth v2] bootstrap: session restored for', profile.email, 'id=', profile.id, 'isTrainer=', profile.isTrainer);
             set({ user: profile, isAuthenticated: true, isBootstrapped: true });
@@ -245,35 +274,47 @@ export const useAuthStore = create<AuthState>()(
             set({ user: null, isAuthenticated: false, isBootstrapped: true });
           }
         } catch (e) {
-          console.error('[Auth v2] bootstrap error:', e);
+          // Timeout OR genuine error. Either way we must mark
+          // bootstrapped so the rest of the app stops waiting.
+          console.error('[Auth v2] bootstrap error (marking bootstrapped so UI unblocks):', e);
           set({ isBootstrapped: true });
         } finally {
-          // Always clear the loading flag so UI never hangs on a spinner.
-          set({ isLoading: false });
+          // Safety net: if anyone else set isLoading=true before we ran,
+          // clear it. Bootstrap itself never raises it.
+          if (get().isLoading) set({ isLoading: false });
         }
       },
 
       signInWithPassword: async (email, password) => {
         set({ isLoading: true });
         try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: email.toLowerCase().trim(),
-            password,
-          });
+          const { data, error } = await withTimeout(
+            supabase.auth.signInWithPassword({
+              email: email.toLowerCase().trim(),
+              password,
+            }),
+            15000,
+            'signInWithPassword',
+          );
           if (error) {
-            console.log('[Auth v2] signInWithPassword failed:', error.message);
+            console.error('[Auth v2] signInWithPassword failed:', error.message, '| status:', (error as any)?.status);
             const reason = /invalid/i.test(error.message) ? 'invalid_credentials'
               : /confirm/i.test(error.message) ? 'email_not_confirmed'
               : 'unknown';
             return { ok: false, reason, message: error.message };
           }
-          const profile = await loadProfile(data.user.id);
+          const profile = await withTimeout(
+            loadProfile(data.user.id),
+            5000,
+            'signInWithPassword: loadProfile',
+          );
           if (!profile) {
             return { ok: false, reason: 'profile_missing', message: 'public.users row missing' };
           }
           set({ user: profile, isAuthenticated: true, isBootstrapped: true });
           return { ok: true, user: profile };
         } catch (e: any) {
+          console.error('[Auth v2] signInWithPassword threw:', e?.message ?? e);
           return { ok: false, reason: 'unknown', message: e?.message ?? String(e) };
         } finally {
           set({ isLoading: false });
@@ -284,16 +325,21 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const emailLower = email.toLowerCase().trim();
-          const { data, error } = await supabase.auth.signUp({
-            email: emailLower,
-            password,
-            options: {
-              data: {
-                display_name: displayName,
-                username: username,
+          console.log('[Auth v2] signUpWithPassword: attempting signup for', emailLower);
+          const { data, error } = await withTimeout(
+            supabase.auth.signUp({
+              email: emailLower,
+              password,
+              options: {
+                data: {
+                  display_name: displayName,
+                  username: username,
+                },
               },
-            },
-          });
+            }),
+            15000,
+            'signUpWithPassword',
+          );
           if (error) {
             // Log the raw Supabase error so we can diagnose reports like
             // "it says email already exists on a brand new email" — the
@@ -335,6 +381,7 @@ export const useAuthStore = create<AuthState>()(
           set({ user: fresh, isAuthenticated: true, isBootstrapped: true });
           return { ok: true, user: fresh };
         } catch (e: any) {
+          console.error('[Auth v2] signUpWithPassword threw:', e?.message ?? e);
           return { ok: false, reason: 'unknown', message: e?.message ?? String(e) };
         } finally {
           set({ isLoading: false });
