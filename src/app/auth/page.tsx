@@ -214,10 +214,17 @@ function AuthPageContent() {
     // reason (the back-compat `login` shim only returns a boolean).
     const result = await signInWithPassword(loginEmail, loginPassword);
     if (!result.ok) {
+      // profile_missing: credentials are fine but no public.users row
+      // can be loaded. Route to /auth/recovery so the user has a
+      // concrete path forward instead of bouncing on a toast.
+      if (result.reason === 'profile_missing') {
+        toast.error('Profile needs attention — redirecting…');
+        router.push('/auth/recovery');
+        return;
+      }
       const msg =
         result.reason === 'invalid_credentials' ? 'Invalid email or password'
         : result.reason === 'email_not_confirmed' ? 'Please confirm your email first. Check your inbox for a verification link.'
-        : result.reason === 'profile_missing' ? 'Your account exists but the profile record is missing. Please contact support or try resetting your app data.'
         : result.message || 'Sign-in failed. Please try again.';
       toast.error(msg);
       return;
@@ -557,9 +564,21 @@ function AuthPageContent() {
                   <Button 
                     type="button"
                     variant="ghost"
-                    onClick={() => {
-                      // Clear all localStorage and reload to reinitialize
-                      localStorage.clear();
+                    onClick={async () => {
+                      // Full-fresh-start: clear Supabase session first
+                      // (otherwise a stale auth cookie re-hydrates on
+                      // reload and the app never reaches the logged-out
+                      // state), then wipe localStorage, then reload.
+                      try {
+                        await supabase.auth.signOut();
+                      } catch (err) {
+                        console.error('[Auth] signOut during reset:', err);
+                      }
+                      try {
+                        localStorage.clear();
+                      } catch {
+                        /* ignore */
+                      }
                       toast.success('Data cleared! Reloading...');
                       setTimeout(() => window.location.reload(), 500);
                     }}

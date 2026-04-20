@@ -74,7 +74,7 @@ async function loadProfile(userId: string): Promise<User | null> {
   let data: any = null;
   let error: any = null;
 
-  // Primary lookup.
+  // Primary lookup (per Supabase guidance).
   try {
     const r = await supabase
       .from('users')
@@ -87,10 +87,42 @@ async function loadProfile(userId: string): Promise<User | null> {
     error = e;
   }
 
-  // Fallback: auth_user_id column doesn't exist yet (pre-migration
-  // state). PostgREST surfaces this as code 42703 or a message
-  // referencing the missing column. Retry with an id-only filter so
-  // profiles whose id already equals auth.users.id resolve normally.
+  // PGRST116 === identity-link conflict: multiple rows matched the
+  // OR-clause (one with id = userId AND another with auth_user_id =
+  // userId). Rather than locking the user out, prefer the row whose
+  // id matches auth.uid() (the canonical one). Operator reconciles
+  // via supabase/manual_followups.sql.
+  const multiRow =
+    !!error &&
+    (error.code === 'PGRST116' ||
+      (typeof error.message === 'string' && /multiple|more than one row/i.test(error.message)));
+  if (multiRow) {
+    console.warn(
+      '[Auth v2] loadProfile: identity-link conflict (PGRST116) for user', userId,
+      '— falling back to id-preferred lookup. Run supabase/manual_followups.sql to reconcile.'
+    );
+    const byId = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+    if (byId.data) {
+      data = byId.data;
+      error = null;
+    } else if (!byId.error) {
+      const byAuth = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_user_id', userId)
+        .limit(1)
+        .maybeSingle();
+      data = byAuth.data;
+      error = byAuth.error;
+    } else {
+      error = byId.error;
+    }
+  }
+
+  // Column missing: pre-migration state. PostgREST surfaces this as
+  // code 42703 or a message referencing the missing column. Retry
+  // with an id-only filter so profiles whose id already equals
+  // auth.users.id resolve normally.
   const columnMissing =
     !!error &&
     (error.code === '42703' ||
@@ -162,20 +194,23 @@ export const useAuthStore = create<AuthState>()(
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session?.user) {
-            set({ user: null, isAuthenticated: false, isLoading: false, isBootstrapped: true });
+            set({ user: null, isAuthenticated: false, isBootstrapped: true });
             return;
           }
           const profile = await loadProfile(session.user.id);
           if (profile) {
             console.log('[Auth v2] bootstrap: session restored for', profile.email, 'id=', profile.id, 'isTrainer=', profile.isTrainer);
-            set({ user: profile, isAuthenticated: true, isLoading: false, isBootstrapped: true });
+            set({ user: profile, isAuthenticated: true, isBootstrapped: true });
           } else {
             console.warn('[Auth v2] bootstrap: session present but public.users row missing for id=', session.user.id);
-            set({ user: null, isAuthenticated: false, isLoading: false, isBootstrapped: true });
+            set({ user: null, isAuthenticated: false, isBootstrapped: true });
           }
         } catch (e) {
           console.error('[Auth v2] bootstrap error:', e);
-          set({ isLoading: false, isBootstrapped: true });
+          set({ isBootstrapped: true });
+        } finally {
+          // Always clear the loading flag so UI never hangs on a spinner.
+          set({ isLoading: false });
         }
       },
 
@@ -188,7 +223,6 @@ export const useAuthStore = create<AuthState>()(
           });
           if (error) {
             console.log('[Auth v2] signInWithPassword failed:', error.message);
-            set({ isLoading: false });
             const reason = /invalid/i.test(error.message) ? 'invalid_credentials'
               : /confirm/i.test(error.message) ? 'email_not_confirmed'
               : 'unknown';
@@ -196,14 +230,14 @@ export const useAuthStore = create<AuthState>()(
           }
           const profile = await loadProfile(data.user.id);
           if (!profile) {
-            set({ isLoading: false });
             return { ok: false, reason: 'profile_missing', message: 'public.users row missing' };
           }
-          set({ user: profile, isAuthenticated: true, isLoading: false, isBootstrapped: true });
+          set({ user: profile, isAuthenticated: true, isBootstrapped: true });
           return { ok: true, user: profile };
         } catch (e: any) {
-          set({ isLoading: false });
           return { ok: false, reason: 'unknown', message: e?.message ?? String(e) };
+        } finally {
+          set({ isLoading: false });
         }
       },
 
@@ -225,11 +259,9 @@ export const useAuthStore = create<AuthState>()(
             const reason = /already/i.test(error.message) ? 'email_taken'
               : /password/i.test(error.message) ? 'weak_password'
               : 'unknown';
-            set({ isLoading: false });
             return { ok: false, reason, message: error.message };
           }
           if (!data.user) {
-            set({ isLoading: false });
             return { ok: false, reason: 'unknown', message: 'no user returned' };
           }
 
@@ -237,7 +269,6 @@ export const useAuthStore = create<AuthState>()(
           // Poll briefly then update with the extra profile fields.
           const profile = await waitForProfile(data.user.id);
           if (!profile) {
-            set({ isLoading: false });
             return { ok: false, reason: 'profile_update_failed', message: 'trigger did not create public.users row' };
           }
 
@@ -251,11 +282,12 @@ export const useAuthStore = create<AuthState>()(
           }
 
           const fresh = (await loadProfile(data.user.id)) ?? profile;
-          set({ user: fresh, isAuthenticated: true, isLoading: false, isBootstrapped: true });
+          set({ user: fresh, isAuthenticated: true, isBootstrapped: true });
           return { ok: true, user: fresh };
         } catch (e: any) {
-          set({ isLoading: false });
           return { ok: false, reason: 'unknown', message: e?.message ?? String(e) };
+        } finally {
+          set({ isLoading: false });
         }
       },
 

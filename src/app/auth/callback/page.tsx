@@ -50,9 +50,13 @@ export default function AuthCallbackPage() {
 
         const user = useAuthStore.getState().user;
         if (!user) {
-          console.error('[AuthCallback] bootstrap returned no user');
-          setStatus('Profile not found. Redirecting…');
-          setTimeout(() => router.replace('/auth'), 1200);
+          // Session exists but public.users row couldn't be loaded.
+          // Route to /auth/recovery so the user has a concrete path
+          // forward (sign-out / reset / support) instead of looping
+          // back to /auth and re-entering the same failure.
+          console.error('[AuthCallback] bootstrap returned no user — routing to /auth/recovery');
+          setStatus('Profile needs attention. Redirecting…');
+          setTimeout(() => router.replace('/auth/recovery'), 800);
           return;
         }
 
