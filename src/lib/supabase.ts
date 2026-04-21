@@ -33,7 +33,29 @@ if (!supabaseAnonKey.startsWith('eyJ')) {
 
 console.log('[Supabase Init] Using project URL:', supabaseUrl);
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Disable navigator.locks for GoTrue. The default `LockAcquireTimeoutError`
+// recovery path can deadlock in this app when multiple components call
+// `auth.getSession()` / `signInWithPassword()` concurrently during bootstrap
+// (symptom: every awaited auth call hangs until its own timeout wrapper
+// fires, while `onAuthStateChange` still reports SIGNED_IN in the
+// background). A pass-through lock eliminates the deadlock; it is safe
+// here because the session is never shared across tabs in a way that
+// requires cross-tab serialisation for this app — each tab operates on
+// its own localStorage snapshot and reconciles via `onAuthStateChange`.
+const passThroughLock = async <R>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> => fn();
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    lock: passThroughLock,
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
 // Database types
 export interface DbUser {
