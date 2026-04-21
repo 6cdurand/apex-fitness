@@ -1,30 +1,39 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+// Fail-fast: no URL/key fallbacks. A missing or placeholder URL silently
+// routed every auth request (sign-in, password recovery) to a dead host,
+// which is why recovery emails never sent. Throwing here makes the
+// misconfiguration obvious in the browser console / SSR logs instead of
+// letting the app issue requests against `placeholder.supabase.co`.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// Debug logging for Supabase initialization
-console.log('[Supabase Init] Configuration check:', {
-  hasUrl: !!supabaseUrl,
-  hasAnonKey: !!supabaseAnonKey,
-  urlValue: supabaseUrl ? `${supabaseUrl.substring(0, 40)}...` : '(empty)',
-  keyPrefix: supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : '(empty)',
-  keyIsJWT: supabaseAnonKey.startsWith('eyJ'),
-});
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('[Supabase Init] Credentials not configured. Using localStorage fallback.');
+if (!supabaseUrl || !supabaseUrl.includes('.supabase.co')) {
+  throw new Error(
+    '[supabase] NEXT_PUBLIC_SUPABASE_URL is missing or invalid. ' +
+      'It must be set at build time and contain ".supabase.co". ' +
+      `Received: ${supabaseUrl ? JSON.stringify(supabaseUrl) : '(empty)'}`,
+  );
 }
 
-if (supabaseAnonKey && !supabaseAnonKey.startsWith('eyJ')) {
-  console.warn('[Supabase Init] WARNING: Anon key does not look like a valid JWT. Supabase keys typically start with "eyJ"');
+if (!supabaseAnonKey) {
+  throw new Error(
+    '[supabase] NEXT_PUBLIC_SUPABASE_ANON_KEY is missing. ' +
+      'It must be set at build time for the browser client to authenticate.',
+  );
 }
 
-// Use placeholder values if not configured — the app falls back to localStorage anyway
-export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder'
-);
+if (!supabaseAnonKey.startsWith('eyJ')) {
+  // Not fatal (keys could in theory differ), but loud — a non-JWT value
+  // almost always means the env var was populated with the wrong secret.
+  console.warn(
+    '[supabase] NEXT_PUBLIC_SUPABASE_ANON_KEY does not look like a JWT (expected to start with "eyJ").',
+  );
+}
+
+console.log('[Supabase Init] Using project URL:', supabaseUrl);
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database types
 export interface DbUser {
