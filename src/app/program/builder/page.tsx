@@ -703,14 +703,21 @@ function ProgramBuilderContent() {
       localStorage.setItem(`apex-program-library-${user.id}`, JSON.stringify(savedPrograms));
     }
     
-    // Send notification to the client about their new program
+    // Send notification to the client about their new program.
+    // Include programId + both URL fields so the client's click handler can
+    // deep-link directly; avoids the "null program_id" regression that made
+    // assigned-program notifications un-openable.
     if (isTrainerMode && targetClientId && targetClientId !== user.id) {
+      const programLink = `/program?programId=${encodeURIComponent(program.id)}`;
       addNotification({
         userId: targetClientId,
         type: 'program_assigned',
         title: 'New Program Assigned',
         message: `Your trainer assigned you "${programName || 'Custom Program'}" — ${days.length} workouts, ${effectiveFrequency}×/week for ${actualWeeks} weeks`,
-        actionUrl: '/program',
+        actionUrl: programLink,
+        link: programLink,
+        programId: program.id,
+        senderId: user.id,
       });
     }
     

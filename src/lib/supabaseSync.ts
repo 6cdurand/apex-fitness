@@ -3145,7 +3145,7 @@ export async function deleteWorkoutTemplateFromSupabase(templateId: string): Pro
 
 export async function syncNotificationToSupabase(notification: any): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  
+
   try {
     const url = notification.actionUrl || notification.link || null;
     const dbNotification: Record<string, any> = {
@@ -3158,18 +3158,35 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
       action_url: url,
       created_at: notification.createdAt,
     };
-    // Try with link column (new migration); if fails, retry without
+    // Optional deep-link references — only included when present so legacy
+    // rows / legacy schema variants don't trip unknown-column errors.
     dbNotification.link = url;
-    
-    let { error } = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
-    if (error && error.message?.includes('link')) {
-      // link column doesn't exist yet — retry without it
-      delete dbNotification.link;
-      const retry = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
-      error = retry.error;
+    if (notification.programId) dbNotification.program_id = notification.programId;
+    if (notification.senderId) dbNotification.sender_id = notification.senderId;
+
+    // The notifications table has drifted across environments (some DBs
+    // predate the `link`, `program_id`, `sender_id` columns). Rather than
+    // failing the whole upsert on a single unknown column, strip any
+    // column the server complains about and retry. Bounded to one retry
+    // per column we added so we can't loop forever.
+    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id'];
+    let attempt = 0;
+    let lastError: any = null;
+    // At most (optionalCols.length + 1) attempts: one per drop + the final try.
+    while (attempt <= optionalCols.length) {
+      const { error } = await supabase.from('notifications').upsert(dbNotification, { onConflict: 'id' });
+      if (!error) return true;
+      lastError = error;
+      const msg = (error.message || '').toLowerCase();
+      // Postgres/PostgREST error when column is missing typically mentions
+      // the column name and either "does not exist" or "column" / "schema cache".
+      const offending = optionalCols.find((c) => msg.includes(String(c)) && (msg.includes('column') || msg.includes('schema cache') || msg.includes('does not exist')));
+      if (!offending || !(offending in dbNotification)) break;
+      delete dbNotification[offending];
+      attempt++;
     }
-    if (error) {
-      console.error('[Notification Sync] Error:', error.message);
+    if (lastError) {
+      console.error('[Notification Sync] Error:', lastError.message);
       return false;
     }
     return true;
@@ -3195,16 +3212,23 @@ export async function fetchNotificationsFromSupabase(userId: string): Promise<an
       return [];
     }
     
-    return (data || []).map(n => ({
-      id: n.id,
-      userId: n.user_id,
-      type: n.type,
-      title: n.title,
-      message: n.message,
-      read: n.read,
-      link: n.link || n.action_url,
-      actionUrl: n.action_url || n.link,
-      createdAt: n.created_at,
+    // Null-safe mapping: each optional field is defaulted so a row missing
+    // the column (e.g. older DB snapshot without `program_id`/`sender_id`)
+    // still parses without throwing downstream. `undefined` rather than
+    // `null` keeps the shape aligned with the TypeScript `Notification`
+    // interface (optional keys).
+    return (data || []).map((n: any) => ({
+      id: n?.id,
+      userId: n?.user_id,
+      type: n?.type,
+      title: n?.title ?? '',
+      message: n?.message ?? '',
+      read: !!n?.read,
+      link: n?.link ?? n?.action_url ?? undefined,
+      actionUrl: n?.action_url ?? n?.link ?? undefined,
+      programId: n?.program_id ?? undefined,
+      senderId: n?.sender_id ?? undefined,
+      createdAt: n?.created_at,
     }));
   } catch (e) {
     console.error('[Notification Fetch] Exception:', e);

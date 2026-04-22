@@ -578,6 +578,11 @@ export interface Notification {
   read: boolean;
   actionUrl?: string;
   link?: string;
+  // Optional references that let a notification deep-link into a specific
+  // entity. Both stay optional so legacy rows (pre-fix) parse cleanly and
+  // any consumer must null-check before using them.
+  programId?: string;
+  senderId?: string;
   createdAt: string;
 }
 

@@ -19,8 +19,14 @@ import {
   Trash2
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Notification } from '@/types';
+import {
+  resolveNotificationTarget,
+  type LatestActiveProgramLookup,
+} from '@/lib/notificationResolver';
+import { fetchClientProgramsForUser } from '@/lib/supabaseSync';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -38,6 +44,43 @@ export default function NotificationsPage() {
   const userNotifications = notifications
     .filter(n => n.userId === user?.id)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  // Lookup helper for legacy program_assigned rows that don't carry a
+  // programId. Returns the most-recent active program for the current
+  // client or null. Kept local so the pure resolver stays I/O-free.
+  const lookupLatestActiveProgram: LatestActiveProgramLookup = async (clientId) => {
+    try {
+      const programs = await fetchClientProgramsForUser(clientId);
+      if (!Array.isArray(programs) || programs.length === 0) return null;
+      const active = programs
+        .filter((p: any) => p?.status === 'active')
+        .sort((a: any, b: any) => {
+          const ta = new Date(a?.createdAt || a?.created_at || 0).getTime();
+          const tb = new Date(b?.createdAt || b?.created_at || 0).getTime();
+          return tb - ta;
+        });
+      const top = active[0];
+      return top?.id ? { id: top.id } : null;
+    } catch (e) {
+      console.error('[Notifications] lookupLatestActiveProgram failed:', e);
+      return null;
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    markNotificationRead(notification.id);
+    const target = await resolveNotificationTarget(
+      notification,
+      user?.id,
+      lookupLatestActiveProgram,
+    );
+    if (target.kind === 'navigate') {
+      router.push(target.url);
+    } else if (target.kind === 'empty') {
+      toast.info(target.message);
+    }
+    // 'noop' — intentionally do nothing (no actionUrl, no type handler).
+  };
 
   const unreadCount = userNotifications.filter(n => !n.read).length;
 
@@ -128,12 +171,7 @@ export default function NotificationsPage() {
                     "bg-white border-gray-200 shadow-sm cursor-pointer transition-colors",
                     !notification.read && "bg-sky-50 border-l-2 border-l-sky-500"
                   )}
-                  onClick={() => {
-                    markNotificationRead(notification.id);
-                    if (notification.actionUrl) {
-                      router.push(notification.actionUrl);
-                    }
-                  }}
+                  onClick={() => { void handleNotificationClick(notification); }}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">

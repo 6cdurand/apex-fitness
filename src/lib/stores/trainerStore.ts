@@ -1255,14 +1255,21 @@ export const useTrainerStore = create<TrainerState>()(
           .filter(p => p.clientId === program.clientId && p.status === 'completed')
           .forEach(p => syncClientProgramToSupabase(p));
         
-        // Notify client about new program assignment
+        // Notify client about new program assignment.
+        // We now pass the concrete programId + both link fields so the
+        // receiver's click handler can deep-link directly without a
+        // fallback "latest active program" query.
         const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+        const programLink = `/program?programId=${encodeURIComponent(program.id)}`;
         getSocialStore().getState().addNotification({
           userId: program.clientId,
           type: 'program_assigned',
           title: 'New Program Assigned',
           message: `${trainerName} assigned you a new program: ${program.templateName || 'Training Program'}`,
-          link: '/program',
+          link: programLink,
+          actionUrl: programLink,
+          programId: program.id,
+          senderId: useAuthStore.getState().user?.id,
         });
       },
 
