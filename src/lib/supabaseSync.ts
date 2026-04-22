@@ -1848,18 +1848,36 @@ function mapCalendarEventFromDB(e: any) {
 
 export async function fetchCalendarEventsForUser(clientId: string): Promise<any[]> {
   if (!isSupabaseConfigured()) return [];
-  
+
   try {
+    // CLIENT calendar fetch: scope to events this client owns
+    // (trainer-assigned program workouts) or shares (PT sessions).
+    // Trainer-personal events are intentionally excluded.
     const { data, error } = await supabase
       .from('calendar_events')
       .select('*')
-      .eq('client_id', clientId);
-    
+      .eq('client_id', clientId)
+      .in('event_scope', ['client_assigned', 'shared_session'])
+      .order('date', { ascending: true });
+
     if (error) {
+      // Fallback: if the DB predates the `event_scope` column, fetch by
+      // client_id alone and exclude trainer_personal rows in JS. Keeps
+      // legacy environments functional.
+      if (error.message?.includes('event_scope')) {
+        console.warn('[Calendar Fetch For User] event_scope column not found, filtering client-side');
+        const { data: allData } = await supabase
+          .from('calendar_events')
+          .select('*')
+          .eq('client_id', clientId)
+          .order('date', { ascending: true });
+        const filtered = (allData || []).filter(e => e.event_scope !== 'trainer_personal');
+        return filtered.map(mapCalendarEventFromDB);
+      }
       console.error('[Calendar Fetch For User] Error:', error.message);
       return [];
     }
-    
+
     return (data || []).map(mapCalendarEventFromDB);
   } catch (e) {
     console.error('[Calendar Fetch For User] Exception:', e);
