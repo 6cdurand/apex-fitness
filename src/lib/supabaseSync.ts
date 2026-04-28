@@ -1110,6 +1110,31 @@ export async function syncMessageToSupabase(message: MessageData): Promise<boole
   }
 }
 
+// Mark a set of messages as read in Supabase.
+// Callers are expected to have already filtered to inbound-only IDs (i.e. rows
+// where the current user is the receiver) — see computeMessageIdsToMarkRead
+// in messageStore.ts. This function does not re-filter server-side.
+export async function markMessagesReadInSupabase(messageIds: string[]): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  if (!messageIds.length) return true;
+
+  try {
+    const { error } = await supabase
+      .from('messages')
+      .update({ read: true })
+      .in('id', messageIds);
+
+    if (error) {
+      console.error('[Supabase] Error marking messages read:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Mark-read sync error:', e);
+    return false;
+  }
+}
+
 // Sync a conversation to Supabase
 export async function syncConversationToSupabase(conv: ConversationData): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;

@@ -110,7 +110,7 @@ export default function ClientDetailPage() {
     };
     loadAllUsers();
   }, []);
-  const { getOrCreateConversation, sendMessage, getMessages } = useMessageStore();
+  const { getOrCreateConversation, sendMessage, getMessages, markAsRead } = useMessageStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
   
   // State for client workout data fetched from Supabase
@@ -290,6 +290,15 @@ export default function ClientDetailPage() {
     if (!conversation) return [];
     return getMessages(conversation.id);
   }, [conversation]);
+
+  // D4: mark inbound messages as read whenever the trainer opens / is on the
+  // Messages tab for this client. Mirrors @/app/messages/page.tsx:61-65.
+  // Without this, reads from the trainer side never flipped read=true.
+  useEffect(() => {
+    if (activeTab === 'messages' && conversation && user) {
+      markAsRead(conversation.id, user.id);
+    }
+  }, [activeTab, conversation, user, markAsRead]);
 
   // Stats - count ACTUAL completed workouts (from workout store) for training stats
   // AND count PT sessions (from trainer store) for billing purposes

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
-import { useMessageStore } from '@/lib/messageStore';
+import { useMessageStore, mergeMessagesPreferRead } from '@/lib/messageStore';
 import { 
   fetchAllUserDataFromSupabase, 
   isSupabaseConfigured, 
@@ -58,8 +58,10 @@ export function SupabaseSync() {
       const mergedPBs = mergeData(localPBs, remoteData.personalBests);
       const mergedMedals = mergeData(localMedals, remoteData.medals);
       
-      // Merge messages and conversations
-      const mergedMessages = mergeData(localMessages, remoteData.messages.map(m => ({
+      // Merge messages with read-prefer semantics (D2): a fresh local
+      // `read=true` must never be regressed by a stale remote `read=false`.
+      // See mergeMessagesPreferRead in @/lib/messageStore.ts.
+      const mergedMessages = mergeMessagesPreferRead(localMessages, remoteData.messages.map(m => ({
         id: m.id,
         conversationId: m.conversationId,
         senderId: m.senderId,
