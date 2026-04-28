@@ -1083,12 +1083,55 @@ export interface ConversationData {
   updatedAt: string;
 }
 
-// Sync a message to Supabase
-export async function syncMessageToSupabase(message: MessageData): Promise<boolean> {
+// ─── Test seam: messaging client override ──────────────────────────────────
+// Production code never touches this; the default falls through to the real
+// `supabase` singleton imported at the top of this file. Tests covering the
+// FK-race fix (D7) inject a fake client to assert call ordering between the
+// `conversations` and `messages` upserts. Scoped to the messaging upsert
+// paths only — NOT a general client override.
+let __messagingClientOverride: any = null;
+export function __setMessagingSupabaseClientForTests(client: any | null): void {
+  __messagingClientOverride = client;
+}
+function getMessagingClient(): any {
+  return __messagingClientOverride ?? supabase;
+}
+
+// Sync a message to Supabase.
+//
+// D7 (FK-race fix): when `conversation` is supplied, the conversations row is
+// upserted (and awaited) before the messages row. This closes the race where
+// a fresh `getOrCreateConversation` + immediate `sendMessage` would fire two
+// fire-and-forget upserts; if the messages upsert won the race, the FK
+// `messages_conversation_id_fkey` would reject the insert with code 23503.
+//
+// If the conversation upsert errors, this function returns `false` WITHOUT
+// attempting the message upsert — no orphan rows. Local store state is
+// already updated by the caller; surfacing that failure to the UI is D6.
+//
+// Both upserts are idempotent on their primary keys, so the worst-case
+// double-upsert (when `getOrCreateConversation` already fired its own
+// fire-and-forget conversation sync) is two roundtrips on the very first
+// send only and is safe.
+export async function syncMessageToSupabase(
+  message: MessageData,
+  conversation?: ConversationData,
+): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  
+
+  if (conversation) {
+    const conversationOk = await syncConversationToSupabase(conversation);
+    if (!conversationOk) {
+      console.error(
+        '[Supabase] Conversation upsert failed; skipping message upsert to avoid FK violation:',
+        message.id,
+      );
+      return false;
+    }
+  }
+
   try {
-    const { error } = await supabase.from('messages').upsert({
+    const { error } = await getMessagingClient().from('messages').upsert({
       id: message.id,
       conversation_id: message.conversationId,
       sender_id: message.senderId,
@@ -1140,7 +1183,7 @@ export async function syncConversationToSupabase(conv: ConversationData): Promis
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const { error } = await supabase.from('conversations').upsert({
+    const { error } = await getMessagingClient().from('conversations').upsert({
       id: conv.id,
       participant_1: conv.participants[0],
       participant_2: conv.participants[1],

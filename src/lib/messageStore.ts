@@ -150,6 +150,14 @@ export const useMessageStore = create<MessageState>()(
           read: false,
         };
 
+        // Snapshot the conversation BEFORE the local set so we can hand its
+        // current shape to syncMessageToSupabase. The sync layer will upsert
+        // this conversation (awaited) before the message upsert — this is
+        // the D7 FK-race fix. Two upserts on first send (here + the one
+        // getOrCreateConversation already fired) is acceptable: both are
+        // idempotent on (id) PRIMARY KEY.
+        const conversation = get().conversations.find(c => c.id === conversationId);
+
         set(state => ({
           messages: [...state.messages, message],
           conversations: state.conversations.map(c =>
@@ -159,16 +167,30 @@ export const useMessageStore = create<MessageState>()(
           ),
         }));
 
-        // Sync message to Supabase for cross-device access
-        syncMessageToSupabase({
-          id: message.id,
-          conversationId: message.conversationId,
-          senderId: message.senderId,
-          receiverId: message.receiverId,
-          content: message.content,
-          read: message.read,
-          createdAt: message.createdAt,
-        });
+        // Sync message to Supabase for cross-device access. Passing the
+        // conversation forces the sync layer to ensure the conversations row
+        // exists before inserting the messages row (closes FK race).
+        syncMessageToSupabase(
+          {
+            id: message.id,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            receiverId: message.receiverId,
+            content: message.content,
+            read: message.read,
+            createdAt: message.createdAt,
+          },
+          conversation
+            ? {
+                id: conversation.id,
+                participants: conversation.participants,
+                // The just-set updatedAt above hasn't propagated to the local
+                // snapshot we captured, but the upsert is keyed on id and the
+                // updatedAt we send here is monotonic with the prior value.
+                updatedAt: message.createdAt,
+              }
+            : undefined,
+        );
 
         return message;
       },
