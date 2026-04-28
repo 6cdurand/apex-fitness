@@ -52,6 +52,8 @@ import {
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
 import { exerciseLibrary, exerciseLibraryMap, filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
+import { searchExercises } from '@/lib/exerciseSearch';
+import type { Exercise as LibraryExercise } from '@/types';
 import { 
   estimateWorkoutLengthSeconds, 
   formatDuration, 
@@ -620,7 +622,7 @@ function WorkoutBuilderContent() {
   
   const estimatedDuration = Math.round(workoutEstimate.totalSeconds / 60);
 
-  // Combine library exercises with custom exercises
+  // Combine library exercises with custom exercises (idle-state pool)
   const allExercises = [
     ...COMMON_EXERCISES,
     ...customExercises.map(ce => ({
@@ -631,13 +633,41 @@ function WorkoutBuilderContent() {
       isCustom: true,
     })),
   ];
-  
+
+  // Project custom exercises into the Exercise shape for unified search.
+  const customAsLibraryExercises: LibraryExercise[] = useMemo(
+    () => customExercises.map(ce => ({
+      id: ce.id,
+      name: ce.name,
+      primaryMuscles: [],
+      secondaryMuscles: [],
+      category: ce.type === 'cardio' ? 'cardio' : ce.type === 'stretch' ? 'stretching' : 'compound',
+      equipment: 'other',
+      isCustom: true,
+    })),
+    [customExercises],
+  );
+
   // Get the current block type being edited for exercise filtering
   const currentBlockType = showAddExercise ? blocks.find(b => b.id === showAddExercise)?.type : null;
-  
+
   const filteredExercises = useMemo(() => {
-    return filterExercisesBySearch(allExercises, exerciseSearch, currentBlockType);
-  }, [allExercises, exerciseSearch, currentBlockType]);
+    // Searching → unified Fuse-ranked library + custom (typo-tolerant + alias aware).
+    // Idle → curated COMMON_EXERCISES + custom (existing UX preserved per user choice).
+    if (exerciseSearch.trim()) {
+      return searchExercises(exerciseSearch, {
+        blockType: currentBlockType,
+        extraExercises: customAsLibraryExercises,
+      }).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        pattern: ex.category,
+        aliases: [] as string[],
+        isCustom: !!ex.isCustom,
+      }));
+    }
+    return filterExercisesBySearch(allExercises, '', currentBlockType);
+  }, [exerciseSearch, currentBlockType, allExercises, customAsLibraryExercises]);
   
   // Exercise usage counts for the target user (self or client in trainer mode)
   const targetUserId = clientId || user?.id || '';
@@ -1877,7 +1907,7 @@ function WorkoutBuilderContent() {
                       </div>
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
-                          {filterExercisesBySearch(allExercises, exerciseSearch)
+                          {searchExercises(exerciseSearch, { extraExercises: customAsLibraryExercises, limit: 50 })
                           .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
                           .map(ex => {
                             const libEntry = exerciseLibraryMap.get(ex.id);
@@ -1894,7 +1924,7 @@ function WorkoutBuilderContent() {
                                       ...editingExercise.exercise,
                                       exerciseId: ex.id,
                                       exerciseName: ex.name,
-                                      movementPattern: ex.pattern as MovementPattern,
+                                      movementPattern: ex.category as MovementPattern,
                                     }
                                   });
                                   setShowSwapPanel(false);
@@ -1904,7 +1934,7 @@ function WorkoutBuilderContent() {
                                 <div>
                                   <p className="font-medium text-sm">{ex.name}</p>
                                   <p className="text-xs text-muted-foreground capitalize">
-                                    {libEntry?.equipment || ex.pattern}
+                                    {libEntry?.equipment || ex.category}
                                     {libEntry?.primaryMuscles?.length ? ` · ${libEntry.primaryMuscles.join(', ')}` : ''}
                                   </p>
                                 </div>

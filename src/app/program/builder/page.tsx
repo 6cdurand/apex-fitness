@@ -42,7 +42,8 @@ import {
   Clock,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
-import { exerciseLibrary, filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
+import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
+import { searchExercises } from '@/lib/exerciseSearch';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
 import { useWorkoutStore } from '@/lib/store';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
@@ -445,11 +446,16 @@ function ProgramBuilderContent() {
   const currentBlock = showAddExercise ? days[activeDayIndex]?.blocks.find(b => b.id === showAddExercise) : null;
   
   const filteredExercises = useMemo(() => {
-    // Use full exercise library for search, fall back to COMMON_EXERCISES when no search query
-    const source = exerciseSearch.trim()
-      ? exerciseLibrary.map(e => ({ id: e.id, name: e.name, pattern: e.category }))
-      : COMMON_EXERCISES;
-    return filterExercisesBySearch(source, exerciseSearch, currentBlock?.type || null);
+    // Searching → unified Fuse-ranked library (typo-tolerant + alias aware).
+    // Idle → curated COMMON_EXERCISES (existing UX preserved per user choice).
+    if (exerciseSearch.trim()) {
+      return searchExercises(exerciseSearch, { blockType: currentBlock?.type ?? null }).map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        pattern: ex.category,
+      }));
+    }
+    return filterExercisesBySearch(COMMON_EXERCISES, '', currentBlock?.type || null);
   }, [exerciseSearch, currentBlock]);
   
   // Exercise usage counts for the target user
@@ -1706,9 +1712,8 @@ function ProgramBuilderContent() {
                       </div>
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
-                          {filterExercisesBySearch(exerciseLibrary, swapSearch)
+                          {searchExercises(swapSearch, { limit: 50 })
                           .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
-                          .slice(0, 50)
                           .map(ex => {
                             const libEntry = exerciseLibraryMap.get(ex.id);
                             return (
@@ -1724,7 +1729,7 @@ function ProgramBuilderContent() {
                                       ...editingExercise.exercise,
                                       exerciseId: ex.id,
                                       exerciseName: ex.name,
-                                      movementPattern: ex.pattern || '',
+                                      movementPattern: ex.category || '',
                                     }
                                   });
                                   setShowSwapPanel(false);
@@ -1734,7 +1739,7 @@ function ProgramBuilderContent() {
                                 <div>
                                   <p className="font-medium text-sm">{ex.name}</p>
                                   <p className="text-xs text-gray-500 capitalize">
-                                    {libEntry?.equipment || ex.pattern}
+                                    {libEntry?.equipment || ex.category}
                                     {libEntry?.primaryMuscles?.length ? ` · ${libEntry.primaryMuscles.join(', ')}` : ''}
                                   </p>
                                 </div>

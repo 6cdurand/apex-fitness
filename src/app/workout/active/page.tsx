@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { exerciseLibrary, searchExercises, calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
+import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
+import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -350,36 +351,12 @@ export default function ActiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [setRestTimers]);
 
-  // Warmup exercises - use category filter
-  const warmupExercises = exerciseLibrary.filter(e => e.category === 'warmup');
-  
-  // Strength exercises - compound and isolation movements
-  const strengthExercises = exerciseLibrary.filter(e => 
-    e.category === 'compound' || e.category === 'isolation'
-  );
-
-  // Get exercises based on active block type
+  // Get exercises for the picker — unified search across all surfaces.
+  // Empty query + a block selected → block-filtered library; empty query +
+  // no block → full library; non-empty query → Fuse-ranked + block filter.
   const getFilteredExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
-    
-    // When searching, search entire library by name, muscles, equipment, and category
-    if (exerciseSearch) {
-      const search = exerciseSearch.toLowerCase();
-      return exerciseLibrary.filter(e => 
-        e.name.toLowerCase().includes(search) ||
-        e.primaryMuscles.some(m => m.toLowerCase().includes(search)) ||
-        e.secondaryMuscles.some(m => m.toLowerCase().includes(search)) ||
-        e.equipment.toLowerCase().includes(search) ||
-        e.category.toLowerCase().includes(search)
-      );
-    }
-    
-    // When not searching, filter by block type
-    if (!block) return exerciseLibrary;
-    
-    return block.type === 'warmup' ? warmupExercises : 
-           block.type === 'strength' ? strengthExercises : 
-           exerciseLibrary;
+    return searchExercises(exerciseSearch, { blockType: block?.type ?? null });
   };
 
   const handleAddExercise = (exercise: Exercise) => {
@@ -1292,9 +1269,7 @@ export default function ActiveWorkoutPage() {
     setCircuitToSave(null);
   };
 
-  const filteredExercises = exerciseSearch 
-    ? searchExercises(exerciseSearch)
-    : exerciseLibrary;
+  const filteredExercises = searchExercises(exerciseSearch);
 
   if (!activeWorkout && !completedWorkoutData) return null;
 
