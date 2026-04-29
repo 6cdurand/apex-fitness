@@ -107,6 +107,21 @@ export const useMessageStore = create<MessageState>()(
       },
 
       getOrCreateConversation: (currentUserId, otherUserId) => {
+        // D8: Canonicalize participants so `participant_1 < participant_2`
+        // when the row is written to Supabase. The live conversations table
+        // has a CHECK constraint `conversations_participant_order_check`
+        // enforcing that direction (name + LEAST/GREATEST pattern in
+        // supabase-migration-prompt.sql:12-17 confirm the canonical
+        // direction). String comparison of UUID text agrees with Postgres
+        // UUID byte ordering, so a simple `<` suffices.
+        //
+        // The `.includes(...)` lookup below is order-insensitive, so any
+        // legacy locally-persisted row in non-canonical order still matches
+        // and is returned as-is (no local data repair needed).
+        const [p1, p2] = currentUserId < otherUserId
+          ? [currentUserId, otherUserId]
+          : [otherUserId, currentUserId];
+
         const existing = get().conversations.find(c => 
           c.participants.includes(currentUserId) && c.participants.includes(otherUserId)
         );
@@ -115,7 +130,7 @@ export const useMessageStore = create<MessageState>()(
 
         const newConversation: Conversation = {
           id: uuidv4(),
-          participants: [currentUserId, otherUserId],
+          participants: [p1, p2],
           updatedAt: new Date().toISOString(),
         };
 

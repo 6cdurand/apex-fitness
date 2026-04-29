@@ -1183,10 +1183,20 @@ export async function syncConversationToSupabase(conv: ConversationData): Promis
   if (!isSupabaseConfigured()) return false;
   
   try {
+    // D8 defence-in-depth: canonicalize the pair so `participant_1 < participant_2`
+    // regardless of what order the caller supplied. messageStore.getOrCreateConversation
+    // already canonicalizes at creation (D8, Edit 1), but a stale locally-persisted
+    // row from before that fix could still be flowing through here; re-sorting in
+    // the sync layer closes the gap so the live CHECK constraint
+    // `conversations_participant_order_check` is always satisfied.
+    const [a, b] = conv.participants;
+    const participant_1 = a < b ? a : b;
+    const participant_2 = a < b ? b : a;
+
     const { error } = await getMessagingClient().from('conversations').upsert({
       id: conv.id,
-      participant_1: conv.participants[0],
-      participant_2: conv.participants[1],
+      participant_1,
+      participant_2,
       updated_at: conv.updatedAt,
     });
     

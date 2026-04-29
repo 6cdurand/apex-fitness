@@ -45,10 +45,12 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
 import {
   computeMessageIdsToMarkRead,
   mergeMessagesPreferRead,
+  useMessageStore,
   type Message,
 } from '../messageStore';
 import {
   syncMessageToSupabase,
+  syncConversationToSupabase,
   __setMessagingSupabaseClientForTests,
   type MessageData,
   type ConversationData,
@@ -399,6 +401,144 @@ const conversationPayload: ConversationData = {
       events.some(e => e.table === 'conversations' && e.phase === 'exit') &&
         events.some(e => e.table === 'messages' && e.phase === 'exit'),
     );
+  }
+
+  // ============ D8: participant-order canonicalization ============
+  // Prod Sev-1: the live `conversations` table has a CHECK constraint
+  // `conversations_participant_order_check` enforcing `participant_1 <
+  // participant_2`. Client-side must canonicalize before upsert.
+  console.log('\n--- D8: canonicalize conversation participant order ---');
+
+  // Deliberately lex-ordered so the "wrong" order is obvious in assertions.
+  const USER_LO = 'a1111111-1111-1111-1111-111111111111'; // lex-smaller
+  const USER_HI = 'f9999999-9999-9999-9999-999999999999'; // lex-greater
+
+  // --- D8 Test (a): syncConversationToSupabase canonicalizes both orderings. ---
+  {
+    // Supplied in canonical order → upsert payload stays canonical.
+    const { client: clientCanonical, events: eventsCanonical } = makeFakeClient();
+    __setMessagingSupabaseClientForTests(clientCanonical);
+
+    const okCanonical = await syncConversationToSupabase({
+      id: 'conv-canonical',
+      participants: [USER_LO, USER_HI],
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    });
+
+    __setMessagingSupabaseClientForTests(null);
+
+    const payloadCanonical = eventsCanonical.find(
+      e => e.table === 'conversations' && e.phase === 'enter',
+    )?.payload;
+
+    assert('D8(a)/canonical-input: returns true', okCanonical === true);
+    assert(
+      'D8(a)/canonical-input: payload has participant_1 < participant_2',
+      payloadCanonical?.participant_1 === USER_LO &&
+        payloadCanonical?.participant_2 === USER_HI,
+      `payload=${JSON.stringify(payloadCanonical)}`,
+    );
+
+    // Supplied in REVERSED order → sync layer MUST still write canonical.
+    // This is the defence-in-depth layer that closes the prod Sev-1 hole
+    // when a stale locally-persisted row (pre-D8-Edit-1) flows through.
+    const { client: clientReversed, events: eventsReversed } = makeFakeClient();
+    __setMessagingSupabaseClientForTests(clientReversed);
+
+    const okReversed = await syncConversationToSupabase({
+      id: 'conv-reversed',
+      participants: [USER_HI, USER_LO],
+      updatedAt: '2026-04-30T00:00:00.000Z',
+    });
+
+    __setMessagingSupabaseClientForTests(null);
+
+    const payloadReversed = eventsReversed.find(
+      e => e.table === 'conversations' && e.phase === 'enter',
+    )?.payload;
+
+    assert('D8(a)/reversed-input: returns true', okReversed === true);
+    assert(
+      'ACCEPTANCE D8(a): sync-layer canonicalizes reversed input to participant_1 < participant_2',
+      payloadReversed?.participant_1 === USER_LO &&
+        payloadReversed?.participant_2 === USER_HI,
+      `payload=${JSON.stringify(payloadReversed)}`,
+    );
+  }
+
+  // --- D8 Test (b): getOrCreateConversation canonicalizes + lookup is order-agnostic. ---
+  {
+    // Install a no-op fake client for the fire-and-forget
+    // syncConversationToSupabase call that getOrCreateConversation triggers.
+    // We are testing the store shape here, not the sync payload (covered in 'a').
+    const { client: noopClient } = makeFakeClient();
+    __setMessagingSupabaseClientForTests(noopClient);
+
+    // Reset the store so stale persisted state doesn't leak between test runs.
+    useMessageStore.setState({ conversations: [], messages: [] });
+
+    // Call in NON-canonical order: currentUserId (USER_HI) > otherUserId (USER_LO).
+    // The store must flip them before persisting locally.
+    const first = useMessageStore
+      .getState()
+      .getOrCreateConversation(USER_HI, USER_LO);
+
+    assert(
+      'D8(b)/first-call: returned conversation participants are canonical',
+      first.participants[0] === USER_LO && first.participants[1] === USER_HI,
+      `participants=${JSON.stringify(first.participants)}`,
+    );
+
+    // Second call with the args FLIPPED (now in canonical order) must return
+    // the SAME conversation — the .includes() lookup is order-insensitive.
+    const second = useMessageStore
+      .getState()
+      .getOrCreateConversation(USER_LO, USER_HI);
+
+    assert(
+      'ACCEPTANCE D8(b): getOrCreateConversation lookup is order-agnostic (same id)',
+      second.id === first.id,
+      `first.id=${first.id} second.id=${second.id}`,
+    );
+    assert(
+      'D8(b)/second-call: returned conversation still has canonical participant order',
+      second.participants[0] === USER_LO && second.participants[1] === USER_HI,
+      `participants=${JSON.stringify(second.participants)}`,
+    );
+    assert(
+      'D8(b): exactly one conversation row exists in the store for the pair',
+      useMessageStore.getState().conversations.filter(
+        c => c.participants.includes(USER_LO) && c.participants.includes(USER_HI),
+      ).length === 1,
+    );
+
+    // Legacy-locally-persisted case: a conversation stored BEFORE the D8 fix
+    // may still sit in Zustand with participants in reversed order. The
+    // `.includes()` lookup must still find it — no local data repair needed.
+    useMessageStore.setState({
+      conversations: [
+        {
+          id: 'legacy-conv',
+          participants: [USER_HI, USER_LO], // pre-D8 order
+          updatedAt: '2026-04-29T00:00:00.000Z',
+        },
+      ],
+      messages: [],
+    });
+
+    const legacyLookup = useMessageStore
+      .getState()
+      .getOrCreateConversation(USER_LO, USER_HI);
+
+    assert(
+      'D8(b)/legacy-local: order-insensitive .includes() lookup still matches',
+      legacyLookup.id === 'legacy-conv',
+      `got id=${legacyLookup.id}`,
+    );
+
+    // Clean up so later additions don't inherit this seeded state.
+    useMessageStore.setState({ conversations: [], messages: [] });
+    __setMessagingSupabaseClientForTests(null);
   }
 
   // ============ Summary ============
