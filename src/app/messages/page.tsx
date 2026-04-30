@@ -4,6 +4,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { useMessageStore, Conversation } from '@/lib/messageStore';
+import {
+  fetchUsersByIdsChunked,
+  readProfileCache,
+  writeProfileCache,
+  isValidUUID,
+} from '@/lib/userFetchUtils';
 import Link from 'next/link';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -49,10 +55,90 @@ export default function MessagesPage() {
     }
   }, [isAuthenticated, router]);
 
+  // D11: hydrate allUsers from all available sources so conversation headers
+  // and list entries render real names + avatars even on a fresh device (no
+  // localStorage). Previously this page only read `apex-users` from
+  // localStorage, so a new login's first /messages visit rendered "?" for
+  // every counterparty. Mirrors the pattern at community/page.tsx:48-64.
+  //
+  // Source precedence (later sources override individual defined fields, so
+  // trainer flags from localStorage are preserved when Supabase returns only
+  // id/displayName/username/profilePhoto):
+  //   1. readProfileCache()               — sync, prevents '?' flash on reloads
+  //   2. localStorage 'apex-users'        — legacy seed (rich trainer flags)
+  //   3. useTrainerStore().clients        — covers trainer-side client search
+  //   4. fetchUsersByIdsChunked(ids)      — authoritative names from Supabase
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
-    setAllUsers(stored);
-  }, []);
+    if (!user?.id) return;
+
+    // Per-id field merge: later sources override only DEFINED fields of
+    // earlier sources. Keeps e.g. `isTrainer: true` from localStorage even
+    // when the Supabase row doesn't carry that flag.
+    const mergeById = (lists: any[][]): any[] => {
+      const byId = new Map<string, any>();
+      for (const list of lists) {
+        for (const u of list || []) {
+          if (!u?.id) continue;
+          const existing = byId.get(u.id) ?? {};
+          const next: any = { ...existing };
+          for (const [k, v] of Object.entries(u)) {
+            if (v !== undefined && v !== null && v !== '') next[k] = v;
+          }
+          byId.set(u.id, next);
+        }
+      }
+      return Array.from(byId.values());
+    };
+
+    // --- Sync seeds (run before the await, so the first paint has names). ---
+    const cacheSeed = Object.values(readProfileCache());
+    const storedSeed: any[] = (() => {
+      try { return JSON.parse(localStorage.getItem('apex-users') || '[]'); }
+      catch { return []; }
+    })();
+    const clientSeed: any[] = (clients || []).map((c: any) => ({
+      id: c.clientId,
+      displayName: c.displayName || c.name || c.contactName,
+      username: c.username,
+      profilePhoto: c.profilePhoto,
+    }));
+    setAllUsers(mergeById([cacheSeed, storedSeed, clientSeed]));
+
+    // --- Primary async: pull counterparty profiles for THIS user's
+    //     conversations straight from Supabase in one chunked round-trip. ---
+    const hydrate = async () => {
+      try {
+        const userConvos = getConversationsForUser(user.id);
+        const participantIds = [
+          ...new Set(
+            userConvos
+              .flatMap(c => c.participants)
+              .filter(id => id && id !== user.id && isValidUUID(id)),
+          ),
+        ];
+        if (participantIds.length === 0) return;
+
+        const { usersById, failedIds } = await fetchUsersByIdsChunked(participantIds);
+        const fetched = Object.values(usersById);
+        if (fetched.length === 0) {
+          if (failedIds.length > 0) {
+            console.warn('[Messages] Could not resolve', failedIds.length, 'counterparty ids');
+          }
+          return;
+        }
+
+        // Persist for next visit so reload does NOT flash '?' → real-name.
+        writeProfileCache(usersById);
+        setAllUsers(prev => mergeById([prev, fetched]));
+      } catch (e) {
+        console.error('[Messages] Error hydrating user directory:', e);
+      }
+    };
+
+    hydrate();
+    // `conversations` is included so newly-created conversations trigger a
+    // re-hydrate for any participant we have not yet resolved.
+  }, [user?.id, conversations, clients, getConversationsForUser]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
