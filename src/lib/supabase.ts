@@ -58,15 +58,22 @@ export interface DbWorkout {
   created_at: string;
 }
 
+// W3: must mirror public.personal_bests exactly. Verified against prod
+// (SQL 2026-05-01): id uuid, user_id uuid, exercise_id text, exercise_name
+// text, weight numeric, reps integer, one_rm numeric, date timestamptz,
+// created_at timestamptz. There is NO `workout_id` column and NO FK to
+// workouts — the historical rename was from one_rep_max/achieved_at to
+// one_rm/date and the app mapping was never updated, so every PB upsert
+// has been failing with 42703 for the lifetime of the rename.
 export interface DbPersonalBest {
   id: string;
   user_id: string;
   exercise_id: string;
+  exercise_name?: string;
   weight: number;
   reps: number;
-  one_rep_max: number;
-  achieved_at: string;
-  workout_id?: string;
+  one_rm: number;
+  date: string;
 }
 
 export interface DbMedal {

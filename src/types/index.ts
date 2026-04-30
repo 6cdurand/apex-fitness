@@ -282,6 +282,11 @@ export interface Workout {
 export interface PersonalBest {
   id: string;
   exerciseId: string;
+  // W3: optional human label mirrored to public.personal_bests.exercise_name
+  // so cross-device pulls don't have to resolve exerciseId against the
+  // exercise catalog to render. Not all historical in-memory PBs have it;
+  // keep it optional so existing object literals still type-check.
+  exerciseName?: string;
   userId: string;
   oneRepMax: number; // Calculated or actual
   bestWeight: number;

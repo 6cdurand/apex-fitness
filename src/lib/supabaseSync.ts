@@ -1,4 +1,4 @@
-import { supabase, db } from './supabase';
+import { supabase, db, type DbPersonalBest } from './supabase';
 import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage } from '@/types';
 
 /**
@@ -574,32 +574,57 @@ function fromDbWorkout(dbWorkout: any): Workout {
   };
 }
 
-// Convert local PB format to Supabase format
-function toDbPersonalBest(pb: PersonalBest): any {
+// Convert local PB format to Supabase format.
+//
+// W3 (prod schema drift fix): aligned to public.personal_bests verified via
+// SQL 2026-05-01 — id uuid, user_id uuid, exercise_id text, exercise_name
+// text, weight numeric, reps integer, one_rm numeric, date timestamptz,
+// created_at timestamptz. Historical columns `one_rep_max`, `achieved_at`,
+// and `workout_id` DO NOT EXIST in prod; writing them caused every PB
+// upsert to fail with Postgres 42703 for the lifetime of the rename, so
+// user PBs lived only in each device's localStorage. `created_at` is
+// DB-managed (DEFAULT now()). `exercise_name` is included so server-side
+// queries have a human label without joining. `workoutId` on the app-side
+// PersonalBest is NOT persisted — the prod table has no FK to workouts.
+//
+// Keep this function exported (prior signature was file-private) so the
+// unit test at __tests__/personalBest.test.ts can assert set-equality of
+// the emitted keys and catch future schema drift at the same commit as
+// the interface change.
+export function toDbPersonalBest(pb: PersonalBest): DbPersonalBest {
   return {
     id: pb.id,
     user_id: pb.userId,
     exercise_id: pb.exerciseId,
+    exercise_name: pb.exerciseName,
     weight: pb.bestWeight,
     reps: pb.bestReps,
-    one_rep_max: pb.oneRepMax,
-    achieved_at: pb.achievedAt,
-    workout_id: pb.workoutId,
+    one_rm: pb.oneRepMax,
+    date: pb.achievedAt,
   };
 }
 
-// Convert Supabase PB format to local format
-function fromDbPersonalBest(dbPb: any): PersonalBest {
+// Convert Supabase PB format to local format.
+//
+// W3: must read the real prod columns (one_rm / date) — previous reads of
+// one_rep_max / achieved_at / workout_id silently produced `undefined`
+// every time the full-sync pull ran. `workoutId` on the app-side
+// PersonalBest is set to '' here because the DB has no such column; local
+// store writes populate it for PBs achieved after the last sync.
+export function fromDbPersonalBest(dbPb: DbPersonalBest): PersonalBest {
+  const weight = Number(dbPb.weight ?? 0);
+  const reps = Number(dbPb.reps ?? 0);
   return {
     id: dbPb.id,
     userId: dbPb.user_id,
     exerciseId: dbPb.exercise_id,
-    bestWeight: dbPb.weight,
-    bestReps: dbPb.reps,
-    oneRepMax: dbPb.one_rep_max,
-    bestVolume: dbPb.weight * dbPb.reps,
-    achievedAt: dbPb.achieved_at,
-    workoutId: dbPb.workout_id,
+    exerciseName: dbPb.exercise_name,
+    bestWeight: weight,
+    bestReps: reps,
+    oneRepMax: Number(dbPb.one_rm ?? 0),
+    bestVolume: weight * reps,
+    achievedAt: dbPb.date,
+    workoutId: '',
   };
 }
 
