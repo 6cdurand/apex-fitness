@@ -37,7 +37,7 @@ interface WorkoutState {
   startFromTemplate: (template: WorkoutTemplate, clientId?: string) => void;
   clearCurrentClient: () => void;
   getActiveUserId: () => string; // Get the ID of who we're currently training
-  endWorkout: (privateNotes?: string, sharedNotes?: string) => Workout | null;
+  endWorkout: (privateNotes?: string, sharedNotes?: string) => Promise<Workout | null>;
   updateActiveWorkoutNotes: (notes: string) => void;
   cancelWorkout: () => void;
   
@@ -77,17 +77,17 @@ interface WorkoutState {
   getWorkoutHistory: () => Workout[];
   getWorkoutHistoryForUser: (userId: string) => Workout[];
   getPersonalBestsForUser: (userId: string) => PersonalBest[];
-  deleteWorkout: (workoutId: string) => void;
+  deleteWorkout: (workoutId: string) => Promise<void>;
   clearDataForUser: (userId: string) => void;
   
   // Notes
-  updateWorkoutNotes: (workoutId: string, notes: string) => void;
+  updateWorkoutNotes: (workoutId: string, notes: string) => Promise<void>;
   getWorkoutById: (workoutId: string) => Workout | undefined;
   
   // Edit completed workouts
-  updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => void;
-  removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => void;
-  removeSetFromCompletedWorkout: (workoutId: string, exerciseId: string, setId: string) => void;
+  updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => Promise<void>;
+  removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => Promise<void>;
+  removeSetFromCompletedWorkout: (workoutId: string, exerciseId: string, setId: string) => Promise<void>;
   
   // Recalculate PBs from workout history
   recalculatePBsForUser: (userId: string) => void;
@@ -270,7 +270,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeWorkout: { ...activeWorkout, notes } });
       },
 
-      endWorkout: (notes?: string) => {
+      endWorkout: async (notes?: string) => {
         const { activeWorkout, workoutTimer } = get();
         if (!activeWorkout) return null;
 
@@ -295,6 +295,22 @@ export const useWorkoutStore = create<WorkoutState>()(
           status: 'completed',
         };
 
+        // W1 (tab-close data-loss fix): await the Supabase upsert BEFORE any
+        // UI-facing state transition that implies success. If the request
+        // fails, activeWorkout and the live timers stay intact so the user
+        // can hit Finish again. The caller (handleFinishWorkout) surfaces
+        // the failure via toast and leaves the finish dialog open.
+        const synced = await syncWorkoutToSupabase(completedWorkout);
+        if (!synced) {
+          console.error(
+            '[WorkoutStore] Workout sync failed; preserving activeWorkout for retry:',
+            completedWorkout.id,
+          );
+          return null;
+        }
+
+        // Sync succeeded — now it is safe to commit the local state
+        // transition (clear activeWorkout, push to workoutHistory).
         set(state => ({
           activeWorkout: null,
           workoutHistory: [completedWorkout, ...state.workoutHistory],
@@ -302,9 +318,6 @@ export const useWorkoutStore = create<WorkoutState>()(
           restTimer: { isRunning: false, seconds: 0, type: 'rest' },
           currentClientId: null,
         }));
-
-        // Sync workout to Supabase for cross-device access
-        syncWorkoutToSupabase(completedWorkout);
 
         // Patch source calendar event status to 'completed'
         // templateId is set to 'session-{eventId}' when started from a booked session
@@ -1057,7 +1070,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         return get().personalBests.filter(pb => pb.userId === userId);
       },
 
-      deleteWorkout: (workoutId) => {
+      deleteWorkout: async (workoutId) => {
         const { workoutHistory } = get();
         const workoutToDelete = workoutHistory.find(w => w.id === workoutId);
         const userId = workoutToDelete?.userId;
@@ -1115,10 +1128,15 @@ export const useWorkoutStore = create<WorkoutState>()(
           }
         }
         
-        // Sync soft delete to Supabase
+        // W1: await soft-delete sync. Error is logged but does not roll back
+        // the local soft-delete — the next `runDeriveAll` / full-sync pass
+        // will retry, and the UI has already filtered the row out.
         const deletedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (deletedWorkout) {
-          syncWorkoutToSupabase(deletedWorkout);
+          const ok = await syncWorkoutToSupabase(deletedWorkout);
+          if (!ok) {
+            console.error('[WorkoutStore] Soft-delete sync failed; local state already updated:', workoutId);
+          }
         }
         
         // Silently remove associated feed post
@@ -1145,17 +1163,21 @@ export const useWorkoutStore = create<WorkoutState>()(
         getMedalStore().getState().clearMedalsForUser(userId);
       },
 
-      updateWorkoutNotes: (workoutId: string, notes: string) => {
+      updateWorkoutNotes: async (workoutId: string, notes: string) => {
         set(state => ({
           workoutHistory: state.workoutHistory.map(w =>
             w.id === workoutId ? { ...w, notes } : w
           ),
         }));
         
-        // Sync updated workout to Supabase
+        // W1: await sync so a tab-close mid-flight is surfaced in the logs;
+        // local state is already updated so we don't roll back on failure.
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
-          syncWorkoutToSupabase(updatedWorkout);
+          const ok = await syncWorkoutToSupabase(updatedWorkout);
+          if (!ok) {
+            console.error('[WorkoutStore] Notes sync failed:', workoutId);
+          }
         }
       },
 
@@ -1163,24 +1185,28 @@ export const useWorkoutStore = create<WorkoutState>()(
         return get().workoutHistory.find(w => w.id === workoutId);
       },
 
-      updateCompletedWorkout: (workoutId: string, updates: Partial<Workout>) => {
+      updateCompletedWorkout: async (workoutId: string, updates: Partial<Workout>) => {
         set(state => ({
           workoutHistory: state.workoutHistory.map(w =>
             w.id === workoutId ? { ...w, ...updates } : w
           ),
         }));
         
-        // Sync to Supabase
+        // W1: await sync. On failure we still run runDeriveAll locally so the
+        // UI reflects the edit; the next full-sync pass retries the workout.
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
-          syncWorkoutToSupabase(updatedWorkout);
+          const ok = await syncWorkoutToSupabase(updatedWorkout);
+          if (!ok) {
+            console.error('[WorkoutStore] Edit sync failed:', workoutId);
+          }
           
           // deriveAll: recompute PBs, medals, ratings, volume after edit
           get().runDeriveAll(updatedWorkout.userId);
         }
       },
 
-      removeExerciseFromCompletedWorkout: (workoutId: string, exerciseId: string) => {
+      removeExerciseFromCompletedWorkout: async (workoutId: string, exerciseId: string) => {
         const workout = get().workoutHistory.find(w => w.id === workoutId);
         if (!workout) return;
         
@@ -1192,15 +1218,19 @@ export const useWorkoutStore = create<WorkoutState>()(
           ),
         }));
         
-        // Sync to Supabase and recalculate PBs
+        // W1: await sync + recompute derived state. On failure we log and
+        // still recompute locally.
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
-          syncWorkoutToSupabase(updatedWorkout);
+          const ok = await syncWorkoutToSupabase(updatedWorkout);
+          if (!ok) {
+            console.error('[WorkoutStore] removeExercise sync failed:', workoutId);
+          }
           get().runDeriveAll(workout.userId);
         }
       },
 
-      removeSetFromCompletedWorkout: (workoutId: string, exerciseId: string, setId: string) => {
+      removeSetFromCompletedWorkout: async (workoutId: string, exerciseId: string, setId: string) => {
         const workout = get().workoutHistory.find(w => w.id === workoutId);
         if (!workout) return;
         
@@ -1222,10 +1252,14 @@ export const useWorkoutStore = create<WorkoutState>()(
           ),
         }));
         
-        // Sync to Supabase and recalculate PBs (this handles PB reversion)
+        // W1: await sync + recompute derived state. On failure we log and
+        // still recompute locally (this handles PB reversion).
         const updatedWorkout = get().workoutHistory.find(w => w.id === workoutId);
         if (updatedWorkout) {
-          syncWorkoutToSupabase(updatedWorkout);
+          const ok = await syncWorkoutToSupabase(updatedWorkout);
+          if (!ok) {
+            console.error('[WorkoutStore] removeSet sync failed:', workoutId);
+          }
           get().runDeriveAll(workout.userId);
         }
       },

@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { ExerciseImage } from '@/components/ExerciseImage';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
-import { Exercise, WorkoutSet } from '@/types';
+import { Exercise, Workout, WorkoutSet } from '@/types';
 import { 
   Plus, 
   X, 
@@ -103,6 +103,10 @@ export default function ActiveWorkoutPage() {
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showFinishDialog, setShowFinishDialog] = useState(false);
+  // W1: pending state while syncWorkoutToSupabase resolves. Disables the
+  // Finish button to prevent double-submits and gives the user a visual
+  // tell that the save is in flight.
+  const [isFinishing, setIsFinishing] = useState(false);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [showRestSettings, setShowRestSettings] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -705,7 +709,11 @@ export default function ActiveWorkoutPage() {
     toast.success('Superset created!');
   };
 
-  const handleFinishWorkout = () => {
+  const handleFinishWorkout = async () => {
+    // W1: prevent double-submit. If a previous click is still syncing,
+    // ignore the second click — the retry toast re-enables this handler.
+    if (isFinishing) return;
+
     // Capture workout info before ending
     const workoutName = activeWorkout?.name || 'Workout';
     const isPT = !!activeWorkout?.assignedBy;
@@ -727,8 +735,26 @@ export default function ActiveWorkoutPage() {
       ),
     } : undefined;
 
-    const completed = endWorkout(workoutNotes, sharedNotes);
-    if (completed) {
+    // W1: await endWorkout. It will return null without clearing activeWorkout
+    // if the Supabase upsert fails — we surface that as a retry toast and
+    // keep the finish dialog open. The `isFinishing` flag disables the
+    // button during the request window.
+    setIsFinishing(true);
+    let completed: Workout | null = null;
+    try {
+      completed = await endWorkout(workoutNotes, sharedNotes);
+    } finally {
+      setIsFinishing(false);
+    }
+
+    if (!completed) {
+      toast.error('Failed to save workout. Check your connection and tap Finish again.', {
+        duration: 8000,
+      });
+      return;
+    }
+
+    {
       // Feed post is now opt-in — created in handleCloseSummary if shareToFeed is checked
 
       // Session record creation + totalSessions increment is handled by completeWorkout (endWorkout) in store.ts
@@ -3737,15 +3763,17 @@ export default function ActiveWorkoutPage() {
             <Button
               variant="outline"
               onClick={() => setShowFinishDialog(false)}
+              disabled={isFinishing}
               className="flex-1 border-gray-200"
             >
               Keep Going
             </Button>
             <Button
               onClick={handleFinishWorkout}
+              disabled={isFinishing}
               className="flex-1 bg-sky-500 hover:bg-sky-600"
             >
-              Finish Workout
+              {isFinishing ? 'Saving…' : 'Finish Workout'}
             </Button>
           </div>
         </DialogContent>

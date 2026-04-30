@@ -860,7 +860,27 @@ export async function fetchClientWorkoutsFromSupabase(trainerId: string): Promis
   }
 }
 
-// Sync a completed workout to Supabase
+// ─── Test seam: workout client override ───────────────────────────────────
+// Same pattern as __setMessagingSupabaseClientForTests below. Production code
+// never touches this; the default falls through to the real `supabase`
+// singleton imported at the top of this file. Tests covering W1 (endWorkout
+// must await sync before clearing activeWorkout) inject a fake client so the
+// upsert can be driven to resolve/reject on demand. Scoped to the `workouts`
+// upsert path only — NOT a general client override.
+let __workoutClientOverride: any = null;
+export function __setWorkoutSupabaseClientForTests(client: any | null): void {
+  __workoutClientOverride = client;
+}
+function getWorkoutClient(): any {
+  return __workoutClientOverride ?? supabase;
+}
+
+// Sync a completed workout to Supabase.
+//
+// W1 (tab-close data-loss fix): callers MUST await this promise before any
+// UI-facing state transition that implies success (e.g. clearing activeWorkout
+// or pushing to workoutHistory). On `false` the local state should be kept
+// intact so the user can retry. See workoutStore.endWorkout.
 export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> {
   if (!isSupabaseConfigured()) {
     console.log('[WorkoutSync] Supabase not configured, skipping sync');
@@ -878,7 +898,7 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
       totalVolume: workout.totalVolume,
     });
     
-    const { error, data } = await supabase
+    const { error, data } = await getWorkoutClient()
       .from('workouts')
       .upsert(dbWorkout)
       .select();
