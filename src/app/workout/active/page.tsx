@@ -61,6 +61,42 @@ function formatTime(seconds: number): string {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 }
 
+// ============================================================================
+// __shouldRedirectFromActiveWorkout: pure decision function for the
+// authentication / no-active-workout redirect guard. Extracted as a test
+// seam in the same style as `__decideIdentityNormalization` in
+// SupabaseSync.tsx so it can be driven directly by unit tests without RTL.
+//
+// Bug fixed 2026-05-01: handleFinishWorkout flips `isFinishing=true`
+// synchronously before any await, then awaits endWorkout (which clears
+// activeWorkout via `set({ activeWorkout: null })` mid-await-chain).
+// During that yield React processed the queued render with
+// `activeWorkout=null && !showSummary && !completedWorkoutData`, firing
+// the /workout redirect before `setShowSummary(true)` could run.
+// Including `isFinishing` in the guard prevents the redirect from
+// stomping the finish flow.
+// ============================================================================
+export type ActiveWorkoutRedirectTarget = 'auth' | 'workout' | null;
+
+export function __shouldRedirectFromActiveWorkout(params: {
+  isAuthenticated: boolean;
+  activeWorkout: unknown;
+  showSummary: boolean;
+  completedWorkoutData: unknown;
+  isFinishing: boolean;
+}): ActiveWorkoutRedirectTarget {
+  if (!params.isAuthenticated) return 'auth';
+  if (
+    !params.activeWorkout &&
+    !params.showSummary &&
+    !params.completedWorkoutData &&
+    !params.isFinishing
+  ) {
+    return 'workout';
+  }
+  return null;
+}
+
 export default function ActiveWorkoutPage() {
   const router = useRouter();
   const { isAuthenticated, user: currentUser } = useAuthStore();
@@ -230,14 +266,20 @@ export default function ActiveWorkoutPage() {
   const hasStrength = workoutBlocks.some(b => b.type === 'strength');
 
   // Redirect if not authenticated or no active workout
-  // BUT skip redirect if the summary is showing (activeWorkout is null after endWorkout)
+  // BUT skip redirect if the summary is showing (activeWorkout is null after
+  // endWorkout), and skip while a finish flow is in progress (isFinishing is
+  // set synchronously before any await — see __shouldRedirectFromActiveWorkout).
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    } else if (!activeWorkout && !showSummary && !completedWorkoutData) {
-      router.replace('/workout');
-    }
-  }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, router]);
+    const target = __shouldRedirectFromActiveWorkout({
+      isAuthenticated,
+      activeWorkout,
+      showSummary,
+      completedWorkoutData,
+      isFinishing,
+    });
+    if (target === 'auth') router.replace('/auth');
+    else if (target === 'workout') router.replace('/workout');
+  }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, isFinishing, router]);
 
   // Map block types from builder format to active workout format
   const mapBlockType = (type: string): 'warmup' | 'strength' | 'circuit' | 'cardio' => {
