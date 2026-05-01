@@ -28,6 +28,25 @@ interface AuthState {
   updatePassword: (email: string, oldPassword: string, newPassword: string) => boolean;
   resetPassword: (email: string, newPassword: string) => boolean;
   switchMode: (mode: UserMode) => void;
+  /**
+   * Heal-on-mount identity normalization.
+   *
+   * Rewrites the in-memory user.id AND the corresponding `apex-users`
+   * localStorage row so both point at the canonical `public.users.id`. Used
+   * by SupabaseSync to fix the 40 users persisted with a stale
+   * `user.id = auth.users.id` before the canonical-resolve code shipped.
+   *
+   * This action is CLIENT-SIDE ONLY and MUST NOT call updateUserInSupabase:
+   * the public.users row already has the canonical id; we are only healing
+   * the client cache. Running an UPDATE on public.users.id would touch the
+   * primary key and may violate foreign-key references (programs, PBs,
+   * workouts, conversations, etc. all key to public.users.id).
+   *
+   * Idempotent: no-op when no user is loaded or when current id already
+   * equals the canonical id. De-dupes `apex-users` rows when the store
+   * already contains both the stale-id row and the canonical-id row.
+   */
+  normalizeUserIdToCanonical: (canonicalId: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -323,6 +342,49 @@ export const useAuthStore = create<AuthState>()(
           // Sync mode to Supabase
           updateUserInSupabase(currentUser.id, { mode });
         }
+      },
+
+      normalizeUserIdToCanonical: (canonicalId: string) => {
+        const currentUser = get().user;
+        if (!currentUser) return;
+        if (currentUser.id === canonicalId) return; // idempotent
+
+        console.log(
+          '[Auth] Normalizing user.id',
+          currentUser.id,
+          '→ canonical',
+          canonicalId,
+        );
+
+        // 1. Update in-memory state
+        const updatedUser = { ...currentUser, id: canonicalId };
+        set({ user: updatedUser });
+
+        // 2. Update localStorage `apex-users` array — rewrite the row's id, de-dupe.
+        //    If a row already exists at the canonical id (e.g. populated by a
+        //    previous OAuth login on the same device) drop it first, then
+        //    re-key the stale-id row onto the canonical id preserving the
+        //    password hash and any other locally stored fields.
+        try {
+          const storedUsers: Array<User & { password?: string }> = JSON.parse(
+            localStorage.getItem('apex-users') || '[]'
+          );
+          const filtered = storedUsers.filter((u) => u.id !== canonicalId);
+          const idx = filtered.findIndex((u) => u.id === currentUser.id);
+          if (idx !== -1) {
+            filtered[idx] = { ...filtered[idx], id: canonicalId };
+          } else {
+            filtered.push({ ...updatedUser });
+          }
+          localStorage.setItem('apex-users', JSON.stringify(filtered));
+        } catch (e) {
+          console.error('[Auth] Failed to normalize localStorage apex-users:', e);
+        }
+
+        // 3. DO NOT call updateUserInSupabase — that would UPDATE
+        //    public.users.id (primary key, referenced by FKs on programs /
+        //    workouts / PBs / conversations). The DB row already has the
+        //    canonical id; we're only healing the client-side cache.
       },
     }),
     {

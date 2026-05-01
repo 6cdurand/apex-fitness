@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
 import {
   useMessageStore,
@@ -18,6 +18,7 @@ import {
   cleanupDeletedClients,
   fetchWorkoutTemplatesFromSupabase,
   syncWorkoutTemplateToSupabase,
+  resolveCanonicalUserByEmail,
   type MessageData,
   type ConversationData,
 } from '@/lib/supabaseSync';
@@ -139,6 +140,65 @@ export function __applyConversationRealtimeEvent(row: any): void {
   });
 }
 
+// ============================================================================
+// HEAL-ON-MOUNT IDENTITY NORMALIZATION (Layer 1 — artifact c)
+// ============================================================================
+//
+// auth.users.id and public.users.id diverged for 40 of 48 beta users. All
+// app data (programs, PBs, workouts, follows, conversations) keys to
+// public.users.id. loginWithSupabaseUser already resolves the canonical
+// public.users.id by email on login, but zustand/persist rehydrates
+// `apex-auth.state.user` on every page load WITHOUT re-running that
+// resolution. Users who last logged in before canonical-resolve shipped
+// still have user.id = auth.users.id persisted, and every downstream
+// Supabase fetch returns empty.
+//
+// Fix: re-resolve the canonical public.users.id by email on mount, and if
+// the persisted id is stale, heal it in place via
+// useAuthStore.normalizeUserIdToCanonical (client-only — does NOT UPDATE
+// public.users.id).
+//
+// `__decideIdentityNormalization` is the pure decision function underlying
+// the effect — extracted as a test seam in the same style as
+// __applyMessageRealtimeEvent so it can be driven directly by unit tests
+// without mocking React / channel wiring.
+// ============================================================================
+
+export type IdentityNormalizationDecision =
+  | { action: 'skip'; reason: 'no-canonical' | 'already-canonical' | 'error' }
+  | { action: 'normalize'; canonicalId: string };
+
+/**
+ * Decide what to do with the persisted `user.id` given the canonical row
+ * resolved by email. Pure — no side effects. Wired to the real
+ * `resolveCanonicalUserByEmail` in the useEffect below; in tests, callers
+ * inject a stub.
+ *
+ * Behaviour:
+ *  - No canonical row (email never persisted to public.users)   → skip.
+ *  - Canonical id matches persisted id (non-diverged user)       → skip.
+ *  - Canonical id differs from persisted id (diverged user)      → normalize.
+ *  - Underlying resolve throws (network / supabase error)        → skip (fail
+ *    open: better to sync with a stale id than block the app forever).
+ */
+export async function __decideIdentityNormalization(params: {
+  userId: string;
+  userEmail: string;
+  resolveCanonical: (email: string) => Promise<{ id: string } | null>;
+}): Promise<IdentityNormalizationDecision> {
+  try {
+    const canonical = await params.resolveCanonical(params.userEmail);
+    if (!canonical) return { action: 'skip', reason: 'no-canonical' };
+    if (canonical.id === params.userId) {
+      return { action: 'skip', reason: 'already-canonical' };
+    }
+    return { action: 'normalize', canonicalId: canonical.id };
+  } catch (e) {
+    console.error('[SupabaseSync:Identity] resolve error:', e);
+    return { action: 'skip', reason: 'error' };
+  }
+}
+
 /**
  * SupabaseSync Component
  * Syncs ALL user data from Supabase on login for cross-device access
@@ -147,8 +207,76 @@ export function __applyConversationRealtimeEvent(row: any): void {
 export function SupabaseSync() {
   const { user, isAuthenticated, updateUser } = useAuthStore();
 
+  // Heal-on-mount identity normalization: re-resolve canonical public.users.id
+  // by email and rewrite the persisted user.id in place if it's stale. Must
+  // complete BEFORE any downstream data-sync effects run; both existing
+  // sync effects below gate on `isIdentityNormalized`.
+  const [isIdentityNormalized, setIsIdentityNormalized] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id || !user?.email) {
+      setIsIdentityNormalized(true); // nothing to do; release downstream effects
+      return;
+    }
+    if (!isSupabaseConfigured()) {
+      setIsIdentityNormalized(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    const normalizeIdentity = async () => {
+      const decision = await __decideIdentityNormalization({
+        userId: user.id,
+        userEmail: user.email!,
+        resolveCanonical: resolveCanonicalUserByEmail,
+      });
+      if (cancelled) return;
+
+      if (decision.action === 'skip') {
+        if (decision.reason === 'no-canonical') {
+          console.log(
+            '[SupabaseSync:Identity] No canonical public.users row for',
+            user.email,
+            '— leaving user.id as-is',
+          );
+        } else if (decision.reason === 'already-canonical') {
+          console.log(
+            '[SupabaseSync:Identity] user.id',
+            user.id,
+            'already canonical for',
+            user.email,
+          );
+        }
+        setIsIdentityNormalized(true);
+        return;
+      }
+
+      console.warn(
+        '[SupabaseSync:Identity] ⚠️ Stale user.id detected',
+        user.id,
+        '→ canonical',
+        decision.canonicalId,
+        '(',
+        user.email,
+        ') — healing in place',
+      );
+      useAuthStore.getState().normalizeUserIdToCanonical(decision.canonicalId);
+      // Give zustand a tick to flush before downstream effects read state.
+      await new Promise((r) => setTimeout(r, 0));
+      if (cancelled) return;
+      setIsIdentityNormalized(true);
+    };
+
+    normalizeIdentity();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.id, user?.email]);
+
   // Sync user data (workouts, PBs, medals, etc.) - on EVERY page load for cross-device sync
   useEffect(() => {
+    if (!isIdentityNormalized) return;
     if (!isAuthenticated || !user?.id) return;
     if (!isSupabaseConfigured()) {
       console.log('[SupabaseSync] Supabase not configured, using localStorage only');
@@ -248,11 +376,12 @@ export function SupabaseSync() {
     };
 
     syncFromSupabase();
-  }, [isAuthenticated, user?.id, updateUser]);
+  }, [isAuthenticated, user?.id, updateUser, isIdentityNormalized]);
 
   // SEPARATE effect for trainer data - syncs on EVERY mount for ALL authenticated users
   // This ensures cross-device consistency regardless of localStorage state
   useEffect(() => {
+    if (!isIdentityNormalized) return;
     if (!isAuthenticated || !user?.id) return;
     if (!isSupabaseConfigured()) return;
 
@@ -296,7 +425,7 @@ export function SupabaseSync() {
     // Small delay to ensure auth is fully loaded
     const timer = setTimeout(syncTrainerData, 300);
     return () => clearTimeout(timer);
-  }, [isAuthenticated, user?.id]);
+  }, [isAuthenticated, user?.id, isIdentityNormalized]);
 
   // ==========================================================================
   // M1 + M2: REALTIME MESSAGES + CONVERSATIONS SUBSCRIPTION
