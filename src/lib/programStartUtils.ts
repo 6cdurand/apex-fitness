@@ -8,10 +8,38 @@
  */
 
 /**
+ * Normalize a raw `sets` value (which may come from legacy program_data,
+ * trainer-builder input, or AI generation) into a safe positive integer
+ * suitable for `Array.from({ length: n })`. Without this guard, negative
+ * numbers, Infinity, or NaN crash Start with `RangeError: Invalid array
+ * length` (command-center ticket 2026-05-01).
+ *
+ * - Non-finite (NaN / ±Infinity) or <= 0 → default to 3, warn
+ * - Floats are floored
+ * - Clamped to [1, 50]; any clamp fires a warn
+ */
+export function normalizeSetCount(raw: unknown, contextLabel?: string): number {
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw ?? ''));
+  if (!Number.isFinite(n) || n <= 0) {
+    console.warn('[programStartUtils] Invalid set count', raw, contextLabel ? `(${contextLabel})` : '', '→ defaulting to 3');
+    return 3;
+  }
+  const clamped = Math.max(1, Math.min(50, Math.floor(n)));
+  if (clamped !== n) {
+    console.warn('[programStartUtils] Set count', raw, 'clamped to', clamped, contextLabel ? `(${contextLabel})` : '');
+  }
+  return clamped;
+}
+
+/**
  * Parse a rep string like '12→10→8→6' into per-set rep values.
  * Falls back to parseInt for flat strings like '10' or '8-12'.
  */
 export function parseRepsPerSet(reps: string | number, setCount: number): number[] {
+  // Belt-and-braces: direct callers may pass an unsanitised setCount from raw
+  // program_data. Re-clamp here so Array(setCount) / Array.from never throw.
+  setCount = normalizeSetCount(setCount, 'parseRepsPerSet');
+
   if (typeof reps === 'number') {
     return Array(setCount).fill(reps);
   }
@@ -98,7 +126,7 @@ export function convertProgramDayToTemplate(
   // Build flat exercises array for startFromTemplate (it maps these into WorkoutExercise)
   const exercises = blocks.flatMap((block: any) =>
     (block.exercises || []).map((ex: any) => {
-      const setCount = typeof ex.sets === 'number' ? ex.sets : (parseInt(ex.sets) || 3);
+      const setCount = normalizeSetCount(ex.sets, `${ex.exerciseName ?? ex.exerciseId}`);
       const repsPerSet = parseRepsPerSet(ex.reps, setCount);
 
       return {

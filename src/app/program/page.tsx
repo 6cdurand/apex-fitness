@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
-import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
+import { convertProgramDayToTemplate, normalizeSetCount } from '@/lib/programStartUtils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -432,7 +432,7 @@ export default function ProgramPage() {
           category: 'compound' as const,
           equipment: 'barbell' as const,
         },
-        sets: Array.from({ length: ex.sets }, (_, i) => ({
+        sets: Array.from({ length: normalizeSetCount(ex.sets, `handleStartGenerated:${ex.exerciseId}`) }, (_, i) => ({
           id: `gen-set-${ex.exerciseId}-${i}-${Math.random().toString(36).slice(2, 6)}`,
           setNumber: i + 1,
           targetReps: ex.reps,
