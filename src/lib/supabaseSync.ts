@@ -628,8 +628,23 @@ export function fromDbPersonalBest(dbPb: DbPersonalBest): PersonalBest {
   };
 }
 
-// Convert local medal format to Supabase format
-function toDbMedal(medal: Medal): any {
+// Convert local medal format to Supabase format.
+//
+// Schema drift fixed 2026-05-01 (option B — no migration):
+// `public.medals` does NOT have `earned` or `earned_at`. The only
+// timestamp column is `achieved_at` (timestamptz, default now()).
+// Historically this function sent both `earned` and `earned_at`, which
+// surfaced as `POST /medals?on_conflict=user_id,definition_id → 400
+// PGRST204 "Could not find the 'earned' column of 'medals' in the
+// schema cache"` on every workout finish. Medals never reached the DB.
+//
+// Verified via a live PostgREST per-column probe (see commit body).
+// Existing columns used here: id, user_id, definition_id, name,
+// description, icon, tier, category, rarity, achieved_at, progress,
+// target, times_earned. We derive the app-side `medal.earned` flag
+// from `achieved_at` on read (see `fromDbMedal`), keeping the Medal
+// type's `earned`/`earnedAt` fields authoritative app-side.
+export function toDbMedal(medal: Medal): any {
   return {
     id: medal.id,
     user_id: medal.userId,
@@ -640,16 +655,22 @@ function toDbMedal(medal: Medal): any {
     tier: medal.tier,
     category: medal.category,
     rarity: medal.rarity,
-    earned: medal.earned,
-    earned_at: medal.earnedAt,
+    achieved_at: medal.earnedAt, // renamed from earned_at; `earned` column dropped entirely
     progress: medal.progress || 0,
     target: medal.target || 1,
     times_earned: medal.timesEarned || 1,
   };
 }
 
-// Convert Supabase medal format to local format
-function fromDbMedal(dbMedal: any): Medal {
+// Convert Supabase medal format to local format.
+//
+// `earned` is derived from `!!achieved_at` because the DB has no
+// separate boolean column — the presence of a non-null timestamp IS
+// the "earned" signal (matches the DEFAULT NOW() semantics of the
+// `achieved_at` column). `earnedAt` maps from `dbMedal.achieved_at`.
+// `evolution_tier` is not yet a DB column (see schema probe); falls
+// back to 'base' so the app-side type stays satisfied.
+export function fromDbMedal(dbMedal: any): Medal {
   return {
     id: dbMedal.id,
     userId: dbMedal.user_id,
@@ -660,8 +681,8 @@ function fromDbMedal(dbMedal: any): Medal {
     tier: dbMedal.tier,
     category: dbMedal.category,
     rarity: dbMedal.rarity || dbMedal.tier, // Use tier as rarity fallback
-    earned: dbMedal.earned,
-    earnedAt: dbMedal.earned_at,
+    earned: !!dbMedal.achieved_at, // derived: any non-null timestamp means earned
+    earnedAt: dbMedal.achieved_at || undefined,
     progress: dbMedal.progress,
     target: dbMedal.target,
     timesEarned: dbMedal.times_earned || 1,
