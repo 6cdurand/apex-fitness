@@ -1054,7 +1054,14 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       getPBForExercise: (exerciseId) => {
         const targetUserId = get().getActiveUserId();
-        return get().personalBests.find(p => p.exerciseId === exerciseId && p.userId === targetUserId);
+        // D15: normalize the lookup key — PBs are stored with
+        // normalizeExerciseId(rawId) applied (see deriveAll.ts recomputePBs),
+        // so strict equality on a raw template id (e.g. 'Bench Press') would
+        // miss the stored PB whose exerciseId is 'bench-press'. Ad-hoc
+        // library exercises only matched by coincidence because their
+        // library id was already in canonical form.
+        const normalizedId = normalizeExerciseId(exerciseId || '');
+        return get().personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
       },
 
       getWorkoutHistory: () => {

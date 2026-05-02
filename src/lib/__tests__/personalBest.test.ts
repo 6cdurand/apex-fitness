@@ -199,6 +199,128 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
     );
   }
 
+  // --- D15 Part A: getPBForExercise normalizes the lookup key ---
+  //
+  // Regression for the program-workout PB-miss bug. PBs are stored with
+  // normalizeExerciseId(rawId) applied; the getter used to compare via
+  // strict equality on the raw input, so template-sourced ids like
+  // 'Bench Press' or 'BENCH_PRESS' never matched the stored
+  // 'bench-press'. The fix normalizes inside getPBForExercise.
+  //
+  // We exercise the live zustand store here (no mocks): localStorage is
+  // already shimmed above, and the two stores' default states make no
+  // network calls in isolation.
+  console.log('\n--- D15 Part A: getPBForExercise normalizes the lookup key ---');
+  {
+    // Imports are placed inside the IIFE to avoid loading these modules at
+    // the top of the file — the file also tests pure DB-mapping functions
+    // and we don't want to mutate store state before those earlier blocks
+    // have run.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useWorkoutStore } = require('../stores/workoutStore');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAuthStore } = require('../stores/authStore');
+
+    // Seed an active user so getActiveUserId() returns a known id.
+    useAuthStore.setState({
+      user: {
+        id: 'user-alice',
+        email: 'alice@test.com',
+        displayName: 'Alice',
+        mode: 'user',
+        isTrainer: false,
+      } as unknown as never,
+      isAuthenticated: true,
+    });
+
+    // Seed a PB for alice with the canonical stored id 'bench-press' and
+    // one for bob (different user) to test userId isolation.
+    const stored: PersonalBest[] = [
+      {
+        id: 'pb-bench',
+        userId: 'user-alice',
+        exerciseId: 'bench-press',
+        exerciseName: 'Bench Press',
+        oneRepMax: 150,
+        bestWeight: 140,
+        bestReps: 3,
+        bestVolume: 420,
+        achievedAt: '2026-04-28T10:00:00.000Z',
+        workoutId: 'w-bench',
+      },
+      {
+        id: 'pb-bob-squat',
+        userId: 'user-bob',
+        exerciseId: 'squat',
+        exerciseName: 'Squat',
+        oneRepMax: 200,
+        bestWeight: 180,
+        bestReps: 5,
+        bestVolume: 900,
+        achievedAt: '2026-04-29T10:00:00.000Z',
+        workoutId: 'w-squat',
+      },
+    ];
+    useWorkoutStore.setState({ personalBests: stored, currentClientId: null });
+
+    const getPB = useWorkoutStore.getState().getPBForExercise;
+
+    // Case 1: stored 'bench-press', lookup 'Bench Press' (raw template id).
+    const case1 = getPB('Bench Press');
+    assert(
+      "case 1: lookup 'Bench Press' (raw template id) returns the stored PB",
+      case1?.id === 'pb-bench',
+      `got ${case1?.id ?? 'undefined'}`,
+    );
+
+    // Case 2: lookup 'BENCH_PRESS' (underscores, caps).
+    const case2 = getPB('BENCH_PRESS');
+    assert(
+      "case 2: lookup 'BENCH_PRESS' (underscores, caps) returns the stored PB",
+      case2?.id === 'pb-bench',
+      `got ${case2?.id ?? 'undefined'}`,
+    );
+
+    // Case 3: no PB stored for 'overhead-press' → undefined.
+    const case3 = getPB('Overhead Press');
+    assert(
+      "case 3: lookup with no stored PB returns undefined",
+      case3 === undefined,
+      `got ${case3?.id ?? 'undefined(correct)'}`,
+    );
+
+    // Case 4: bob's squat PB must NOT be returned for alice.
+    const case4 = getPB('Squat');
+    assert(
+      "case 4: another user's PB is not returned (userId isolation)",
+      case4 === undefined,
+      `got ${case4?.id ?? 'undefined(correct)'}`,
+    );
+
+    // Case 5: alias resolution — 'Flat Barbell Bench Press' normalises
+    // via exerciseStats aliases to 'bench-press'.
+    const case5 = getPB('Flat Barbell Bench Press');
+    assert(
+      "case 5: alias 'Flat Barbell Bench Press' → 'bench-press' resolves to stored PB",
+      case5?.id === 'pb-bench',
+      `got ${case5?.id ?? 'undefined'}`,
+    );
+
+    // Case 6: REGRESSION GUARD — bench-press PB must NOT be returned when
+    // the lookup key is a different exercise ('deadlift').
+    const case6 = getPB('deadlift');
+    assert(
+      "case 6 (regression): 'deadlift' lookup does NOT return the bench-press PB",
+      case6 === undefined,
+      `got ${case6?.id ?? 'undefined(correct)'}`,
+    );
+
+    // Clean up so we don't leak state into later tests if this file is
+    // ever extended.
+    useWorkoutStore.setState({ personalBests: [], currentClientId: null });
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+  }
+
   // --- Summary ---
   console.log(`\n--- Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) process.exit(1);

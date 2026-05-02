@@ -177,6 +177,11 @@ export default function ActiveWorkoutPage() {
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
   const [saveProgramChanges, setSaveProgramChanges] = useState(true); // default ON for program workouts
+  // D15 Part B: blocking Yes/No modal that replaces the old inline checkbox.
+  // Appears between Finish and the summary for program workouts, so the
+  // user has to explicitly opt in to overwriting the program template
+  // instead of the previous "buried pre-checked checkbox" UX.
+  const [showSaveProgramPrompt, setShowSaveProgramPrompt] = useState(false);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
@@ -863,7 +868,15 @@ export default function ActiveWorkoutPage() {
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setEditEndTime(new Date(endTimeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setShowFinishDialog(false);
-      setShowSummary(true);
+      // D15 Part B: for program workouts, show a blocking Yes/No modal
+      // asking whether to overwrite the program template BEFORE revealing
+      // the summary. For non-program workouts, go straight to the summary
+      // as before. The summary is opened by the modal's Yes/No handlers.
+      if (isProgramWorkout) {
+        setShowSaveProgramPrompt(true);
+      } else {
+        setShowSummary(true);
+      }
 
       // Fetch AI feedback asynchronously — FREE FOR ALL USERS
       setAiFeedbackLoading(true);
@@ -1687,18 +1700,11 @@ export default function ActiveWorkoutPage() {
               </div>
             )}
 
-            {/* Save changes to program — only for program workouts */}
-            {completedWorkoutData?.isProgramWorkout && (
-              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={saveProgramChanges} onChange={(e) => setSaveProgramChanges(e.target.checked)} className="w-5 h-5 rounded border-sky-300 bg-white text-sky-500 focus:ring-sky-500" />
-                  <div className="text-left">
-                    <span className="text-gray-900 font-medium text-sm">Save changes to program</span>
-                    <p className="text-[11px] text-gray-500">Update this workout in your program with any exercise edits</p>
-                  </div>
-                </label>
-              </div>
-            )}
+            {/* D15 Part B: the "Save changes to program" choice moved out
+                of the summary into a blocking Yes/No modal rendered BEFORE
+                the summary for program workouts. See the
+                `<Dialog open={showSaveProgramPrompt}>` block near the end
+                of this JSX, and the handler branch in handleFinishWorkout. */}
 
             {/* Share to Feed */}
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
@@ -3849,6 +3855,52 @@ export default function ActiveWorkoutPage() {
         </DialogContent>
       </Dialog>
 
+      {/* D15 Part B: Save-changes-to-program prompt. Blocking Yes/No modal
+          that appears between Finish and the Summary, only for program
+          workouts. onInteractOutside + onEscapeKeyDown are prevented so
+          the user has to make an explicit choice rather than accidentally
+          overwriting their program template. Both handlers set
+          saveProgramChanges (which handleCloseSummary still reads) and
+          then open the summary. */}
+      <Dialog open={showSaveProgramPrompt} onOpenChange={() => {}}>
+        <DialogContent
+          className="sm:max-w-[420px]"
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Save changes to program?</DialogTitle>
+            <DialogDescription>
+              You modified this workout (added / removed / reordered exercises or sets).
+              Do you want to update your program template with these changes?
+              This will overwrite the trainer-assigned workout for this day.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSaveProgramChanges(false);
+                setShowSaveProgramPrompt(false);
+                setShowSummary(true);
+              }}
+            >
+              No, keep original
+            </Button>
+            <Button
+              onClick={() => {
+                setSaveProgramChanges(true);
+                setShowSaveProgramPrompt(false);
+                setShowSummary(true);
+              }}
+              className="bg-sky-500 hover:bg-sky-600 text-white"
+            >
+              Yes, save changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Workout Summary Dialog — compact version */}
       <Dialog open={showSummary} onOpenChange={(open) => !open && handleCloseSummary()}>
         <DialogContent className="bg-white border-gray-200 max-w-sm max-h-[85vh] overflow-y-auto">
@@ -4052,18 +4104,11 @@ export default function ActiveWorkoutPage() {
               </div>
             )}
 
-            {/* Save changes to program — only for program workouts */}
-            {completedWorkoutData?.isProgramWorkout && (
-              <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={saveProgramChanges} onChange={(e) => setSaveProgramChanges(e.target.checked)} className="w-5 h-5 rounded border-sky-300 bg-white text-sky-500 focus:ring-sky-500" />
-                  <div className="text-left">
-                    <span className="text-gray-900 font-medium text-sm">Save changes to program</span>
-                    <p className="text-[11px] text-gray-500">Update this workout in your program with any exercise edits</p>
-                  </div>
-                </label>
-              </div>
-            )}
+            {/* D15 Part B: the "Save changes to program" choice moved out
+                of the summary into a blocking Yes/No modal rendered BEFORE
+                the summary for program workouts. See the
+                `<Dialog open={showSaveProgramPrompt}>` block near the end
+                of this JSX, and the handler branch in handleFinishWorkout. */}
 
             {/* Share to Feed */}
             <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
