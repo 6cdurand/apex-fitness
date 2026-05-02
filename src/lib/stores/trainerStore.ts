@@ -2253,6 +2253,14 @@ export const useTrainerStore = create<TrainerState>()(
     {
       name: 'apex-trainer',
       storage: createJSONStorage(() => safeLocalStorage),
+      // D13: do not persist trainer data to localStorage — all 15 state arrays
+      // (clients, clientPrograms, sessionWorkouts, etc.) are authoritative in
+      // Supabase and re-fetched on login via loadAllDataFromSupabase. Persisting
+      // here duplicates data and silently fails once the browser quota is hit,
+      // which can block Supabase writes from completing reliably (observed in
+      // prod: trainer at 894KB apex-trainer blob, QuotaExceededError storm,
+      // assigned programs not propagating to client devices).
+      partialize: () => ({}),
     }
   )
 );
