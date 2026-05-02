@@ -36,6 +36,7 @@ import { syncWorkoutTemplateToSupabase, fetchWorkoutTemplatesFromSupabase } from
 import { useSocialStore } from './socialStore';
 import { useWorkoutStore } from './workoutStore';
 import { useMedalStore } from './medalStore';
+import { __buildProgramAssignedNotification } from '../programAssignedNotification';
 const getSocialStore = () => useSocialStore;
 const getWorkoutStore = () => useWorkoutStore;
 const getMedalStore = () => useMedalStore;
@@ -1256,21 +1257,58 @@ export const useTrainerStore = create<TrainerState>()(
           .forEach(p => syncClientProgramToSupabase(p));
         
         // Notify client about new program assignment.
-        // We now pass the concrete programId + both link fields so the
-        // receiver's click handler can deep-link directly without a
-        // fallback "latest active program" query.
-        const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
-        const programLink = `/program?programId=${encodeURIComponent(program.id)}`;
-        getSocialStore().getState().addNotification({
-          userId: program.clientId,
-          type: 'program_assigned',
-          title: 'New Program Assigned',
-          message: `${trainerName} assigned you a new program: ${program.templateName || 'Training Program'}`,
-          link: programLink,
-          actionUrl: programLink,
-          programId: program.id,
-          senderId: useAuthStore.getState().user?.id,
-        });
+        //
+        // D12 (Part A) — this store action is now the SINGLE writer for
+        // `program_assigned` notifications. The program builder used to
+        // also call addNotification(...) directly after addClientProgram,
+        // which produced 2x "New Program Assigned" rows per trainer save.
+        // That duplicate writer has been removed; all assignment paths
+        // (main builder, client/[id]/program/preview, client/[id]/program/
+        // builder) now flow through this single writer.
+        //
+        // Gating: skip the notification when the program was self-created
+        // (client authoring their own program — same user on both sides of
+        // the relationship). The main builder used `isTrainerMode &&
+        // targetClientId !== user.id` for this; the equivalent invariant
+        // on the program itself is `trainerId !== clientId`.
+        if (program.trainerId && program.clientId && program.trainerId !== program.clientId) {
+          const authUser = useAuthStore.getState().user;
+          const trainerName = authUser?.displayName || 'Your trainer';
+          const senderId = authUser?.id || program.trainerId;
+
+          // Derive the richer "N workouts, F×/week for W weeks" message
+          // fields from the ClientProgram itself so we don't have to widen
+          // addClientProgram's signature (which would touch 3 call sites).
+          // Fallback-safe: alternate assignment paths (preview +
+          // clients/[id]/program/builder) omit endDate / trainingDaysPerWeek,
+          // and the helper falls back to the shorter message in that case.
+          const workoutCount = Array.isArray(program.weeklyPlan)
+            ? program.weeklyPlan.length
+            : undefined;
+          const daysPerWeek = program.trainingDaysPerWeek;
+          let actualWeeks: number | undefined;
+          if (program.startDate && program.endDate) {
+            const startMs = new Date(program.startDate).getTime();
+            const endMs = new Date(program.endDate).getTime();
+            if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs) {
+              actualWeeks = Math.max(1, Math.round((endMs - startMs) / (7 * 86400000)));
+            }
+          }
+
+          const payload = __buildProgramAssignedNotification({
+            program: {
+              id: program.id,
+              clientId: program.clientId,
+              templateName: program.templateName,
+            },
+            trainerName,
+            senderId,
+            workoutCount,
+            daysPerWeek,
+            actualWeeks,
+          });
+          getSocialStore().getState().addNotification(payload);
+        }
       },
 
       updateClientProgram: (programId, updates) => {

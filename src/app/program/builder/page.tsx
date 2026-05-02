@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useSocialStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -228,7 +228,6 @@ function ProgramBuilderContent() {
   const { user } = useAuthStore();
   const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
-  const { addNotification } = useSocialStore();
   
   const isTrainerMode = user?.mode === 'trainer';
   
@@ -709,24 +708,12 @@ function ProgramBuilderContent() {
       localStorage.setItem(`apex-program-library-${user.id}`, JSON.stringify(savedPrograms));
     }
     
-    // Send notification to the client about their new program.
-    // Include programId + both URL fields so the client's click handler can
-    // deep-link directly; avoids the "null program_id" regression that made
-    // assigned-program notifications un-openable.
-    if (isTrainerMode && targetClientId && targetClientId !== user.id) {
-      const programLink = `/program?programId=${encodeURIComponent(program.id)}`;
-      addNotification({
-        userId: targetClientId,
-        type: 'program_assigned',
-        title: 'New Program Assigned',
-        message: `Your trainer assigned you "${programName || 'Custom Program'}" — ${days.length} workouts, ${effectiveFrequency}×/week for ${actualWeeks} weeks`,
-        actionUrl: programLink,
-        link: programLink,
-        programId: program.id,
-        senderId: user.id,
-      });
-    }
-    
+    // NOTE: no direct addNotification call here — D12 (Part A) consolidated
+    // the program_assigned writer into the `addClientProgram` store action
+    // above. That writer derives the rich message (days / frequency /
+    // duration) from the ClientProgram fields we already set, so we don't
+    // lose the more-informative copy.
+
     setShowSaveDialog(false);
     const totalSessions = actualWeeks * effectiveFrequency;
     toast.success(`Program created! ${totalSessions} sessions scheduled.`);

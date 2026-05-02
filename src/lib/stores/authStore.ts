@@ -19,6 +19,19 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /**
+   * True once SupabaseSync has finished the heal-on-mount canonical id
+   * reconciliation (either applied the heal, confirmed no heal was needed,
+   * or failed open). Client-scoped data fetches should gate on this flag
+   * so they don't issue a first query against a stale `user.id` right
+   * before it gets rewritten to the canonical `public.users.id`.
+   *
+   * SupabaseSync is the only writer of this flag via
+   * {@link setIdentityNormalized}. The flag is NOT persisted — every new
+   * session starts with `identityNormalized: false` and SupabaseSync flips
+   * it to `true` once on mount.
+   */
+  identityNormalized: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   loginWithSupabaseUser: (supabaseUser: { id: string; email: string; displayName: string; profilePhoto?: string }) => Promise<boolean>;
   register: (userData: Partial<User> & { password: string }) => Promise<boolean>;
@@ -47,6 +60,11 @@ interface AuthState {
    * already contains both the stale-id row and the canonical-id row.
    */
   normalizeUserIdToCanonical: (canonicalId: string) => void;
+  /**
+   * Publish the current value of {@link identityNormalized}. Intended only
+   * for SupabaseSync — consumers should read the flag, never write it.
+   */
+  setIdentityNormalized: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -55,6 +73,9 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      identityNormalized: false,
+
+      setIdentityNormalized: (value) => set({ identityNormalized: !!value }),
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -391,6 +412,11 @@ export const useAuthStore = create<AuthState>()(
       name: 'apex-auth',
       storage: createJSONStorage(() => safeLocalStorage),
       onRehydrateStorage: () => (state) => {
+        // identityNormalized is a transient per-session signal — if a
+        // previous session persisted it as true, reset it so SupabaseSync
+        // gets a chance to re-confirm the heal on this mount before any
+        // downstream data fetch gates on it.
+        if (state) state.identityNormalized = false;
         // Repair: if user is in trainer mode but isTrainer was incorrectly set to false, restore it
         if (state?.user && state.user.mode === 'trainer' && !state.user.isTrainer) {
           console.log('[Auth] Repairing isTrainer flag (was false while mode=trainer)');

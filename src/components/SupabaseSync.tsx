@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
 import {
   useMessageStore,
@@ -211,7 +211,18 @@ export function SupabaseSync() {
   // by email and rewrite the persisted user.id in place if it's stale. Must
   // complete BEFORE any downstream data-sync effects run; both existing
   // sync effects below gate on `isIdentityNormalized`.
-  const [isIdentityNormalized, setIsIdentityNormalized] = useState(false);
+  //
+  // D12 (Part B): we ALSO publish every transition to the auth store via
+  // `useAuthStore.getState().setIdentityNormalized(...)` so client-scoped
+  // data fetches on /program and /today can gate on the same signal
+  // instead of racing the heal. Local useState stays the source of truth
+  // for this component's two in-component sync effects; the store flag is
+  // a parallel publisher consumed externally.
+  const [isIdentityNormalized, rawSetIsIdentityNormalized] = useState(false);
+  const setIsIdentityNormalized = useCallback((value: boolean) => {
+    rawSetIsIdentityNormalized(value);
+    useAuthStore.getState().setIdentityNormalized(value);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || !user?.id || !user?.email) {
@@ -272,7 +283,7 @@ export function SupabaseSync() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, user?.id, user?.email]);
+  }, [isAuthenticated, user?.id, user?.email, setIsIdentityNormalized]);
 
   // Sync user data (workouts, PBs, medals, etc.) - on EVERY page load for cross-device sync
   useEffect(() => {

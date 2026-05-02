@@ -118,7 +118,7 @@ function loadProgramData(userId: string, programId: string): { dayLabel: string;
 
 export default function ProgramPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, identityNormalized } = useAuthStore();
   const { startFromTemplate } = useWorkoutStore();
   const { clientPrograms, getNextProgramWorkout, loadClientDataFromSupabase, calendarEvents, deleteCalendarEvent, updateClientProgram } = useTrainerStore();
   
@@ -130,9 +130,18 @@ export default function ProgramPage() {
   
   // Load client programs from Supabase, and re-fetch on foreground so a
   // freshly-assigned program shows up without a manual reload.
+  //
+  // D12 (Part B): gate on `identityNormalized` from the auth store. Until
+  // SupabaseSync finishes the heal-on-mount canonical-id reconciliation,
+  // `user.id` may still be the stale auth.users.id — querying client_programs
+  // with that id returns 0 rows and paints a false "no program" state. The
+  // effect re-runs when identityNormalized flips true, which is when we
+  // actually want the first fetch to land.
   useEffect(() => {
+    if (!identityNormalized) return;
     if (!user?.id || user.isTrainer) return;
     const uid = user.id;
+    console.log('[Program] fetch with uid:', uid, 'isIdentityNormalized:', identityNormalized);
     loadClientDataFromSupabase(uid);
 
     const refetch = () => {
@@ -147,7 +156,7 @@ export default function ProgramPage() {
       window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', refetch);
     };
-  }, [user?.id, user?.isTrainer]);
+  }, [user?.id, user?.isTrainer, identityNormalized]);
   
   const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
   const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
