@@ -45,6 +45,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { convertProgramDayToTemplate, parseRepsPerSet } from '@/lib/programStartUtils';
+import { __shouldSkipClientFetch } from '@/lib/modeAwareFetchGate';
 import { isEventCompleted, getOrCreateSessionWorkoutForEvent, type SessionWorkoutResult } from '@/lib/sessionWorkoutResolver';
 import { format, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isToday as isDateToday } from 'date-fns';
 import Link from 'next/link';
@@ -94,18 +95,18 @@ export default function TodayPage() {
 
   // No longer auto-redirect to active workout — bottom bar handles re-entry
 
-  // Load client programs + calendar events from Supabase (for non-trainer users),
-  // and re-load whenever the tab regains focus/visibility so a freshly-assigned
+  // Load client programs + calendar events from Supabase, and re-load
+  // whenever the tab regains focus/visibility so a freshly-assigned
   // program shows up without requiring a full page reload.
   //
-  // NOTE: D12 Part B added an `identityNormalized` gate here that was
-  // reverted — in prod the flag never flipped true for some user/session
-  // combinations, leaving /today permanently empty even when programs
-  // existed in the DB. Slight flicker while SupabaseSync's heal-on-mount
-  // is running is acceptable; a permanent empty state is not.
+  // D14: gate is keyed on `user.mode` (live Athlete/Trainer toggle) via
+  // __shouldSkipClientFetch — NOT the permanent `user.isTrainer` role
+  // flag. Dual-mode accounts (trainers who are also clients of another
+  // trainer) must see programs assigned to them after switching to
+  // Athlete mode. Shared pure helper — see src/lib/modeAwareFetchGate.ts.
   useEffect(() => {
-    if (!user?.id || user.isTrainer) return;
-    const uid = user.id;
+    if (__shouldSkipClientFetch(user)) return;
+    const uid = user!.id!;
     console.log('[Today] fetch with uid:', uid);
     loadClientDataFromSupabase(uid);
 
@@ -121,7 +122,7 @@ export default function TodayPage() {
       window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', refetch);
     };
-  }, [user?.id, user?.isTrainer]);
+  }, [user?.id, user?.mode]);
 
   // deriveAll consistency check — runs once per day on login
   useEffect(() => {

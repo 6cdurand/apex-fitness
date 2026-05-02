@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
 import { convertProgramDayToTemplate, normalizeSetCount } from '@/lib/programStartUtils';
+import { __shouldSkipClientFetch } from '@/lib/modeAwareFetchGate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -131,15 +132,15 @@ export default function ProgramPage() {
   // Load client programs from Supabase, and re-fetch on foreground so a
   // freshly-assigned program shows up without a manual reload.
   //
-  // NOTE: D12 Part B added an `identityNormalized` gate here that was
-  // reverted — in prod the flag never flipped true for some user/session
-  // combinations, leaving /program permanently empty even when a program
-  // existed in the DB. Slight flicker while SupabaseSync's heal-on-mount
-  // is running is acceptable; a permanent empty state is not. The effect
-  // already re-runs on user.id changes, which covers the heal case.
+  // D14: gate is keyed on `user.mode` (the live Athlete/Trainer toggle)
+  // via __shouldSkipClientFetch — NOT the permanent `user.isTrainer` role
+  // flag. Dual-mode accounts (trainers who are also clients of another
+  // trainer) must be able to flip to Athlete mode and see programs
+  // assigned to them. The gate sits in a pure helper so it's unit-tested
+  // and shared with /today.
   useEffect(() => {
-    if (!user?.id || user.isTrainer) return;
-    const uid = user.id;
+    if (__shouldSkipClientFetch(user)) return;
+    const uid = user!.id!;
     console.log('[Program] fetch with uid:', uid);
     loadClientDataFromSupabase(uid);
 
@@ -155,7 +156,7 @@ export default function ProgramPage() {
       window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', refetch);
     };
-  }, [user?.id, user?.isTrainer]);
+  }, [user?.id, user?.mode]);
   
   const activeProgram = clientPrograms.find(p => p.clientId === user?.id && p.status === 'active');
   const nextWorkout = user?.id ? getNextProgramWorkout(user.id) : null;
