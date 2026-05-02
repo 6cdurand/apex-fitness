@@ -52,7 +52,7 @@ import { toast } from 'sonner';
 
 export default function TodayPage() {
   const router = useRouter();
-  const { user, isAuthenticated, switchMode, identityNormalized } = useAuthStore();
+  const { user, isAuthenticated, switchMode } = useAuthStore();
   const { activeWorkout, workoutHistory, startWorkout, startFromTemplate, templates, personalBests, volumeRollups } = useWorkoutStore();
   const { medals } = useMedalStore();
   const { calendarEvents, getScheduledSessionsForUser, getEventsForDate, clients, sessions, payments, sessionWorkouts, clientPrograms, deleteCalendarEvent, getNextProgramWorkout, loadClientDataFromSupabase } = useTrainerStore();
@@ -98,15 +98,15 @@ export default function TodayPage() {
   // and re-load whenever the tab regains focus/visibility so a freshly-assigned
   // program shows up without requiring a full page reload.
   //
-  // D12 (Part B): gate on `identityNormalized` — same race as /program. Until
-  // SupabaseSync finishes the canonical-id heal, `user.id` may still be the
-  // stale auth.users.id; querying with it returns 0 rows and flashes an
-  // incorrect "no programs" state.
+  // NOTE: D12 Part B added an `identityNormalized` gate here that was
+  // reverted — in prod the flag never flipped true for some user/session
+  // combinations, leaving /today permanently empty even when programs
+  // existed in the DB. Slight flicker while SupabaseSync's heal-on-mount
+  // is running is acceptable; a permanent empty state is not.
   useEffect(() => {
-    if (!identityNormalized) return;
     if (!user?.id || user.isTrainer) return;
     const uid = user.id;
-    console.log('[Today] fetch with uid:', uid, 'isIdentityNormalized:', identityNormalized);
+    console.log('[Today] fetch with uid:', uid);
     loadClientDataFromSupabase(uid);
 
     const refetch = () => {
@@ -121,7 +121,7 @@ export default function TodayPage() {
       window.removeEventListener('focus', refetch);
       document.removeEventListener('visibilitychange', refetch);
     };
-  }, [user?.id, user?.isTrainer, identityNormalized]);
+  }, [user?.id, user?.isTrainer]);
 
   // deriveAll consistency check — runs once per day on login
   useEffect(() => {
