@@ -14,6 +14,7 @@ import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedN
 import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
+import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
@@ -832,9 +833,34 @@ export default function ActiveWorkoutPage() {
 
       // Show summary popup instead of redirecting
       const endTimeStr = completed.endTime || new Date().toISOString();
-      // Detect if this workout came from a program
+      // Detect if this workout came from a program.
+      // D16 Part A: prefix detection ('program-' / 'sched-') used to be the
+      // only path. Some workouts lose that prefix upstream and the D15
+      // "Save changes to program?" modal silently never showed for them.
+      // We now delegate to the pure helper which adds a structural fallback
+      // (active-program day-label match or templateId substring-include).
       const tplId = completed.templateId || '';
-      const isProgramWorkout = tplId.startsWith('program-') || tplId.startsWith('sched-');
+      const isProgramWorkoutByPrefix =
+        tplId.startsWith('program-') || tplId.startsWith('sched-');
+      const isProgramWorkout = detectIsProgramWorkout({
+        templateId: tplId,
+        workoutName: completed.name,
+        workoutUserId: completed.userId,
+        clientPrograms: useTrainerStore.getState().clientPrograms,
+      });
+      console.log('[D16] isProgramWorkout detection', {
+        tplId,
+        isProgramWorkoutByPrefix,
+        isProgramWorkout,
+        completedId: completed.id,
+        completedName: completed.name,
+      });
+      if (!isProgramWorkoutByPrefix && isProgramWorkout) {
+        console.log(
+          '[D16] isProgramWorkout matched via fallback',
+          { workoutName: completed.name, templateId: tplId },
+        );
+      }
 
       // PT Review Flow: when the CLIENT (not the trainer) finishes a PT session on
       // their own device, the trainer must review + release the summary first.
@@ -1252,7 +1278,11 @@ export default function ActiveWorkoutPage() {
             type: 'workout_assigned' as any,
             title: `${clientName} completed workout${wasEdited ? ' & edited program' : ''}`,
             message: `${clientName} completed "${completedWorkoutData.name}" — ${completedWorkoutData.sets} sets, ${Math.round(completedWorkoutData.totalVolume)}kg volume${editSuffix}`,
-            link: `/clients/${currentUser.id}`,
+            // D16 Part B: link directly to the workout summary so the trainer
+            // lands on the workout the client just completed (and the diff
+            // card rendered for program edits) instead of the full
+            // /clients/<id> overview page.
+            link: `/workout/${completedWorkoutData.id}`,
           });
         }
       } catch {}

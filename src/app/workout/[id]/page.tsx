@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { useAuthStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,10 +73,26 @@ export default function WorkoutDetailPage() {
 
     const found = workoutHistory.find(w => w.id === params.id && !w.deletedAt);
     if (found) {
-      // Privacy: only allow viewing if user owns the workout or is the trainer who ran it
+      // Privacy: allow viewing if the user owns the workout, conducted it
+      // as a PT trainer, OR is the program trainer for the workout owner.
+      // D16 Part C: previously only the first two cases were allowed,
+      // which blocked the trainer from clicking the "client completed
+      // workout" notification (D16 Part B link change) and the "Recent
+      // Workouts" entries in /clients/[id]. We widen the allow-list to
+      // include both program-linked trainers (active client_programs row)
+      // and roster-linked trainers (trainer_clients row).
       if (user && found.userId !== user.id && found.assignedBy !== user.id) {
-        router.replace('/workout/history');
-        return;
+        const trainerStore = useTrainerStore.getState();
+        const isProgramTrainer = trainerStore.clientPrograms.some(
+          (p: any) => p.clientId === found.userId && p.trainerId === user.id
+        );
+        const isLinkedTrainer = trainerStore.clients.some(
+          (c: any) => c.clientId === found.userId && c.trainerId === user.id
+        );
+        if (!isProgramTrainer && !isLinkedTrainer) {
+          router.replace('/workout/history');
+          return;
+        }
       }
       setWorkout(found);
       setNotes(found.privateNotes || found.notes || '');
@@ -232,6 +249,69 @@ export default function WorkoutDetailPage() {
   const totalReps = workout.exercises.reduce((sum, ex) => 
     sum + ex.sets.filter(s => s.completed).reduce((s, set) => s + (set.reps || 0), 0), 0
   );
+
+  // D16 Part D: compute the program-template diff for the trainer view.
+  // Renders only when:
+  //   - the viewer is NOT the workout owner (so they're a trainer/observer),
+  //   - the workout is structurally a program workout (detect helper),
+  //   - we can match a day in the active program by dayLabel,
+  //   - there's at least one added or removed exercise.
+  // Skipped for the session trainer with an existing coachNote — the
+  // coach-note flow already covers feedback in that case.
+  const trainerStore = useTrainerStore.getState();
+  const viewerIsOwner = !!user && workout.userId === user.id;
+  const programDiff = (() => {
+    if (viewerIsOwner) return null;
+    if (isSessionTrainer && workout.coachNote) return null;
+    const isProgWorkout = detectIsProgramWorkout({
+      templateId: workout.templateId,
+      workoutName: workout.name,
+      workoutUserId: workout.userId,
+      clientPrograms: trainerStore.clientPrograms,
+    });
+    if (!isProgWorkout) return null;
+
+    const activeProgram = trainerStore.clientPrograms.find(
+      (p: any) => p.clientId === workout.userId && p.status === 'active',
+    );
+    if (!activeProgram?.weeklyPlan?.length) return null;
+
+    const day = activeProgram.weeklyPlan.find(
+      (d: any) => d.dayLabel === workout.name,
+    );
+    if (!day) return null;
+
+    const originalIds = new Set<string>(
+      (day.blocks || [])
+        .flatMap((b: any) => b.exercises || [])
+        .map((e: any) => e.exerciseId)
+        .filter(Boolean),
+    );
+    const currentIds = new Set<string>(
+      workout.exercises.map((e) => e.exerciseId).filter(Boolean),
+    );
+    const idToName = new Map<string, string>();
+    for (const ex of workout.exercises) {
+      if (ex.exerciseId) idToName.set(ex.exerciseId, ex.exercise?.name || ex.exerciseId);
+    }
+    for (const block of (day.blocks || [])) {
+      for (const ex of (block.exercises || [])) {
+        if (ex.exerciseId && !idToName.has(ex.exerciseId)) {
+          idToName.set(ex.exerciseId, ex.exerciseName || ex.exerciseId);
+        }
+      }
+    }
+
+    const addedNames = Array.from(currentIds)
+      .filter((id) => !originalIds.has(id))
+      .map((id) => idToName.get(id) || id);
+    const removedNames = Array.from(originalIds)
+      .filter((id) => !currentIds.has(id))
+      .map((id) => idToName.get(id) || id);
+
+    if (addedNames.length === 0 && removedNames.length === 0) return null;
+    return { addedNames, removedNames };
+  })();
 
   // Find PBs achieved during this workout
   const workoutPBs = personalBests.filter(pb => pb.workoutId === workout.id);
@@ -593,6 +673,34 @@ export default function WorkoutDetailPage() {
                 ) : (
                   <p className={sharedNotesText ? "text-gray-700 text-sm whitespace-pre-wrap" : "text-gray-500 text-sm italic"}>
                     {sharedNotesText || 'No shared notes'}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* D16 Part D: Compared to program template — trainer-only diff
+              card. Renders only when the viewer is the program trainer
+              (privacy-check above already gates non-trainer viewers from
+              reaching this page) AND the client added/removed exercises
+              relative to the program template. See programDiff
+              computation block earlier in this file for the conditions. */}
+          {programDiff && (
+            <Card className="bg-gray-50 border border-gray-200 border-l-4 border-l-sky-500 shadow-sm">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-sky-700 mb-2">
+                  Compared to program template
+                </p>
+                {programDiff.addedNames.length > 0 && (
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium text-emerald-700">Added:</span>{' '}
+                    {programDiff.addedNames.join(', ')}
+                  </p>
+                )}
+                {programDiff.removedNames.length > 0 && (
+                  <p className="text-sm text-gray-800 mt-1">
+                    <span className="font-medium text-rose-700">Removed:</span>{' '}
+                    {programDiff.removedNames.join(', ')}
                   </p>
                 )}
               </CardContent>
