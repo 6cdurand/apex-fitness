@@ -276,6 +276,13 @@ export interface Workout {
   reviewStatus?: 'pending' | 'released';
   coachNote?: string; // Trainer's personal note included when releasing the summary
   releasedAt?: string; // ISO timestamp when trainer released the summary to the client
+  // D17: explicit tags written at start time when a workout is launched from
+  // a program day (see startFromTemplate's `source` arg). These make
+  // program-workout detection definitive at finish time instead of inferring
+  // from templateId prefixes. Legacy workouts without these tags fall back
+  // to the existing prefix + structural detection in detectIsProgramWorkout.
+  sourceProgramId?: string;
+  sourceDayIndex?: number;
 }
 
 // Personal Best / Records

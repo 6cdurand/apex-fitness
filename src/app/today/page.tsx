@@ -725,7 +725,12 @@ export default function TodayPage() {
               userId: user.id,
             });
             if (template.exercises.length > 0) {
-              startFromTemplate(template as any);
+              // D17: tag with source program + day so the finish-time
+              // "Save changes to program?" flow fires reliably.
+              startFromTemplate(template as any, undefined, {
+                programId: program.id,
+                dayIndex: idx,
+              });
               router.push('/workout/active');
             }
           };

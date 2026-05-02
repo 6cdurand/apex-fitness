@@ -183,6 +183,60 @@ function assertEqual<T>(label: string, actual: T, expected: T): void {
     false,
   );
 
+  console.log('\n--- D17 sourceProgramId fast path ---');
+  const u1ActiveProgram = {
+    id: 'prog-abc',
+    clientId: 'u1',
+    status: 'active',
+    weeklyPlan: [{ dayLabel: 'Push Day' }],
+  };
+  assertEqual(
+    'sourceProgramId set + matching program for same user → true',
+    detectIsProgramWorkout({
+      sourceProgramId: 'prog-abc',
+      sourceDayIndex: 0,
+      templateId: '',
+      workoutName: 'Push Day',
+      workoutUserId: 'u1',
+      clientPrograms: [u1ActiveProgram],
+    }),
+    true,
+  );
+  assertEqual(
+    'sourceProgramId set + program deleted from clientPrograms → false',
+    detectIsProgramWorkout({
+      sourceProgramId: 'prog-deleted',
+      sourceDayIndex: 0,
+      templateId: 'program-prog-deleted-0',
+      workoutName: 'Push Day',
+      workoutUserId: 'u1',
+      clientPrograms: [u1ActiveProgram],
+    }),
+    false,
+  );
+  assertEqual(
+    "sourceProgramId set + program belongs to another user → false (user mismatch)",
+    detectIsProgramWorkout({
+      sourceProgramId: 'prog-abc',
+      sourceDayIndex: 0,
+      templateId: '',
+      workoutName: 'Push Day',
+      workoutUserId: 'u2',
+      clientPrograms: [u1ActiveProgram],
+    }),
+    false,
+  );
+  assertEqual(
+    "sourceProgramId undefined falls through to legacy detection ('program-' prefix still resolves true)",
+    detectIsProgramWorkout({
+      templateId: 'program-anything',
+      workoutName: 'Push Day',
+      workoutUserId: 'u1',
+      clientPrograms: [u1ActiveProgram],
+    }),
+    true,
+  );
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

@@ -34,7 +34,11 @@ interface WorkoutState {
   // Workout actions
   startWorkout: (name: string, templateId?: string, clientId?: string, initialBlockType?: 'strength' | 'circuit' | 'cardio') => void;
   startWorkoutForClient: (name: string, clientId: string, templateId?: string) => void;
-  startFromTemplate: (template: WorkoutTemplate, clientId?: string) => void;
+  startFromTemplate: (
+    template: WorkoutTemplate,
+    clientId?: string,
+    source?: { programId?: string; dayIndex?: number },
+  ) => void;
   clearCurrentClient: () => void;
   getActiveUserId: () => string; // Get the ID of who we're currently training
   endWorkout: (privateNotes?: string, sharedNotes?: string) => Promise<Workout | null>;
@@ -166,7 +170,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ currentClientId: null });
       },
 
-      startFromTemplate: (template, clientId) => {
+      startFromTemplate: (template, clientId, source) => {
         // Use clientId if provided, otherwise use logged-in user's ID
         const loggedInUserId = useAuthStore.getState().user?.id || '';
         const targetUserId = clientId || loggedInUserId;
@@ -256,6 +260,13 @@ export const useWorkoutStore = create<WorkoutState>()(
           status: 'active',
           assignedBy: clientId ? loggedInUserId : undefined,
           blocks,
+          // D17: explicit program-source tags (only set when the caller
+          // identifies this as a program-day start). endWorkout spreads
+          // activeWorkout into the completed record so these survive into
+          // workoutHistory untouched and drive detectIsProgramWorkout's
+          // fast path at finish time.
+          sourceProgramId: source?.programId,
+          sourceDayIndex: source?.dayIndex,
         };
         set({ 
           activeWorkout: workout,

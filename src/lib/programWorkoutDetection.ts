@@ -27,6 +27,11 @@
  */
 
 export interface ProgramDetectionInput {
+  // D17: explicit start-time tags. When `sourceProgramId` is present the
+  // helper short-circuits on a definitive store lookup, skipping the
+  // fragile legacy templateId-prefix inference entirely.
+  sourceProgramId?: string;
+  sourceDayIndex?: number;
   templateId?: string;
   workoutName?: string;
   workoutUserId: string;
@@ -39,6 +44,17 @@ export interface ProgramDetectionInput {
 }
 
 export function detectIsProgramWorkout(args: ProgramDetectionInput): boolean {
+  // D17 fast path — explicit source tag written at start time.
+  // Definitive: the workout was launched from a known program day for
+  // this user. Returns false if the program has since been deleted or
+  // the tag points at another user's program (defensive — should never
+  // happen but keeps the contract tight).
+  if (args.sourceProgramId) {
+    return args.clientPrograms.some(
+      (p) => p.id === args.sourceProgramId && p.clientId === args.workoutUserId,
+    );
+  }
+
   const tplId = args.templateId || '';
 
   // Fast path — explicit prefix.

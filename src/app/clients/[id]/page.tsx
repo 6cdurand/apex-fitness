@@ -2372,11 +2372,18 @@ export default function ClientDetailPage() {
                             });
                             if (template.exercises.length > 0) {
                               const { startFromTemplate } = useWorkoutStore.getState();
+                              // D17: tag with source program + day. The templateId
+                              // gets rewritten to session-<ts> below so
+                              // prefix-based detection would silently miss
+                              // this; explicit tags are the reliable signal.
                               startFromTemplate({
                                 ...(template as any),
                                 id: `session-${Date.now()}`,
                                 name: `${day.dayLabel} - ${clientUser.displayName}`,
-                              } as any, clientId);
+                              } as any, clientId, {
+                                programId: activeProgram.id,
+                                dayIndex: i,
+                              });
                               router.push('/workout/active');
                             }
                           }}

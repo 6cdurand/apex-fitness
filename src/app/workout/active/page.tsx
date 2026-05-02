@@ -15,6 +15,7 @@ import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
+import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
@@ -165,6 +166,12 @@ export default function ActiveWorkoutPage() {
     isProgramWorkout?: boolean;
     programDayLabel?: string;
     templateId?: string;
+    // D17: explicit program-source tags carried through from the completed
+    // Workout so downstream code can key off them instead of re-parsing
+    // templateId. Both optional because legacy in-flight workouts don't
+    // have them and the fallback detection path handles that case.
+    sourceProgramId?: string;
+    sourceDayIndex?: number;
     awaitingReview?: boolean;
   } | null>(null);
   const [editingTimes, setEditingTimes] = useState(false);
@@ -177,12 +184,22 @@ export default function ActiveWorkoutPage() {
   const [sharedNotes, setSharedNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
-  const [saveProgramChanges, setSaveProgramChanges] = useState(true); // default ON for program workouts
+  // D17: explicitly null until the user answers the "Save changes to program?"
+  // modal. Save only fires on === true. If the modal never shows (detection
+  // edge case, stale bundle, render race), the program template stays
+  // untouched — fail-safe. D15/D16's default-true was fail-unsafe and
+  // caused silent overwrites in prod.
+  const [saveProgramChanges, setSaveProgramChanges] = useState<boolean | null>(null);
   // D15 Part B: blocking Yes/No modal that replaces the old inline checkbox.
   // Appears between Finish and the summary for program workouts, so the
   // user has to explicitly opt in to overwriting the program template
   // instead of the previous "buried pre-checked checkbox" UX.
   const [showSaveProgramPrompt, setShowSaveProgramPrompt] = useState(false);
+  // D17 Part 4: structural diff (added/removed exercise names) vs the
+  // program template. Populated right before the modal opens so the body
+  // can show exactly what the user is confirming. null when there is no
+  // prompt queued (non-program workout, or identical-to-template run).
+  const [programDiffForPrompt, setProgramDiffForPrompt] = useState<ProgramDayDiff | null>(null);
   const [aiFeedback, setAiFeedback] = useState<string | null>(null);
   const [aiFeedbackLoading, setAiFeedbackLoading] = useState(false);
   const [supersetPairingId, setSupersetPairingId] = useState<string | null>(null);
@@ -842,25 +859,67 @@ export default function ActiveWorkoutPage() {
       const tplId = completed.templateId || '';
       const isProgramWorkoutByPrefix =
         tplId.startsWith('program-') || tplId.startsWith('sched-');
+      // D17 Part 3: pass the explicit start-time tags first. When present
+      // they short-circuit the legacy prefix + structural fallback and
+      // guarantee correct detection regardless of upstream templateId
+      // rewrites. Tags are undefined for legacy in-flight workouts; those
+      // fall through to the D16 logic unchanged.
+      const trainerStoreSnap = useTrainerStore.getState();
       const isProgramWorkout = detectIsProgramWorkout({
+        sourceProgramId: completed.sourceProgramId,
+        sourceDayIndex: completed.sourceDayIndex,
         templateId: tplId,
         workoutName: completed.name,
         workoutUserId: completed.userId,
-        clientPrograms: useTrainerStore.getState().clientPrograms,
+        clientPrograms: trainerStoreSnap.clientPrograms,
       });
-      console.log('[D16] isProgramWorkout detection', {
+      console.log('[D17] isProgramWorkout detection', {
+        sourceProgramId: completed.sourceProgramId,
+        sourceDayIndex: completed.sourceDayIndex,
         tplId,
         isProgramWorkoutByPrefix,
         isProgramWorkout,
         completedId: completed.id,
         completedName: completed.name,
       });
-      if (!isProgramWorkoutByPrefix && isProgramWorkout) {
+      if (!isProgramWorkoutByPrefix && isProgramWorkout && !completed.sourceProgramId) {
         console.log(
-          '[D16] isProgramWorkout matched via fallback',
+          '[D16] isProgramWorkout matched via structural fallback',
           { workoutName: completed.name, templateId: tplId },
         );
       }
+
+      // D17 Part 4: compute the program-template diff NOW so we can
+      // decide whether the modal is worth showing. No structural change
+      // ⇒ no prompt ⇒ straight to summary with saveProgramChanges staying
+      // null (fail-safe). Keyed on exerciseId; set/rep edits are not a
+      // structural change and do not trigger the prompt.
+      let programDiff: ProgramDayDiff = {
+        added: [],
+        removed: [],
+        addedCount: 0,
+        removedCount: 0,
+        hasChanges: false,
+      };
+      if (isProgramWorkout) {
+        const activeProgram = trainerStoreSnap.clientPrograms.find((p: any) => (
+          completed.sourceProgramId
+            ? p.id === completed.sourceProgramId
+            : (p.clientId === completed.userId && p.status === 'active')
+        ));
+        if (activeProgram?.weeklyPlan?.length) {
+          const byIndex = completed.sourceDayIndex;
+          const dayIdx = (
+            typeof byIndex === 'number' && byIndex >= 0 && byIndex < activeProgram.weeklyPlan.length
+          )
+            ? byIndex
+            : activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completed.name);
+          if (dayIdx >= 0) {
+            programDiff = computeProgramDayDiff(completed, activeProgram.weeklyPlan[dayIdx]);
+          }
+        }
+      }
+      console.log('[D17] program diff', programDiff);
 
       // PT Review Flow: when the CLIENT (not the trainer) finishes a PT session on
       // their own device, the trainer must review + release the summary first.
@@ -888,19 +947,25 @@ export default function ActiveWorkoutPage() {
         isProgramWorkout,
         programDayLabel: workoutName,
         templateId: tplId,
+        // D17: carry through the explicit source tags so the save block
+        // can key off them exactly instead of re-parsing templateId.
+        sourceProgramId: completed.sourceProgramId,
+        sourceDayIndex: completed.sourceDayIndex,
         awaitingReview: isClientFinishingPT,
       });
       // Pre-fill editable time fields
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setEditEndTime(new Date(endTimeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setShowFinishDialog(false);
-      // D15 Part B: for program workouts, show a blocking Yes/No modal
-      // asking whether to overwrite the program template BEFORE revealing
-      // the summary. For non-program workouts, go straight to the summary
-      // as before. The summary is opened by the modal's Yes/No handlers.
-      if (isProgramWorkout) {
+      // D17 Part 4: only show the Save-changes-to-program modal when there
+      // are REAL structural changes (added/removed exercises). Identical
+      // runs go straight to the summary with saveProgramChanges staying
+      // null — no silent overwrite risk, no phantom prompt.
+      if (isProgramWorkout && programDiff.hasChanges) {
+        setProgramDiffForPrompt(programDiff);
         setShowSaveProgramPrompt(true);
       } else {
+        setProgramDiffForPrompt(null);
         setShowSummary(true);
       }
 
@@ -1104,7 +1169,9 @@ export default function ActiveWorkoutPage() {
     // Save edited workout back to program (if from a program and user opted in)
     // Tracks diff so we can include "added/removed" counts in trainer notification
     let programEditDiff: { added: number; removed: number } | null = null;
-    if (completedWorkoutData?.isProgramWorkout && saveProgramChanges) {
+    // D17: explicit === true check so null (modal never answered) does not
+    // save. Paired with the null default above to keep the save fail-safe.
+    if (completedWorkoutData?.isProgramWorkout && saveProgramChanges === true) {
       const userId = currentUser?.id;
       if (userId) {
         try {
@@ -1263,7 +1330,10 @@ export default function ActiveWorkoutPage() {
         const trainerId = activeProgram?.trainerId || currentUser.trainerId;
         if (trainerId && trainerId !== currentUser.id) {
           const clientName = currentUser.displayName || currentUser.username || 'Client';
-          const wasEdited = completedWorkoutData.isProgramWorkout && saveProgramChanges;
+          // D17: wasEdited must also use strict === true — a null saveProgramChanges
+          // means the user never got the modal, so we must not claim the program
+          // was edited in the trainer notification.
+          const wasEdited = completedWorkoutData.isProgramWorkout && saveProgramChanges === true;
           let editSuffix = '';
           if (wasEdited && programEditDiff && (programEditDiff.added > 0 || programEditDiff.removed > 0)) {
             const parts: string[] = [];
@@ -1294,7 +1364,8 @@ export default function ActiveWorkoutPage() {
     setSharedNotes('');
     setSessionPaid(false);
     setShareToFeed(false);
-    setSaveProgramChanges(true);
+    // D17: reset to null so the next workout's gate starts fail-safe.
+    setSaveProgramChanges(null);
     setAiFeedback(null);
     setAiFeedbackLoading(false);
     // Clear derive result so medals don't persist to next workout
@@ -3892,18 +3963,43 @@ export default function ActiveWorkoutPage() {
           overwriting their program template. Both handlers set
           saveProgramChanges (which handleCloseSummary still reads) and
           then open the summary. */}
+      {/* D17 Part 4: modal body now surfaces the exact structural diff
+          (added / removed exercise names) instead of a generic "you
+          modified this workout" string, so users know what they're
+          confirming. Only rendered when programDiff.hasChanges is true
+          (see handleFinishWorkout gate). */}
       <Dialog open={showSaveProgramPrompt} onOpenChange={() => {}}>
         <DialogContent
-          className="sm:max-w-[420px]"
+          className="sm:max-w-[460px]"
           onInteractOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Save changes to program?</DialogTitle>
-            <DialogDescription>
-              You modified this workout (added / removed / reordered exercises or sets).
-              Do you want to update your program template with these changes?
-              This will overwrite the trainer-assigned workout for this day.
+            <DialogTitle>Save changes to your program?</DialogTitle>
+            <DialogDescription className="space-y-2 pt-2">
+              <span className="block">
+                You modified this workout. Update the program template with these changes for next time?
+              </span>
+              {programDiffForPrompt && (
+                <span className="block bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2 space-y-1 text-xs">
+                  {programDiffForPrompt.addedCount > 0 && (
+                    <span className="block">
+                      <span className="font-semibold text-emerald-600">
+                        + Added ({programDiffForPrompt.addedCount}):
+                      </span>{' '}
+                      <span className="text-gray-700">{programDiffForPrompt.added.join(', ')}</span>
+                    </span>
+                  )}
+                  {programDiffForPrompt.removedCount > 0 && (
+                    <span className="block">
+                      <span className="font-semibold text-rose-600">
+                        − Removed ({programDiffForPrompt.removedCount}):
+                      </span>{' '}
+                      <span className="text-gray-700">{programDiffForPrompt.removed.join(', ')}</span>
+                    </span>
+                  )}
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 justify-end pt-4">
@@ -3915,7 +4011,7 @@ export default function ActiveWorkoutPage() {
                 setShowSummary(true);
               }}
             >
-              No, keep original
+              No, keep template as-is
             </Button>
             <Button
               onClick={() => {

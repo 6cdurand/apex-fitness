@@ -172,7 +172,12 @@ export default function ProgramPage() {
       userId: user.id,
     });
     if (template.exercises.length > 0) {
-      startFromTemplate(template as any);
+      // D17: tag this workout with its source program + day so finish-time
+      // detection is definitive (no string-prefix guessing).
+      startFromTemplate(template as any, undefined, {
+        programId: activeProgram.id,
+        dayIndex,
+      });
       router.push('/workout/active');
     }
   };
