@@ -1,9 +1,33 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
-import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
-import { registerUserToSupabase, loginFromSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
+import {
+  registerUserToSupabase,
+  registerUserWithAuthLink,
+  loginFromSupabase,
+  updateUserInSupabase,
+  resolveCanonicalUserByEmail,
+} from '../supabaseSync';
+import { supabase } from '../supabase';
+
+// ---- Layer 2 test seam ----------------------------------------------------
+// Allows the register.test.ts suite to substitute `registerUserWithAuthLink`
+// without a full module-mock harness. Production always resolves to the
+// real import below; only the test suite writes a non-null override via
+// `__setRegisterUserWithAuthLinkForTests`. Mirrors the existing
+// `__setMessagingSupabaseClientForTests` / `__setWorkoutSupabaseClientForTests`
+// pattern elsewhere in this repo.
+type RegisterUserWithAuthLinkFn = typeof registerUserWithAuthLink;
+let __registerUserWithAuthLinkOverride: RegisterUserWithAuthLinkFn | null = null;
+export function __setRegisterUserWithAuthLinkForTests(
+  fn: RegisterUserWithAuthLinkFn | null,
+): void {
+  __registerUserWithAuthLinkOverride = fn;
+}
+function getRegisterUserWithAuthLink(): RegisterUserWithAuthLinkFn {
+  return __registerUserWithAuthLinkOverride ?? registerUserWithAuthLink;
+}
 
 // Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
 export function hashPassword(password: string): string {
@@ -222,15 +246,15 @@ export const useAuthStore = create<AuthState>()(
       register: async (userData) => {
         set({ isLoading: true });
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        
-        // Check if a placeholder account with this email exists — reuse its ID instead of creating a duplicate
-        const existingPlaceholder = storedUsers.find((u: any) => 
+
+        // Check if a placeholder account with this email exists — reuse its ID instead of creating a duplicate.
+        const existingPlaceholder = storedUsers.find((u: any) =>
           u.email?.toLowerCase() === userData.email?.toLowerCase() &&
           (u.accountStatus === 'placeholder' || u.email?.endsWith('@placeholder.local') || u.email?.endsWith('@client.apex'))
         );
-        
-        // Check if a real (non-placeholder) account with this email exists — block duplicate
-        const existingActive = storedUsers.find((u: any) => 
+
+        // Check if a real (non-placeholder) account with this email exists — block duplicate.
+        const existingActive = storedUsers.find((u: any) =>
           u.email?.toLowerCase() === userData.email?.toLowerCase() &&
           u.accountStatus !== 'placeholder' && !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex')
         );
@@ -239,8 +263,48 @@ export const useAuthStore = create<AuthState>()(
           return false;
         }
 
+        // LAYER 2: always create the Supabase Auth account FIRST.
+        //
+        // Historical behaviour (the bug this fix closes): register() minted
+        // a uuidv4() for `public.users.id` with no corresponding `auth.users`
+        // row. Users who later signed in via OAuth got a separate auth row
+        // at an unrelated UUID and relied on the `on_auth_user_created`
+        // trigger to link them via `auth_user_id` — a workaround that
+        // leaves `public.id` and `auth.id` diverged forever. That's the
+        // divergence factory this refactor closes.
+        //
+        // New behaviour: supabase.auth.signUp creates the auth.users row
+        // up-front; its id is the canonical id for all new accounts. For
+        // placeholder upgrades we keep the placeholder's public.users.id
+        // (so trainer-side assignments remain intact) but still pass the
+        // fresh authUserId through to registerUserWithAuthLink so
+        // `public.users.auth_user_id` resolves cleanly via effective_uid().
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: userData.email!,
+          password: userData.password,
+          options: {
+            data: {
+              display_name: userData.displayName || userData.username || '',
+            },
+          },
+        });
+
+        if (authError || !authData?.user) {
+          console.error('[Auth:Register] supabase.auth.signUp failed:', authError?.message || 'no user returned');
+          set({ isLoading: false });
+          return false;
+        }
+
+        const authUserId = authData.user.id;
+
+        // Canonical public.users.id:
+        //  - placeholder upgrade → reuse placeholder id (trainer-assignment continuity).
+        //  - genuine new signup → use the auth id (no divergence from day one).
+        //  - explicit userData.id (rare, e.g. programmatic tests) → honoured.
+        const canonicalId = userData.id || existingPlaceholder?.id || authUserId;
+
         const newUser: User = {
-          id: userData.id || existingPlaceholder?.id || uuidv4(),
+          id: canonicalId,
           email: userData.email || '',
           username: userData.username || '',
           displayName: userData.displayName || userData.username || '',
@@ -260,21 +324,29 @@ export const useAuthStore = create<AuthState>()(
           trainerId: existingPlaceholder?.trainerId || undefined,
         };
 
-        // If upgrading a placeholder, replace it; otherwise add new
+        // If upgrading a placeholder, replace it; otherwise add new.
         const filteredUsers = existingPlaceholder
           ? storedUsers.filter((u: any) => u.id !== existingPlaceholder.id)
           : storedUsers;
         filteredUsers.push({ ...newUser, password: hashPassword(userData.password) });
         localStorage.setItem('apex-users', JSON.stringify(filteredUsers));
-        
-        // Sync to Supabase for cross-device login
+
+        // Sync to Supabase, linking auth_user_id explicitly. Non-fatal on
+        // throw: the auth.users row already exists, on_auth_user_created
+        // may have repaired the link server-side, and the user can still
+        // use the app (a later sync pass can reconcile).
         try {
-          const synced = await registerUserToSupabase(newUser, userData.password);
-          console.log('Supabase sync result:', synced);
+          const linked = await getRegisterUserWithAuthLink()(
+            newUser,
+            userData.password,
+            authUserId,
+            'active',
+          );
+          console.log('[Auth:Register] registerUserWithAuthLink result:', linked);
         } catch (e) {
-          console.error('Supabase sync error:', e);
+          console.error('[Auth:Register] registerUserWithAuthLink threw (non-fatal):', e);
         }
-        
+
         set({ user: newUser, isAuthenticated: true, isLoading: false });
         return true;
       },

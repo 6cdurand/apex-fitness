@@ -137,6 +137,112 @@ export async function registerUserToSupabase(user: User, password: string, accou
   }
 }
 
+/**
+ * Register user to Supabase AND link to a Supabase Auth row.
+ *
+ * Same shape as {@link registerUserToSupabase} but writes `auth_user_id`
+ * alongside `id` in both the INSERT and UPDATE payloads. This is the
+ * Layer-2 helper used by the refactored `authStore.register` path after
+ * `supabase.auth.signUp` has minted an `auth.users` row.
+ *
+ * Why a parallel helper (instead of extending the existing one):
+ *  - `registerUserToSupabase` is still called from `loginWithSupabaseUser`'s
+ *    OAuth-create branch, where there's no fresh authUserId to link (the
+ *    auth row was created by Google/Apple's redirect flow, not by us).
+ *  - Adding an optional `authUserId` param to the existing helper would
+ *    widen its surface and regress on a call site that explicitly should
+ *    NOT overwrite auth_user_id (the DB trigger `on_auth_user_created`
+ *    already populated it for OAuth users).
+ *
+ * Placeholder-upgrade safety: when `user.id` matches an existing
+ * `public.users` row (trainer-created placeholder), the UPDATE branch
+ * fires and includes `auth_user_id: authUserId` so `effective_uid()`
+ * resolves the canonical id on the server. `user.id` is NEVER touched
+ * by this update — it stays at the placeholder id, preserving all
+ * trainer-assignment FKs.
+ *
+ * Genuine-new signup: the INSERT branch writes `id = auth_user_id = authUserId`
+ * from day one → zero divergence for all accounts registered after
+ * Layer 2 ships.
+ *
+ * Returns false (non-throw) on Supabase error so callers can continue
+ * (auth.users row exists, user can still use the app; a later sync pass
+ * or the on_auth_user_created trigger can repair public.users).
+ */
+export async function registerUserWithAuthLink(
+  user: User,
+  password: string,
+  authUserId: string,
+  accountStatus: 'active' | 'placeholder' = 'active',
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    console.log('[Supabase RegisterWithAuth] ❌ Supabase not configured, using localStorage only');
+    return false;
+  }
+
+  const userData = {
+    id: user.id,
+    auth_user_id: authUserId, // Layer 2: explicit link back to auth.users row
+    email: user.email,
+    username: user.username,
+    password_hash: simpleHash(password),
+    display_name: user.displayName || user.username,
+    gender: user.gender,
+    date_of_birth: user.dateOfBirth,
+    height: user.height,
+    weight: user.weight,
+    preferred_unit: user.preferredUnit || 'kg',
+    is_trainer: user.isTrainer || false,
+    is_verified_trainer: user.isVerifiedTrainer || false,
+    mode: user.mode || 'user',
+    trainer_id: (user as any).trainerId || null,
+    account_status: accountStatus,
+  };
+
+  console.log(
+    '[Supabase RegisterWithAuth] id=', user.id,
+    'auth_user_id=', authUserId,
+    '(divergent=', user.id !== authUserId, ')',
+  );
+
+  try {
+    // UPDATE branch — placeholder-upgrade path. Keeps the existing
+    // public.users.id intact (trainer assignments stay linked) and
+    // populates auth_user_id so the server-side effective_uid() resolver
+    // maps auth.uid() → this canonical id.
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (existing) {
+      const { error: updateError } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('id', user.id);
+      if (updateError) {
+        console.error('[Supabase RegisterWithAuth] Update error:', updateError.message, updateError.code);
+        return false;
+      }
+      console.log('[Supabase RegisterWithAuth] ✅ Updated existing public.users row + linked auth_user_id:', user.email);
+      return true;
+    }
+
+    // INSERT branch — genuine new signup. id === auth_user_id from day one.
+    const { error, status } = await supabase.from('users').insert(userData).select();
+    if (error) {
+      console.error('[Supabase RegisterWithAuth] ❌ Insert error:', error.message, '| Code:', error.code, '| Status:', status);
+      return false;
+    }
+    console.log('[Supabase RegisterWithAuth] ✅ Inserted public.users row with id = auth_user_id =', authUserId);
+    return true;
+  } catch (e: any) {
+    console.error('[Supabase RegisterWithAuth] ❌ Exception:', e?.message || e);
+    return false;
+  }
+}
+
 // Update password hash in Supabase (for cross-device login after password change)
 export async function updatePasswordInSupabase(email: string, newPassword: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
