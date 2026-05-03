@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
-import { syncExerciseHistoryToSupabase } from '@/lib/supabaseSync';
+import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
@@ -97,6 +97,88 @@ export function __shouldRedirectFromActiveWorkout(params: {
     return 'workout';
   }
   return null;
+}
+
+// ============================================================================
+// A2 (PLAN_exercise_history.md §A2 + Hendrik repro data-layer half)
+//
+// During a PT session, the trainer's local `workoutHistory` only contains the
+// client's workouts if the trainer has previously visited /clients/[id] in
+// this browser session — the merge lives at clients/[id]/page.tsx:121-152.
+// When a PT session starts from any other surface (calendar deeplink,
+// notification tap, /workout/active deeplink), `workoutHistory` has no rows
+// for the client, so the i-button popup correctly derives "no history".
+// That's the Hendrik repro: 32 workouts in Supabase, zero in local state.
+//
+// Fix: on mount of the active page, when `activeWorkout.userId` differs from
+// the logged-in trainer, fetch the client's data once and merge into
+// `workoutHistory` + `personalBests` with id-keyed dedupe (same shape as the
+// inline merge on the clients page, no helper duplicated).
+//
+// Three exports:
+//  - `shouldHydrateForPTSession(activeWorkoutUserId, authUserId)` — guard
+//    predicate. Returns true iff both ids are non-empty AND differ.
+//  - `mergeHydrationIntoState(prev, incoming)` — pure dedupe-by-id reducer.
+//  - `hydrateClientHistoryIfPTSession(params, deps)` — orchestrator with
+//    injected `fetchUserData` + `applyToStore` so the "exactly one fetch
+//    with the correct id" invariant is unit-testable without React.
+// ============================================================================
+
+export function shouldHydrateForPTSession(
+  activeWorkoutUserId: string | null | undefined,
+  authUserId: string | null | undefined,
+): boolean {
+  if (!activeWorkoutUserId || activeWorkoutUserId.length === 0) return false;
+  if (!authUserId || authUserId.length === 0) return false;
+  return activeWorkoutUserId !== authUserId;
+}
+
+export function mergeHydrationIntoState<
+  W extends { id: string },
+  P extends { id: string },
+>(
+  prev: { workoutHistory: W[]; personalBests: P[] },
+  incoming: { workouts: W[]; personalBests: P[] },
+): { workoutHistory: W[]; personalBests: P[] } {
+  // Mirrors the inline pattern in clients/[id]/page.tsx:134-144 — the
+  // routing constraint is "do NOT duplicate the helper", not "do NOT
+  // mirror the shape". This keeps the dedupe semantics identical across
+  // both surfaces (the trainer detail page and the active workout page).
+  const existingIds = new Set(prev.workoutHistory.map((w) => w.id));
+  const newWorkouts = incoming.workouts.filter((w) => !existingIds.has(w.id));
+  const existingPBIds = new Set(prev.personalBests.map((pb) => pb.id));
+  const newPBs = incoming.personalBests.filter((pb) => !existingPBIds.has(pb.id));
+  return {
+    workoutHistory: [...prev.workoutHistory, ...newWorkouts],
+    personalBests: [...prev.personalBests, ...newPBs],
+  };
+}
+
+export type HydrateOutcome = 'skipped' | 'fetched-empty' | 'applied';
+
+export async function hydrateClientHistoryIfPTSession(
+  params: {
+    activeWorkoutUserId: string | null | undefined;
+    authUserId: string | null | undefined;
+  },
+  deps: {
+    fetchUserData: (userId: string) => Promise<{
+      workouts: Array<{ id: string }>;
+      personalBests: Array<{ id: string }>;
+    } | null>;
+    applyToStore: (data: {
+      workouts: Array<{ id: string }>;
+      personalBests: Array<{ id: string }>;
+    }) => void;
+  },
+): Promise<HydrateOutcome> {
+  if (!shouldHydrateForPTSession(params.activeWorkoutUserId, params.authUserId)) {
+    return 'skipped';
+  }
+  const data = await deps.fetchUserData(params.activeWorkoutUserId!);
+  if (!data) return 'fetched-empty';
+  deps.applyToStore(data);
+  return 'applied';
 }
 
 export default function ActiveWorkoutPage() {
@@ -303,6 +385,45 @@ export default function ActiveWorkoutPage() {
     if (target === 'auth') router.replace('/auth');
     else if (target === 'workout') router.replace('/workout');
   }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, isFinishing, router]);
+
+  // A2: hydrate client workout history on PT-session start. Idempotent —
+  // dedupes by workout id and PB id so re-runs (e.g. activeWorkout.id
+  // changes within the same session) never duplicate. Skipped entirely
+  // for the trainer's own workout. See `hydrateClientHistoryIfPTSession`
+  // above for the test seam.
+  useEffect(() => {
+    if (!activeWorkout) return;
+    let cancelled = false;
+    void hydrateClientHistoryIfPTSession(
+      {
+        activeWorkoutUserId: activeWorkout.userId,
+        authUserId: useAuthStore.getState().user?.id,
+      },
+      {
+        fetchUserData: async (userId) => {
+          const data = await fetchUserDataFromSupabase(userId);
+          if (!data) return null;
+          return { workouts: data.workouts, personalBests: data.personalBests };
+        },
+        applyToStore: (data) => {
+          if (cancelled) return;
+          useWorkoutStore.setState((prev) =>
+            mergeHydrationIntoState(
+              { workoutHistory: prev.workoutHistory, personalBests: prev.personalBests },
+              { workouts: data.workouts as any, personalBests: data.personalBests as any },
+            ),
+          );
+        },
+      },
+    ).catch((e) => {
+      // Non-fatal: failed hydrate just means the popup falls back to
+      // whatever the trainer already has locally. Logging keeps it
+      // diagnosable in prod (Hendrik repro depended on us NOT silently
+      // swallowing fetch failures).
+      console.error('[ActiveWorkout] hydrateClientHistoryIfPTSession failed:', e);
+    });
+    return () => { cancelled = true; };
+  }, [activeWorkout?.id, activeWorkout?.userId]);
 
   // Map block types from builder format to active workout format
   const mapBlockType = (type: string): 'warmup' | 'strength' | 'circuit' | 'cardio' => {
