@@ -9,12 +9,77 @@ import { ExerciseImage } from '@/components/ExerciseImage';
 import { getExerciseById, getMuscleDisplayName } from '@/lib/exercises';
 import { normalizeExerciseId, calculateExerciseStats } from '@/lib/exerciseStats';
 import { maleTierRanges, femaleTierRanges, getTierFor1RM, getProgressInTier, getTierBgColor, getTierColor } from '@/lib/strengthRating';
-import { useWorkoutStore, useAuthStore } from '@/lib/store';
+import { useWorkoutStore, useAuthStore, useTrainerStore } from '@/lib/store';
 import { getExerciseVideoUrl } from '@/lib/exerciseVideos';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { Info, Dumbbell, Target, AlertTriangle, Trophy, TrendingUp, Calendar, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+
+// ---------------------------------------------------------------------------
+// A1 (PLAN_exercise_history.md §A1 + W9 Hendrik repro)
+//
+// The popup previously keyed history and PB lookups off `useAuthStore.user.id`.
+// In a PT session that's the TRAINER's id, not the client's — so the trainer
+// sees their own stats regardless of which client's exercise they're
+// inspecting. Hendrik's 32 workouts + 28 client_exercise_history rows never
+// surfaced because the lookup was scoped to the wrong user.
+//
+// Fix shape: two pure helpers exported from this module, consumed by the
+// component (and directly unit-tested in ExerciseHowTo.test.tsx). Keeping
+// them pure means the test can't drift from the render behaviour.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve the id the popup should scope its history / PB lookups to.
+ *
+ *  - During an active workout, `useWorkoutStore.getActiveUserId()` returns
+ *    the ID of whoever the trainer is training (client during PT sessions,
+ *    self otherwise). That's the correct id.
+ *  - Outside an active workout (e.g. the popup is opened from a program
+ *    builder or the exercise search in a non-workout surface), fall back
+ *    to the logged-in user's id.
+ *  - Empty string counts as "no active id" — the workout store returns ''
+ *    as a defensive fallback when both `currentClientId` and auth are
+ *    missing; treating it as a real id would look up history at `userId = ''`
+ *    and match nothing.
+ */
+export function resolveScopedUserId(
+  activeUserId: string | null | undefined,
+  authUserId: string | null | undefined,
+): string | undefined {
+  if (activeUserId && activeUserId.length > 0) return activeUserId;
+  if (authUserId && authUserId.length > 0) return authUserId;
+  return undefined;
+}
+
+/**
+ * Strength-rating tier ranges are split by male/female. Previously this was
+ * derived from `user.gender !== 'female'` which, during a PT session, read
+ * the TRAINER's gender. For an accurate tier against the client's 1RM we
+ * need the CLIENT's gender.
+ *
+ * Behaviour:
+ *  - If `scopedUserId === authUser.id` → self case, use the auth gender.
+ *  - Otherwise → PT session, look the client up in `useTrainerStore.clients`
+ *    and read `.client.gender`.
+ *  - Default `true` (same as the legacy `gender !== 'female'` fallback) so
+ *    unknown / placeholder / missing-gender rows don't flip the tier.
+ */
+export function isMaleForUser(
+  scopedUserId: string | null | undefined,
+  authUser: { id?: string; gender?: 'male' | 'female' | 'other' } | null | undefined,
+  trainerClients: Array<{ clientId: string; client?: { gender?: 'male' | 'female' | 'other' } }>,
+): boolean {
+  if (!scopedUserId) return true;
+  if (authUser?.id && scopedUserId === authUser.id) {
+    return authUser.gender !== 'female';
+  }
+  const row = trainerClients.find((c) => c.clientId === scopedUserId);
+  const clientGender = row?.client?.gender;
+  if (!clientGender) return true;
+  return clientGender !== 'female';
+}
 
 interface ExerciseHowToProps {
   exerciseId: string;
@@ -37,8 +102,15 @@ export function ExerciseHowTo({
   const exercise = getExerciseById(exerciseId);
   const normalizedId = normalizeExerciseId(exerciseId);
   const { personalBests, workoutHistory } = useWorkoutStore();
+  const activeUserId = useWorkoutStore((s) => s.getActiveUserId());
   const { user } = useAuthStore();
-  const isMale = user?.gender !== 'female';
+  const trainerClients = useTrainerStore((s) => s.clients);
+
+  // A1: during a PT session, lookups must scope to the active client, not
+  // the logged-in trainer. `resolveScopedUserId` falls back to `user.id`
+  // when there's no active workout (popup viewed outside a session).
+  const scopedUserId = resolveScopedUserId(activeUserId, user?.id);
+  const isMale = isMaleForUser(scopedUserId, user, trainerClients);
 
   const name =
     exerciseName ||
@@ -54,15 +126,15 @@ export function ExerciseHowTo({
 
   // Exercise stats (only computed when dialog is open)
   const stats = useMemo(() => {
-    if (!open || !user?.id) return null;
-    return calculateExerciseStats(normalizedId, workoutHistory, user.id, isMale);
-  }, [open, normalizedId, workoutHistory, user?.id, isMale]);
+    if (!open || !scopedUserId) return null;
+    return calculateExerciseStats(normalizedId, workoutHistory, scopedUserId, isMale);
+  }, [open, normalizedId, workoutHistory, scopedUserId, isMale]);
 
   // Personal best
   const pb = useMemo(() => {
-    if (!open || !user?.id) return null;
-    return personalBests.find(p => p.exerciseId === normalizedId && p.userId === user.id) || null;
-  }, [open, normalizedId, personalBests, user?.id]);
+    if (!open || !scopedUserId) return null;
+    return personalBests.find(p => p.exerciseId === normalizedId && p.userId === scopedUserId) || null;
+  }, [open, normalizedId, personalBests, scopedUserId]);
 
   // Strength rating (only for exercises with tier ranges)
   const tierRanges = isMale ? maleTierRanges : femaleTierRanges;
@@ -308,7 +380,7 @@ export function ExerciseHowTo({
             )}
 
             {/* Your Stats Section */}
-            {user?.id && (pb || (stats && stats.totalSessions > 0)) && (
+            {scopedUserId && (pb || (stats && stats.totalSessions > 0)) && (
               <div className="border-t border-slate-800 pt-4 space-y-3">
                 <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-1.5">
                   <TrendingUp className="w-4 h-4 text-emerald-400" />
