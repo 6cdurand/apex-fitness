@@ -23,20 +23,31 @@
  */
 
 /**
- * HARD-DISABLED feature flag for the in-app forgot-password flow.
+ * Feature flag for the in-app forgot-password flow.
  *
- * While `false`:
- *  - The "Forgot password?" trigger button is replaced with static
- *    "contact your trainer" copy on `/auth` (no way to open the modal).
- *  - The Reset Password modal JSX render is gated so even a stale
- *    `showForgotPassword=true` state cannot surface UI.
- *  - The `handleForgotPassword` submit handler short-circuits before any
- *    Supabase write.
+ * Phase 0.5 (2026-05-06): flipped `true` when the magic-link recovery flow
+ * shipped. The Edge Function at
+ * `supabase/functions/password-recovery/index.ts` owns the token issue +
+ * commit paths; the UI on `/auth` + `/auth/reset-password` routes through it.
  *
- * Must remain `false` until the magic-link-with-server-validated-token
- * rebuild ships in Phase 1.
+ * While `true`:
+ *  - The `/auth` page renders a functional "Forgot password?" trigger that
+ *    opens the email-only recovery request modal.
+ *  - The modal calls the `password-recovery` Edge Function's `request`
+ *    action, which generates a token, stores its SHA-256 hash, and emails
+ *    the plaintext link via Resend (enumeration-safe neutral response).
+ *  - `/auth/reset-password?token=...` verifies + commits the new password
+ *    via the Edge Function's `verify` and `commit` actions.
+ *
+ * Flipping back to `false` is the kill-switch if a magic-link regression
+ * surfaces in prod (Sev-0 2026-05-04 playbook applies):
+ *  - The `/auth` page swaps the trigger button for static
+ *    "contact your trainer" copy.
+ *  - The recovery request modal render is gated off.
+ *  - `handleForgotPassword` short-circuits before hitting the Edge Function.
+ *  - Reset link pages still verify, but users will bounce to `/auth`.
  */
-export const ENABLE_USER_PASSWORD_RESET = false;
+export const ENABLE_USER_PASSWORD_RESET = true;
 
 /**
  * Decides whether the `/auth` page should open the setup-password flow

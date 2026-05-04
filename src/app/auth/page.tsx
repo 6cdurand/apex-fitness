@@ -21,6 +21,7 @@ import {
   canOpenSetupPasswordFlow,
   shouldProcessForgotPasswordSubmit,
 } from '@/lib/authGuards';
+import { NEUTRAL_REQUEST_RESPONSE } from '@/lib/passwordRecovery';
 import { Loader2 } from 'lucide-react';
 
 type Step = 'credentials' | 'profile' | 'goals' | 'connections';
@@ -31,7 +32,7 @@ function AuthPageContent() {
   const inviteToken = searchParams.get('invite');
   const modeParam = searchParams.get('mode');
   
-  const { login, register, isLoading, user, updatePassword, resetPassword } = useAuthStore();
+  const { login, register, isLoading, user, updatePassword } = useAuthStore();
   const { loadFromSupabase } = useTrainerStore();
   
   const [activeTab, setActiveTab] = useState<'login' | 'register'>(modeParam === 'login' ? 'login' : 'login');
@@ -43,11 +44,15 @@ function AuthPageContent() {
   const [setupConfirmPassword, setSetupConfirmPassword] = useState('');
   const [isSettingUp, setIsSettingUp] = useState(false);
   
-  // Forgot password state
+  // Forgot password state (Phase 0.5 magic-link flow — see authGuards.ts +
+  // supabase/functions/password-recovery). The in-modal UI now only asks for
+  // an email; the password is set on `/auth/reset-password?token=...` after
+  // the user clicks the Resend-delivered link.
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [isSubmittingForgot, setIsSubmittingForgot] = useState(false);
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
+  const [showTrainerHelp, setShowTrainerHelp] = useState(false);
   
   // Check invite token and pre-fill email.
   //
@@ -189,47 +194,48 @@ function AuthPageContent() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    // SECURITY (Sev-0 2026-05-04): in-app forgot-password is hard-disabled
-    // until the magic-link-with-server-validated-token flow ships in Phase 1.
-    // This guard runs before any validation or DB write so no Supabase update
-    // is possible even if the modal is somehow surfaced (it cannot be — the
-    // trigger button is removed and the modal render is also flag-gated).
+
+    // Belt-and-suspenders: the flag is `true` in Phase 0.5, but if a
+    // future incident flips it back to `false`, this guard stops the submit
+    // before we call the Edge Function. Same message users see in the
+    // static copy when the flag is off.
     if (!shouldProcessForgotPasswordSubmit()) {
       toast.error(
         'Password reset is temporarily unavailable. Please contact your trainer for help.',
       );
       return;
     }
-    if (!forgotEmail.trim()) {
-      toast.error('Please enter your email');
+
+    const email = forgotEmail.trim();
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter a valid email');
       return;
     }
-    if (forgotNewPassword.length < 4) {
-      toast.error('Password must be at least 4 characters');
-      return;
-    }
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      toast.error('Passwords do not match');
-      return;
-    }
-    
-    const success = resetPassword(forgotEmail.trim(), forgotNewPassword);
-    if (success) {
-      // Also sync to Supabase if configured
-      try {
-        await updatePasswordInSupabase(forgotEmail.trim(), forgotNewPassword);
-      } catch (e) {
-        // Local reset still succeeded
+
+    setIsSubmittingForgot(true);
+    try {
+      // Fire-and-display-neutral: the Edge Function returns the same 200
+      // JSON for known / unknown / rate-limited / Resend-failed paths so
+      // the UI cannot leak account existence. We only distinguish between
+      // "reached the function" (show confirmation) and "network error"
+      // (show toast error so the user can retry).
+      const { error } = await supabase.functions.invoke('password-recovery', {
+        body: { action: 'request', email },
+      });
+      if (error) {
+        console.error('[auth] password-recovery request failed:', error);
+        toast.error('Could not send recovery email. Please try again in a moment.');
+        setIsSubmittingForgot(false);
+        return;
       }
-      toast.success('Password reset! You can now sign in.');
-      setShowForgotPassword(false);
-      setLoginEmail(forgotEmail.trim());
-      setLoginPassword('');
-      setForgotEmail('');
-      setForgotNewPassword('');
-      setForgotConfirmPassword('');
-    } else {
-      toast.error('No account found with that email');
+      // Always show the neutral confirmation message regardless of whether
+      // the email exists. Mirrors NEUTRAL_REQUEST_RESPONSE.message.
+      setForgotSubmitted(true);
+    } catch (err) {
+      console.error('[auth] password-recovery threw:', err);
+      toast.error('Network error. Please try again in a moment.');
+    } finally {
+      setIsSubmittingForgot(false);
     }
   };
 
@@ -517,16 +523,28 @@ function AuthPageContent() {
                   </Button>
                   
                   {/*
-                    Sev-0 2026-05-04: the in-app forgot-password trigger is
-                    disabled until the magic-link rebuild ships in Phase 1
-                    (see `src/lib/authGuards.ts`). Static contact copy is
-                    rendered in its place so there is no path to open the
-                    Reset Password modal from the main /auth flow.
+                    Forgot-password trigger (Phase 0.5, 2026-05-06). Gated on
+                    `ENABLE_USER_PASSWORD_RESET`; the emergency-disable copy
+                    surfaces only if a future incident flips the flag off.
                   */}
-                  <p className="w-full text-center text-xs text-gray-500 mt-1">
-                    Forgot your password? Please contact your trainer for help.
-                    Automated password recovery returns Friday.
-                  </p>
+                  {ENABLE_USER_PASSWORD_RESET ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(loginEmail);
+                        setForgotSubmitted(false);
+                        setShowTrainerHelp(false);
+                        setShowForgotPassword(true);
+                      }}
+                      className="w-full text-center text-xs text-gray-500 hover:text-sky-400 transition-colors mt-1"
+                    >
+                      Forgot password?
+                    </button>
+                  ) : (
+                    <p className="w-full text-center text-xs text-gray-500 mt-1">
+                      Forgot your password? Please contact your trainer for help.
+                    </p>
+                  )}
                   
                   <div className="relative my-4">
                     <div className="absolute inset-0 flex items-center">
@@ -911,70 +929,97 @@ function AuthPageContent() {
       </div>
 
       {/*
-        Forgot Password Modal — DISABLED via `ENABLE_USER_PASSWORD_RESET`
-        pending the magic-link rebuild (Sev-0 2026-05-04). The trigger
-        button above has been removed; this second guard prevents the
-        modal from rendering even if `showForgotPassword` is flipped true
-        by some future code path or dev-tools tampering.
+        Recovery request modal (Phase 0.5, 2026-05-06). The user enters their
+        email; we call the `password-recovery` Edge Function `request` action.
+        The modal never collects a password — that happens on
+        `/auth/reset-password?token=...` after the user clicks the Resend
+        link. The render is still gated on `ENABLE_USER_PASSWORD_RESET` so
+        an emergency re-disable is a one-line flip.
       */}
       {ENABLE_USER_PASSWORD_RESET && showForgotPassword && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-5">
           <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl rounded-2xl">
             <CardHeader>
-              <CardTitle className="text-white">Reset Password</CardTitle>
-              <CardDescription>Enter your email and choose a new password</CardDescription>
+              <CardTitle className="text-white">Reset Your Password</CardTitle>
+              <CardDescription>
+                {forgotSubmitted
+                  ? 'Check your inbox for a recovery link.'
+                  : 'Enter your email and we will send you a recovery link.'}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="your@email.com"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                  />
+              {!forgotSubmitted ? (
+                <form onSubmit={handleForgotPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-gray-300">Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="your@email.com"
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
+                      required
+                      disabled={isSubmittingForgot}
+                      autoFocus
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                    disabled={isSubmittingForgot}
+                  >
+                    {isSubmittingForgot ? 'Sending…' : 'Send Recovery Link'}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setShowTrainerHelp((v) => !v)}
+                    className="w-full text-center text-xs text-gray-400 hover:text-sky-400 transition-colors"
+                  >
+                    I don&apos;t have access to this email — contact your trainer
+                  </button>
+                  {showTrainerHelp && (
+                    <p className="text-xs text-gray-400 bg-slate-800/60 rounded-md p-3 leading-relaxed">
+                      If the email on file is wrong or you no longer have access
+                      to it, message your trainer directly. They can update your
+                      email from their client-detail screen and re-send the
+                      recovery link.
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full text-gray-500 hover:text-gray-300 text-sm"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotEmail('');
+                      setShowTrainerHelp(false);
+                    }}
+                    disabled={isSubmittingForgot}
+                  >
+                    Cancel
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-300" data-testid="forgot-confirmation">
+                    {NEUTRAL_REQUEST_RESPONSE.message} The link expires in 1
+                    hour. If it doesn&apos;t arrive in a few minutes, check your
+                    spam folder or try again.
+                  </p>
+                  <Button
+                    type="button"
+                    className="w-full bg-sky-500 hover:bg-sky-600 text-white"
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotSubmitted(false);
+                      setForgotEmail('');
+                      setShowTrainerHelp(false);
+                    }}
+                  >
+                    Close
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">New Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter new password"
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                    minLength={4}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-gray-300">Confirm Password</Label>
-                  <Input
-                    type="password"
-                    placeholder="Re-enter new password"
-                    value={forgotConfirmPassword}
-                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                    className="bg-gray-50 border-gray-200 text-gray-900 placeholder:text-gray-400"
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit"
-                  className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                >
-                  Reset Password
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full text-gray-500 hover:text-gray-300 text-sm"
-                  onClick={() => { setShowForgotPassword(false); setForgotEmail(''); setForgotNewPassword(''); setForgotConfirmPassword(''); }}
-                >
-                  Cancel
-                </Button>
-              </form>
+              )}
             </CardContent>
           </Card>
         </div>
