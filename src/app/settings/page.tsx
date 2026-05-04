@@ -17,9 +17,7 @@ import {
   User, 
   Bell, 
   Scale, 
-  Palette, 
   Shield, 
-  HelpCircle,
   ChevronRight,
   Save,
   Upload,
@@ -35,6 +33,7 @@ import {
   X,
   Check
 } from 'lucide-react';
+import { PRIVACY_SETTINGS_ROUTE } from './privacy/page';
 import { toast } from 'sonner';
 import { Gender, WeightUnit, Gym } from '@/types';
 import { resetSeedData, resetWorkoutDataOnly } from '@/lib/seedData';
@@ -1032,31 +1031,27 @@ function SettingsPageContent() {
           </CardContent>
         </Card>
 
-        {/* More Options */}
+        {/* More Options
+         *
+         * Previously held three buttons (Privacy & Security, Appearance,
+         * Help & Support). Appearance + Help & Support had no onClick and
+         * violated App Store Guideline 5.1.1 — they've been removed in the
+         * 2026-05-06 Sev-1 cleanup. Privacy & Security is wired below to
+         * the new `/settings/privacy` page. If / when Appearance and Help
+         * ship as real pages, re-introduce their buttons here with the
+         * same row styling. Route constant is imported from the privacy
+         * page module so there is a single source of truth.
+         */}
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardContent className="p-0">
             <Button
               variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
+              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none"
+              onClick={() => router.push(PRIVACY_SETTINGS_ROUTE)}
+              data-testid="settings-privacy-button"
             >
               <Shield className="w-5 h-5 mr-3 text-gray-500" />
               Privacy & Security
-              <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
-            >
-              <Palette className="w-5 h-5 mr-3 text-gray-500" />
-              Appearance
-              <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none"
-            >
-              <HelpCircle className="w-5 h-5 mr-3 text-gray-500" />
-              Help & Support
               <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
             </Button>
           </CardContent>
