@@ -61,18 +61,28 @@ export const NEUTRAL_REQUEST_RESPONSE = {
 // ---------------------------------------------------------------------------
 
 /**
- * Exact copy of the private `simpleHash` function that `register()` uses to
- * write `public.users.password_hash`. Must stay byte-for-byte identical with
- * both `supabaseSync.ts` and the Edge Function's inline copy; the tests
- * pin all three to the same fixtures.
+ * Byte-for-byte copy of `simpleHash` from `src/lib/supabaseSync.ts:16-24`.
+ * That function is the one `register()` uses to write
+ * `public.users.password_hash`, and `login()` in the same module reads back
+ * the same format for comparison. If this mirror drifts, every password
+ * reset produces a hash that login() cannot match → user lockout.
+ *
+ * Sev-0 2026-05-06: this copy previously returned `hash.toString(36)`,
+ * missing the `'hash_'` prefix, the `Math.abs()` sign normalization, and
+ * the `'_' + str.length` suffix. Post-reset logins failed with
+ * `[Supabase Login] hashes match: false`. The regression test in
+ * `src/lib/__tests__/passwordRecovery.test.ts` now imports the canonical
+ * `simpleHash` directly from `supabaseSync.ts` and pins byte-equality
+ * across 8 fixtures to catch future drift at commit time.
  */
 export function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
   }
-  return hash.toString(36);
+  return 'hash_' + Math.abs(hash).toString(36) + '_' + str.length;
 }
 
 // ---------------------------------------------------------------------------

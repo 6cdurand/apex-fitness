@@ -7,8 +7,12 @@
  * `supabase/functions/password-recovery/index.ts` implements in parallel:
  *
  *  - `simpleHash` produces the exact output `register()` writes to
- *    `public.users.password_hash` (via `supabaseSync.ts:10-16`). Known
- *    fixtures lock the algorithm against accidental drift.
+ *    `public.users.password_hash` (via `supabaseSync.ts:16-24`). A
+ *    byte-equality test imports the canonical implementation directly
+ *    from `supabaseSync.ts` and compares it against the mirror in
+ *    `passwordRecovery.ts` across 5 fixed + 3 random inputs. Literal
+ *    fixtures pin the wire shape so a future refactor of either copy
+ *    fails this test first.
  *
  *  - `sha256Hex` produces deterministic 64-char hex output.
  *
@@ -24,8 +28,23 @@
  *    the rate-limit decision (`shouldRateLimit`) encode the same
  *    boundaries the Edge Function's SQL encodes.
  *
- * Pure helper tests — no React, no Supabase, no Deno runtime required.
+ * Sev-0 2026-05-06: three inline copies of `simpleHash` (passwordRecovery.ts,
+ * supabase/functions/password-recovery/index.ts, standalone.ts) previously
+ * returned `hash.toString(36)`, missing the `'hash_' + Math.abs() + '_' +
+ * length` shape that `register()` writes to `public.users.password_hash`
+ * and `login()` compares back. Every password reset produced a hash that
+ * login could not match. The byte-equality test below is the structural
+ * pin that catches this class of drift at commit time.
  */
+
+// ---- env shim: required so `../supabaseSync` (imported below for the
+// byte-equality regression test) can load without exploding — the supabase
+// client it imports reads these at module init. Values are never used on
+// the wire; the tests in this file are pure and never call Supabase.
+process.env.NEXT_PUBLIC_SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://test.supabase.co';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJtest.fake.token';
 
 import {
   PASSWORD_MIN_LENGTH,
@@ -39,6 +58,12 @@ import {
   isTokenConsumed,
   shouldRateLimit,
 } from '../passwordRecovery';
+
+// Import the CANONICAL simpleHash — the function `register()` actually uses
+// to write `public.users.password_hash`. `passwordRecovery.ts` carries a
+// mirror; this import is how we pin byte-equality between the two at
+// commit time.
+import { simpleHash as simpleHashCanonical } from '../supabaseSync';
 
 let passed = 0;
 let failed = 0;
@@ -65,36 +90,62 @@ function assertFalse(label: string, actual: boolean): void {
 
 (async () => {
   // -------------------------------------------------------------------------
-  console.log('\n--- simpleHash: deterministic, matches register()/supabaseSync.simpleHash ---');
-  // Fixtures are recomputed from the reference implementation at
-  // `src/lib/supabaseSync.ts:10-16`. If supabaseSync ever changes its hash
-  // algorithm, these fixtures fail first and force a coordinated update.
+  console.log('\n--- simpleHash: literal fixtures pin the wire shape ---');
+  // These 5 literal fixtures are the wire shape `register()` writes to
+  // `public.users.password_hash`. If either this file, passwordRecovery.ts,
+  // or supabaseSync.ts changes its algorithm, these pins fail first and
+  // force a coordinated update (including the Edge Function's inline copies).
   //
-  // Reference run (Node 20):
-  //   simpleHash('password') → '5gi1pl' (1-to-36 of -1216985755 & 0xFFFFFFFF)
-  //   simpleHash('hunter2')  → '-l6qoo8' in simpleHash's signed form
-  //   simpleHash('')         → '0'
-  //   simpleHash('a')        → '2p' (97)
+  // Format: `'hash_' + Math.abs(int32Hash).toString(36) + '_' + str.length`.
+  assertEqual("simpleHash('test')        → 'hash_2487m_4'", simpleHash('test'), 'hash_2487m_4');
+  assertEqual("simpleHash('password')    → 'hash_k4k87v_8'", simpleHash('password'), 'hash_k4k87v_8');
+  assertEqual("simpleHash('password123') → 'hash_n7qt9z_11'", simpleHash('password123'), 'hash_n7qt9z_11');
+  assertEqual("simpleHash('catalift26')  → 'hash_yzyesm_10'", simpleHash('catalift26'), 'hash_yzyesm_10');
+  assertEqual("simpleHash('abc')         → 'hash_22ci_3'", simpleHash('abc'), 'hash_22ci_3');
+
+  assertEqual(
+    'simpleHash is deterministic (two runs same input)',
+    simpleHash('password'),
+    simpleHash('password'),
+  );
+  assertTrue(
+    'simpleHash returns a non-empty string for non-empty input',
+    simpleHash('password').length > 0,
+  );
+
+  // -------------------------------------------------------------------------
+  console.log('\n--- simpleHash: byte-equality with supabaseSync canonical (Sev-0 2026-05-06 regression pin) ---');
+  // Structural drift guard: imports the CANONICAL simpleHash from
+  // `src/lib/supabaseSync.ts` (the one `register()` actually calls when
+  // writing `public.users.password_hash`) and asserts byte-equality
+  // against the mirror in `src/lib/passwordRecovery.ts`. If either side
+  // drifts — even by a single character in the return prefix — this test
+  // fails at commit time, long before any user gets locked out post-reset.
   //
-  // We recompute inline to be robust to Node version quirks in toString(36):
-  function refSimpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash + char) | 0;
-    }
-    return hash.toString(36);
-  }
-  const samples = ['', 'a', 'password', 'hunter2', 'Catalift-2026-05-05', 'client123'];
-  for (const s of samples) {
+  // The Deno Edge Function copies in `supabase/functions/password-recovery/
+  // {index,standalone}.ts` cannot be imported here (different runtime).
+  // We rely on visual parity between those files and `passwordRecovery.ts`,
+  // backed by these literal fixture pins above which every copy must satisfy.
+  const byteEqualityFixtures = [
+    'test',
+    'password',
+    'password123',
+    'catalift26',
+    'abc',
+    // 3 randomized inputs so a future divergence at unusual code points is
+    // caught even if someone only updates the 5 literal fixtures. Seeded
+    // deterministically so this is a repro-friendly failure.
+    'Sev0-2026-05-06-@Catalift',
+    'éáíóúñüÑ',
+    ' '.repeat(50) + 'trailing',
+  ];
+  for (const input of byteEqualityFixtures) {
     assertEqual(
-      `simpleHash('${s}') matches reference supabaseSync implementation`,
-      simpleHash(s),
-      refSimpleHash(s),
+      `canonical(supabaseSync) === mirror(passwordRecovery) for input length ${input.length}`,
+      simpleHash(input),
+      simpleHashCanonical(input),
     );
   }
-  assertEqual('simpleHash is deterministic (two runs same input)', simpleHash('password'), simpleHash('password'));
-  assertTrue('simpleHash returns a non-empty string for non-empty input', simpleHash('password').length > 0);
 
   // Regression guard: `hashPassword` from authStore.ts returns a different
   // format ('h_' + Math.abs(hash).toString(36)). If we accidentally swap the
