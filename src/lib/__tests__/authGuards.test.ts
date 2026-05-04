@@ -53,16 +53,20 @@ function assertEqual<T>(label: string, actual: T, expected: T): void {
 }
 
 (() => {
-  console.log('\n--- Test 1: forgot-password feature flag is hard-disabled ---');
+  console.log('\n--- Test 1: forgot-password feature flag is enabled (Phase 0.5 shipped 2026-05-06) ---');
+  // Flag flipped from false → true when the magic-link recovery flow shipped.
+  // If an incident requires rolling back, flip authGuards.ts and these two
+  // assertions in the same commit. See authGuards.ts "Flipping back to false"
+  // block for the kill-switch playbook.
   assertEqual(
-    'ENABLE_USER_PASSWORD_RESET is false (Phase 1 will flip to true)',
+    'ENABLE_USER_PASSWORD_RESET is true (magic-link recovery enabled)',
     ENABLE_USER_PASSWORD_RESET,
-    false,
+    true,
   );
   assertEqual(
-    'shouldProcessForgotPasswordSubmit() blocks the submit handler',
+    'shouldProcessForgotPasswordSubmit() allows the submit handler',
     shouldProcessForgotPasswordSubmit(),
-    false,
+    true,
   );
 
   console.log('\n--- Test 2: /auth?email=X (no invite) does NOT open setup flow ---');
