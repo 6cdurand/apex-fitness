@@ -171,6 +171,20 @@ function PrivacySettingsContent() {
     window.location.href = buildDataExportMailto(user.email || '');
   };
 
+  // Back button: pop history when there is any (the in-app
+  // /menu → /settings → /settings/privacy path, which is the 99% case),
+  // fall back to /settings only on a deep-link / fresh-tab landing
+  // (e.g. shared URL). Using router.push('/settings') unconditionally
+  // pushes a duplicate history entry so the browser's own back button
+  // returns to /settings/privacy. Reported by Christo, 2026-05-05.
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      router.back();
+    } else {
+      router.push('/settings');
+    }
+  };
+
   return (
     <MainLayout>
       <div className="bg-gradient-to-b from-slate-900 via-slate-950 to-black min-h-screen">
@@ -182,7 +196,7 @@ function PrivacySettingsContent() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => router.push('/settings')}
+            onClick={handleBack}
             className="text-gray-300 hover:text-white hover:bg-slate-800"
             aria-label="Back to Settings"
             data-testid="privacy-back-button"
