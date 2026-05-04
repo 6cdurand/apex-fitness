@@ -16,6 +16,11 @@ import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { acceptInvitation, checkInvitationByToken, updatePasswordInSupabase, updateUserInSupabase } from '@/lib/supabaseSync';
+import {
+  ENABLE_USER_PASSWORD_RESET,
+  canOpenSetupPasswordFlow,
+  shouldProcessForgotPasswordSubmit,
+} from '@/lib/authGuards';
 import { Loader2 } from 'lucide-react';
 
 type Step = 'credentials' | 'profile' | 'goals' | 'connections';
@@ -44,39 +49,37 @@ function AuthPageContent() {
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
   
-  // Check invite token and pre-fill email
+  // Check invite token and pre-fill email.
+  //
+  // SECURITY (Sev-0 2026-05-04): the setup-password flow MUST only open for a
+  // verified invite token. The previous implementation opened the flow on
+  // any of (a) valid token, (b) token-lookup failure + emailParam present,
+  // (c) no token + emailParam present — turning `/auth?email=victim@example.com`
+  // into an account-takeover vector. `canOpenSetupPasswordFlow` now enforces
+  // token + server-verified `result.valid` as the single gate; emailParam is
+  // only used to pre-fill the LOGIN email field so the user can sign in.
   const emailParam = searchParams.get('email');
   useEffect(() => {
+    const decodedEmail = emailParam ? decodeURIComponent(emailParam) : null;
     if (inviteToken) {
-      // Try Supabase lookup first
       checkInvitationByToken(inviteToken).then((result) => {
-        if (result.valid && result.email) {
-          setInviteEmail(result.email);
-          setLoginEmail(result.email);
+        const inviteValid = !!(result.valid && result.email);
+        if (canOpenSetupPasswordFlow({ inviteToken, inviteValid })) {
+          setInviteEmail(result.email!);
+          setLoginEmail(result.email!);
           if (result.clientId) setInviteClientId(result.clientId);
           setShowSetupPassword(true);
-        } else if (emailParam) {
-          // Fallback: use email from URL param (always works, even without Supabase table)
-          const decodedEmail = decodeURIComponent(emailParam);
-          setInviteEmail(decodedEmail);
+        } else if (decodedEmail) {
+          // Token invalid/expired — pre-fill login email only, never open setup.
           setLoginEmail(decodedEmail);
-          setShowSetupPassword(true);
         }
       }).catch(() => {
-        // If Supabase check fails entirely, use email param
-        if (emailParam) {
-          const decodedEmail = decodeURIComponent(emailParam);
-          setInviteEmail(decodedEmail);
-          setLoginEmail(decodedEmail);
-          setShowSetupPassword(true);
-        }
+        // Supabase unreachable — pre-fill login email only, never open setup.
+        if (decodedEmail) setLoginEmail(decodedEmail);
       });
-    } else if (emailParam) {
-      // No invite token but email param present — still show setup
-      const decodedEmail = decodeURIComponent(emailParam);
-      setInviteEmail(decodedEmail);
+    } else if (decodedEmail) {
+      // No invite token — only pre-fill the login email. Setup flow stays closed.
       setLoginEmail(decodedEmail);
-      setShowSetupPassword(true);
     }
   }, [inviteToken, emailParam]);
   
@@ -186,6 +189,17 @@ function AuthPageContent() {
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    // SECURITY (Sev-0 2026-05-04): in-app forgot-password is hard-disabled
+    // until the magic-link-with-server-validated-token flow ships in Phase 1.
+    // This guard runs before any validation or DB write so no Supabase update
+    // is possible even if the modal is somehow surfaced (it cannot be — the
+    // trigger button is removed and the modal render is also flag-gated).
+    if (!shouldProcessForgotPasswordSubmit()) {
+      toast.error(
+        'Password reset is temporarily unavailable. Please contact your trainer for help.',
+      );
+      return;
+    }
     if (!forgotEmail.trim()) {
       toast.error('Please enter your email');
       return;
@@ -502,13 +516,17 @@ function AuthPageContent() {
                     {isLoading ? 'Signing in...' : 'Sign In'}
                   </Button>
                   
-                  <button
-                    type="button"
-                    onClick={() => { setShowForgotPassword(true); setForgotEmail(loginEmail); }}
-                    className="w-full text-center text-xs text-gray-500 hover:text-sky-400 transition-colors mt-1"
-                  >
-                    Forgot password?
-                  </button>
+                  {/*
+                    Sev-0 2026-05-04: the in-app forgot-password trigger is
+                    disabled until the magic-link rebuild ships in Phase 1
+                    (see `src/lib/authGuards.ts`). Static contact copy is
+                    rendered in its place so there is no path to open the
+                    Reset Password modal from the main /auth flow.
+                  */}
+                  <p className="w-full text-center text-xs text-gray-500 mt-1">
+                    Forgot your password? Please contact your trainer for help.
+                    Automated password recovery returns Friday.
+                  </p>
                   
                   <div className="relative my-4">
                     <div className="absolute inset-0 flex items-center">
@@ -892,8 +910,14 @@ function AuthPageContent() {
         </Card>
       </div>
 
-      {/* Forgot Password Modal */}
-      {showForgotPassword && (
+      {/*
+        Forgot Password Modal — DISABLED via `ENABLE_USER_PASSWORD_RESET`
+        pending the magic-link rebuild (Sev-0 2026-05-04). The trigger
+        button above has been removed; this second guard prevents the
+        modal from rendering even if `showForgotPassword` is flipped true
+        by some future code path or dev-tools tampering.
+      */}
+      {ENABLE_USER_PASSWORD_RESET && showForgotPassword && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-5">
           <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl rounded-2xl">
             <CardHeader>
