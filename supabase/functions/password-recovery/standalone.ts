@@ -34,13 +34,18 @@ const NEUTRAL_REQUEST_RESPONSE = {
   message: 'If an account exists for that email, a recovery link has been sent.',
 };
 
+// Byte-for-byte copy of `simpleHash` from `src/lib/supabaseSync.ts:16-24`.
+// See `src/lib/passwordRecovery.ts` for Sev-0 2026-05-06 history. Keep in
+// sync with index.ts and passwordRecovery.ts; the Node-side tests pin the
+// contract.
 function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
   }
-  return hash.toString(36);
+  return 'hash_' + Math.abs(hash).toString(36) + '_' + str.length;
 }
 
 async function sha256Hex(input: string): Promise<string> {

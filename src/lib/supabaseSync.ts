@@ -6,8 +6,14 @@ import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage 
  * Syncs local data to Supabase for cross-device access
  */
 
-// Simple hash function for password (for demo - use bcrypt in production)
-function simpleHash(str: string): string {
+// Simple hash function for password (for demo - use bcrypt in production).
+// Exported so the password-recovery regression test can pin byte-equality
+// against its mirror in `src/lib/passwordRecovery.ts` (and, by extension,
+// the Deno Edge Function's inline copies). Do NOT change the return shape —
+// `register()` writes `public.users.password_hash` with this exact format
+// and `login()` compares against it verbatim; any drift breaks cross-device
+// login for every affected user (root cause of the 2026-05-06 Sev-0).
+export function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
