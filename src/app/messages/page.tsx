@@ -152,6 +152,26 @@ export default function MessagesPage() {
     }
   }, [selectedConversation, user, markAsRead]);
 
+  // Pre-select conversation from ?with=<userId> query param
+  useEffect(() => {
+    if (!user || selectedConversation) return;
+    const params = new URLSearchParams(window.location.search);
+    const withUserId = params.get('with');
+    if (withUserId) {
+      // Find or create conversation with this user
+      const existingConv = conversations.find(c => 
+        c.participants.includes(user.id) && c.participants.includes(withUserId)
+      );
+      if (existingConv) {
+        setSelectedConversation(existingConv);
+      } else {
+        // Create new conversation
+        const conv = getOrCreateConversation(user.id, withUserId);
+        setSelectedConversation(conv);
+      }
+    }
+  }, [user, selectedConversation, conversations, getOrCreateConversation]);
+
   if (!isAuthenticated || !user) return null;
 
   const userConversations = getConversationsForUser(user.id).sort((a, b) => {

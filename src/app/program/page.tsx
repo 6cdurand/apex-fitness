@@ -38,7 +38,8 @@ import {
   X,
   LayoutGrid,
   User,
-  Trophy
+  Trophy,
+  MessageCircle
 } from 'lucide-react';
 import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
@@ -524,6 +525,19 @@ export default function ProgramPage() {
                     <p className="text-[10px] text-gray-500">Exercises</p>
                   </div>
                 </div>
+
+                {/* Start conversation CTA */}
+                {activeProgram.trainerId && activeProgram.trainerId !== user?.id && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full bg-white hover:bg-gray-50 text-gray-700 border-gray-300"
+                    onClick={() => router.push(`/messages?with=${activeProgram.trainerId}`)}
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Start conversation with {trainerName || 'trainer'}
+                  </Button>
+                )}
 
                 {/* Next Workout highlight */}
                 {nextWorkout && nextWorkout.remainingThisWeek > 0 && (
