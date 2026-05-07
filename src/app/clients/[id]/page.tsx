@@ -626,6 +626,15 @@ export default function ClientDetailPage() {
               <h1 className="text-lg font-semibold text-white">{clientUser.displayName}</h1>
               <p className="text-sm text-rose-100">@{clientUser.username}</p>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-white/90 hover:text-white hover:bg-white/10"
+              onClick={() => router.push(`/messages?with=${clientUser.id}`)}
+            >
+              <MessageCircle className="w-4 h-4 mr-2" />
+              Message
+            </Button>
             <div className="flex items-center gap-1">
               {isPlaceholder && (
                 <Badge variant="secondary" className="bg-amber-500/20 text-amber-200 border-amber-400/30 text-[10px]">
