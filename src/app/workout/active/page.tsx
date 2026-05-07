@@ -17,6 +17,7 @@ import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
+import { format } from 'date-fns';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
@@ -2893,10 +2894,12 @@ export default function ActiveWorkoutPage() {
                                 <span className="text-amber-400">PB: {exercisePB.bestWeight}kg × {exercisePB.bestReps}</span>
                               </div>
                             )}
-                            {lastSets && lastSets.length > 0 && (
+                            {lastSets && lastSets.length > 0 && lastWorkout && (
                               <div className="flex items-center gap-1 px-2 py-1 bg-gray-100 rounded">
                                 <History className="w-3 h-3 text-gray-400" />
-                                <span className="text-gray-400">Last: {lastSets.slice(0, 3).map((s: any) => `${s.weight}×${s.reps}`).join(', ')}</span>
+                                <span className="text-gray-400">
+                                  {format(new Date(lastWorkout.startTime), 'MMM d')} · {lastSets.slice(0, 3).map((s: any) => `${s.weight}×${s.reps}`).join(', ')}
+                                </span>
                               </div>
                             )}
                           </div>
