@@ -88,6 +88,7 @@ function ClientsPageContent() {
   // Link existing account state
   const [supabaseUsers, setSupabaseUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [selectedLinkUser, setSelectedLinkUser] = useState<any>(null);
 
@@ -133,6 +134,13 @@ function ClientsPageContent() {
       router.replace('/workout');
     }
   }, [isAuthenticated, user?.mode, router]);
+
+  // Track loading state - set to false once initial data is available
+  useEffect(() => {
+    if (clients.length > 0 || allUsers.length > 0) {
+      setIsLoadingClients(false);
+    }
+  }, [clients.length, allUsers.length]);
 
   // Load users from both localStorage AND Supabase for cross-device sync
   useEffect(() => {
@@ -776,7 +784,28 @@ function ClientsPageContent() {
 
         {/* Clients List */}
         <div>
-          {filteredClients.length === 0 ? (
+          {isLoadingClients ? (
+            <div className="space-y-3">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Card key={i} className="bg-white border-gray-200 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-gray-200 animate-pulse rounded w-1/3" />
+                        <div className="h-3 bg-gray-200 animate-pulse rounded w-1/2" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-200">
+                      <div className="h-8 bg-gray-200 animate-pulse rounded" />
+                      <div className="h-8 bg-gray-200 animate-pulse rounded" />
+                      <div className="h-8 bg-gray-200 animate-pulse rounded" />
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : filteredClients.length === 0 ? (
             <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-16 text-center">
                 <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">
