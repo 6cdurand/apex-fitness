@@ -1958,25 +1958,25 @@ function ProgramBuilderContent() {
       <Dialog open={showSaveBlockDialog} onOpenChange={setShowSaveBlockDialog}>
         <DialogContent className="bg-gray-900 border-gray-800">
           <DialogHeader>
-            <DialogTitle>Save Block to Library</DialogTitle>
+            <DialogTitle className="text-white">Save Block to Library</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Block Name</Label>
+              <Label className="text-gray-300">Block Name</Label>
               <Input
                 value={saveBlockName}
                 onChange={(e) => setSaveBlockName(e.target.value)}
                 placeholder="e.g., Upper Body Strength, Leg Day Warmup"
-                className="mt-2"
+                className="mt-2 bg-gray-800 border-gray-700 text-white"
               />
             </div>
             <div>
-              <Label>Folder <span className="text-gray-500 font-normal">(optional)</span></Label>
+              <Label className="text-gray-300">Folder <span className="text-gray-500 font-normal">(optional)</span></Label>
               <Input
                 value={saveBlockFolder}
                 onChange={(e) => setSaveBlockFolder(e.target.value)}
                 placeholder="e.g., Jason's workouts, Push Day"
-                className="mt-2"
+                className="mt-2 bg-gray-800 border-gray-700 text-white"
                 list="program-folder-suggestions"
               />
               <datalist id="program-folder-suggestions">
