@@ -12,6 +12,7 @@ import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
+import { __buildWorkoutCompletedNotification } from '../workoutCompletedNotification';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
 import { useTrainerStore } from './trainerStore';
@@ -392,6 +393,25 @@ export const useWorkoutStore = create<WorkoutState>()(
               status: 'completed',
               notes: `Completed PT session`,
             });
+
+            // Create in-app notification for client
+            const socialStore = getSocialStore().getState();
+            const authUser = useAuthStore.getState().user;
+            const trainerName = authUser?.displayName || 'Your trainer';
+
+            const notificationPayload = __buildWorkoutCompletedNotification({
+              workout: {
+                id: completedWorkout.id,
+                userId: clientId,
+                name: completedWorkout.name,
+                totalVolume: completedWorkout.totalVolume,
+                duration: completedWorkout.duration,
+              },
+              trainerName,
+              trainerId,
+            });
+
+            socialStore.addNotification(notificationPayload);
           } else {
             // Mark the existing session as completed
             trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
