@@ -407,6 +407,10 @@ function SettingsPageContent() {
   const [exerciseUnit, setExerciseUnit] = useState<WeightUnit>('kg');
   const [isPublicProfile, setIsPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  // TODO: notification_prefs JSONB column may not exist in users table yet.
+  // DEFAULT to { email: true, push: true } client-side until schema migration applied.
+  const [emailNotifications, setEmailNotifications] = useState((user as any)?.notification_prefs?.email ?? true);
+  const [pushNotifications, setPushNotifications] = useState((user as any)?.notification_prefs?.push ?? true);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   
   // Gym affiliation
@@ -1003,30 +1007,34 @@ function SettingsPageContent() {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-gray-900">Weekly Reports</p>
-                <p className="text-sm text-gray-500">Get notified when your weekly report is ready</p>
+                <p className="font-medium text-gray-900">Email Notifications</p>
+                <p className="text-sm text-gray-500">Receive workout summaries, program updates, and reminders via email</p>
               </div>
               <Switch 
-                checked={notifications}
-                onCheckedChange={setNotifications}
+                checked={emailNotifications}
+                onCheckedChange={(checked) => {
+                  setEmailNotifications(checked);
+                  // TODO: Save to users.notification_prefs once column exists
+                  toast.success(checked ? 'Email notifications enabled' : 'Email notifications disabled');
+                }}
                 className="data-[state=checked]:bg-sky-500"
               />
             </div>
             <Separator className="bg-gray-200" />
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-gray-900">Workout Reminders</p>
-                <p className="text-sm text-gray-500">Remind me to workout</p>
+                <p className="font-medium text-gray-900">Push Notifications</p>
+                <p className="text-sm text-gray-500">Receive in-app alerts for messages, completed workouts, and updates</p>
               </div>
-              <Switch className="data-[state=checked]:bg-sky-500" />
-            </div>
-            <Separator className="bg-gray-200" />
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-gray-900">Social Notifications</p>
-                <p className="text-sm text-gray-500">Likes, comments, and follows</p>
-              </div>
-              <Switch defaultChecked className="data-[state=checked]:bg-sky-500" />
+              <Switch 
+                checked={pushNotifications}
+                onCheckedChange={(checked) => {
+                  setPushNotifications(checked);
+                  // TODO: Save to users.notification_prefs once column exists
+                  toast.success(checked ? 'Push notifications enabled' : 'Push notifications disabled');
+                }}
+                className="data-[state=checked]:bg-sky-500"
+              />
             </div>
           </CardContent>
         </Card>
