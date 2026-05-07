@@ -25,7 +25,8 @@ import {
   Search,
   BadgeCheck,
   Check,
-  CheckCheck
+  CheckCheck,
+  Loader2
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -39,6 +40,7 @@ export default function MessagesPage() {
     getOrCreateConversation, 
     getMessages, 
     sendMessage, 
+    retryMessage,
     markAsRead,
     getConversationsForUser 
   } = useMessageStore();
@@ -273,9 +275,21 @@ export default function MessagesPage() {
                               {format(new Date(msg.createdAt), 'HH:mm')}
                             </span>
                             {isOwn && (
-                              msg.read 
-                                ? <CheckCheck className="w-3 h-3 text-sky-200" />
-                                : <Check className="w-3 h-3 text-sky-200" />
+                              msg.status === 'failed' ? (
+                                <button
+                                  onClick={() => retryMessage(msg.id)}
+                                  className="text-xs text-red-200 hover:text-red-100 underline flex items-center gap-1"
+                                  title="Tap to retry"
+                                >
+                                  Failed • Retry
+                                </button>
+                              ) : msg.status === 'pending' ? (
+                                <Loader2 className="w-3 h-3 text-sky-200 animate-spin" />
+                              ) : msg.read ? (
+                                <CheckCheck className="w-3 h-3 text-sky-200" />
+                              ) : (
+                                <Check className="w-3 h-3 text-sky-200" />
+                              )
                             )}
                           </div>
                         </div>
