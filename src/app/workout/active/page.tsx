@@ -2971,7 +2971,7 @@ export default function ActiveWorkoutPage() {
                                         value={set.duration || ''}
                                         onChange={(e) => updateSet(workoutExercise.id, set.id, { duration: parseInt(e.target.value) || 30 })}
                                         disabled={set.completed || setTimer?.isRunning}
-                                        className={cn("h-9 text-center bg-gray-50 border-gray-200", set.completed && "opacity-50")}
+                                        className={cn("min-h-[44px] h-9 text-center bg-gray-50 border-gray-200", set.completed && "opacity-50")}
                                       />
                                     </div>
                                     {/* Timer display and controls */}
@@ -3054,7 +3054,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.weight == null && set.previousWeight != null && "placeholder:text-sky-300")}
+                                        className={cn("min-h-[44px] h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.weight == null && set.previousWeight != null && "placeholder:text-sky-300")}
                                       />
                                     </div>
                                     {/* Reps Input */}
@@ -3076,7 +3076,7 @@ export default function ActiveWorkoutPage() {
                                           }
                                         }}
                                         disabled={set.completed}
-                                        className={cn("h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.reps == null && set.previousReps != null && "placeholder:text-sky-300")}
+                                        className={cn("min-h-[44px] h-8 sm:h-9 text-center text-xs sm:text-sm bg-gray-50 border-gray-200 px-1", set.completed && "opacity-50", set.reps == null && set.previousReps != null && "placeholder:text-sky-300")}
                                       />
                                     </div>
                                   </>
@@ -3177,7 +3177,7 @@ export default function ActiveWorkoutPage() {
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
                                     disabled={drop.completed}
-                                    className={cn("w-16 h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
+                                    className={cn("w-16 min-h-[44px] h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
                                   />
                                   <span className="text-gray-600">×</span>
                                   <Input
@@ -3190,7 +3190,7 @@ export default function ActiveWorkoutPage() {
                                       updateSet(workoutExercise.id, set.id, { drops: newDrops });
                                     }}
                                     disabled={drop.completed}
-                                    className={cn("w-16 h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
+                                    className={cn("w-16 min-h-[44px] h-8 text-center bg-gray-50 border-gray-200 text-sm", drop.completed && "opacity-50")}
                                   />
                                   {/* Drop set complete/undo button */}
                                   {!drop.completed ? (
