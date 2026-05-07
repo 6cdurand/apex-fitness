@@ -579,7 +579,7 @@ export interface WeeklyReport {
 export type NotificationType = 
   | 'weekly_report' | 'workout_assigned' | 'friend_request' 
   | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system'
-  | 'program_assigned' | 'session_booked';
+  | 'program_assigned' | 'session_booked' | 'workout_completed_summary';
 
 export interface Notification {
   id: string;
@@ -591,9 +591,10 @@ export interface Notification {
   actionUrl?: string;
   link?: string;
   // Optional references that let a notification deep-link into a specific
-  // entity. Both stay optional so legacy rows (pre-fix) parse cleanly and
+  // entity. All stay optional so legacy rows (pre-fix) parse cleanly and
   // any consumer must null-check before using them.
   programId?: string;
+  workoutId?: string;
   senderId?: string;
   createdAt: string;
 }
