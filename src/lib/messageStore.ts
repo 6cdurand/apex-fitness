@@ -39,6 +39,7 @@ interface MessageState {
   retryMessage: (messageId: string) => void;
   markAsRead: (conversationId: string, userId: string) => void;
   getUnreadCount: (userId: string) => number;
+  getUnreadCountForConversation: (conversationId: string, userId: string) => number;
   getConversationsForUser: (userId: string) => Conversation[];
 }
 
@@ -298,6 +299,12 @@ export const useMessageStore = create<MessageState>()(
 
       getUnreadCount: (userId) => {
         return get().messages.filter(m => m.receiverId === userId && !m.read).length;
+      },
+
+      getUnreadCountForConversation: (conversationId, userId) => {
+        return get().messages.filter(
+          m => m.conversationId === conversationId && m.receiverId === userId && !m.read
+        ).length;
       },
 
       getConversationsForUser: (userId) => {

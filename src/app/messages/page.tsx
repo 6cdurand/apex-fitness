@@ -42,7 +42,8 @@ export default function MessagesPage() {
     sendMessage, 
     retryMessage,
     markAsRead,
-    getConversationsForUser 
+    getConversationsForUser,
+    getUnreadCountForConversation
   } = useMessageStore();
   
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
@@ -175,8 +176,8 @@ export default function MessagesPage() {
   if (!isAuthenticated || !user) return null;
 
   const userConversations = getConversationsForUser(user.id).sort((a, b) => {
-    const aUnread = messages.filter(m => m.conversationId === a.id && m.receiverId === user.id && !m.read).length;
-    const bUnread = messages.filter(m => m.conversationId === b.id && m.receiverId === user.id && !m.read).length;
+    const aUnread = getUnreadCountForConversation(a.id, user.id);
+    const bUnread = getUnreadCountForConversation(b.id, user.id);
     // Unread conversations first, then by most recent
     if (aUnread > 0 && bUnread === 0) return -1;
     if (bUnread > 0 && aUnread === 0) return 1;
@@ -430,9 +431,7 @@ export default function MessagesPage() {
                   <div className="space-y-2">
                     {userConversations.map((conv) => {
                       const otherUser = getOtherUser(conv);
-                      const unreadCount = messages.filter(
-                        m => m.conversationId === conv.id && m.receiverId === user.id && !m.read
-                      ).length;
+                      const unreadCount = getUnreadCountForConversation(conv.id, user.id);
                       
                       return (
                         <Card 
