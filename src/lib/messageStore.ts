@@ -18,6 +18,7 @@ export interface Message {
   content: string;
   createdAt: string;
   read: boolean;
+  status?: 'pending' | 'sent' | 'failed';
 }
 
 export interface Conversation {
@@ -35,6 +36,7 @@ interface MessageState {
   getOrCreateConversation: (currentUserId: string, otherUserId: string) => Conversation;
   getMessages: (conversationId: string) => Message[];
   sendMessage: (conversationId: string, senderId: string, receiverId: string, content: string) => Message;
+  retryMessage: (messageId: string) => void;
   markAsRead: (conversationId: string, userId: string) => void;
   getUnreadCount: (userId: string) => number;
   getConversationsForUser: (userId: string) => Conversation[];
@@ -163,6 +165,7 @@ export const useMessageStore = create<MessageState>()(
           content,
           createdAt: new Date().toISOString(),
           read: false,
+          status: 'pending',
         };
 
         // Snapshot the conversation BEFORE the local set so we can hand its
@@ -205,9 +208,70 @@ export const useMessageStore = create<MessageState>()(
                 updatedAt: message.createdAt,
               }
             : undefined,
-        );
+        ).then(() => {
+          // Mark as sent on success
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === message.id ? { ...m, status: 'sent' as const } : m
+            ),
+          }));
+        }).catch(() => {
+          // Mark as failed on error
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === message.id ? { ...m, status: 'failed' as const } : m
+            ),
+          }));
+        });
 
         return message;
+      },
+
+      retryMessage: (messageId) => {
+        const message = get().messages.find(m => m.id === messageId);
+        if (!message || message.status !== 'failed') return;
+
+        // Reset to pending
+        set(state => ({
+          messages: state.messages.map(m =>
+            m.id === messageId ? { ...m, status: 'pending' as const } : m
+          ),
+        }));
+
+        // Find conversation for sync context
+        const conversation = get().conversations.find(c => c.id === message.conversationId);
+
+        // Retry sync
+        syncMessageToSupabase(
+          {
+            id: message.id,
+            conversationId: message.conversationId,
+            senderId: message.senderId,
+            receiverId: message.receiverId,
+            content: message.content,
+            read: message.read,
+            createdAt: message.createdAt,
+          },
+          conversation
+            ? {
+                id: conversation.id,
+                participants: conversation.participants,
+                updatedAt: conversation.updatedAt,
+              }
+            : undefined,
+        ).then(() => {
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === messageId ? { ...m, status: 'sent' as const } : m
+            ),
+          }));
+        }).catch(() => {
+          set(state => ({
+            messages: state.messages.map(m =>
+              m.id === messageId ? { ...m, status: 'failed' as const } : m
+            ),
+          }));
+        });
       },
 
       markAsRead: (conversationId, userId) => {
