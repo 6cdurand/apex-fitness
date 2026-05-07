@@ -488,6 +488,10 @@ function WorkoutBuilderContent() {
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
   const [showSwapPanel, setShowSwapPanel] = useState(false);
+  const [exerciseFilters, setExerciseFilters] = useState<{
+    muscleGroup: string[];
+    equipment: string[];
+  }>({ muscleGroup: [], equipment: [] });
   
   // New state for enhanced builder
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId);
@@ -1905,10 +1909,71 @@ function WorkoutBuilderContent() {
                           className="pl-9 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-500"
                         />
                       </div>
+                      <div className="flex flex-wrap gap-1 mb-2">
+                        {['push', 'pull', 'legs', 'core'].map(mg => (
+                          <button
+                            key={mg}
+                            onClick={() => setExerciseFilters(f => ({
+                              ...f,
+                              muscleGroup: f.muscleGroup.includes(mg) 
+                                ? f.muscleGroup.filter(m => m !== mg)
+                                : [...f.muscleGroup, mg]
+                            }))}
+                            className={`px-2 py-0.5 text-[10px] rounded-full transition-colors ${
+                              exerciseFilters.muscleGroup.includes(mg)
+                                ? 'bg-sky-500 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {mg}
+                          </button>
+                        ))}
+                        {['barbell', 'dumbbell', 'bodyweight', 'machine', 'cable'].map(eq => (
+                          <button
+                            key={eq}
+                            onClick={() => setExerciseFilters(f => ({
+                              ...f,
+                              equipment: f.equipment.includes(eq)
+                                ? f.equipment.filter(e => e !== eq)
+                                : [...f.equipment, eq]
+                            }))}
+                            className={`px-2 py-0.5 text-[10px] rounded-full transition-colors ${
+                              exerciseFilters.equipment.includes(eq)
+                                ? 'bg-purple-500 text-white'
+                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
+                          >
+                            {eq}
+                          </button>
+                        ))}
+                      </div>
                       <ScrollArea className="h-32">
                         <div className="space-y-1">
                           {searchExercises(exerciseSearch, { extraExercises: customAsLibraryExercises, limit: 50 })
                           .filter(ex => ex.id !== editingExercise.exercise.exerciseId)
+                          .filter(ex => {
+                            // Muscle group filter (push/pull/legs/core)
+                            if (exerciseFilters.muscleGroup.length > 0) {
+                              const pushMuscles = ['chest', 'shoulders', 'triceps'];
+                              const pullMuscles = ['back', 'lats', 'biceps', 'traps'];
+                              const legsMuscles = ['quads', 'hamstrings', 'glutes', 'calves'];
+                              const coreMuscles = ['abs', 'obliques'];
+                              
+                              const hasPush = exerciseFilters.muscleGroup.includes('push') && ex.primaryMuscles.some(m => pushMuscles.includes(m));
+                              const hasPull = exerciseFilters.muscleGroup.includes('pull') && ex.primaryMuscles.some(m => pullMuscles.includes(m));
+                              const hasLegs = exerciseFilters.muscleGroup.includes('legs') && ex.primaryMuscles.some(m => legsMuscles.includes(m));
+                              const hasCore = exerciseFilters.muscleGroup.includes('core') && ex.primaryMuscles.some(m => coreMuscles.includes(m));
+                              
+                              if (!hasPush && !hasPull && !hasLegs && !hasCore) return false;
+                            }
+                            
+                            // Equipment filter
+                            if (exerciseFilters.equipment.length > 0) {
+                              if (!exerciseFilters.equipment.includes(ex.equipment)) return false;
+                            }
+                            
+                            return true;
+                          })
                           .map(ex => {
                             const libEntry = exerciseLibraryMap.get(ex.id);
                             return (
