@@ -825,7 +825,7 @@ function AuthPageContent() {
                           <Heart className="w-5 h-5 text-red-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-white text-sm">Apple Health</p>
+                          <p className="font-medium text-gray-900 text-sm">Apple Health</p>
                           <p className="text-[11px] text-gray-500">Steps, calories, heart rate, sleep</p>
                         </div>
                         {onboardConnections.appleHealth && <Check className="w-5 h-5 text-red-400" />}
@@ -845,7 +845,7 @@ function AuthPageContent() {
                           <Smartphone className="w-5 h-5 text-green-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-white text-sm">Google / Samsung Health</p>
+                          <p className="font-medium text-gray-900 text-sm">Google / Samsung Health</p>
                           <p className="text-[11px] text-gray-500">Steps, calories, heart rate</p>
                         </div>
                         {onboardConnections.googleHealth && <Check className="w-5 h-5 text-green-400" />}
@@ -865,7 +865,7 @@ function AuthPageContent() {
                           <Calendar className="w-5 h-5 text-blue-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-white text-sm">Calendar</p>
+                          <p className="font-medium text-gray-900 text-sm">Calendar</p>
                           <p className="text-[11px] text-gray-500">Sync workouts to your phone calendar</p>
                         </div>
                         {onboardConnections.calendar && <Check className="w-5 h-5 text-blue-400" />}
@@ -886,7 +886,7 @@ function AuthPageContent() {
                             <CreditCard className="w-5 h-5 text-purple-400" />
                           </div>
                           <div className="flex-1 text-left">
-                            <p className="font-medium text-white text-sm">Stripe</p>
+                            <p className="font-medium text-gray-900 text-sm">Stripe</p>
                             <p className="text-[11px] text-gray-500">Accept payments from clients</p>
                           </div>
                           {onboardConnections.stripe && <Check className="w-5 h-5 text-purple-400" />}
