@@ -507,7 +507,7 @@ function ClientsPageContent() {
                   Add Client
                 </Button>
               </DialogTrigger>
-            <DialogContent className="bg-white border-gray-200">
+            <DialogContent className="bg-white border-gray-200 max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-gray-900">Add Client</DialogTitle>
                 <DialogDescription>
@@ -862,7 +862,7 @@ function ClientsPageContent() {
                             </Badge>
                           </div>
                           
-                          <div className="flex items-center gap-3 text-sm">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm">
                             <span className="flex items-center gap-1 text-gray-500">
                               <CheckCircle2 className="w-3 h-3" />
                               {workoutsDone} sessions
@@ -905,7 +905,7 @@ function ClientsPageContent() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-500 hover:text-gray-900"
+                          className="text-gray-500 hover:text-gray-900 min-h-[44px]"
                           onClick={(e) => {
                             e.stopPropagation();
                             if (!user?.id) return;
@@ -919,7 +919,7 @@ function ClientsPageContent() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-500 hover:text-gray-900"
+                          className="text-gray-500 hover:text-gray-900 min-h-[44px]"
                           onClick={(e) => {
                             e.stopPropagation();
                             setSelectedClientId(client.clientId);
@@ -932,7 +932,7 @@ function ClientsPageContent() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="text-gray-500 hover:text-gray-900"
+                          className="text-gray-500 hover:text-gray-900 min-h-[44px]"
                           onClick={(e) => {
                             e.stopPropagation();
                             setBookingClientId(client.clientId);
@@ -1056,7 +1056,7 @@ function ClientsPageContent() {
 
       {/* Add Group Dialog */}
       <Dialog open={showAddGroup} onOpenChange={setShowAddGroup}>
-        <DialogContent className="bg-white border-gray-200 shadow-sm max-h-[90vh] overflow-y-auto">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-gray-900">Create Group</DialogTitle>
             <DialogDescription>
@@ -1167,7 +1167,7 @@ function ClientsPageContent() {
 
       {/* Booking Dialog */}
       <Dialog open={showBooking} onOpenChange={setShowBooking}>
-        <DialogContent className="bg-white border-gray-200 shadow-sm">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-gray-900">Book Session</DialogTitle>
             <DialogDescription>
@@ -1275,7 +1275,7 @@ function ClientsPageContent() {
 
       {/* Assign Workout Dialog */}
       <Dialog open={showAssignWorkout} onOpenChange={setShowAssignWorkout}>
-        <DialogContent className="bg-white border-gray-200 shadow-sm">
+        <DialogContent className="bg-white border-gray-200 shadow-sm max-w-[95vw] sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-gray-900">Assign Workout</DialogTitle>
             <DialogDescription>
