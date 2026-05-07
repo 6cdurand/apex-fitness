@@ -19,6 +19,7 @@ import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { format } from 'date-fns';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { ExerciseImage } from '@/components/ExerciseImage';
@@ -2907,7 +2908,9 @@ export default function ActiveWorkoutPage() {
                         {/* Volume Comparison Bar */}
                         {lastVolume > 0 && (
                           <div className="px-4 py-1.5 bg-gray-50 flex items-center justify-between text-[11px]">
-                            <span className="text-gray-500">Last: {lastVolume.toLocaleString()}kg</span>
+                            <span className={exercisePB ? "text-amber-500" : "text-gray-500"}>
+                              {exercisePB ? 'PB:' : 'Last:'} {lastVolume.toLocaleString()}kg
+                            </span>
                             <span className={cn(
                               "font-medium",
                               currentVolume > lastVolume ? "text-green-400" : currentVolume < lastVolume ? "text-orange-400" : "text-gray-400"
@@ -3018,21 +3021,28 @@ export default function ActiveWorkoutPage() {
                                     {/* Previous — tap to fill */}
                                     <div className="col-span-3">
                                       {previousDisplay !== '—' ? (
-                                        <button
-                                          onClick={() => {
-                                            if (!set.completed && set.previousWeight != null && set.previousReps) {
-                                              updateSet(workoutExercise.id, set.id, { 
-                                                weight: Math.abs(set.previousWeight), 
-                                                reps: set.previousReps 
-                                              });
-                                            }
-                                          }}
-                                          disabled={set.completed}
-                                          className="text-xs text-sky-500 hover:text-sky-400 active:scale-95 transition-all disabled:text-gray-500 disabled:cursor-default"
-                                          title="Tap to fill"
-                                        >
-                                          {previousDisplay}
-                                        </button>
+                                        <div className="flex flex-col items-start">
+                                          <button
+                                            onClick={() => {
+                                              if (!set.completed && set.previousWeight != null && set.previousReps) {
+                                                updateSet(workoutExercise.id, set.id, { 
+                                                  weight: Math.abs(set.previousWeight), 
+                                                  reps: set.previousReps 
+                                                });
+                                              }
+                                            }}
+                                            disabled={set.completed}
+                                            className="text-xs text-sky-500 hover:text-sky-400 active:scale-95 transition-all disabled:text-gray-500 disabled:cursor-default"
+                                            title="Tap to fill"
+                                          >
+                                            {previousDisplay}
+                                          </button>
+                                          {lastWorkout && (
+                                            <span className="text-[9px] text-gray-400">
+                                              {format(new Date(lastWorkout.startTime), 'MMM d')}
+                                            </span>
+                                          )}
+                                        </div>
                                       ) : (
                                         <span className="text-xs text-gray-500">—</span>
                                       )}
