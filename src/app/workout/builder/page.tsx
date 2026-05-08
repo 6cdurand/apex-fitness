@@ -18,6 +18,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExerciseImage } from '@/components/ExerciseImage';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
@@ -1129,31 +1136,45 @@ function WorkoutBuilderContent() {
       </div>
 
       {/* Client Selection */}
+      {/*
+        Dropdown picker (replaces the previous full-grid that rendered a
+        button per client). Christo's report: the grid was overwhelming
+        once a trainer had more than a handful of clients, and the
+        Update Workout edit flow re-selecting from the same grid felt
+        excessive when the assignment is already known. A Select keeps
+        the assignment editable but compact, scales to N clients
+        without dominating the page, and matches the dropdown pattern
+        used elsewhere (e.g. the Gender select on /auth).
+      */}
       <Card className="mb-4 bg-gray-900/50 border-gray-800">
         <CardContent className="p-4">
           <Label className="mb-3 block text-white">Assign to Client</Label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {clients.map((c) => {
-              const isSelected = selectedClientId === c.clientId;
-              return (
-                <button
-                  key={c.clientId}
-                  className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 transition-all ${
-                    isSelected 
-                      ? 'bg-sky-500/20 border-sky-500 text-sky-400 ring-2 ring-sky-500/50' 
-                      : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-sky-500/50 hover:bg-gray-800'
-                  }`}
-                  onClick={() => setSelectedClientId(c.clientId)}
-                >
-                  <Users className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate text-sm font-medium">{getClientNameUtil(c.clientId)}</span>
-                </button>
-              );
-            })}
-            {clients.length === 0 && (
-              <p className="text-sm text-muted-foreground col-span-full">No clients found</p>
-            )}
-          </div>
+          {clients.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No clients found</p>
+          ) : (
+            <Select
+              value={selectedClientId ?? ''}
+              onValueChange={(v) => setSelectedClientId(v || null)}
+            >
+              <SelectTrigger className="w-full bg-gray-800/50 border-gray-700 text-white hover:border-sky-500/50 focus:ring-sky-500/50">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-sky-400 flex-shrink-0" />
+                  <SelectValue placeholder="Select a client…" />
+                </div>
+              </SelectTrigger>
+              <SelectContent className="bg-gray-900 border-gray-700">
+                {clients.map((c) => (
+                  <SelectItem
+                    key={c.clientId}
+                    value={c.clientId}
+                    className="text-gray-200 focus:text-white focus:bg-sky-500/20"
+                  >
+                    {getClientNameUtil(c.clientId)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </CardContent>
       </Card>
 
