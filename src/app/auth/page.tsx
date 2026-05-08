@@ -263,7 +263,23 @@ function AuthPageContent() {
       
       router.push('/workout');
     } else {
-      toast.error('Invalid email or password');
+      // Surface a specific reason instead of the generic "invalid email or
+      // password" toast. The most important branch is `oauth_only`: accounts
+      // registered through Google have no password_hash, so retrying any
+      // password will always fail. The user needs the Google button.
+      const reason = useAuthStore.getState().loginError;
+      if (reason === 'oauth_only') {
+        toast.error('This account uses Google Sign-In. Please use "Continue with Google" below.', {
+          duration: 6000,
+        });
+      } else if (reason === 'no_user') {
+        toast.error('No account found with this email. Try "Create Account" instead.');
+      } else if (reason === 'network') {
+        toast.error('Could not reach server. Check your connection and try again.');
+      } else {
+        // wrong_password or local-only failure
+        toast.error('Invalid email or password.');
+      }
     }
   };
 

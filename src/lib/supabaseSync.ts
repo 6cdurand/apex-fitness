@@ -201,11 +201,27 @@ export async function resolveCanonicalUserByEmail(
   }
 }
 
+/**
+ * Discriminated result for {@link loginFromSupabase}.
+ *
+ * Lets the auth UI surface a specific message instead of the generic
+ * "Invalid email or password" — particularly important for accounts
+ * created via Google OAuth (`oauth_only`), where the user has no
+ * password_hash to compare against and the only path forward is to
+ * use the "Continue with Google" button.
+ */
+export type SupabaseLoginResult =
+  | { kind: 'success'; user: User }
+  | { kind: 'no_user' }
+  | { kind: 'oauth_only' }
+  | { kind: 'wrong_password' }
+  | { kind: 'network' };
+
 // Login user from Supabase (cross-device)
-export async function loginFromSupabase(email: string, password: string): Promise<User | null> {
+export async function loginFromSupabase(email: string, password: string): Promise<SupabaseLoginResult> {
   if (!isSupabaseConfigured()) {
     console.log('[Supabase Login] Not configured');
-    return null;
+    return { kind: 'network' };
   }
   
   const emailLower = email.toLowerCase().trim();
@@ -215,22 +231,35 @@ export async function loginFromSupabase(email: string, password: string): Promis
   
   try {
     // First check if user exists by email only (to debug password issues)
-    const { data: userByEmail } = await supabase
+    const { data: userByEmail, error: lookupError } = await supabase
       .from('users')
       .select('id, email, password_hash')
       .eq('email', emailLower)
       .maybeSingle();
     
-    if (!userByEmail) {
-      console.log('[Supabase Login] ❌ No user found with email:', emailLower);
-      return null;
+    if (lookupError) {
+      console.log('[Supabase Login] ❌ Lookup error:', lookupError.message);
+      return { kind: 'network' };
     }
     
-    console.log('[Supabase Login] Found user, hashes match:', userByEmail.password_hash === passwordHash);
+    if (!userByEmail) {
+      console.log('[Supabase Login] ❌ No user found with email:', emailLower);
+      return { kind: 'no_user' };
+    }
+    
+    // Distinguish OAuth-only accounts (no password set) from wrong-password
+    // attempts. Without this branch, users who registered via Google get
+    // the same opaque "Invalid email or password" toast as someone who
+    // typo'd a password — and have no idea they should click the Google
+    // button instead.
+    if (!userByEmail.password_hash) {
+      console.log('[Supabase Login] ❌ Account has no password (OAuth-only)');
+      return { kind: 'oauth_only' };
+    }
     
     if (userByEmail.password_hash !== passwordHash) {
       console.log('[Supabase Login] ❌ Password mismatch');
-      return null;
+      return { kind: 'wrong_password' };
     }
     
     // Now get full user data
@@ -242,7 +271,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
     
     if (error || !data) {
       console.log('[Supabase Login] ❌ Error fetching user data:', error?.message);
-      return null;
+      return { kind: 'network' };
     }
     
     // Convert DB user to local User type
@@ -266,10 +295,10 @@ export async function loginFromSupabase(email: string, password: string): Promis
     };
     
     console.log('User logged in from Supabase:', email);
-    return user;
+    return { kind: 'success', user };
   } catch (e) {
     console.error('Login from Supabase failed:', e);
-    return null;
+    return { kind: 'network' };
   }
 }
 
