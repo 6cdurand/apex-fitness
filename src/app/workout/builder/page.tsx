@@ -1071,7 +1071,10 @@ function WorkoutBuilderContent() {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl pb-24">
+    // pb-36 (9rem) on mobile to clear the new two-row action bar
+    // (meta row stacked above the button row); pb-24 from sm and up
+    // since the desktop action bar is still a single row.
+    <div className="container mx-auto p-4 max-w-4xl pb-36 sm:pb-24">
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <Button variant="ghost" onClick={() => router.back()}>
@@ -2406,41 +2409,57 @@ function WorkoutBuilderContent() {
       </Dialog>
 
       {/* Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
-        <div className="container mx-auto max-w-4xl flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                {blocks.length} block{blocks.length !== 1 ? 's' : ''} • {' '}
-                {blocks.reduce((acc, b) => acc + b.exercises.length, 0)} exercises
-              </p>
-            </div>
+      {/*
+        Mobile fix: in edit mode the action bar contains TWO buttons
+        (Delete & Restart + Update Workout) plus the left-side meta
+        (blocks count + duration estimate with a verbose "(Xm work,
+        Ym rest)" breakdown). With `flex justify-between` on a phone
+        viewport the meta eats the row width and the primary CTA is
+        clipped off-screen to the right — Christo's "the Update
+        Workout button is hidden in mobile view" report. Fix:
+          - Stack vertically on mobile (`flex-col`), inline on >=sm.
+          - Buttons row goes full-width on mobile so the primary CTA
+            is always reachable; meta sits above.
+          - Hide the verbose work/rest sub-line on mobile to keep the
+            duration chip compact (still shown on >=sm).
+          - Buttons split the row 50/50 on mobile via `flex-1` so
+            both fit within the viewport regardless of label length.
+      */}
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-3 sm:p-4">
+        <div className="container mx-auto max-w-4xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              {blocks.length} block{blocks.length !== 1 ? 's' : ''} •{' '}
+              {blocks.reduce((acc, b) => acc + b.exercises.length, 0)} exercises
+            </p>
             {blocks.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-sky-500/10 rounded-lg border border-sky-500/20">
+              <div className="flex items-center gap-2 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-sky-500/10 rounded-lg border border-sky-500/20">
                 <Clock className="h-4 w-4 text-sky-400" />
                 <div className="text-sm">
                   <span className="font-semibold text-sky-400">~{estimatedDuration} min</span>
-                  <span className="text-xs text-muted-foreground ml-2">
+                  <span className="hidden sm:inline text-xs text-muted-foreground ml-2">
                     ({Math.round(workoutEstimate.workSeconds / 60)}m work, {Math.round(workoutEstimate.restSeconds / 60)}m rest)
                   </span>
                 </div>
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto">
             {isEditMode && (
-              <Button 
+              <Button
                 variant="destructive"
                 size="lg"
                 onClick={handleDeleteAndRestart}
+                className="flex-1 sm:flex-none"
               >
-                <Trash2 className="h-4 w-4 mr-2" /> Delete & Restart
+                <Trash2 className="h-4 w-4 mr-2" /> <span className="hidden xs:inline">Delete & Restart</span><span className="xs:hidden">Delete</span>
               </Button>
             )}
-            <Button 
-              onClick={handleSave} 
+            <Button
+              onClick={handleSave}
               size="lg"
               disabled={blocks.length === 0}
+              className="flex-1 sm:flex-none"
             >
               <Save className="h-4 w-4 mr-2" /> {isEditMode ? 'Update Workout' : 'Save & Link to Session'}
             </Button>
