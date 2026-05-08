@@ -5,6 +5,7 @@ import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@
 import {
   useMessageStore,
   mergeMessagesPreferRead,
+  dedupeConversationsByParticipants,
   type Message,
   type Conversation,
 } from '@/lib/messageStore';
@@ -334,6 +335,18 @@ export function SupabaseSync() {
         updatedAt: c.updatedAt,
       })));
 
+      // Heal duplicate conversation rows for the same participant pair.
+      // `mergeData` only dedupes by `id`, so two rows for the same pair
+      // (e.g. one persisted before the canonical-id heal landed and one
+      // after) both survive the merge and surface as the "two message
+      // blocks with hendrik" symptom in /messages. The pure helper
+      // collapses them to a single canonical row and rewrites every
+      // dropped row's messages so the surviving thread keeps the full
+      // history. Runs on every Supabase sync — eventually-consistent
+      // self-heal across devices.
+      const { conversations: dedupedConversations, messages: dedupedMessages } =
+        dedupeConversationsByParticipants(mergedConversations, mergedMessages);
+
       // Update stores with merged data
       useWorkoutStore.setState({
         workoutHistory: mergedWorkouts,
@@ -345,8 +358,8 @@ export function SupabaseSync() {
       });
       
       useMessageStore.setState({
-        messages: mergedMessages,
-        conversations: mergedConversations,
+        messages: dedupedMessages,
+        conversations: dedupedConversations,
       });
 
       // ALWAYS update user's followers/following from Supabase (source of truth)

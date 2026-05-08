@@ -45,7 +45,9 @@ if (typeof (globalThis as any).localStorage === 'undefined') {
 import {
   computeMessageIdsToMarkRead,
   mergeMessagesPreferRead,
+  dedupeConversationsByParticipants,
   useMessageStore,
+  type Conversation,
   type Message,
 } from '../messageStore';
 import {
@@ -539,6 +541,156 @@ const conversationPayload: ConversationData = {
     // Clean up so later additions don't inherit this seeded state.
     useMessageStore.setState({ conversations: [], messages: [] });
     __setMessagingSupabaseClientForTests(null);
+  }
+
+  // ============ D8(c): dedupeConversationsByParticipants ============
+  // Pure-helper coverage for the heal-on-sync routine that collapses
+  // duplicate conversation rows for the same participant pair (the
+  // "two message blocks with hendrik" symptom Christo reported in
+  // /messages). All tests run against the exported pure function — no
+  // store mutation, no zustand reads.
+  {
+    const A = '00000000-0000-0000-0000-aaaaaaaaaaaa';
+    const B = '00000000-0000-0000-0000-bbbbbbbbbbbb';
+    const C = '00000000-0000-0000-0000-cccccccccccc';
+
+    const mkConv = (
+      id: string,
+      participants: string[],
+      updatedAt: string,
+    ): Conversation => ({ id, participants, updatedAt });
+
+    const mkMsg = (
+      id: string,
+      conversationId: string,
+    ): Message => ({
+      id,
+      conversationId,
+      senderId: A,
+      receiverId: B,
+      content: 'hi',
+      createdAt: '2026-04-28T00:00:00.000Z',
+      read: false,
+    });
+
+    // --- (c1) No duplicates → input passes through unchanged ---
+    {
+      const conv = [mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z')];
+      const msgs = [mkMsg('m1', 'c1')];
+      const out = dedupeConversationsByParticipants(conv, msgs);
+      assert(
+        'D8(c1): single conversation passes through unchanged',
+        out.conversations.length === 1 &&
+          out.conversations[0].id === 'c1' &&
+          out.messages.length === 1 &&
+          out.messages[0].conversationId === 'c1',
+      );
+    }
+
+    // --- (c2) Two convs same pair, picks newer updatedAt ---
+    {
+      const older = mkConv('c-old', [A, B], '2026-05-01T00:00:00.000Z');
+      const newer = mkConv('c-new', [A, B], '2026-05-07T00:00:00.000Z');
+      const msgs = [mkMsg('m-old', 'c-old'), mkMsg('m-new', 'c-new')];
+      const out = dedupeConversationsByParticipants([older, newer], msgs);
+      assert(
+        'ACCEPTANCE D8(c2): one conv kept (the newer one) for the pair',
+        out.conversations.length === 1 && out.conversations[0].id === 'c-new',
+        `got ${JSON.stringify(out.conversations.map(c => c.id))}`,
+      );
+      assert(
+        'D8(c2): all messages reassigned to the kept conversation id',
+        out.messages.every(m => m.conversationId === 'c-new'),
+        `got ${JSON.stringify(out.messages.map(m => [m.id, m.conversationId]))}`,
+      );
+    }
+
+    // --- (c3) Order-insensitive grouping ---
+    {
+      // Two rows with the same pair but participants in reversed order
+      // (a pre-D8(b) legacy row + a canonical row) — must still collapse.
+      const reversed = mkConv('c-rev', [B, A], '2026-05-01T00:00:00.000Z');
+      const canonical = mkConv('c-can', [A, B], '2026-05-08T00:00:00.000Z');
+      const out = dedupeConversationsByParticipants([reversed, canonical], []);
+      assert(
+        'ACCEPTANCE D8(c3): order-insensitive grouping collapses [B,A] + [A,B]',
+        out.conversations.length === 1 && out.conversations[0].id === 'c-can',
+        `got ${JSON.stringify(out.conversations.map(c => [c.id, c.participants]))}`,
+      );
+    }
+
+    // --- (c4) Different pairs are NOT collapsed ---
+    {
+      const ab = mkConv('c-ab', [A, B], '2026-05-01T00:00:00.000Z');
+      const ac = mkConv('c-ac', [A, C], '2026-05-01T00:00:00.000Z');
+      const out = dedupeConversationsByParticipants([ab, ac], []);
+      assert(
+        'D8(c4): distinct participant pairs are preserved',
+        out.conversations.length === 2,
+        `got ${out.conversations.length}`,
+      );
+    }
+
+    // --- (c5) Tie on updatedAt → smallest id wins (deterministic) ---
+    {
+      const a = mkConv('c-aaa', [A, B], '2026-05-01T00:00:00.000Z');
+      const z = mkConv('c-zzz', [A, B], '2026-05-01T00:00:00.000Z');
+      const out = dedupeConversationsByParticipants([a, z], []);
+      assert(
+        'D8(c5): tie-break prefers the smallest id (deterministic across clients)',
+        out.conversations.length === 1 && out.conversations[0].id === 'c-aaa',
+        `got ${out.conversations[0]?.id}`,
+      );
+    }
+
+    // --- (c6) Three duplicates collapse to one + all messages remap ---
+    {
+      const c1 = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const c2 = mkConv('c2', [A, B], '2026-05-05T00:00:00.000Z');
+      const c3 = mkConv('c3', [A, B], '2026-05-08T00:00:00.000Z');
+      const msgs = [mkMsg('m1', 'c1'), mkMsg('m2', 'c2'), mkMsg('m3', 'c3')];
+      const out = dedupeConversationsByParticipants([c1, c2, c3], msgs);
+      assert(
+        'D8(c6): three duplicates collapse to one (newest by updatedAt)',
+        out.conversations.length === 1 && out.conversations[0].id === 'c3',
+      );
+      assert(
+        'D8(c6): every message reassigned to the kept id (no orphans)',
+        out.messages.length === 3 &&
+          out.messages.every(m => m.conversationId === 'c3'),
+        `got ${JSON.stringify(out.messages.map(m => [m.id, m.conversationId]))}`,
+      );
+    }
+
+    // --- (c7) Pure function: input arrays not mutated ---
+    {
+      const c1 = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const c2 = mkConv('c2', [A, B], '2026-05-08T00:00:00.000Z');
+      const msgs = [mkMsg('m1', 'c1')];
+      const inputConvs = [c1, c2];
+      const inputMsgs = [...msgs];
+      dedupeConversationsByParticipants(inputConvs, inputMsgs);
+      assert(
+        'D8(c7): purity — input conversations array unchanged',
+        inputConvs.length === 2 && inputConvs[0].id === 'c1' && inputConvs[1].id === 'c2',
+      );
+      assert(
+        'D8(c7): purity — input messages unchanged (conversationId not mutated)',
+        inputMsgs[0].conversationId === 'c1',
+      );
+    }
+
+    // --- (c8) Malformed rows pass through (defensive) ---
+    {
+      const malformed = { id: 'bad', participants: [], updatedAt: '' } as any as Conversation;
+      const good = mkConv('c-good', [A, B], '2026-05-01T00:00:00.000Z');
+      const out = dedupeConversationsByParticipants([malformed, good], []);
+      assert(
+        'D8(c8): malformed row (empty participants) does NOT collapse with valid rows',
+        out.conversations.length === 2,
+        `got ${out.conversations.length}`,
+      );
+    }
   }
 
   // ============ Summary ============
