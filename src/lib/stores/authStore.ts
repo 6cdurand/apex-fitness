@@ -15,10 +15,26 @@ export function hashPassword(password: string): string {
   return 'h_' + Math.abs(hash).toString(36);
 }
 
+/**
+ * Outcome surfaced to the auth UI after a failed `login()`.
+ *
+ * Lets `/auth` show an actionable error instead of the generic
+ * "Invalid email or password" toast — most importantly, when the
+ * account exists but has no password_hash (`oauth_only`), so the
+ * user knows to click "Continue with Google" instead of retrying
+ * their password.
+ */
+export type LoginErrorReason = 'no_user' | 'wrong_password' | 'oauth_only' | 'network' | null;
+
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /**
+   * Reason for the most recent failed login attempt. Cleared to null
+   * on successful login. Read by `/auth` page to show specific toasts.
+   */
+  loginError: LoginErrorReason;
   /**
    * True once SupabaseSync has finished the heal-on-mount canonical id
    * reconciliation (either applied the heal, confirmed no heal was needed,
@@ -74,11 +90,12 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
       identityNormalized: false,
+      loginError: null,
 
       setIdentityNormalized: (value) => set({ identityNormalized: !!value }),
 
       login: async (email: string, password: string) => {
-        set({ isLoading: true });
+        set({ isLoading: true, loginError: null });
         
         console.log('[Auth] Login attempt for:', email);
         
@@ -109,25 +126,28 @@ export const useAuthStore = create<AuthState>()(
         if (localUser) {
           console.log('[Auth] ✅ Found user in localStorage');
           const { password: _, ...userData } = localUser;
-          set({ user: userData, isAuthenticated: true, isLoading: false });
+          set({ user: userData, isAuthenticated: true, isLoading: false, loginError: null });
           return true;
         }
         
         console.log('[Auth] User not in localStorage, trying Supabase...');
         
-        // Try Supabase for cross-device login
-        const supabaseUser = await loginFromSupabase(email, password);
-        if (supabaseUser) {
-          console.log('[Auth] ✅ Found user in Supabase:', supabaseUser.email);
+        // Try Supabase for cross-device login. The discriminated result lets us
+        // surface 'oauth_only' (account registered via Google, no password set)
+        // distinctly from 'wrong_password' / 'no_user' so the auth UI can guide
+        // the user to the correct sign-in path.
+        const result = await loginFromSupabase(email, password);
+        if (result.kind === 'success') {
+          console.log('[Auth] ✅ Found user in Supabase:', result.user.email);
           // Save to localStorage for future local logins
-          storedUsers.push({ ...supabaseUser, password: hashPassword(password) });
+          storedUsers.push({ ...result.user, password: hashPassword(password) });
           localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-          set({ user: supabaseUser, isAuthenticated: true, isLoading: false });
+          set({ user: result.user, isAuthenticated: true, isLoading: false, loginError: null });
           return true;
         }
         
-        console.log('[Auth] ❌ Login failed - user not found in localStorage or Supabase');
-        set({ isLoading: false });
+        console.log('[Auth] ❌ Login failed - reason:', result.kind);
+        set({ isLoading: false, loginError: result.kind });
         return false;
       },
 
