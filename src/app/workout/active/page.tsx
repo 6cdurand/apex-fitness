@@ -190,6 +190,13 @@ export default function ActiveWorkoutPage() {
     workoutTimer,
     restTimer,
     workoutHistory,
+    // personalBests is destructured (read but unused directly) so this
+    // component subscribes to changes. Without it, PT-session hydration
+    // would push new PBs into the store but the active-workout view
+    // would not re-render until some other subscribed field changed —
+    // which is what caused trainers logging PT sessions to see no PB
+    // chip even though the client's PBs were correctly fetched.
+    personalBests: _personalBestsSubscription,
     addExercise,
     removeExercise,
     updateExercise,
@@ -402,18 +409,46 @@ export default function ActiveWorkoutPage() {
       },
       {
         fetchUserData: async (userId) => {
+          console.log('[PT Hydrate] Fetching client data for userId:', userId);
           const data = await fetchUserDataFromSupabase(userId);
-          if (!data) return null;
+          if (!data) {
+            console.log('[PT Hydrate] ❌ fetchUserDataFromSupabase returned null');
+            return null;
+          }
+          console.log(
+            '[PT Hydrate] ✅ Received',
+            data.workouts.length, 'workouts,',
+            data.personalBests.length, 'PBs for client',
+            userId,
+          );
+          if (data.personalBests.length > 0) {
+            console.log('[PT Hydrate] First PB sample:', {
+              userId: data.personalBests[0].userId,
+              exerciseId: data.personalBests[0].exerciseId,
+              bestWeight: data.personalBests[0].bestWeight,
+              bestReps: data.personalBests[0].bestReps,
+            });
+          } else {
+            console.log(
+              '[PT Hydrate] ⚠️ Client has 0 PBs in Supabase — they may not have completed any workouts since the W3 sync fix, or the personal_bests table is missing rows for this user.',
+            );
+          }
           return { workouts: data.workouts, personalBests: data.personalBests };
         },
         applyToStore: (data) => {
           if (cancelled) return;
-          useWorkoutStore.setState((prev) =>
-            mergeHydrationIntoState(
+          useWorkoutStore.setState((prev) => {
+            const merged = mergeHydrationIntoState(
               { workoutHistory: prev.workoutHistory, personalBests: prev.personalBests },
               { workouts: data.workouts as any, personalBests: data.personalBests as any },
-            ),
-          );
+            );
+            console.log(
+              '[PT Hydrate] Store updated. Total PBs now:',
+              merged.personalBests.length,
+              '(was:', prev.personalBests.length, ')',
+            );
+            return merged;
+          });
         },
       },
     ).catch((e) => {
