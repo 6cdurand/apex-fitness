@@ -6,6 +6,7 @@ import {
   useMessageStore,
   mergeMessagesPreferRead,
   dedupeConversationsByParticipants,
+  attachLastMessagesToConversations,
   type Message,
   type Conversation,
 } from '@/lib/messageStore';
@@ -347,6 +348,27 @@ export function SupabaseSync() {
       const { conversations: dedupedConversations, messages: dedupedMessages } =
         dedupeConversationsByParticipants(mergedConversations, mergedMessages);
 
+      // Re-project `lastMessage` from the message list onto every
+      // conversation so /messages shows preview snippets correctly on a
+      // fresh device (and after every subsequent sync).
+      //
+      // Why this is necessary even after the dedupe step:
+      //   `fetchMessagesFromSupabase` returns conversations stripped of
+      //   `lastMessage` (the conversations table has no last_message_*
+      //   columns — schema is just id / participant_1 / participant_2 /
+      //   updated_at). `mergeData` then replaces local conversations
+      //   wholesale by id, dropping any cached lastMessage. Without
+      //   re-projection, /messages renders rows with avatar+name only
+      //   and no preview line — Christo's "preview shows empty" report.
+      //
+      // The realtime path already does this for incoming live messages
+      // (see applyMessageRow above); this closes the same gap on the
+      // initial load + every subsequent full re-sync.
+      const conversationsWithPreviews = attachLastMessagesToConversations(
+        dedupedConversations,
+        dedupedMessages,
+      );
+
       // Update stores with merged data
       useWorkoutStore.setState({
         workoutHistory: mergedWorkouts,
@@ -359,7 +381,7 @@ export function SupabaseSync() {
       
       useMessageStore.setState({
         messages: dedupedMessages,
-        conversations: dedupedConversations,
+        conversations: conversationsWithPreviews,
       });
 
       // ALWAYS update user's followers/following from Supabase (source of truth)

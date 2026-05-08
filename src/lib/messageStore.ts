@@ -193,6 +193,99 @@ export function dedupeConversationsByParticipants(
   return { conversations: kept, messages: remappedMessages };
 }
 
+/**
+ * Pure helper: project each conversation's `lastMessage` from the messages
+ * array.
+ *
+ * Why this exists:
+ *   The `conversations` table in Supabase has no `last_message_*` columns
+ *   (schema is just id / participant_1 / participant_2 / updated_at), so
+ *   `fetchMessagesFromSupabase` returns conversations stripped of any
+ *   `lastMessage` field. The SupabaseSync mount path then merges those
+ *   "remote shape" conversations over the local store — under the
+ *   id-keyed `mergeData` precedence rule, every conversation that
+ *   already existed in Supabase is replaced wholesale by the remote
+ *   row, dropping the locally-cached `lastMessage`.
+ *
+ *   The visible symptom Christo reported: opening /messages on a fresh
+ *   device (or even the same device after a sync) shows an empty list /
+ *   conversation rows with no preview snippet. This helper closes the
+ *   gap by treating `lastMessage` + `updatedAt` as a deterministic
+ *   projection of `messages` — derive on read, not stored as a separate
+ *   piece of remote state.
+ *
+ * Semantics:
+ *  - For each conversation, find the most recent message (by `createdAt`)
+ *    whose `conversationId` matches; tie-break by smallest message id so
+ *    the result is stable across clients.
+ *  - Set `lastMessage` to that message; bump `updatedAt` to the message's
+ *    `createdAt` IF it's newer than the existing conversation timestamp
+ *    (we never regress `updatedAt` — a conversation row's own update may
+ *    have happened post-message, e.g. a participant change).
+ *  - Conversations with no matching messages are returned with
+ *    `lastMessage: undefined` and unchanged `updatedAt` so empty threads
+ *    still render in the list (avatar + name only, no preview line).
+ *  - Pure: input arrays are not mutated.
+ *
+ * Exposed for unit tests AND for the SupabaseSync mount path so the
+ * projection runs every time we pull from Supabase. Mirrors the M2
+ * patch already done in the realtime path (see SupabaseSync.tsx
+ * applyMessageRow), just for the initial-load case.
+ */
+export function attachLastMessagesToConversations(
+  conversations: Conversation[],
+  messages: Message[],
+): Conversation[] {
+  if (conversations.length === 0) return conversations;
+
+  // Bucket messages by conversationId so the per-conversation lookup is
+  // O(1) instead of O(n*m). One pass over messages.
+  const byConv = new Map<string, Message[]>();
+  for (const m of messages) {
+    const list = byConv.get(m.conversationId);
+    if (list) {
+      list.push(m);
+    } else {
+      byConv.set(m.conversationId, [m]);
+    }
+  }
+
+  return conversations.map(c => {
+    const convMessages = byConv.get(c.id);
+    if (!convMessages || convMessages.length === 0) {
+      // No messages for this conversation — leave lastMessage cleared so
+      // the UI renders the row without a preview line. Keep updatedAt as
+      // received from the conversations row (Supabase or local).
+      return c.lastMessage ? { ...c, lastMessage: undefined } : c;
+    }
+
+    // Newest first; deterministic tie-break by smallest id.
+    let latest = convMessages[0];
+    for (let i = 1; i < convMessages.length; i++) {
+      const m = convMessages[i];
+      const cmp = (m.createdAt || '').localeCompare(latest.createdAt || '');
+      if (cmp > 0 || (cmp === 0 && m.id < latest.id)) {
+        latest = m;
+      }
+    }
+
+    // Bump updatedAt only if the message is newer than the conversation's
+    // current timestamp. This prevents regressing a future-dated update
+    // that the conversations table itself may carry (e.g. a participant
+    // metadata change synced after the last message).
+    const nextUpdatedAt =
+      (c.updatedAt || '').localeCompare(latest.createdAt || '') < 0
+        ? latest.createdAt
+        : c.updatedAt;
+
+    return {
+      ...c,
+      lastMessage: latest,
+      updatedAt: nextUpdatedAt,
+    };
+  });
+}
+
 export const useMessageStore = create<MessageState>()(
   persist(
     (set, get) => ({

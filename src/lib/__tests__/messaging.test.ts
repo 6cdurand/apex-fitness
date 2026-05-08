@@ -46,6 +46,7 @@ import {
   computeMessageIdsToMarkRead,
   mergeMessagesPreferRead,
   dedupeConversationsByParticipants,
+  attachLastMessagesToConversations,
   useMessageStore,
   type Conversation,
   type Message,
@@ -689,6 +690,172 @@ const conversationPayload: ConversationData = {
         'D8(c8): malformed row (empty participants) does NOT collapse with valid rows',
         out.conversations.length === 2,
         `got ${out.conversations.length}`,
+      );
+    }
+  }
+
+  // ============ M3: attachLastMessagesToConversations ============
+  // Acceptance: opening /messages on a fresh device (or after any
+  // SupabaseSync re-fetch) shows the same preview snippets as the device
+  // where the messages were sent. The conversations table has no
+  // last_message_* columns, so lastMessage must be projected from the
+  // messages array on every sync.
+  console.log('\n## M3: attachLastMessagesToConversations');
+  {
+    const A = '11111111-1111-1111-1111-111111111111';
+    const B = '22222222-2222-2222-2222-222222222222';
+    const mkConv = (id: string, parts: [string, string], updatedAt: string, lastMessage?: Message): Conversation => ({
+      id,
+      participants: parts,
+      updatedAt,
+      ...(lastMessage ? { lastMessage } : {}),
+    });
+    const mkMsg = (id: string, convId: string, createdAt: string, content = id): Message => ({
+      id,
+      conversationId: convId,
+      senderId: A,
+      receiverId: B,
+      content,
+      createdAt,
+      read: false,
+    });
+
+    // --- (m1) Empty conversations → returned untouched ---
+    {
+      const out = attachLastMessagesToConversations([], [mkMsg('m1', 'c1', '2026-05-08T12:00:00.000Z')]);
+      assert(
+        'M3(m1): empty conversations input is a no-op',
+        Array.isArray(out) && out.length === 0,
+      );
+    }
+
+    // --- (m2) Conversation with one message → lastMessage attached, updatedAt bumped ---
+    {
+      const c = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const m = mkMsg('m1', 'c1', '2026-05-08T12:00:00.000Z', 'hello');
+      const [out] = attachLastMessagesToConversations([c], [m]);
+      assert(
+        'ACCEPTANCE M3(m2): single message becomes the conversation lastMessage',
+        out.lastMessage?.id === 'm1' && out.lastMessage?.content === 'hello',
+        `got ${JSON.stringify(out.lastMessage)}`,
+      );
+      assert(
+        'M3(m2): updatedAt advances to the latest message createdAt when newer',
+        out.updatedAt === '2026-05-08T12:00:00.000Z',
+        `got ${out.updatedAt}`,
+      );
+    }
+
+    // --- (m3) Multiple messages → newest by createdAt wins ---
+    {
+      const c = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const ms = [
+        mkMsg('m1', 'c1', '2026-05-05T10:00:00.000Z', 'older'),
+        mkMsg('m2', 'c1', '2026-05-08T12:00:00.000Z', 'newer'),
+        mkMsg('m3', 'c1', '2026-05-06T10:00:00.000Z', 'middle'),
+      ];
+      const [out] = attachLastMessagesToConversations([c], ms);
+      assert(
+        'M3(m3): newest message by createdAt wins',
+        out.lastMessage?.id === 'm2' && out.lastMessage?.content === 'newer',
+        `got ${out.lastMessage?.id}/${out.lastMessage?.content}`,
+      );
+    }
+
+    // --- (m4) Tie on createdAt → smallest id wins (deterministic across clients) ---
+    {
+      const c = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const ms = [
+        mkMsg('m-zzz', 'c1', '2026-05-08T12:00:00.000Z', 'z'),
+        mkMsg('m-aaa', 'c1', '2026-05-08T12:00:00.000Z', 'a'),
+      ];
+      const [out] = attachLastMessagesToConversations([c], ms);
+      assert(
+        'M3(m4): tie-break prefers the smallest id (deterministic)',
+        out.lastMessage?.id === 'm-aaa',
+        `got ${out.lastMessage?.id}`,
+      );
+    }
+
+    // --- (m5) Empty conversation (no messages) → row preserved, lastMessage undefined ---
+    {
+      const c = mkConv('c-empty', [A, B], '2026-05-01T00:00:00.000Z');
+      const [out] = attachLastMessagesToConversations([c], []);
+      assert(
+        'M3(m5): conversation with no messages is preserved',
+        out.id === 'c-empty' && out.participants.length === 2,
+      );
+      assert(
+        'M3(m5): conversation with no messages keeps lastMessage undefined',
+        out.lastMessage === undefined,
+      );
+      assert(
+        'M3(m5): updatedAt unchanged when no messages',
+        out.updatedAt === '2026-05-01T00:00:00.000Z',
+      );
+    }
+
+    // --- (m6) Stale lastMessage on incoming row is overwritten by the projection ---
+    {
+      const stale = mkMsg('m-stale', 'c1', '2026-04-01T00:00:00.000Z', 'STALE');
+      const c = mkConv('c1', [A, B], '2026-04-01T00:00:00.000Z', stale);
+      const newer = mkMsg('m-new', 'c1', '2026-05-08T12:00:00.000Z', 'FRESH');
+      const [out] = attachLastMessagesToConversations([c], [newer]);
+      assert(
+        'M3(m6): stale lastMessage on the conversation row is replaced by the newest message in the list',
+        out.lastMessage?.id === 'm-new' && out.lastMessage?.content === 'FRESH',
+        `got ${out.lastMessage?.id}/${out.lastMessage?.content}`,
+      );
+    }
+
+    // --- (m7) Messages for OTHER conversations are NOT attached here ---
+    {
+      const c1 = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const c2 = mkConv('c2', [A, B], '2026-05-01T00:00:00.000Z');
+      const ms = [
+        mkMsg('m1-c1', 'c1', '2026-05-02T10:00:00.000Z', 'c1 msg'),
+        mkMsg('m1-c2', 'c2', '2026-05-08T10:00:00.000Z', 'c2 msg'),
+      ];
+      const out = attachLastMessagesToConversations([c1, c2], ms);
+      const c1Out = out.find(c => c.id === 'c1')!;
+      const c2Out = out.find(c => c.id === 'c2')!;
+      assert(
+        'M3(m7): per-conversation scoping — c1 lastMessage is c1-only',
+        c1Out.lastMessage?.id === 'm1-c1' && c2Out.lastMessage?.id === 'm1-c2',
+        `c1=${c1Out.lastMessage?.id} c2=${c2Out.lastMessage?.id}`,
+      );
+    }
+
+    // --- (m8) updatedAt is NOT regressed when conversation row is newer than messages ---
+    {
+      const c = mkConv('c1', [A, B], '2026-05-08T15:00:00.000Z');
+      const olderMsg = mkMsg('m1', 'c1', '2026-05-08T12:00:00.000Z', 'older');
+      const [out] = attachLastMessagesToConversations([c], [olderMsg]);
+      assert(
+        'M3(m8): updatedAt does NOT regress when the conversation row is newer than the latest message',
+        out.updatedAt === '2026-05-08T15:00:00.000Z',
+        `got ${out.updatedAt}`,
+      );
+      assert(
+        'M3(m8): lastMessage is still attached even when updatedAt is not bumped',
+        out.lastMessage?.id === 'm1',
+      );
+    }
+
+    // --- (m9) Pure: input arrays not mutated ---
+    {
+      const c = mkConv('c1', [A, B], '2026-05-01T00:00:00.000Z');
+      const m = mkMsg('m1', 'c1', '2026-05-08T12:00:00.000Z');
+      const inputConvs = [c];
+      const inputMsgs = [m];
+      attachLastMessagesToConversations(inputConvs, inputMsgs);
+      assert(
+        'M3(m9): purity — input conversations array unchanged',
+        inputConvs[0].lastMessage === undefined,
+      );
+      assert(
+        'M3(m9): purity — input messages array unchanged',
+        inputMsgs[0].id === 'm1' && inputMsgs[0].createdAt === '2026-05-08T12:00:00.000Z',
       );
     }
   }
