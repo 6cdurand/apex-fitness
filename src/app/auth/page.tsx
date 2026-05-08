@@ -484,11 +484,18 @@ function AuthPageContent() {
             </>
           ) : (
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as 'login' | 'register'); setStep('credentials'); }}>
+            {/* Inactive Sign In / Create Account tab inherits
+                `dark:text-muted-foreground` from shadcn default which
+                renders very dim on `bg-slate-800/50` and looked muddy
+                in Christo's photo. Force `text-gray-300` on the
+                inactive trigger so the path-selection toggle reads
+                clearly; the active state still gets `text-white` on
+                sky-500. */}
             <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 rounded-xl p-1">
-              <TabsTrigger value="login" className="rounded-lg data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
+              <TabsTrigger value="login" className="rounded-lg text-gray-300 data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
                 Sign In
               </TabsTrigger>
-              <TabsTrigger value="register" className="rounded-lg data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
+              <TabsTrigger value="register" className="rounded-lg text-gray-300 data-[state=active]:bg-sky-500 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-sky-500/20 transition-all duration-200">
                 Create Account
               </TabsTrigger>
             </TabsList>
@@ -717,10 +724,17 @@ function AuthPageContent() {
                           <SelectTrigger className="bg-gray-50 border-gray-200 text-gray-900">
                             <SelectValue />
                           </SelectTrigger>
+                          {/* SelectItem inherits the shadcn default which
+                              uses light text in dark-mode contexts — on
+                              the explicit bg-white SelectContent the
+                              "Male / Female / Other" labels were
+                              effectively invisible. Force dark text +
+                              dark focus text so the dropdown items are
+                              readable both at rest and on hover. */}
                           <SelectContent className="bg-white border-gray-200">
-                            <SelectItem value="male">Male</SelectItem>
-                            <SelectItem value="female">Female</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
+                            <SelectItem value="male" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Male</SelectItem>
+                            <SelectItem value="female" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Female</SelectItem>
+                            <SelectItem value="other" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -772,11 +786,19 @@ function AuthPageContent() {
 
                   {step === 'goals' && (
                     <div className="space-y-6">
-                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-200">
+                      {/* This card sat on bg-gray-50 (light) but used
+                          `text-white` for the heading and `text-gray-400`
+                          for the subtitle, which made both invisible on
+                          the goals step. Re-skin to match the dark
+                          surface used by the sibling "What you'll get"
+                          (sky-500/10) and trainer-mode (rose-500/10)
+                          cards — same backdrop family, same text
+                          tokens, same border. */}
+                      <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-semibold text-white">Are you a Personal Trainer?</h3>
-                            <p className="text-sm text-gray-400 mt-1">
+                            <p className="text-sm text-gray-300 mt-1">
                               Access trainer tools to manage clients
                             </p>
                           </div>
