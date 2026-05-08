@@ -1008,7 +1008,7 @@ function ProgramBuilderContent() {
 
             {/* Add Block: type buttons + library */}
             <div className="flex gap-1 flex-wrap items-center">
-              <span className="text-xs text-gray-500 mr-1">Add Block:</span>
+              <span className="text-xs text-gray-400 mr-1">Add Block:</span>
               {BLOCK_TYPES.map(bt => (
                 <Button
                   key={bt.value}
@@ -1034,8 +1034,8 @@ function ProgramBuilderContent() {
             {activeDay?.blocks.length === 0 && (
               <Card className="bg-gray-900/50 border-gray-800 border-dashed">
                 <CardContent className="p-8 text-center">
-                  <Dumbbell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">Add a block to start building this day</p>
+                  <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                  <p className="text-sm text-gray-300">Add a block to start building this day</p>
                 </CardContent>
               </Card>
             )}
@@ -1094,14 +1094,19 @@ function ProgramBuilderContent() {
                     <div className="divide-y divide-white/5">
                       {block.exercises.map((ex, exIdx) => (
                         <div key={ex.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-                          <GripVertical className="w-3.5 h-3.5 text-gray-600 flex-shrink-0 cursor-grab" />
-                          <span className="text-xs text-gray-500 w-5 flex-shrink-0">{exIdx + 1}.</span>
+                          <GripVertical className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 cursor-grab" />
+                          <span className="text-xs text-gray-400 w-5 flex-shrink-0">{exIdx + 1}.</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <p className="text-sm text-gray-900 font-medium truncate">{ex.exerciseName}</p>
+                              {/* Exercise names render on the dark program-builder
+                                  theme — text-gray-900 was near-black on the
+                                  bg-blue-500/10 over bg-gray-900 backdrop and read
+                                  as a blank row to Christo. Switch to text-white
+                                  to match the rest of the dark UI. */}
+                              <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
                               <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                             </div>
-                            <p className="text-xs text-gray-400 mt-0.5">
+                            <p className="text-xs text-gray-300 mt-0.5">
                               {ex.sets} × {ex.reps} reps · {ex.rest} rest
                             </p>
                           </div>
@@ -1457,6 +1462,11 @@ function ProgramBuilderContent() {
               <div className="flex items-center gap-2">
                 <Dumbbell className="w-5 h-5 text-sky-400" />
                 <DialogTitle className="text-white text-lg font-semibold">Block Library</DialogTitle>
+                {/* Block Library dialog headings + bodies render on a
+                    bg-gray-900 surface; tightened muted-text classes
+                    (text-gray-500/600) to text-gray-300/400 to keep
+                    block names + counts legible without changing the
+                    visual hierarchy. */}
               </div>
               <Button
                 variant="ghost"
@@ -1503,9 +1513,9 @@ function ProgramBuilderContent() {
             <div className="space-y-3">
               {filteredLibraryBlocks.length === 0 && (
                 <div className="text-center py-8">
-                  <Dumbbell className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No blocks found</p>
-                  <p className="text-xs text-gray-600 mt-1">Create blocks in the workout builder to see them here</p>
+                  <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+                  <p className="text-sm text-gray-300">No blocks found</p>
+                  <p className="text-xs text-gray-400 mt-1">Create blocks in the workout builder to see them here</p>
                 </div>
               )}
               {filteredLibraryBlocks.map((sb) => {
@@ -1543,7 +1553,7 @@ function ProgramBuilderContent() {
                           </Button>
                         </div>
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">{sb.exercises.length} exercises</p>
+                      <p className="text-xs text-gray-300 mt-1">{sb.exercises.length} exercises</p>
                     </CardContent>
                   </Card>
                 );
