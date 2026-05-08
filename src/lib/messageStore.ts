@@ -99,6 +99,100 @@ export function mergeMessagesPreferRead(local: Message[], remote: Message[]): Me
   return merged;
 }
 
+/**
+ * Pure helper: collapse multiple Conversation rows that share the same
+ * participant pair down to a single canonical row, and rewrite any
+ * messages whose `conversationId` referenced a dropped row to point at
+ * the kept row.
+ *
+ * Why this exists:
+ *   The conversations list can grow duplicates when the same pair of
+ *   users ends up with two rows under different ids — the symptom Christo
+ *   reported in /messages: "two message blocks with hendrik where there
+ *   should only be one". Three known root causes have produced this:
+ *     1. Conversation persisted before the canonical-id heal landed,
+ *        then a new row created post-heal under the canonical ids.
+ *     2. SupabaseSync `mergeData` deduping by `id` only — two rows for
+ *        the same participant pair created on different devices both
+ *        survive the merge.
+ *     3. Race in `getOrCreateConversation` if two CTAs fire close enough
+ *        that the dedupe `find()` runs before the first conversation
+ *        commits to the store.
+ *
+ * Semantics:
+ *  - Group conversations by sorted participant pair (`[a,b].sort().join('|')`)
+ *    so order-insensitive and canonical-id-insensitive within a pair.
+ *  - In each group with >1 row, keep the row with the most recent
+ *    `updatedAt`; tie-break by smallest `id` so the result is deterministic
+ *    and stable across clients (same input → same kept id).
+ *  - Rewrite every message whose `conversationId` matches a dropped row
+ *    so messages stay attached to the kept conversation. Without this
+ *    step, the surviving conversation would have an empty thread because
+ *    half the messages reference the deleted row.
+ *
+ * Exposed for unit tests AND for the SupabaseSync mount path so the heal
+ * runs every time we pull from Supabase. Pure / no zustand reads.
+ */
+export function dedupeConversationsByParticipants(
+  conversations: Conversation[],
+  messages: Message[],
+): { conversations: Conversation[]; messages: Message[] } {
+  if (conversations.length < 2) {
+    return { conversations, messages };
+  }
+
+  const groups = new Map<string, Conversation[]>();
+  for (const c of conversations) {
+    if (!c.participants || c.participants.length !== 2) {
+      // Defensive: skip malformed rows so they aren't grouped under
+      // an empty key. They pass through unchanged in the kept list.
+      const key = `__malformed__${c.id}`;
+      groups.set(key, [c]);
+      continue;
+    }
+    const key = [...c.participants].sort().join('|');
+    const list = groups.get(key);
+    if (list) {
+      list.push(c);
+    } else {
+      groups.set(key, [c]);
+    }
+  }
+
+  const idRemap = new Map<string, string>(); // droppedId → keptId
+  const kept: Conversation[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]);
+      continue;
+    }
+    // Pick the row with the most recent updatedAt; on tie, the smallest id.
+    const sorted = [...group].sort((a, b) => {
+      const aTs = a.updatedAt || '';
+      const bTs = b.updatedAt || '';
+      if (aTs !== bTs) return bTs.localeCompare(aTs); // newer first
+      return a.id.localeCompare(b.id);
+    });
+    const winner = sorted[0];
+    kept.push(winner);
+    for (const dropped of sorted.slice(1)) {
+      idRemap.set(dropped.id, winner.id);
+    }
+  }
+
+  if (idRemap.size === 0) {
+    return { conversations: kept, messages };
+  }
+
+  const remappedMessages = messages.map(m =>
+    idRemap.has(m.conversationId)
+      ? { ...m, conversationId: idRemap.get(m.conversationId)! }
+      : m,
+  );
+
+  return { conversations: kept, messages: remappedMessages };
+}
+
 export const useMessageStore = create<MessageState>()(
   persist(
     (set, get) => ({
