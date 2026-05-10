@@ -178,6 +178,10 @@ interface TrainerState {
   // Set initial stats for onboarding existing clients
   setInitialClientStats: (clientId: string, sessionsDone: number, sessionsLeft: number, totalPaid: number) => void;
   
+  // P01: Identity normalization heal sweep
+  healClientIdReferences: (staleId: string, canonicalId: string) => void;
+  healTrainerIdReferences: (staleId: string, canonicalId: string) => void;
+  
   // Client-facing session functions
   loadClientDataFromSupabase: (clientId: string) => Promise<void>;
   getScheduledSessionsForUser: (userId: string) => CalendarEvent[];
@@ -1359,7 +1363,19 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       getActiveProgram: (clientId) => {
-        return get().clientPrograms.find(p => p.clientId === clientId && p.status === 'active');
+        const candidates = get().clientPrograms.filter(
+          p => p.clientId === clientId && p.status === 'active'
+        );
+        if (candidates.length === 0) return undefined;
+        if (candidates.length === 1) return candidates[0];
+        // P05: Deterministic tie-break on multiple active programs
+        return candidates.reduce((best, p) => {
+          const bUpd = best.updatedAt || best.createdAt || '';
+          const pUpd = p.updatedAt || p.createdAt || '';
+          if (pUpd > bUpd) return p;
+          if (pUpd < bUpd) return best;
+          return p.id < best.id ? p : best;
+        });
       },
 
       getNextProgramWorkout: (userId) => {
@@ -1461,6 +1477,87 @@ export const useTrainerStore = create<TrainerState>()(
 
       getClientProfile: (clientId) => {
         return get().clientProfiles.find(p => p.clientId === clientId);
+      },
+
+      // P01: Identity normalization heal sweep
+      healClientIdReferences: (staleId, canonicalId) => {
+        const state = get();
+        const updated = {
+          clientPrograms: state.clientPrograms.map(p =>
+            p.clientId === staleId ? { ...p, clientId: canonicalId } : p
+          ),
+          clients: state.clients.map(c =>
+            c.clientId === staleId ? { ...c, clientId: canonicalId } : c
+          ),
+          calendarEvents: state.calendarEvents.map(e =>
+            e.clientId === staleId ? { ...e, clientId: canonicalId } : e
+          ),
+          sessions: state.sessions.map(s =>
+            s.clientId === staleId ? { ...s, clientId: canonicalId } : s
+          ),
+          payments: state.payments.map(p =>
+            p.clientId === staleId ? { ...p, clientId: canonicalId } : p
+          ),
+          blockPerformances: state.blockPerformances.map(b =>
+            b.clientId === staleId ? { ...b, clientId: canonicalId } : b
+          ),
+        };
+        set(updated);
+        
+        // Re-sync updated rows to Supabase
+        updated.clientPrograms.forEach(p => {
+          if (p.clientId === canonicalId) {
+            syncClientProgramToSupabase(p).catch(e => 
+              console.error('[healClientId] Failed to sync program:', e)
+            );
+          }
+        });
+        updated.calendarEvents.forEach(e => {
+          if (e.clientId === canonicalId) {
+            syncCalendarEventToSupabase(e).catch(err => 
+              console.error('[healClientId] Failed to sync calendar event:', err)
+            );
+          }
+        });
+        updated.sessions.forEach(s => {
+          if (s.clientId === canonicalId) {
+            syncTrainerSessionToSupabase(s).catch(err => 
+              console.error('[healClientId] Failed to sync session:', err)
+            );
+          }
+        });
+        updated.payments.forEach(p => {
+          if (p.clientId === canonicalId) {
+            syncPaymentToSupabase(p).catch(err => 
+              console.error('[healClientId] Failed to sync payment:', err)
+            );
+          }
+        });
+      },
+
+      healTrainerIdReferences: (staleId, canonicalId) => {
+        const state = get();
+        const updated = {
+          clientPrograms: state.clientPrograms.map(p =>
+            p.trainerId === staleId ? { ...p, trainerId: canonicalId } : p
+          ),
+          clients: state.clients.map(c =>
+            c.trainerId === staleId ? { ...c, trainerId: canonicalId } : c
+          ),
+          sessions: state.sessions.map(s =>
+            s.trainerId === staleId ? { ...s, trainerId: canonicalId } : s
+          ),
+        };
+        set(updated);
+        
+        // Re-sync updated rows
+        updated.clientPrograms.forEach(p => {
+          if (p.trainerId === canonicalId) {
+            syncClientProgramToSupabase(p).catch(e => 
+              console.error('[healTrainerId] Failed to sync program:', e)
+            );
+          }
+        });
       },
 
       // Set initial stats for onboarding existing clients

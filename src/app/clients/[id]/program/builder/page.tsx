@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { useTrainerStore, useWorkoutStore } from '@/lib/store';
 import { filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises';
+import { toast } from 'sonner';
 import { programTemplates } from '@/lib/programTemplates';
 import { BlockType, MovementPattern } from '@/types';
 import { 
@@ -263,6 +264,12 @@ export default function WorkoutBuilderPage() {
     const activeProgram = getActiveProgram(clientId);
     
     if (activeProgram && activeProgram.weeklyPlan) {
+      // P07: Guard against out-of-range dayIndex from stale URL params
+      if (dayIndex < 0 || dayIndex >= activeProgram.weeklyPlan.length) {
+        toast.error('That program day no longer exists. Reopen the program from the client view.');
+        return;
+      }
+      
       // Update the specific day in the weekly plan with the edited blocks
       const updatedWeeklyPlan = [...activeProgram.weeklyPlan];
       if (updatedWeeklyPlan[dayIndex]) {
