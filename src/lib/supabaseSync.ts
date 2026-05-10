@@ -583,6 +583,9 @@ function toDbWorkout(workout: Workout): any {
   if (workout.releasedAt !== undefined) {
     dbWorkout.released_at = workout.releasedAt || null;
   }
+  if (workout.blocks !== undefined) {
+    dbWorkout.blocks = workout.blocks || null;
+  }
   return dbWorkout;
 }
 
@@ -606,6 +609,7 @@ function fromDbWorkout(dbWorkout: any): Workout {
     reviewStatus: dbWorkout.review_status || undefined,
     coachNote: dbWorkout.coach_note || undefined,
     releasedAt: dbWorkout.released_at || undefined,
+    blocks: dbWorkout.blocks || undefined,
   };
 }
 
