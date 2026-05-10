@@ -39,7 +39,8 @@ import {
   LayoutGrid,
   User,
   Trophy,
-  MessageCircle
+  MessageCircle,
+  Edit2
 } from 'lucide-react';
 import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
@@ -498,14 +499,27 @@ export default function ProgramPage() {
               <CardContent className="p-4 space-y-3">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-bold text-gray-900 text-base">{activeProgram.templateName}</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {trainerName ? `By ${trainerName} • ` : ''}{activeProgram.trainingDaysPerWeek || activeProgram.weeklyPlan?.length}×/week • {activeProgram.weeklyPlan?.length} unique workouts
                       {activeProgram.scheduleMode === 'flexible' ? ' • Flexible' : activeProgram.selectedDays?.length ? ` • ${activeProgram.selectedDays.map(d => d.charAt(0).toUpperCase() + d.slice(0, 2)).join('/')}` : ''}
                     </p>
                   </div>
-                  <Badge className="text-[10px] bg-emerald-500/20 text-emerald-600 border-0">Active</Badge>
+                  <div className="flex items-center gap-2">
+                    {activeProgram.trainerId === user?.id && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-sky-500/30 text-sky-600 hover:bg-sky-500/10 h-8"
+                        onClick={() => router.push(`/program/builder?clientId=${user!.id}`)}
+                      >
+                        <Edit2 className="w-3.5 h-3.5 mr-1.5" />
+                        Edit
+                      </Button>
+                    )}
+                    <Badge className="text-[10px] bg-emerald-500/20 text-emerald-600 border-0">Active</Badge>
+                  </div>
                 </div>
 
                 {/* Program details */}
