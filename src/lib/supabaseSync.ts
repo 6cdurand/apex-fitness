@@ -989,6 +989,51 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
       .select();
     
     if (error) {
+      // Schema-drift retry: if the failure is a missing optional column (e.g.
+      // `blocks` from D2 before migration 20260511_add_blocks_to_workouts.sql
+      // is applied, or `ai_summary` / `review_status` / `coach_note` /
+      // `released_at` if their migrations regress on staging), strip the
+      // optional columns and retry once with the core payload. This keeps
+      // workout saves working on any environment whose schema is behind the
+      // app build, instead of every Finish tap looking like a network error
+      // and the user re-tapping in a panic.
+      const errMsg = (error.message || '').toLowerCase();
+      const errCode = (error as { code?: string }).code;
+      const isMissingColumn =
+        errCode === '42703' ||
+        errMsg.includes('could not find') ||
+        errMsg.includes('does not exist') ||
+        errMsg.includes('schema cache');
+      if (isMissingColumn) {
+        console.warn(
+          '[WorkoutSync] ⚠️ Schema drift detected; retrying with core columns only.',
+          'Apply pending migrations to enable optional persistence.',
+          { code: errCode, message: error.message },
+        );
+        const coreWorkout: Record<string, unknown> = { ...dbWorkout };
+        delete coreWorkout.blocks;
+        delete coreWorkout.ai_summary;
+        delete coreWorkout.review_status;
+        delete coreWorkout.coach_note;
+        delete coreWorkout.released_at;
+        delete coreWorkout.deleted_at;
+        const retry = await getWorkoutClient()
+          .from('workouts')
+          .upsert(coreWorkout)
+          .select();
+        if (retry.error) {
+          console.error(
+            '[WorkoutSync] ❌ Retry without optional columns also failed:',
+            retry.error.message,
+            retry.error.details,
+            retry.error.hint,
+          );
+          console.error('[WorkoutSync] Workout data that failed:', JSON.stringify(coreWorkout, null, 2));
+          return false;
+        }
+        console.log('[WorkoutSync] ✅ Workout synced via schema-drift retry:', workout.id);
+        return true;
+      }
       console.error('[WorkoutSync] ❌ Error syncing workout:', error.message, error.details, error.hint);
       console.error('[WorkoutSync] Workout data that failed:', JSON.stringify(dbWorkout, null, 2));
       return false;
