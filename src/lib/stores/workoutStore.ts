@@ -42,6 +42,7 @@ interface WorkoutState {
   ) => void;
   clearCurrentClient: () => void;
   getActiveUserId: () => string; // Get the ID of who we're currently training
+  setBlockSnapshot: (blocks: any[]) => void;
   endWorkout: (privateNotes?: string, sharedNotes?: string) => Promise<Workout | null>;
   updateActiveWorkoutNotes: (notes: string) => void;
   cancelWorkout: () => void;
@@ -280,6 +281,12 @@ export const useWorkoutStore = create<WorkoutState>()(
         const { activeWorkout } = get();
         if (!activeWorkout) return;
         set({ activeWorkout: { ...activeWorkout, notes } });
+      },
+
+      setBlockSnapshot: (blocks: any[]) => {
+        const { activeWorkout } = get();
+        if (!activeWorkout) return;
+        set({ activeWorkout: { ...activeWorkout, blocks } });
       },
 
       endWorkout: async (notes?: string) => {

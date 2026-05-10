@@ -936,6 +936,26 @@ export default function ActiveWorkoutPage() {
     // ignore the second click — the retry toast re-enables this handler.
     if (isFinishing) return;
 
+    // Capture block snapshot for cardio/circuit persistence
+    const blockSnapshot = workoutBlocks.map(b => ({
+      id: b.id,
+      type: b.type,
+      name: b.name,
+      timerSeconds: b.timerSeconds,
+      completed: b.completed || b.circuitComplete,
+      rounds: b.circuitRounds,
+      roundsCompleted: b.roundsCompleted?.length,
+      roundTimes: b.roundsCompleted?.map(r => r.duration),
+      circuitStyle: b.circuitStyle,
+      cardioMode: b.cardioMode,
+      cardioActivity: b.cardioType,
+      distanceCompleted: b.distanceCompleted,
+      targetDistance: b.targetDistance,
+      splits: b.splits,
+    }));
+    const { setBlockSnapshot } = useWorkoutStore.getState();
+    setBlockSnapshot(blockSnapshot);
+
     // Capture workout info before ending
     const workoutName = activeWorkout?.name || 'Workout';
     const isPT = !!activeWorkout?.assignedBy;
@@ -1004,6 +1024,27 @@ export default function ActiveWorkoutPage() {
           );
         });
       }
+
+      // Record block performances for cardio/circuit blocks
+      const trainerStore = useTrainerStore.getState();
+      workoutBlocks
+        .filter(b => (b.type === 'circuit' || b.type === 'cardio') && (b.completed || b.circuitComplete))
+        .forEach(b => {
+          trainerStore.recordBlockPerformance({
+            blockId: b.id,
+            blockName: b.name,
+            blockType: b.type as any,
+            clientId: completed!.userId,
+            trainerId: completed!.assignedBy || completed!.userId,
+            workoutId: completed!.id,
+            completionTime: b.timerSeconds,
+            roundsCompleted: b.roundsCompleted?.length,
+            roundTimes: b.roundsCompleted?.map(r => r.duration),
+            totalVolume: undefined,
+            exerciseStats: undefined,
+            notes: undefined,
+          });
+        });
 
       // Show summary popup instead of redirecting
       const endTimeStr = completed.endTime || new Date().toISOString();

@@ -172,6 +172,27 @@ export interface WorkoutBlock {
   }[];
 }
 
+// Snapshot of block state at workout finish (for cardio/circuit persistence)
+export interface WorkoutBlockSnapshot {
+  id: string;
+  type: 'warmup' | 'strength' | 'circuit' | 'cardio' | 'cooldown' | 'stretching' | 'finisher' | 'activation';
+  name: string;
+  timerSeconds?: number;
+  completed?: boolean;
+  rounds?: number;
+  roundsCompleted?: number;
+  roundTimes?: number[];
+  roundDuration?: string;
+  restBetweenRounds?: string;
+  circuitStyle?: 'amrap' | 'forTime' | 'rounds' | 'emom' | 'tabata';
+  cardioMode?: 'steady' | 'intervals' | 'distance';
+  cardioActivity?: string;
+  distanceCompleted?: number;
+  targetDistance?: number;
+  splits?: { distance: number; time: number }[];
+  intervals?: { duration: number; intensity: 'work' | 'rest' }[];
+}
+
 // Saved Block for Block Library
 export interface SavedBlock {
   id: string;
@@ -267,7 +288,7 @@ export interface Workout {
   status: 'active' | 'completed' | 'cancelled';
   assignedBy?: string; // Trainer ID if assigned
   scheduledDate?: string;
-  blocks?: WorkoutBlock[]; // Session workout blocks
+  blocks?: WorkoutBlockSnapshot[]; // Block-level snapshot at finish (cardio/circuit persistence)
   deletedAt?: string; // Soft delete timestamp — null means active
   aiSummary?: string; // AI-generated feedback summary shown on completion + workout history
   // PT Session Review Flow — populated only for PT sessions the client opened on their own device.
