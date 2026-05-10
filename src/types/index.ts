@@ -132,6 +132,7 @@ export interface WorkoutExercise {
   groupOrder?: string; // A1, A2, A3, B1, B2, etc.
   miniRestSeconds?: number; // Optional rest between exercises in superset
   isUnilateral?: boolean; // Toggle for alternating sides (L/R) exercises
+  sequenceDuration?: number; // Warmup/cooldown sequence mode: duration in seconds (default 30)
 }
 
 // Workout Block (for organizing exercises in the builder)
@@ -147,6 +148,8 @@ export interface WorkoutBlock {
   targetTime?: string;
   workInterval?: string;
   restInterval?: string;
+  // Warmup/cooldown sequence mode
+  sequenceMode?: boolean; // When true, exercises play in order with auto-advance timer
   exercises: {
     id: string;
     exerciseId: string;
@@ -169,6 +172,8 @@ export interface WorkoutBlock {
     intervals?: number; // number of intervals
     intervalWork?: string; // e.g., "400m" or "1min"
     intervalRest?: string; // e.g., "90s"
+    // Warmup/cooldown sequence duration per exercise
+    sequenceDuration?: number; // seconds, default 30
   }[];
 }
 

@@ -20,6 +20,7 @@ import { getClientDisplayInfo } from '@/lib/clientUtils';
 import { format } from 'date-fns';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
+import WarmupSequence from '@/components/WarmupSequence';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { ExerciseImage } from '@/components/ExerciseImage';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
@@ -2848,6 +2849,27 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
                   </div>
+                ) : block.type === 'warmup' && (block as any).sequenceMode ? (
+                  // WARMUP SEQUENCE MODE - Auto-advancing timer with exercise images
+                  <WarmupSequence
+                    exercises={blockExercises}
+                    onComplete={() => {
+                      // Mark block as complete
+                      const updatedBlocks = workoutBlocks.map(b =>
+                        b.id === block.id ? { ...b, completed: true } : b
+                      );
+                      setWorkoutBlocks(updatedBlocks);
+                    }}
+                    onExerciseComplete={(exerciseId, duration) => {
+                      // Mark exercise set as completed
+                      updateSet(blockExercises.find(e => e.exerciseId === exerciseId)!.id, blockExercises.find(e => e.exerciseId === exerciseId)!.sets[0].id, {
+                        completed: true,
+                        reps: 0,
+                        weight: 0,
+                        duration,
+                      });
+                    }}
+                  />
                 ) : (
                   // WARMUP/STRENGTH LAYOUT - Full-width exercise cards with sets
                   <div className="divide-y divide-gray-800">
