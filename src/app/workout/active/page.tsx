@@ -3017,8 +3017,14 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
                   </div>
-                ) : block.type === 'warmup' && (block as any).sequenceMode ? (
-                  // WARMUP SEQUENCE MODE - Auto-advancing timer with exercise images
+                ) : block.type === 'warmup' && (block as any).sequenceMode !== false && blockExercises.length > 0 ? (
+                  // WARMUP SEQUENCE MODE — Auto-advancing timer with exercise
+                  // images. 2026-05-11 change: sequence mode is now the DEFAULT
+                  // for warmup blocks. Previously this branch required
+                  // `sequenceMode === true` so existing warmup blocks (which
+                  // never set the field) fell through to the strength layout.
+                  // Now `sequenceMode !== false` enables it by default;
+                  // trainers can explicitly opt out by setting false.
                   <WarmupSequence
                     exercises={blockExercises}
                     onComplete={() => {
@@ -3030,12 +3036,16 @@ export default function ActiveWorkoutPage() {
                     }}
                     onExerciseComplete={(exerciseId, duration) => {
                       // Mark exercise set as completed
-                      updateSet(blockExercises.find(e => e.exerciseId === exerciseId)!.id, blockExercises.find(e => e.exerciseId === exerciseId)!.sets[0].id, {
-                        completed: true,
-                        reps: 0,
-                        weight: 0,
-                        duration,
-                      });
+                      const ex = blockExercises.find((e: any) => e.exerciseId === exerciseId);
+                      const firstSet = ex?.sets?.[0];
+                      if (ex && firstSet) {
+                        updateSet(ex.id, firstSet.id, {
+                          completed: true,
+                          reps: 0,
+                          weight: 0,
+                          duration,
+                        });
+                      }
                     }}
                   />
                 ) : (

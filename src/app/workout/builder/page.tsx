@@ -747,6 +747,15 @@ function WorkoutBuilderContent() {
       type,
       name: type === 'warmup' ? 'Warm-up' : type === 'cooldown' ? 'Cool-down' : type === 'circuit' ? 'Circuit' : 'Strength',
       exercises: [],
+      // 2026-05-11: warmup and cooldown blocks default to sequence mode so
+      // the active-workout renderer uses the WarmupSequence component
+      // (exercise image + countdown timer + auto-advance) instead of the
+      // strength-style rep tracker. Trainer can opt out by setting
+      // sequenceMode: false on the block (builder toggle is a follow-up;
+      // for now sequence mode is the default warmup UX).
+      ...((type === 'warmup' || type === 'cooldown') && {
+        sequenceMode: true,
+      }),
       // Default circuit settings
       ...(type === 'circuit' && {
         rounds: 3,
