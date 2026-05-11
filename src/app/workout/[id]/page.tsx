@@ -15,6 +15,7 @@ import { Workout } from '@/types';
 import { getMuscleDisplayName, calculate1RM } from '@/lib/exercises';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
 import { cn } from '@/lib/utils';
+import BlockMemoryCard from '@/components/BlockMemoryCard';
 import { 
   Clock, 
   Dumbbell, 
@@ -707,7 +708,36 @@ export default function WorkoutDetailPage() {
             </Card>
           )}
 
+          {/* Workout Memory - Block-level summary for cardio/circuit/warmup */}
+          {workout.blocks && workout.blocks.length > 0 && (() => {
+            const memoryBlocks = workout.blocks.filter(b => 
+              b.type === 'cardio' || b.type === 'circuit' || b.type === 'warmup'
+            );
+            if (memoryBlocks.length === 0) return null;
+            return (
+              <section className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2 mb-4">
+                  <Zap className="w-5 h-5 text-sky-400" />
+                  Workout Memory
+                </h2>
+                <div className="space-y-4">
+                  {memoryBlocks.map(block => (
+                    <BlockMemoryCard key={block.id} block={block} />
+                  ))}
+                </div>
+              </section>
+            );
+          })()}
+
           {/* Exercises */}
+          {(() => {
+            const hasMemoryBlocks = workout.blocks && workout.blocks.some(b => 
+              b.type === 'cardio' || b.type === 'circuit' || b.type === 'warmup'
+            );
+            const hasExercises = workout.exercises && workout.exercises.length > 0;
+            // Hide exercises section if no exercises and blocks are showing
+            if (!hasExercises && hasMemoryBlocks) return null;
+            return (
           <section>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -849,6 +879,8 @@ export default function WorkoutDetailPage() {
               })}
             </div>
           </section>
+            );
+          })()}
 
           {/* Actions */}
           <div className="grid grid-cols-3 gap-3">
