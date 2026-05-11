@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedName, formatAssistedWeight } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
-import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase } from '@/lib/supabaseSync';
+import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase, getClientExerciseHistory } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
@@ -346,6 +346,19 @@ export default function ActiveWorkoutPage() {
   
   // Circuit exercise reps (exerciseId -> reps)
   const [circuitExerciseReps, setCircuitExerciseReps] = useState<Record<string, number>>({});
+  // 2026-05-11: weight input alongside reps for circuit exercises. Keyed by
+  // workoutExercise.id to match circuitExerciseReps so both inputs update
+  // the same set row consistently.
+  const [circuitExerciseWeights, setCircuitExerciseWeights] = useState<Record<string, number>>({});
+
+  // 2026-05-11 (PLAN_exercise_history.md Track B): cross-trainer exercise
+  // usage counter, keyed by exerciseId. Populated from
+  // `client_exercise_history` for the active workout's user (NOT the
+  // logged-in user — important for trainer-led PT sessions). Used to render
+  // an `N×` pill on each exercise in the search dialog so the trainer can
+  // see how many times this client has done the exercise across all
+  // trainers, including before the relationship started.
+  const [exerciseTimesUsed, setExerciseTimesUsed] = useState<Record<string, number>>({});
   const [showCircuitDialog, setShowCircuitDialog] = useState(false);
   const [circuitConfig, setCircuitConfig] = useState({
     style: 'amrap' as 'amrap' | 'forTime' | 'rounds' | 'emom',
@@ -475,26 +488,155 @@ export default function ActiveWorkoutPage() {
     return typeMap[type] || 'strength';
   };
 
+  // 2026-05-11: Builder stores cardio configuration on the EXERCISE level
+  // (ex.cardioType / ex.distance / ex.distanceUnit / ex.intervals / etc.)
+  // but the active-workout block rendering reads BLOCK-level fields
+  // (block.cardioMode / block.targetDistance / block.intervalRounds).
+  // Derive the block-level cardio shape from the first cardio exercise
+  // so the cardio renderer (steady timer / distance progress / interval
+  // phase badge) has data to render. Returns an empty object for non-
+  // cardio blocks or cardio blocks with no recognized cardio exercise.
+  const deriveCardioBlockFields = (block: any): Record<string, any> => {
+    if (block?.type !== 'cardio') return {};
+    const exercises = block.exercises || [];
+    const cardioEx = exercises.find((ex: any) => ex?.isCardio || ex?.cardioType) || exercises[0];
+    if (!cardioEx) return {};
+
+    const ct: string | undefined = cardioEx.cardioType;
+    const cardioMode: 'distance' | 'intervals' | 'steady' =
+      ct === 'distance' ? 'distance' :
+      ct === 'intervals' ? 'intervals' :
+      'steady';
+
+    const cardioActivity: string | undefined =
+      cardioEx.exerciseName || cardioEx.exercise?.name || cardioEx.name;
+
+    let targetDistance: number | undefined;
+    if (cardioEx.distance) {
+      const raw = parseFloat(String(cardioEx.distance));
+      if (Number.isFinite(raw)) {
+        const unit = cardioEx.distanceUnit || 'km';
+        targetDistance =
+          unit === 'km' ? Math.round(raw * 1000) :
+          unit === 'mi' ? Math.round(raw * 1609.344) :
+          Math.round(raw); // already meters
+      }
+    }
+
+    const intervalRounds: number | undefined =
+      typeof cardioEx.intervals === 'number' && cardioEx.intervals > 0
+        ? cardioEx.intervals
+        : undefined;
+
+    return {
+      cardioMode,
+      cardioActivity,
+      targetDistance,
+      intervalRounds,
+    };
+  };
+
   // Initialize blocks from activeWorkout.blocks (for session workouts)
+  //
+  // 2026-05-11 fix: previously enumerated only `circuitStyle`/`circuitDuration`/
+  // `circuitRounds`, which silently dropped every cardio field
+  // (`cardioMode`, `cardioActivity`, `targetDistance`, `intervalRounds`,
+  // `intervalWork`, `intervalRest`, etc.) when an active workout loaded.
+  // Result: cardio blocks rendered the heart icon header but the mode-
+  // specific UI (steady timer / interval phase badge / distance progress
+  // bar) was a no-op because `block.cardioMode` was undefined. User-visible
+  // symptom: "the cardio block has it named strength up at the top, none
+  // of the timed/distance/interval info translates to the active workout".
+  //
+  // Fix: spread the source block first so every field flows through
+  // verbatim, then override the runtime-only fields (type via
+  // mapBlockType, fresh timer state, fresh completion flags). This keeps
+  // both circuit and cardio configs intact and is robust against future
+  // additions to WorkoutBlock without needing another edit here.
   useEffect(() => {
     if (activeWorkout?.blocks && activeWorkout.blocks.length > 0 && workoutBlocks.length === 0) {
-      const initialBlocks = activeWorkout.blocks.map((block: any) => ({
-        id: block.id || `block-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        type: mapBlockType(block.type),
-        name: block.name || 'Block',
-        circuitStyle: block.circuitStyle,
-        circuitDuration: block.circuitDuration,
-        circuitRounds: block.rounds || block.circuitRounds,
-        timerRunning: false,
-        timerSeconds: 0,
-        completed: false,
-        circuitComplete: false,
-        roundsCompleted: [],
-      }));
+      const initialBlocks = activeWorkout.blocks.map((block: any) => {
+        const mappedType = mapBlockType(block.type);
+        // Re-stamp block.type to the mapped value so deriveCardioBlockFields
+        // sees `cardio` rather than e.g. `cardio` already-lowercased input
+        // styles that mapBlockType normalizes.
+        const cardioFields = deriveCardioBlockFields({ ...block, type: mappedType });
+        return {
+          ...block,
+          id: block.id || `block-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          type: mappedType,
+          name: block.name || 'Block',
+          // Normalize the circuit-rounds alias (builder uses `rounds`,
+          // active runtime uses `circuitRounds`). Keep the original
+          // `rounds` too so any downstream code reading it still works.
+          circuitRounds: block.circuitRounds ?? block.rounds,
+          // Bridge per-exercise cardio config (cardioType / distance /
+          // distanceUnit / intervals) into the block-level fields the
+          // active-workout cardio renderer expects (cardioMode /
+          // targetDistance / intervalRounds). Empty object for non-cardio.
+          ...cardioFields,
+          // Reset runtime/transient state on each entry
+          timerRunning: false,
+          timerSeconds: 0,
+          completed: false,
+          circuitComplete: false,
+          roundsCompleted: [],
+          // Cardio distance progress always starts at 0 even if the source
+          // block had a stale `distanceCompleted` (e.g. from a re-entered
+          // session). `splits` similarly resets.
+          distanceCompleted: 0,
+          splits: [],
+          currentIntervalRound: 1,
+          currentIntervalPhase: 'work' as const,
+        };
+      });
       setWorkoutBlocks(initialBlocks);
-      console.log('[Active Workout] Initialized blocks:', initialBlocks.map(b => ({ id: b.id, type: b.type, name: b.name })));
+      console.log('[Active Workout] Initialized blocks:', initialBlocks.map(b => ({
+        id: b.id,
+        type: b.type,
+        name: b.name,
+        cardioMode: b.cardioMode,
+        cardioActivity: b.cardioActivity,
+        targetDistance: b.targetDistance,
+        circuitStyle: b.circuitStyle,
+        circuitRounds: b.circuitRounds,
+      })));
     }
   }, [activeWorkout?.blocks]);
+
+  // 2026-05-11 (PLAN_exercise_history.md Track B): fetch the cross-trainer
+  // exercise usage counter for the active workout's user. Runs once per
+  // workout-start (re-runs when the userId changes between sessions, e.g.
+  // a trainer switching between clients). Quiet on failure — the search
+  // dialog just renders without pills.
+  useEffect(() => {
+    const targetUserId = activeWorkout?.userId;
+    if (!targetUserId) return;
+    let cancelled = false;
+    getClientExerciseHistory(targetUserId)
+      .then(rows => {
+        if (cancelled) return;
+        const next: Record<string, number> = {};
+        for (const row of rows) {
+          const id: unknown = row?.exercise_id;
+          const used: unknown = row?.times_used;
+          if (typeof id === 'string' && typeof used === 'number' && used > 0) {
+            // If the same exercise has multiple rows (different block_type),
+            // sum them — the user wants total across all contexts.
+            next[id] = (next[id] ?? 0) + used;
+          }
+        }
+        setExerciseTimesUsed(next);
+        console.log('[Active Workout] Loaded exercise usage counter:', {
+          userId: targetUserId,
+          exerciseCount: Object.keys(next).length,
+        });
+      })
+      .catch(err => {
+        console.warn('[Active Workout] Failed to load exercise usage counter:', err);
+      });
+    return () => { cancelled = true; };
+  }, [activeWorkout?.userId]);
 
   // Auto-create initial block based on entry flow type selection
   useEffect(() => {
@@ -2617,6 +2759,32 @@ export default function ActiveWorkoutPage() {
                               <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
                             </div>
                             <div className="flex items-center gap-1">
+                              {/* Weight input (added 2026-05-11). Optional —
+                                  bodyweight circuits leave blank. Persists
+                                  through updateSet so weight survives
+                                  workout-finish and round-trips into the
+                                  workout history detail view. */}
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                step="2.5"
+                                value={
+                                  circuitExerciseWeights[workoutExercise.id] ??
+                                  (workoutExercise.sets || [])[0]?.weight ??
+                                  ''
+                                }
+                                onChange={(e) => {
+                                  const weight = parseFloat(e.target.value);
+                                  const safeWeight = Number.isFinite(weight) ? weight : 0;
+                                  setCircuitExerciseWeights(prev => ({ ...prev, [workoutExercise.id]: safeWeight }));
+                                  if ((workoutExercise.sets || [])[0]) {
+                                    updateSet(workoutExercise.id, (workoutExercise.sets || [])[0].id, { weight: safeWeight });
+                                  }
+                                }}
+                                className="w-14 h-7 text-center text-sm bg-gray-50 border-gray-200"
+                                placeholder="kg"
+                              />
+                              <span className="text-xs text-gray-500">kg</span>
                               <Input
                                 type="number"
                                 inputMode="numeric"
@@ -2849,8 +3017,14 @@ export default function ActiveWorkoutPage() {
                       </div>
                     )}
                   </div>
-                ) : block.type === 'warmup' && (block as any).sequenceMode ? (
-                  // WARMUP SEQUENCE MODE - Auto-advancing timer with exercise images
+                ) : block.type === 'warmup' && (block as any).sequenceMode !== false && blockExercises.length > 0 ? (
+                  // WARMUP SEQUENCE MODE — Auto-advancing timer with exercise
+                  // images. 2026-05-11 change: sequence mode is now the DEFAULT
+                  // for warmup blocks. Previously this branch required
+                  // `sequenceMode === true` so existing warmup blocks (which
+                  // never set the field) fell through to the strength layout.
+                  // Now `sequenceMode !== false` enables it by default;
+                  // trainers can explicitly opt out by setting false.
                   <WarmupSequence
                     exercises={blockExercises}
                     onComplete={() => {
@@ -2862,12 +3036,16 @@ export default function ActiveWorkoutPage() {
                     }}
                     onExerciseComplete={(exerciseId, duration) => {
                       // Mark exercise set as completed
-                      updateSet(blockExercises.find(e => e.exerciseId === exerciseId)!.id, blockExercises.find(e => e.exerciseId === exerciseId)!.sets[0].id, {
-                        completed: true,
-                        reps: 0,
-                        weight: 0,
-                        duration,
-                      });
+                      const ex = blockExercises.find((e: any) => e.exerciseId === exerciseId);
+                      const firstSet = ex?.sets?.[0];
+                      if (ex && firstSet) {
+                        updateSet(ex.id, firstSet.id, {
+                          completed: true,
+                          reps: 0,
+                          weight: 0,
+                          duration,
+                        });
+                      }
                     }}
                   />
                 ) : (
@@ -3782,6 +3960,24 @@ export default function ActiveWorkoutPage() {
                         {exercise.primaryMuscles.map(m => getMuscleDisplayName(m)).join(', ')} • {exercise.equipment}
                       </p>
                     </div>
+                    {/* 2026-05-11 (PLAN_exercise_history.md Track B): cross-
+                        trainer usage counter pill. Source is the active
+                        workout's user, NOT the logged-in user, so the
+                        trainer running a PT session sees the client's full
+                        history (including reps done with other trainers). */}
+                    {(() => {
+                      const used = exerciseTimesUsed[exercise.id] ?? 0;
+                      if (used <= 0) return null;
+                      return (
+                        <Badge
+                          variant="secondary"
+                          className="ml-2 bg-sky-500/15 text-sky-600 border-sky-500/30 text-[10px] font-semibold px-1.5 py-0.5"
+                          title={`This client has performed ${exercise.name} ${used} time${used === 1 ? '' : 's'} (across all trainers)`}
+                        >
+                          {used}×
+                        </Badge>
+                      );
+                    })()}
                   </Button>
                 );
               })}
