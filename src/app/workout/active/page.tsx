@@ -264,6 +264,18 @@ export default function ActiveWorkoutPage() {
     sourceProgramId?: string;
     sourceDayIndex?: number;
     awaitingReview?: boolean;
+    // 2026-05-11 fix #4: block-aware summary so the post-workout stats
+    // grid can show cardio distance / circuit rounds instead of "0 Sets",
+    // and the AI Coach can talk about the actual activity.
+    blocksSummary?: {
+      cardio: { activity: string; mode: string; distanceMeters: number; seconds: number; completed: boolean }[];
+      circuit: { style: string; roundsCompleted: number; roundsTarget?: number; seconds: number; completed: boolean }[];
+      warmupCount: number;
+      totalCardioDistanceKm: number;
+      totalCardioMinutes: number;
+      totalCircuitRounds: number;
+      hasNonStrengthWork: boolean;
+    };
   } | null>(null);
   const [editingTimes, setEditingTimes] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
@@ -496,6 +508,37 @@ export default function ActiveWorkoutPage() {
   // so the cardio renderer (steady timer / distance progress / interval
   // phase badge) has data to render. Returns an empty object for non-
   // cardio blocks or cardio blocks with no recognized cardio exercise.
+  //
+  // Parses targetTime strings like "20:00", "1:30:00", "30s", "1min",
+  // "90 sec", into seconds. Returns undefined if unparseable.
+  const parseDurationToSeconds = (raw: unknown): number | undefined => {
+    if (typeof raw === 'number' && Number.isFinite(raw)) return Math.max(0, Math.round(raw));
+    if (typeof raw !== 'string') return undefined;
+    const s = raw.trim().toLowerCase();
+    if (!s) return undefined;
+    // hh:mm:ss or mm:ss
+    if (s.includes(':')) {
+      const parts = s.split(':').map(p => parseInt(p, 10));
+      if (parts.some(p => !Number.isFinite(p))) return undefined;
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      return undefined;
+    }
+    // "30s", "30 sec", "30secs"
+    const secMatch = s.match(/^(\d+(?:\.\d+)?)\s*s(ec(s|onds)?)?$/);
+    if (secMatch) return Math.round(parseFloat(secMatch[1]));
+    // "1min", "5 minutes"
+    const minMatch = s.match(/^(\d+(?:\.\d+)?)\s*m(in(s|utes)?)?$/);
+    if (minMatch) return Math.round(parseFloat(minMatch[1]) * 60);
+    // "1h", "1.5 hr"
+    const hrMatch = s.match(/^(\d+(?:\.\d+)?)\s*h(r|ours?)?$/);
+    if (hrMatch) return Math.round(parseFloat(hrMatch[1]) * 3600);
+    // Bare number = minutes (most common builder input)
+    const bare = parseFloat(s);
+    if (Number.isFinite(bare)) return Math.round(bare * 60);
+    return undefined;
+  };
+
   const deriveCardioBlockFields = (block: any): Record<string, any> => {
     if (block?.type !== 'cardio') return {};
     const exercises = block.exercises || [];
@@ -528,11 +571,19 @@ export default function ActiveWorkoutPage() {
         ? cardioEx.intervals
         : undefined;
 
+    // 2026-05-11 fix #2: parse targetTime so steady cardio with a target
+    // duration counts DOWN from the target instead of UP from zero.
+    // Stored on the block as `targetSeconds` (canonical seconds). The
+    // timer effect reads this for both initial timerSeconds and the
+    // countdown-trigger predicate.
+    const targetSeconds: number | undefined = parseDurationToSeconds(cardioEx.targetTime);
+
     return {
       cardioMode,
       cardioActivity,
       targetDistance,
       intervalRounds,
+      targetSeconds,
     };
   };
 
@@ -577,7 +628,14 @@ export default function ActiveWorkoutPage() {
           ...cardioFields,
           // Reset runtime/transient state on each entry
           timerRunning: false,
-          timerSeconds: 0,
+          // 2026-05-11 fix #2: steady cardio with a target duration starts
+          // the timer AT the target so it counts DOWN. Without a target
+          // the timer starts at 0 and counts up (free-run mode). Same
+          // pattern as circuit AMRAP/EMOM.
+          timerSeconds:
+            mappedType === 'cardio' && (cardioFields as any).cardioMode === 'steady' && typeof (cardioFields as any).targetSeconds === 'number'
+              ? (cardioFields as any).targetSeconds
+              : 0,
           completed: false,
           circuitComplete: false,
           roundsCompleted: [],
@@ -834,28 +892,40 @@ export default function ActiveWorkoutPage() {
     toast.success(`${newBlock.name} block added`);
   };
   
-  // Circuit timer effect
+  // Circuit + cardio timer effect.
+  //
+  // 2026-05-11 fix #2: also countdown for cardio steady mode when a
+  // target duration is set (previously only circuit AMRAP/EMOM
+  // counted down, so a "20 minute run" target counted UP from 0).
   useEffect(() => {
     const runningCircuit = workoutBlocks.find(b => b.timerRunning);
     if (!runningCircuit) return;
-    
+
     const interval = setInterval(() => {
       setWorkoutBlocks(blocks => blocks.map(b => {
         if (b.id !== runningCircuit.id || !b.timerRunning) return b;
-        
-        const isCountdown = b.circuitStyle === 'amrap' || b.circuitStyle === 'emom';
+
+        const isCircuitCountdown = b.circuitStyle === 'amrap' || b.circuitStyle === 'emom';
+        // Cardio counts down if steady with a target duration, OR intervals
+        // (interval phase countdown handled via separate state in future).
+        const isCardioCountdown =
+          b.type === 'cardio' &&
+          b.cardioMode === 'steady' &&
+          typeof (b as any).targetSeconds === 'number' &&
+          (b as any).targetSeconds > 0;
+        const isCountdown = isCircuitCountdown || isCardioCountdown;
         const newSeconds = isCountdown ? (b.timerSeconds || 0) - 1 : (b.timerSeconds || 0) + 1;
-        
+
         // Stop if countdown reaches 0
         if (isCountdown && newSeconds <= 0) {
           toast.success(`${b.name} complete!`);
           return { ...b, timerSeconds: 0, timerRunning: false, completed: true };
         }
-        
+
         return { ...b, timerSeconds: newSeconds };
       }));
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [workoutBlocks]);
   
@@ -1079,7 +1149,56 @@ export default function ActiveWorkoutPage() {
     // ignore the second click — the retry toast re-enables this handler.
     if (isFinishing) return;
 
-    // Capture block snapshot for cardio/circuit persistence
+    // 2026-05-11 fix #4: aggregate block stats. Used by:
+    //  - post-workout summary stats grid (block-aware 4th tile)
+    //  - AI Coach payload (so the coach knows about cardio/circuit work)
+    //  - fallback feedback text when the AI call fails
+    const summarizeBlocks = (blocks: any[]) => {
+      const cardio = blocks.filter(b => b?.type === 'cardio').map(b => ({
+        activity: b.cardioActivity || b.name || 'Cardio',
+        mode: String(b.cardioMode || 'steady'),
+        distanceMeters: typeof b.distanceCompleted === 'number' ? b.distanceCompleted : 0,
+        seconds: typeof b.timerSeconds === 'number' ? b.timerSeconds : 0,
+        completed: !!b.completed,
+      }));
+      const circuit = blocks.filter(b => b?.type === 'circuit').map(b => {
+        const rc = b.roundsCompleted;
+        const roundsCompleted = typeof rc === 'number'
+          ? rc
+          : Array.isArray(rc) ? rc.length : 0;
+        return {
+          style: String(b.circuitStyle || 'rounds').toUpperCase(),
+          roundsCompleted,
+          roundsTarget: typeof b.circuitRounds === 'number' ? b.circuitRounds : (typeof b.rounds === 'number' ? b.rounds : undefined),
+          seconds: typeof b.timerSeconds === 'number' ? b.timerSeconds : 0,
+          completed: !!(b.completed || b.circuitComplete),
+        };
+      });
+      const warmup = blocks.filter(b => b?.type === 'warmup' || b?.type === 'cooldown');
+      const totalCardioDistanceKm = cardio.reduce((s, c) => s + (c.distanceMeters / 1000), 0);
+      const totalCardioMinutes = cardio.reduce((s, c) => s + (c.seconds / 60), 0);
+      const totalCircuitRounds = circuit.reduce((s, c) => s + c.roundsCompleted, 0);
+      return {
+        cardio,
+        circuit,
+        warmupCount: warmup.length,
+        totalCardioDistanceKm,
+        totalCardioMinutes,
+        totalCircuitRounds,
+        hasNonStrengthWork: cardio.length + circuit.length + warmup.length > 0,
+      };
+    };
+
+    // Capture block snapshot for cardio/circuit persistence.
+    //
+    // 2026-05-11 fix #3: the previous mapping had
+    //   `cardioActivity: b.cardioType` — wrong, cardioType is the mode
+    //   ('distance'|'time'|'intervals'), the activity name (e.g.
+    //   "Treadmill Run") lives on b.cardioActivity. Result: recent-
+    //   workout chips showed "Cardio" (the fallback) instead of the
+    //   exercise name. Also missing: targetSeconds, intervalRounds,
+    //   circuitDuration which would otherwise be useful for the
+    //   history detail view.
     const blockSnapshot = workoutBlocks.map(b => ({
       id: b.id,
       type: b.type,
@@ -1087,14 +1206,18 @@ export default function ActiveWorkoutPage() {
       timerSeconds: b.timerSeconds,
       completed: b.completed || b.circuitComplete,
       rounds: b.circuitRounds,
-      roundsCompleted: b.roundsCompleted?.length,
-      roundTimes: b.roundsCompleted?.map(r => r.duration),
+      roundsCompleted: b.roundsCompleted?.length ?? 0,
+      roundTimes: b.roundsCompleted?.map(r => r.duration) ?? [],
       circuitStyle: b.circuitStyle,
+      circuitDuration: (b as any).circuitDuration,
       cardioMode: b.cardioMode,
-      cardioActivity: b.cardioType,
-      distanceCompleted: b.distanceCompleted,
+      cardioActivity: (b as any).cardioActivity, // human-readable activity name
+      distanceCompleted: b.distanceCompleted ?? 0,
       targetDistance: b.targetDistance,
-      splits: b.splits,
+      targetSeconds: (b as any).targetSeconds,
+      splits: b.splits ?? [],
+      intervalRounds: (b as any).intervalRounds,
+      currentIntervalRound: (b as any).currentIntervalRound,
     }));
     const { setBlockSnapshot } = useWorkoutStore.getState();
     setBlockSnapshot(blockSnapshot);
@@ -1271,6 +1394,9 @@ export default function ActiveWorkoutPage() {
         });
       }
 
+      // 2026-05-11 fix #4: summary now includes the block-level aggregate
+      // so the post-workout grid + AI Coach can talk about cardio/circuit.
+      const blocksSummary = summarizeBlocks(blockSnapshot);
       setCompletedWorkoutData({
         id: completed.id,
         name: workoutName,
@@ -1293,6 +1419,7 @@ export default function ActiveWorkoutPage() {
         sourceProgramId: completed.sourceProgramId,
         sourceDayIndex: completed.sourceDayIndex,
         awaitingReview: isClientFinishingPT,
+        blocksSummary,
       });
       // Pre-fill editable time fields
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
@@ -1370,6 +1497,11 @@ export default function ActiveWorkoutPage() {
         }
       }
 
+      // 2026-05-11 fix #5: send block-level summary so the AI Coach
+      // doesn't conclude "volume dropped 100%" on a pure cardio/circuit
+      // session. blocksSummary aggregates cardio distance, circuit
+      // rounds, warmup counts — letting the coach talk about the actual
+      // activity completed.
       fetch('/api/workout-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1386,6 +1518,7 @@ export default function ActiveWorkoutPage() {
           volumeDelta,
           isProgramWorkout,
           programDayLabel: workoutName,
+          blocksSummary,
         }),
       })
         .then(r => r.json())
@@ -1911,7 +2044,12 @@ export default function ActiveWorkoutPage() {
               )}
             </div>
 
-            {/* Compact Stats Row */}
+            {/* Compact Stats Row.
+                2026-05-11 fix #4: 4th tile is now block-aware. Strength-
+                only workout → "Sets". Cardio (any distance > 0) →
+                kilometers run/cycled. Circuit (any rounds > 0) → rounds
+                completed. Cardio+circuit mix → favours whichever has
+                more volume of work. */}
             <div className="grid grid-cols-4 gap-2">
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
                 <p className="text-lg font-bold text-gray-900">{formatTime(completedWorkoutData?.duration || 0)}</p>
@@ -1925,11 +2063,70 @@ export default function ActiveWorkoutPage() {
                 <p className="text-lg font-bold text-purple-500">{completedWorkoutData?.exercises || 0}</p>
                 <p className="text-[10px] text-gray-500">Exercises</p>
               </div>
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
-                <p className="text-lg font-bold text-cyan-500">{completedWorkoutData?.sets || 0}</p>
-                <p className="text-[10px] text-gray-500">Sets</p>
-              </div>
+              {(() => {
+                const bs = completedWorkoutData?.blocksSummary;
+                const sets = completedWorkoutData?.sets || 0;
+                if (bs && bs.totalCardioDistanceKm >= 0.1 && bs.totalCardioDistanceKm >= bs.totalCircuitRounds / 4) {
+                  // Cardio dominates — show km
+                  return (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-green-500">{bs.totalCardioDistanceKm.toFixed(2)}</p>
+                      <p className="text-[10px] text-gray-500">km Cardio</p>
+                    </div>
+                  );
+                }
+                if (bs && bs.totalCircuitRounds > 0) {
+                  return (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-orange-500">{bs.totalCircuitRounds}</p>
+                      <p className="text-[10px] text-gray-500">Rounds</p>
+                    </div>
+                  );
+                }
+                if (bs && sets === 0 && bs.totalCardioMinutes >= 1) {
+                  return (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-green-500">{Math.round(bs.totalCardioMinutes)}</p>
+                      <p className="text-[10px] text-gray-500">min Cardio</p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-cyan-500">{sets}</p>
+                    <p className="text-[10px] text-gray-500">Sets</p>
+                  </div>
+                );
+              })()}
             </div>
+
+            {/* 2026-05-11 fix #4: Block summary chips — visible cardio /
+                circuit / warmup memory in the post-workout summary, so
+                the screen isn't blank for non-strength sessions. */}
+            {completedWorkoutData?.blocksSummary?.hasNonStrengthWork && (
+              <div className="flex flex-wrap gap-1.5">
+                {completedWorkoutData.blocksSummary.cardio.map((c, i) => {
+                  const km = c.distanceMeters >= 100 ? `${(c.distanceMeters / 1000).toFixed(2)}km` : null;
+                  const min = c.seconds >= 30 ? `${Math.round(c.seconds / 60)}min` : null;
+                  return (
+                    <Badge key={`c-${i}`} className="text-[10px] bg-green-500/15 text-green-700 border border-green-500/30">
+                      🏃 {c.activity}{(km || min) ? ` · ${km || min}` : ''}
+                    </Badge>
+                  );
+                })}
+                {completedWorkoutData.blocksSummary.circuit.map((c, i) => (
+                  <Badge key={`x-${i}`} className="text-[10px] bg-orange-500/15 text-orange-700 border border-orange-500/30">
+                    ⚡ {c.style}
+                    {c.roundsCompleted > 0 && ` · ${c.roundsCompleted}${c.roundsTarget ? `/${c.roundsTarget}` : ''} rds`}
+                  </Badge>
+                ))}
+                {completedWorkoutData.blocksSummary.warmupCount > 0 && (
+                  <Badge className="text-[10px] bg-yellow-500/15 text-yellow-700 border border-yellow-500/30">
+                    🔥 {completedWorkoutData.blocksSummary.warmupCount} warm-up{completedWorkoutData.blocksSummary.warmupCount > 1 ? 's' : ''}
+                  </Badge>
+                )}
+              </div>
+            )}
             
             {/* New PRs */}
             {completedWorkoutData?.pbs && completedWorkoutData.pbs.length > 0 && (
@@ -2063,10 +2260,31 @@ export default function ActiveWorkoutPage() {
                 ) : aiFeedback ? (
                   <p className="text-xs text-gray-900 leading-relaxed whitespace-pre-line">{aiFeedback}</p>
                 ) : (
+                  /* 2026-05-11 fix #5: block-aware fallback. Previously
+                     this branch only knew about strength volume and would
+                     say "every rep counts" for a 5km run. Now it picks
+                     the loudest signal: cardio km → circuit rounds →
+                     strength volume → generic. */
                   <p className="text-xs text-gray-800 leading-relaxed">
-                    {completedWorkoutData.totalVolume > 5000
-                      ? `Solid session — ${Math.round(completedWorkoutData.totalVolume).toLocaleString()}kg total volume across ${completedWorkoutData.exercises} exercises. Keep pushing.`
-                      : `${completedWorkoutData.exercises} exercises, ${completedWorkoutData.sets} sets completed. Every rep counts — keep showing up.`}
+                    {(() => {
+                      const bs = completedWorkoutData.blocksSummary;
+                      if (bs && bs.totalCardioDistanceKm >= 0.5) {
+                        return `${bs.totalCardioDistanceKm.toFixed(2)}km logged in ${formatTime(completedWorkoutData.duration)} — solid aerobic effort. Recover well.`;
+                      }
+                      if (bs && bs.totalCircuitRounds > 0) {
+                        return `${bs.totalCircuitRounds} circuit round${bs.totalCircuitRounds > 1 ? 's' : ''} completed across ${bs.circuit.length} block${bs.circuit.length > 1 ? 's' : ''}. Conditioning earned.`;
+                      }
+                      if (bs && bs.totalCardioMinutes >= 5) {
+                        return `${Math.round(bs.totalCardioMinutes)} minutes of cardio in the books. Keep stacking aerobic base.`;
+                      }
+                      if (completedWorkoutData.totalVolume > 5000) {
+                        return `Solid session — ${Math.round(completedWorkoutData.totalVolume).toLocaleString()}kg total volume across ${completedWorkoutData.exercises} exercises. Keep pushing.`;
+                      }
+                      if (bs && bs.warmupCount > 0 && completedWorkoutData.sets === 0 && completedWorkoutData.totalVolume === 0) {
+                        return `${bs.warmupCount} warm-up block${bs.warmupCount > 1 ? 's' : ''} done — mobility matters. Stack the real work next.`;
+                      }
+                      return `${completedWorkoutData.exercises} exercises, ${completedWorkoutData.sets} sets completed. Every rep counts — keep showing up.`;
+                    })()}
                   </p>
                 )}
               </div>
@@ -2556,7 +2774,15 @@ export default function ActiveWorkoutPage() {
                       <p className="text-xs text-gray-500">
                         {block.type === 'cardio' ? (
                           <>
-                            {block.cardioMode === 'steady' && `${Math.floor((block.timerSeconds || 0) / 60)}:${((block.timerSeconds || 0) % 60).toString().padStart(2, '0')} elapsed`}
+                            {block.cardioMode === 'steady' && (() => {
+                              // Show "remaining" when counting down toward a
+                              // target, else "elapsed" for free-run mode.
+                              const t = block.timerSeconds || 0;
+                              const label = typeof (block as any).targetSeconds === 'number' && (block as any).targetSeconds > 0
+                                ? 'remaining'
+                                : 'elapsed';
+                              return `${Math.floor(t / 60)}:${(t % 60).toString().padStart(2, '0')} ${label}`;
+                            })()}
                             {block.cardioMode === 'intervals' && `Round ${block.currentIntervalRound || 1}/${block.intervalRounds || 1} • ${block.currentIntervalPhase?.toUpperCase()}`}
                             {block.cardioMode === 'distance' && `${((block.distanceCompleted || 0) / 1000).toFixed(2)}km / ${((block.targetDistance || 0) / 1000).toFixed(1)}km`}
                           </>
