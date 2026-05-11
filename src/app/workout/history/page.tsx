@@ -13,6 +13,7 @@ import { Search, Dumbbell, Clock, TrendingUp, ChevronRight, Calendar, X, Flame, 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, isThisWeek, isThisMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
+import BlockMemoryCard from '@/components/BlockMemoryCard';
 
 export default function WorkoutHistoryPage() {
   const router = useRouter();
@@ -247,15 +248,24 @@ export default function WorkoutHistoryPage() {
                                 return (
                                   <div className="flex flex-wrap gap-1 mt-2">
                                     {cardioBlocks.map((b, i) => {
-                                      const km = typeof b.distanceCompleted === 'number' && b.distanceCompleted > 0
-                                        ? `${(b.distanceCompleted / 1000).toFixed(2)}km`
-                                        : null;
-                                      const mins = typeof b.timerSeconds === 'number' && b.timerSeconds > 0
-                                        ? `${Math.round(b.timerSeconds / 60)}min`
-                                        : null;
+                                      // 2026-05-11 user-feedback: include pace
+                                      // (min/km) when both distance and time
+                                      // are known — popular running stat.
+                                      const distMeters = typeof b.distanceCompleted === 'number' ? b.distanceCompleted : 0;
+                                      const seconds = typeof b.timerSeconds === 'number' ? b.timerSeconds : 0;
+                                      const km = distMeters > 0 ? `${(distMeters / 1000).toFixed(2)}km` : null;
+                                      const mins = seconds > 0 ? `${Math.round(seconds / 60)}min` : null;
+                                      let pace: string | null = null;
+                                      if (distMeters >= 100 && seconds > 0) {
+                                        const secPerKm = seconds / (distMeters / 1000);
+                                        const m = Math.floor(secPerKm / 60);
+                                        const s = Math.round(secPerKm % 60);
+                                        pace = `${m}:${s.toString().padStart(2, '0')}/km`;
+                                      }
+                                      const detail = [km, mins, pace].filter(Boolean).join(' · ');
                                       return (
                                         <Badge key={`c-${i}`} className="text-xs bg-green-500/15 text-green-700 border border-green-500/30">
-                                          🏃 {b.cardioActivity || 'Cardio'}{(km || mins) ? ` · ${km || mins}` : ''}
+                                          🏃 {b.cardioActivity || 'Cardio'}{detail ? ` · ${detail}` : ''}
                                         </Badge>
                                       );
                                     })}
@@ -440,9 +450,11 @@ export default function WorkoutHistoryPage() {
                       from the WorkoutBlockSnapshot[] now persisted in
                       workouts.blocks. Skips strength blocks because the
                       exercises section below already covers them.
-                      Renders nothing if the workout has no blocks (back-
-                      compat for workouts logged before the migration
-                      applied). */}
+                      User-feedback round 2: replaced the flat key-value
+                      list with BlockMemoryCard, which renders cardio
+                      pace + speed + Strava-style splits bars, and
+                      circuit round-progress dots + per-round bar chart
+                      with fastest-round highlight. */}
                   {(selectedWorkout.blocks || []).length > 0 && (() => {
                     const interestingBlocks = (selectedWorkout.blocks || []).filter(
                       (b: any) => b?.type === 'cardio' || b?.type === 'circuit' || b?.type === 'warmup' || b?.type === 'cooldown'
@@ -452,102 +464,9 @@ export default function WorkoutHistoryPage() {
                       <div>
                         <h3 className="text-sm font-medium text-gray-400 mb-3">Block Memory</h3>
                         <div className="space-y-3">
-                          {interestingBlocks.map((block: any, idx: number) => {
-                            const isCardio = block.type === 'cardio';
-                            const isCircuit = block.type === 'circuit';
-                            const isWarmupish = block.type === 'warmup' || block.type === 'cooldown';
-                            const accent =
-                              isCardio ? { border: 'border-green-500/30', bg: 'bg-green-500/5', text: 'text-green-500', icon: '🏃' } :
-                              isCircuit ? { border: 'border-orange-500/30', bg: 'bg-orange-500/5', text: 'text-orange-500', icon: '⚡' } :
-                              { border: 'border-yellow-500/30', bg: 'bg-yellow-500/5', text: 'text-yellow-600', icon: '🔥' };
-                            return (
-                              <div key={block.id || idx} className={`p-3 ${accent.bg} ${accent.border} border rounded-xl`}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-base">{accent.icon}</span>
-                                    <p className={`font-semibold ${accent.text}`}>{block.name || (isCardio ? 'Cardio' : isCircuit ? 'Circuit' : 'Warm-up')}</p>
-                                    {isCircuit && block.circuitStyle && (
-                                      <Badge variant="secondary" className="text-[10px] uppercase">{block.circuitStyle}</Badge>
-                                    )}
-                                    {isCardio && block.cardioActivity && (
-                                      <Badge variant="secondary" className="text-[10px]">{block.cardioActivity}</Badge>
-                                    )}
-                                  </div>
-                                  {typeof block.timerSeconds === 'number' && block.timerSeconds > 0 && (
-                                    <p className="text-xs font-mono text-gray-600">{formatDurationLong(block.timerSeconds)}</p>
-                                  )}
-                                </div>
-
-                                {/* Cardio: distance, splits, intervals */}
-                                {isCardio && (
-                                  <div className="space-y-1 text-xs">
-                                    {typeof block.distanceCompleted === 'number' && block.distanceCompleted > 0 && (
-                                      <p className="text-gray-700">
-                                        Distance: <span className="font-semibold">{(block.distanceCompleted / 1000).toFixed(2)} km</span>
-                                        {typeof block.targetDistance === 'number' && block.targetDistance > 0 && (
-                                          <span className="text-gray-400"> / {(block.targetDistance / 1000).toFixed(1)} km target</span>
-                                        )}
-                                      </p>
-                                    )}
-                                    {Array.isArray(block.splits) && block.splits.length > 0 && (
-                                      <div className="mt-2">
-                                        <p className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Splits</p>
-                                        <div className="grid grid-cols-5 gap-1">
-                                          {block.splits.map((split: any, splitIdx: number) => (
-                                            <div key={splitIdx} className="bg-white border border-gray-200 rounded px-1 py-0.5 text-center">
-                                              <p className="text-[10px] text-gray-400">{(split.distance / 1000).toFixed(1)}k</p>
-                                              <p className="text-[11px] font-mono text-green-600">{formatDurationLong(split.time)}</p>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                    {Array.isArray(block.intervals) && block.intervals.length > 0 && (
-                                      <p className="text-gray-600">
-                                        Intervals: <span className="font-semibold">{block.intervals.length}</span>
-                                        {' '}({block.intervals.filter((i: any) => i.intensity === 'work').length} work,
-                                        {' '}{block.intervals.filter((i: any) => i.intensity === 'rest').length} rest)
-                                      </p>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Circuit: rounds + per-round times */}
-                                {isCircuit && (
-                                  <div className="space-y-1 text-xs">
-                                    {typeof block.roundsCompleted === 'number' && (
-                                      <p className="text-gray-700">
-                                        Rounds: <span className="font-semibold">{block.roundsCompleted}</span>
-                                        {typeof block.rounds === 'number' && <span className="text-gray-400"> / {block.rounds} target</span>}
-                                      </p>
-                                    )}
-                                    {Array.isArray(block.roundTimes) && block.roundTimes.length > 0 && (
-                                      <div className="mt-2">
-                                        <p className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Per-round times</p>
-                                        <div className="flex flex-wrap gap-1">
-                                          {block.roundTimes.map((rt: number, rtIdx: number) => (
-                                            <span key={rtIdx} className="bg-white border border-gray-200 rounded px-2 py-0.5 text-[11px] font-mono text-orange-600">
-                                              R{rtIdx + 1}: {formatDurationLong(rt)}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Warmup / cooldown: just the timer (already shown above) */}
-                                {isWarmupish && (
-                                  <p className="text-xs text-gray-600">
-                                    {block.completed ? 'Completed' : 'Logged'}
-                                    {typeof block.timerSeconds === 'number' && block.timerSeconds > 0 && (
-                                      <span className="text-gray-400"> · {formatDurationLong(block.timerSeconds)}</span>
-                                    )}
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
+                          {interestingBlocks.map((block: any, idx: number) => (
+                            <BlockMemoryCard key={block.id || idx} block={block} />
+                          ))}
                         </div>
                       </div>
                     );

@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { getMedalDefinition, isCloseToEvolving, getEvolutionGlowTier, getEvolutionLabel } from '@/lib/medals';
 import { cn } from '@/lib/utils';
 import WarmupSequence from '@/components/WarmupSequence';
+import BlockMemoryCard from '@/components/BlockMemoryCard';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
 import { ExerciseImage } from '@/components/ExerciseImage';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
@@ -276,6 +277,10 @@ export default function ActiveWorkoutPage() {
       totalCircuitRounds: number;
       hasNonStrengthWork: boolean;
     };
+    // 2026-05-11 user-feedback (round 2): full block snapshots so the
+    // post-workout summary can render the same creative BlockMemoryCard
+    // visualization the history detail uses (pace, splits, rounds chart).
+    blocks?: any[];
   } | null>(null);
   const [editingTimes, setEditingTimes] = useState(false);
   const [editStartTime, setEditStartTime] = useState('');
@@ -786,11 +791,20 @@ export default function ActiveWorkoutPage() {
     return searchExercises(exerciseSearch, { blockType: block?.type ?? null });
   };
 
+  // 2026-05-11 user-feedback: warmup blocks now support multi-select too
+  // (previously only circuits did). Same `circuitExerciseSelection` state
+  // is reused as a generic "block selection" — name kept for git-history
+  // continuity. Strength blocks remain single-select because each lift
+  // typically gets its own configuration; bulk-adding is more useful for
+  // warmups (mobility flow) and circuits (set of moves rotated through).
+  const isMultiSelectBlock = (blockType?: string) =>
+    blockType === 'circuit' || blockType === 'warmup' || blockType === 'cooldown';
+
   const handleAddExercise = (exercise: Exercise) => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
-    
-    // For circuits, use multi-select mode
-    if (block?.type === 'circuit') {
+
+    // Multi-select for circuits + warmups
+    if (block && isMultiSelectBlock(block.type)) {
       const isSelected = circuitExerciseSelection.some(e => e.id === exercise.id);
       if (isSelected) {
         setCircuitExerciseSelection(circuitExerciseSelection.filter(e => e.id !== exercise.id));
@@ -799,23 +813,25 @@ export default function ActiveWorkoutPage() {
       }
       return;
     }
-    
+
     const blockMetadata = block ? {
       blockName: block.name,
       blockType: block.type,
       blockId: block.id,
     } : {};
-    
+
     addExercise({ ...exercise, ...blockMetadata } as any);
     setShowExerciseModal(false);
     setExerciseSearch('');
     toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
   };
-  
+
+  // Renamed mentally: works for any multi-select block. Function name
+  // stays handleSaveCircuitExercises to keep diff small in commit history.
   const handleSaveCircuitExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
     if (!block) return;
-    
+
     circuitExerciseSelection.forEach(exercise => {
       addExercise({
         ...exercise,
@@ -824,11 +840,11 @@ export default function ActiveWorkoutPage() {
         blockId: block.id,
       } as any);
     });
-    
+
     setCircuitExerciseSelection([]);
     setShowExerciseModal(false);
     setExerciseSearch('');
-    toast.success(`Added ${circuitExerciseSelection.length} exercises to ${block.name}`);
+    toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
   };
   
   const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
@@ -863,10 +879,24 @@ export default function ActiveWorkoutPage() {
       ...(type === 'cardio' && {
         cardioType: cardioConfig.type,
         cardioMode: cardioConfig.mode,
+        // 2026-05-11 fix #2 (round 2): in-place addBlock('cardio') is a
+        // different code path from the builder-flow deriveCardioBlock
+        // Fields. The builder stores targetTime as a string on the
+        // exercise; here the user picks a duration (in seconds) via
+        // cardioConfig and we materialize it directly. The timer effect's
+        // countdown predicate keys off `targetSeconds` for both flows,
+        // so we have to set it here too — otherwise steady cardio counts
+        // UP from cardioConfig.duration instead of DOWN to zero.
+        targetSeconds: cardioConfig.mode === 'steady' && cardioConfig.duration > 0
+          ? cardioConfig.duration
+          : undefined,
         targetDistance: cardioConfig.mode === 'distance' ? cardioConfig.distance : undefined,
         intervalWork: cardioConfig.mode === 'intervals' ? cardioConfig.intervalWork : undefined,
         intervalRest: cardioConfig.mode === 'intervals' ? cardioConfig.intervalRest : undefined,
         intervalRounds: cardioConfig.mode === 'intervals' ? cardioConfig.intervalRounds : undefined,
+        // Human-readable activity name so recent-workouts chip + history
+        // Block-Memory can show e.g. "Run" instead of generic "Cardio".
+        cardioActivity: cardioNames[cardioConfig.type] || 'Cardio',
         timerSeconds: cardioConfig.mode === 'steady' ? cardioConfig.duration : 0,
         timerRunning: false,
         currentIntervalPhase: 'work' as const,
@@ -1396,8 +1426,11 @@ export default function ActiveWorkoutPage() {
 
       // 2026-05-11 fix #4: summary now includes the block-level aggregate
       // so the post-workout grid + AI Coach can talk about cardio/circuit.
+      // Round 2: also pass through the raw block snapshots so the summary
+      // can render the same BlockMemoryCard visualization as history.
       const blocksSummary = summarizeBlocks(blockSnapshot);
       setCompletedWorkoutData({
+        blocks: blockSnapshot,
         id: completed.id,
         name: workoutName,
         duration,
@@ -2127,6 +2160,26 @@ export default function ActiveWorkoutPage() {
                 )}
               </div>
             )}
+
+            {/* 2026-05-11 user-feedback (round 2): creative per-block
+                visualizations (cardio pace + splits, circuit round
+                charts) right in the post-workout summary, not just
+                buried in history detail. Same component used in both
+                surfaces for a consistent recap experience. */}
+            {(() => {
+              const blocks = completedWorkoutData?.blocks || [];
+              const interesting = blocks.filter(
+                (b: any) => b?.type === 'cardio' || b?.type === 'circuit' || b?.type === 'warmup' || b?.type === 'cooldown'
+              );
+              if (interesting.length === 0) return null;
+              return (
+                <div className="space-y-2.5">
+                  {interesting.map((block: any, idx: number) => (
+                    <BlockMemoryCard key={block.id || idx} block={block} />
+                  ))}
+                </div>
+              );
+            })()}
             
             {/* New PRs */}
             {completedWorkoutData?.pbs && completedWorkoutData.pbs.length > 0 && (
@@ -4100,8 +4153,13 @@ export default function ActiveWorkoutPage() {
                       {block.type === 'circuit' && `Select exercises for ${block.circuitStyle?.toUpperCase()} circuit`}
                     </p>
                   </div>
-                  {block.type === 'circuit' && circuitExerciseSelection.length > 0 && (
-                    <Badge className="bg-orange-500">{circuitExerciseSelection.length} selected</Badge>
+                  {/* 2026-05-11: badge now shows for any multi-select
+                      block (circuit + warmup + cooldown), not only
+                      circuit, since warmups are also multi-select. */}
+                  {isMultiSelectBlock(block.type) && circuitExerciseSelection.length > 0 && (
+                    <Badge className={cn(
+                      block.type === 'circuit' ? 'bg-orange-500' : 'bg-yellow-500'
+                    )}>{circuitExerciseSelection.length} selected</Badge>
                   )}
                 </div>
               );
@@ -4113,7 +4171,7 @@ export default function ActiveWorkoutPage() {
               </>
             )}
           </DialogHeader>
-          
+
           {/* Exercise type indicator */}
           {activeBlockId && (() => {
             const block = workoutBlocks.find(b => b.id === activeBlockId);
@@ -4125,7 +4183,7 @@ export default function ActiveWorkoutPage() {
                 block.type === 'strength' && "bg-blue-500/10 text-blue-400",
                 block.type === 'circuit' && "bg-orange-500/10 text-orange-400",
               )}>
-                {block.type === 'warmup' && 'Showing: Bands, stretches, bodyweight, mobility exercises'}
+                {block.type === 'warmup' && 'Tap to select multiple mobility moves, then save'}
                 {block.type === 'strength' && 'Showing: Barbell, dumbbell, cable, machine exercises'}
                 {block.type === 'circuit' && 'Showing: All exercises - tap to select multiple, then save'}
               </div>
@@ -4157,15 +4215,24 @@ export default function ActiveWorkoutPage() {
                       block?.type === 'warmup' && "hover:bg-yellow-500/10",
                       block?.type === 'strength' && "hover:bg-blue-500/10",
                       block?.type === 'circuit' && "hover:bg-orange-500/10",
-                      block?.type === 'circuit' && isSelected && "bg-orange-500/20 border border-orange-500/50",
+                      // 2026-05-11: highlight selected for any multi-
+                      // select block (circuit + warmup), not only circuit.
+                      block && isMultiSelectBlock(block.type) && isSelected && (
+                        block.type === 'circuit'
+                          ? "bg-orange-500/20 border border-orange-500/50"
+                          : "bg-yellow-500/20 border border-yellow-500/50"
+                      ),
                       !block && "hover:bg-gray-50",
                     )}
                     onClick={() => handleAddExercise(exercise)}
                   >
-                    {block?.type === 'circuit' && (
+                    {/* Multi-select checkbox for circuit + warmup */}
+                    {block && isMultiSelectBlock(block.type) && (
                       <div className={cn(
-                        "w-5 h-5 rounded border-2 mr-3 flex items-center justify-center",
-                        isSelected ? "bg-orange-500 border-orange-500" : "border-gray-300"
+                        "w-5 h-5 rounded border-2 mr-3 flex items-center justify-center flex-shrink-0",
+                        isSelected
+                          ? (block.type === 'circuit' ? "bg-orange-500 border-orange-500" : "bg-yellow-500 border-yellow-500")
+                          : "border-gray-300"
                       )}>
                         {isSelected && <Check className="w-3 h-3 text-white" />}
                       </div>
@@ -4210,23 +4277,29 @@ export default function ActiveWorkoutPage() {
             </div>
           </ScrollArea>
           
-          {/* Circuit Save Button */}
+          {/* Multi-select Save Button — shown for circuit + warmup. */}
           {(() => {
             const block = workoutBlocks.find(b => b.id === activeBlockId);
-            if (block?.type === 'circuit' && circuitExerciseSelection.length > 0) {
-              return (
-                <div className="pt-3 border-t border-gray-800">
-                  <Button
-                    onClick={handleSaveCircuitExercises}
-                    className="w-full bg-orange-500 hover:bg-orange-600"
-                  >
-                    <Check className="w-4 h-4 mr-2" />
-                    Add {circuitExerciseSelection.length} Exercise{circuitExerciseSelection.length > 1 ? 's' : ''} to Circuit
-                  </Button>
-                </div>
-              );
-            }
-            return null;
+            if (!block || !isMultiSelectBlock(block.type) || circuitExerciseSelection.length === 0) return null;
+            const isCircuit = block.type === 'circuit';
+            // block.type narrows to 'warmup' | 'strength' | 'circuit' |
+            // 'cardio' from addBlock; cooldown only enters via builder-
+            // sourced workouts so cast to string for the comparison.
+            const label = isCircuit ? 'Circuit' : ((block.type as string) === 'cooldown' ? 'Cool-down' : 'Warm-up');
+            return (
+              <div className="pt-3 border-t border-gray-800">
+                <Button
+                  onClick={handleSaveCircuitExercises}
+                  className={cn(
+                    "w-full",
+                    isCircuit ? "bg-orange-500 hover:bg-orange-600" : "bg-yellow-500 hover:bg-yellow-600"
+                  )}
+                >
+                  <Check className="w-4 h-4 mr-2" />
+                  Add {circuitExerciseSelection.length} Exercise{circuitExerciseSelection.length > 1 ? 's' : ''} to {label}
+                </Button>
+              </div>
+            );
           })()}
         </DialogContent>
       </Dialog>
