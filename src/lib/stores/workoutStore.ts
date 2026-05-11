@@ -477,20 +477,35 @@ export const useWorkoutStore = create<WorkoutState>()(
         const isStretching = exercise.category === 'stretching';
         const defaultDuration = 30; // 30 seconds per stretch
         
-        const sets = isStretching 
-          ? [
-              { id: uuidv4(), setNumber: 1, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
-              { id: uuidv4(), setNumber: 2, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
-            ]
-          : [{
+        // For circuit blocks, create one set per round with roundIndex
+        const isCircuit = blockType === 'circuit';
+        const circuitRounds = (exercise as any).circuitRounds || 3; // Default to 3 rounds if not specified
+        
+        const sets = isCircuit
+          ? Array.from({ length: circuitRounds }, (_, i) => ({
               id: uuidv4(),
-              setNumber: 1,
+              setNumber: i + 1,
               type: 'normal' as const,
               completed: false,
               previousWeight: lastSetData?.weight || pb?.bestWeight,
               previousReps: lastSetData?.reps || pb?.bestReps,
+              roundIndex: i,
               ...(autoAssisted && { isAssisted: true }),
-            }];
+            }))
+          : isStretching 
+            ? [
+                { id: uuidv4(), setNumber: 1, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
+                { id: uuidv4(), setNumber: 2, type: 'normal' as const, completed: false, duration: lastSetData?.duration || defaultDuration, isTimed: true },
+              ]
+            : [{
+                id: uuidv4(),
+                setNumber: 1,
+                type: 'normal' as const,
+                completed: false,
+                previousWeight: lastSetData?.weight || pb?.bestWeight,
+                previousReps: lastSetData?.reps || pb?.bestReps,
+                ...(autoAssisted && { isAssisted: true }),
+              }];
         
         const workoutExercise: WorkoutExercise = {
           id: uuidv4(),

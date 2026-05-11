@@ -110,6 +110,7 @@ export interface WorkoutSet {
   drops?: DropSet[]; // Drop sets attached to this set
   isAssisted?: boolean; // For assisted exercises (pull-up machine, dip machine) where weight = assistance
   isTimed?: boolean; // true for timed exercises (stretches)
+  roundIndex?: number; // For circuit blocks: which round this set belongs to (0-indexed)
 }
 
 // Superset grouping
@@ -133,6 +134,9 @@ export interface WorkoutExercise {
   miniRestSeconds?: number; // Optional rest between exercises in superset
   isUnilateral?: boolean; // Toggle for alternating sides (L/R) exercises
   sequenceDuration?: number; // Warmup/cooldown sequence mode: duration in seconds (default 30)
+  blockType?: string; // Block type this exercise belongs to (circuit, strength, etc.)
+  blockId?: string; // Block ID this exercise belongs to
+  blockName?: string; // Block name this exercise belongs to
 }
 
 // Workout Block (for organizing exercises in the builder)
