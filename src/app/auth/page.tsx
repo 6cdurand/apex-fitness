@@ -731,10 +731,10 @@ function AuthPageContent() {
                               effectively invisible. Force dark text +
                               dark focus text so the dropdown items are
                               readable both at rest and on hover. */}
-                          <SelectContent className="bg-white border-gray-200">
-                            <SelectItem value="male" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Male</SelectItem>
-                            <SelectItem value="female" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Female</SelectItem>
-                            <SelectItem value="other" className="text-gray-900 focus:text-gray-900 focus:bg-gray-100">Other</SelectItem>
+                          <SelectContent className="bg-white border-gray-200 text-gray-900">
+                            <SelectItem value="male" className="!text-gray-900 focus:!text-gray-900 focus:!bg-gray-100">Male</SelectItem>
+                            <SelectItem value="female" className="!text-gray-900 focus:!text-gray-900 focus:!bg-gray-100">Female</SelectItem>
+                            <SelectItem value="other" className="!text-gray-900 focus:!text-gray-900 focus:!bg-gray-100">Other</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -863,8 +863,8 @@ function AuthPageContent() {
                           <Heart className="w-5 h-5 text-red-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-gray-900 text-sm">Apple Health</p>
-                          <p className="text-[11px] text-gray-500">Steps, calories, heart rate, sleep</p>
+                          <p className="font-medium text-gray-100 text-sm">Apple Health</p>
+                          <p className="text-[11px] text-gray-400">Steps, calories, heart rate, sleep</p>
                         </div>
                         {onboardConnections.appleHealth && <Check className="w-5 h-5 text-red-400" />}
                       </button>
@@ -883,8 +883,8 @@ function AuthPageContent() {
                           <Smartphone className="w-5 h-5 text-green-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-gray-900 text-sm">Google / Samsung Health</p>
-                          <p className="text-[11px] text-gray-500">Steps, calories, heart rate</p>
+                          <p className="font-medium text-gray-100 text-sm">Google / Samsung Health</p>
+                          <p className="text-[11px] text-gray-400">Steps, calories, heart rate</p>
                         </div>
                         {onboardConnections.googleHealth && <Check className="w-5 h-5 text-green-400" />}
                       </button>
@@ -903,8 +903,8 @@ function AuthPageContent() {
                           <Calendar className="w-5 h-5 text-blue-400" />
                         </div>
                         <div className="flex-1 text-left">
-                          <p className="font-medium text-gray-900 text-sm">Calendar</p>
-                          <p className="text-[11px] text-gray-500">Sync workouts to your phone calendar</p>
+                          <p className="font-medium text-gray-100 text-sm">Calendar</p>
+                          <p className="text-[11px] text-gray-400">Sync workouts to your phone calendar</p>
                         </div>
                         {onboardConnections.calendar && <Check className="w-5 h-5 text-blue-400" />}
                       </button>
@@ -924,8 +924,8 @@ function AuthPageContent() {
                             <CreditCard className="w-5 h-5 text-purple-400" />
                           </div>
                           <div className="flex-1 text-left">
-                            <p className="font-medium text-gray-900 text-sm">Stripe</p>
-                            <p className="text-[11px] text-gray-500">Accept payments from clients</p>
+                            <p className="font-medium text-gray-100 text-sm">Stripe</p>
+                            <p className="text-[11px] text-gray-400">Accept payments from clients</p>
                           </div>
                           {onboardConnections.stripe && <Check className="w-5 h-5 text-purple-400" />}
                         </button>
