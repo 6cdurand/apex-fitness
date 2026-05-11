@@ -213,23 +213,81 @@ export default function WorkoutHistoryPage() {
                                   {Math.round(workout.totalVolume).toLocaleString()} kg
                                 </span>
                               </div>
-                              {/* Exercise tags */}
-                              <div className="flex flex-wrap gap-1 mt-2">
-                                {workout.exercises.slice(0, 3).map((ex) => (
-                                  <Badge 
-                                    key={ex.id} 
-                                    variant="outline" 
-                                    className="text-xs border-gray-200 text-gray-500"
-                                  >
-                                    {ex.exercise.name}
-                                  </Badge>
-                                ))}
-                                {workout.exercises.length > 3 && (
-                                  <Badge variant="outline" className="text-xs border-gray-200 text-gray-500">
-                                    +{workout.exercises.length - 3}
-                                  </Badge>
-                                )}
-                              </div>
+                              {/* Block summary chips (2026-05-11): quick
+                                  memory for cardio (distance/duration),
+                                  circuit (rounds + style), warmup. Falls
+                                  back to exercise-name tags for workouts
+                                  without persisted blocks. */}
+                              {(() => {
+                                const blocks = (workout.blocks || []) as any[];
+                                const cardioBlocks = blocks.filter(b => b?.type === 'cardio');
+                                const circuitBlocks = blocks.filter(b => b?.type === 'circuit');
+                                const warmupBlocks = blocks.filter(b => b?.type === 'warmup' || b?.type === 'cooldown');
+                                const hasAnyBlock = cardioBlocks.length + circuitBlocks.length + warmupBlocks.length > 0;
+                                if (!hasAnyBlock) {
+                                  return (
+                                    <div className="flex flex-wrap gap-1 mt-2">
+                                      {workout.exercises.slice(0, 3).map((ex) => (
+                                        <Badge
+                                          key={ex.id}
+                                          variant="outline"
+                                          className="text-xs border-gray-200 text-gray-500"
+                                        >
+                                          {ex.exercise.name}
+                                        </Badge>
+                                      ))}
+                                      {workout.exercises.length > 3 && (
+                                        <Badge variant="outline" className="text-xs border-gray-200 text-gray-500">
+                                          +{workout.exercises.length - 3}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div className="flex flex-wrap gap-1 mt-2">
+                                    {cardioBlocks.map((b, i) => {
+                                      const km = typeof b.distanceCompleted === 'number' && b.distanceCompleted > 0
+                                        ? `${(b.distanceCompleted / 1000).toFixed(2)}km`
+                                        : null;
+                                      const mins = typeof b.timerSeconds === 'number' && b.timerSeconds > 0
+                                        ? `${Math.round(b.timerSeconds / 60)}min`
+                                        : null;
+                                      return (
+                                        <Badge key={`c-${i}`} className="text-xs bg-green-500/15 text-green-700 border border-green-500/30">
+                                          🏃 {b.cardioActivity || 'Cardio'}{(km || mins) ? ` · ${km || mins}` : ''}
+                                        </Badge>
+                                      );
+                                    })}
+                                    {circuitBlocks.map((b, i) => (
+                                      <Badge key={`x-${i}`} className="text-xs bg-orange-500/15 text-orange-700 border border-orange-500/30">
+                                        ⚡ {(b.circuitStyle || 'Circuit').toString().toUpperCase()}
+                                        {typeof b.roundsCompleted === 'number' && b.roundsCompleted > 0 ? ` · ${b.roundsCompleted} rds` : ''}
+                                      </Badge>
+                                    ))}
+                                    {warmupBlocks.map((b, i) => (
+                                      <Badge key={`w-${i}`} className="text-xs bg-yellow-500/15 text-yellow-700 border border-yellow-500/30">
+                                        🔥 {b.name || 'Warm-up'}
+                                      </Badge>
+                                    ))}
+                                    {/* Show first strength exercise name as
+                                        the strength summary; deeper detail
+                                        lives in the modal. */}
+                                    {(() => {
+                                      const strengthExCount = workout.exercises.filter(ex => {
+                                        const bt = (ex as any).blockType;
+                                        return !bt || bt === 'strength';
+                                      }).length;
+                                      if (strengthExCount === 0) return null;
+                                      return (
+                                        <Badge className="text-xs bg-blue-500/15 text-blue-700 border border-blue-500/30">
+                                          💪 {strengthExCount} strength
+                                        </Badge>
+                                      );
+                                    })()}
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <ChevronRight className="w-5 h-5 text-gray-500 flex-shrink-0 ml-2" />
                           </div>
@@ -370,6 +428,124 @@ export default function WorkoutHistoryPage() {
                               <Badge key={pr.id} variant="secondary" className="bg-amber-500/20 text-amber-300 text-xs">
                                 {ex?.exercise?.name || pr.exerciseId} — {pr.bestWeight}kg × {pr.bestReps}
                               </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Block-level memory (2026-05-11): cardio splits,
+                      circuit rounds, warmup sequence durations. Reads
+                      from the WorkoutBlockSnapshot[] now persisted in
+                      workouts.blocks. Skips strength blocks because the
+                      exercises section below already covers them.
+                      Renders nothing if the workout has no blocks (back-
+                      compat for workouts logged before the migration
+                      applied). */}
+                  {(selectedWorkout.blocks || []).length > 0 && (() => {
+                    const interestingBlocks = (selectedWorkout.blocks || []).filter(
+                      (b: any) => b?.type === 'cardio' || b?.type === 'circuit' || b?.type === 'warmup' || b?.type === 'cooldown'
+                    );
+                    if (interestingBlocks.length === 0) return null;
+                    return (
+                      <div>
+                        <h3 className="text-sm font-medium text-gray-400 mb-3">Block Memory</h3>
+                        <div className="space-y-3">
+                          {interestingBlocks.map((block: any, idx: number) => {
+                            const isCardio = block.type === 'cardio';
+                            const isCircuit = block.type === 'circuit';
+                            const isWarmupish = block.type === 'warmup' || block.type === 'cooldown';
+                            const accent =
+                              isCardio ? { border: 'border-green-500/30', bg: 'bg-green-500/5', text: 'text-green-500', icon: '🏃' } :
+                              isCircuit ? { border: 'border-orange-500/30', bg: 'bg-orange-500/5', text: 'text-orange-500', icon: '⚡' } :
+                              { border: 'border-yellow-500/30', bg: 'bg-yellow-500/5', text: 'text-yellow-600', icon: '🔥' };
+                            return (
+                              <div key={block.id || idx} className={`p-3 ${accent.bg} ${accent.border} border rounded-xl`}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-base">{accent.icon}</span>
+                                    <p className={`font-semibold ${accent.text}`}>{block.name || (isCardio ? 'Cardio' : isCircuit ? 'Circuit' : 'Warm-up')}</p>
+                                    {isCircuit && block.circuitStyle && (
+                                      <Badge variant="secondary" className="text-[10px] uppercase">{block.circuitStyle}</Badge>
+                                    )}
+                                    {isCardio && block.cardioActivity && (
+                                      <Badge variant="secondary" className="text-[10px]">{block.cardioActivity}</Badge>
+                                    )}
+                                  </div>
+                                  {typeof block.timerSeconds === 'number' && block.timerSeconds > 0 && (
+                                    <p className="text-xs font-mono text-gray-600">{formatDurationLong(block.timerSeconds)}</p>
+                                  )}
+                                </div>
+
+                                {/* Cardio: distance, splits, intervals */}
+                                {isCardio && (
+                                  <div className="space-y-1 text-xs">
+                                    {typeof block.distanceCompleted === 'number' && block.distanceCompleted > 0 && (
+                                      <p className="text-gray-700">
+                                        Distance: <span className="font-semibold">{(block.distanceCompleted / 1000).toFixed(2)} km</span>
+                                        {typeof block.targetDistance === 'number' && block.targetDistance > 0 && (
+                                          <span className="text-gray-400"> / {(block.targetDistance / 1000).toFixed(1)} km target</span>
+                                        )}
+                                      </p>
+                                    )}
+                                    {Array.isArray(block.splits) && block.splits.length > 0 && (
+                                      <div className="mt-2">
+                                        <p className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Splits</p>
+                                        <div className="grid grid-cols-5 gap-1">
+                                          {block.splits.map((split: any, splitIdx: number) => (
+                                            <div key={splitIdx} className="bg-white border border-gray-200 rounded px-1 py-0.5 text-center">
+                                              <p className="text-[10px] text-gray-400">{(split.distance / 1000).toFixed(1)}k</p>
+                                              <p className="text-[11px] font-mono text-green-600">{formatDurationLong(split.time)}</p>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {Array.isArray(block.intervals) && block.intervals.length > 0 && (
+                                      <p className="text-gray-600">
+                                        Intervals: <span className="font-semibold">{block.intervals.length}</span>
+                                        {' '}({block.intervals.filter((i: any) => i.intensity === 'work').length} work,
+                                        {' '}{block.intervals.filter((i: any) => i.intensity === 'rest').length} rest)
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Circuit: rounds + per-round times */}
+                                {isCircuit && (
+                                  <div className="space-y-1 text-xs">
+                                    {typeof block.roundsCompleted === 'number' && (
+                                      <p className="text-gray-700">
+                                        Rounds: <span className="font-semibold">{block.roundsCompleted}</span>
+                                        {typeof block.rounds === 'number' && <span className="text-gray-400"> / {block.rounds} target</span>}
+                                      </p>
+                                    )}
+                                    {Array.isArray(block.roundTimes) && block.roundTimes.length > 0 && (
+                                      <div className="mt-2">
+                                        <p className="text-gray-500 text-[10px] uppercase tracking-wide mb-1">Per-round times</p>
+                                        <div className="flex flex-wrap gap-1">
+                                          {block.roundTimes.map((rt: number, rtIdx: number) => (
+                                            <span key={rtIdx} className="bg-white border border-gray-200 rounded px-2 py-0.5 text-[11px] font-mono text-orange-600">
+                                              R{rtIdx + 1}: {formatDurationLong(rt)}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Warmup / cooldown: just the timer (already shown above) */}
+                                {isWarmupish && (
+                                  <p className="text-xs text-gray-600">
+                                    {block.completed ? 'Completed' : 'Logged'}
+                                    {typeof block.timerSeconds === 'number' && block.timerSeconds > 0 && (
+                                      <span className="text-gray-400"> · {formatDurationLong(block.timerSeconds)}</span>
+                                    )}
+                                  </p>
+                                )}
+                              </div>
                             );
                           })}
                         </div>
