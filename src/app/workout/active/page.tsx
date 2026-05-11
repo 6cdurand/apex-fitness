@@ -818,6 +818,7 @@ export default function ActiveWorkoutPage() {
       blockName: block.name,
       blockType: block.type,
       blockId: block.id,
+      ...(block.type === 'circuit' && { circuitRounds: block.circuitRounds || 3 }),
     } : {};
 
     addExercise({ ...exercise, ...blockMetadata } as any);
@@ -838,6 +839,7 @@ export default function ActiveWorkoutPage() {
         blockName: block.name,
         blockType: block.type,
         blockId: block.id,
+        circuitRounds: block.circuitRounds || 3,
       } as any);
     });
 
@@ -4091,6 +4093,7 @@ export default function ActiveWorkoutPage() {
                         set={set}
                         exerciseId={workoutExercise.id}
                         exerciseName={workoutExercise.exercise?.name || 'Exercise'}
+                        blockType={workoutExercise.blockType}
                         onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
                         onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise?.name || 'Exercise')}
                         onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
@@ -5346,6 +5349,7 @@ function SetRow({
   set,
   exerciseId,
   exerciseName,
+  blockType,
   onUpdate,
   onComplete,
   onUncomplete,
@@ -5354,6 +5358,7 @@ function SetRow({
   set: WorkoutSet;
   exerciseId: string;
   exerciseName: string;
+  blockType?: string;
   onUpdate: (updates: Partial<WorkoutSet>) => void;
   onComplete: (weight: number, reps: number) => void;
   onUncomplete: () => void;
@@ -5387,9 +5392,17 @@ function SetRow({
             "w-7 h-7 rounded-full flex items-center justify-center text-sm font-medium",
             set.completed 
               ? "bg-sky-500 text-white" 
+              : blockType === 'circuit'
+              ? "bg-orange-100 text-orange-500"
               : "bg-gray-100 text-gray-500"
           )}>
-            {set.completed ? <Check className="w-4 h-4" /> : set.setNumber}
+            {set.completed ? (
+              <Check className="w-4 h-4" />
+            ) : blockType === 'circuit' && set.roundIndex != null ? (
+              `R${set.roundIndex + 1}`
+            ) : (
+              set.setNumber
+            )}
           </span>
         </div>
         
