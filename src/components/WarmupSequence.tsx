@@ -43,7 +43,12 @@ export default function WarmupSequence({
   const initialDuration = exercises[0]?.sequenceDuration || 30;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSeconds, setCurrentSeconds] = useState(initialDuration);
-  const [isPaused, setIsPaused] = useState(false);
+  // 2026-05-11 user-feedback: first exercise should NOT auto-start —
+  // people aren't necessarily ready when the block opens. Initial pause
+  // means user explicitly taps play to begin. Subsequent exercises auto-
+  // advance because we don't reset isPaused on index change.
+  const [isPaused, setIsPaused] = useState(true);
+  const [hasStarted, setHasStarted] = useState(false);
   const [isEditingDuration, setIsEditingDuration] = useState(false);
   const [editValue, setEditValue] = useState('');
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -119,7 +124,10 @@ export default function WarmupSequence({
     return () => clearInterval(intv);
   }, [isPaused, isEditingDuration, playBeep]);
 
-  const handlePlayPause = () => setIsPaused(p => !p);
+  const handlePlayPause = () => {
+    setIsPaused(p => !p);
+    if (!hasStarted) setHasStarted(true);
+  };
 
   const handleSkipBack = () => {
     if (currentIndex > 0) {
@@ -207,9 +215,11 @@ export default function WarmupSequence({
         </span>
       </div>
 
-      {/* Exercise image + name */}
+      {/* Exercise image + name. 2026-05-11 user-feedback: image bumped
+          from w-32 h-32 → w-44 h-44 so people can actually see the form
+          without squinting. */}
       <div className="px-6 pt-2 pb-3 flex flex-col items-center">
-        <div className="w-32 h-32 rounded-2xl bg-white border border-yellow-200 overflow-hidden flex items-center justify-center mb-3">
+        <div className="w-44 h-44 rounded-2xl bg-white border border-yellow-200 overflow-hidden flex items-center justify-center mb-3 shadow-sm">
           <ExerciseImage
             exerciseId={currentExercise.exerciseId}
             size="lg"
@@ -280,7 +290,11 @@ export default function WarmupSequence({
                   {formatTime(currentSeconds)}
                 </span>
                 <span className="text-[10px] text-gray-500 uppercase tracking-wider mt-1">
-                  {isPaused ? 'Paused · tap to start' : 'Auto-advancing'}
+                  {!hasStarted
+                    ? 'Tap play when ready'
+                    : isPaused
+                      ? 'Paused · tap to resume'
+                      : 'Auto-advancing'}
                 </span>
               </button>
             )}
@@ -303,7 +317,9 @@ export default function WarmupSequence({
         <Button
           size="icon"
           onClick={handlePlayPause}
-          className="w-16 h-16 rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md"
+          className={`w-16 h-16 rounded-full bg-yellow-500 hover:bg-yellow-600 shadow-md ${
+            !hasStarted ? 'animate-pulse ring-4 ring-yellow-300' : ''
+          }`}
         >
           {isPaused ? (
             <Play className="w-7 h-7 text-white ml-0.5" fill="white" />
