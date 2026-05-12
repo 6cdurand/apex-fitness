@@ -4,6 +4,7 @@ import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { FeedPost, Notification } from '@/types';
 import { useAuthStore } from './authStore';
+import { syncFollowToSupabase, syncUnfollowFromSupabase, fetchFollowingFromSupabase, fetchFollowersFromSupabase } from '../supabaseSync';
 
 interface SocialState {
   posts: FeedPost[];
@@ -17,6 +18,8 @@ interface SocialState {
   
   followUser: (userId: string) => void;
   unfollowUser: (userId: string) => void;
+  hydrateFollowsFromSupabase: (userId: string) => Promise<void>;
+  getFollowersCount: (userId: string) => number;
   
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead: (notificationId: string) => void;
@@ -133,9 +136,10 @@ export const useSocialStore = create<SocialState>()(
           actionUrl: `/profile/${user.id}`,
         });
         
-        // Sync to Supabase
-        const { syncFollowToSupabase } = await import('../supabaseSync');
-        await syncFollowToSupabase(user.id, userId);
+        // Sync to Supabase (fire-and-forget with debounce)
+        setTimeout(() => {
+          syncFollowToSupabase(user.id, userId).catch(() => {});
+        }, 300);
       },
 
       unfollowUser: async (userId) => {
@@ -146,9 +150,39 @@ export const useSocialStore = create<SocialState>()(
           following: user.following.filter(id => id !== userId),
         });
         
-        // Sync to Supabase
-        const { removeFollowFromSupabase } = await import('../supabaseSync');
-        await removeFollowFromSupabase(user.id, userId);
+        // Sync to Supabase (fire-and-forget)
+        setTimeout(() => {
+          syncUnfollowFromSupabase(user.id, userId).catch(() => {});
+        }, 300);
+      },
+
+      hydrateFollowsFromSupabase: async (userId: string) => {
+        try {
+          const [following, followers] = await Promise.all([
+            fetchFollowingFromSupabase(userId),
+            fetchFollowersFromSupabase(userId),
+          ]);
+
+          const { updateUser } = useAuthStore.getState();
+          updateUser({
+            following,
+          });
+
+          console.log(`[FollowSync] Hydrated ${following.length} following, ${followers.length} followers`);
+        } catch (err) {
+          console.error('[FollowSync] Exception during hydration:', err);
+        }
+      },
+
+      getFollowersCount: (userId: string) => {
+        // For now, scan users to get follower count
+        // This will be replaced with followers[] state when we track it properly
+        try {
+          const users = JSON.parse(localStorage.getItem('apex-users') || '[]');
+          return users.filter((u: any) => u.following?.includes(userId)).length;
+        } catch {
+          return 0;
+        }
       },
 
       addNotification: (notification) => {
