@@ -30,6 +30,8 @@ export default function WorkoutHistoryPage() {
   const [editingNotes, setEditingNotes] = useState(false);
   const [showSaveToLibrary, setShowSaveToLibrary] = useState(false);
   const [saveLibraryName, setSaveLibraryName] = useState('');
+  const [filterMode, setFilterMode] = useState<'all' | 'week' | 'month' | 'programs' | 'solo'>('all');
+  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -49,12 +51,25 @@ export default function WorkoutHistoryPage() {
     return false;
   });
 
+  // Apply filter mode
+  let filteredByMode = activeWorkouts;
+  const now = new Date();
+  if (filterMode === 'week') {
+    filteredByMode = activeWorkouts.filter(w => isThisWeek(new Date(w.startTime)));
+  } else if (filterMode === 'month') {
+    filteredByMode = activeWorkouts.filter(w => isThisMonth(new Date(w.startTime)));
+  } else if (filterMode === 'programs') {
+    filteredByMode = activeWorkouts.filter(w => w.assignedBy || w.sourceProgramId);
+  } else if (filterMode === 'solo') {
+    filteredByMode = activeWorkouts.filter(w => !w.assignedBy && !w.sourceProgramId);
+  }
+
   const filteredWorkouts = searchQuery
-    ? activeWorkouts.filter(w => 
+    ? filteredByMode.filter(w => 
         w.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         w.exercises.some(e => e.exercise.name.toLowerCase().includes(searchQuery.toLowerCase()))
       )
-    : activeWorkouts;
+    : filteredByMode;
 
   // Group workouts by date
   const groupedWorkouts = filteredWorkouts.reduce((groups, workout) => {
@@ -169,21 +184,89 @@ export default function WorkoutHistoryPage() {
           </Card>
         </div>
 
+        {/* Quick Filter Chips (athlete mode only) */}
+        {!user?.isTrainer || user?.mode !== 'trainer' ? (
+          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+            <button
+              onClick={() => setFilterMode('all')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                filterMode === 'all'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilterMode('week')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                filterMode === 'week'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              This Week
+            </button>
+            <button
+              onClick={() => setFilterMode('month')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                filterMode === 'month'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              This Month
+            </button>
+            <button
+              onClick={() => setFilterMode('programs')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                filterMode === 'programs'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Programs only
+            </button>
+            <button
+              onClick={() => setFilterMode('solo')}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                filterMode === 'solo'
+                  ? 'bg-sky-500 text-white'
+                  : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Solo only
+            </button>
+          </div>
+        ) : null}
+
         {/* Workout List */}
-        <ScrollArea className="h-[calc(100vh-380px)]">
+        <ScrollArea className="h-[calc(100vh-450px)]">
           {sortedDates.length === 0 ? (
             <Card className="bg-white border-gray-200 shadow-sm">
               <CardContent className="py-16 text-center">
                 <Dumbbell className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                 <h3 className="font-semibold text-gray-500 mb-2">No workouts found</h3>
-                <p className="text-sm text-gray-500">
-                  {searchQuery ? 'Try a different search term' : 'Start your first workout to see it here'}
+                <p className="text-sm text-gray-500 mb-4">
+                  {searchQuery
+                    ? 'Try a different search term'
+                    : activeWorkouts.length === 0
+                    ? 'Start your first workout to see it here'
+                    : 'No workouts match this filter'}
                 </p>
+                {!searchQuery && activeWorkouts.length === 0 && (
+                  <Button
+                    className="bg-sky-500 hover:bg-sky-600 text-white"
+                    onClick={() => router.push('/today')}
+                  >
+                    Start your first workout
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
             <div className="space-y-6">
-              {sortedDates.map((date) => (
+              {sortedDates.slice(0, visibleCount).map((date) => (
                 <div key={date}>
                   <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
@@ -194,7 +277,7 @@ export default function WorkoutHistoryPage() {
                       <Card
                         key={workout.id}
                         className="bg-white border-gray-200 shadow-sm cursor-pointer hover:bg-gray-50 transition-colors"
-                        onClick={() => openWorkoutSummary(workout)}
+                        onClick={() => router.push(`/workout/${workout.id}`)}
                       >
                         <CardContent className="p-4">
                           <div className="flex items-center justify-between">
@@ -307,6 +390,19 @@ export default function WorkoutHistoryPage() {
                   </div>
                 </div>
               ))}
+              
+              {/* Load More Button */}
+              {sortedDates.length > visibleCount && (
+                <div className="mt-6 text-center">
+                  <Button
+                    variant="outline"
+                    onClick={() => setVisibleCount(prev => prev + 20)}
+                    className="border-gray-200 text-gray-600 hover:bg-gray-50"
+                  >
+                    Load more ({sortedDates.length - visibleCount} remaining)
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
