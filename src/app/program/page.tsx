@@ -129,6 +129,7 @@ export default function ProgramPage() {
   const [expandedDay, setExpandedDay] = useState<number | null>(null);
   const [trainerName, setTrainerName] = useState<string>('');
   const [showSwapDialog, setShowSwapDialog] = useState(false);
+  const [repeatDayConfirm, setRepeatDayConfirm] = useState<{ idx: number; day: any } | null>(null);
   const [showWorkoutDays, setShowWorkoutDays] = useState(false);
   
   // Load client programs from Supabase, and re-fetch on foreground so a
@@ -835,21 +836,31 @@ export default function ProgramPage() {
               Pick a different workout to do instead of {nextWorkout?.day?.dayLabel || 'the scheduled workout'}
             </DialogDescription>
           </DialogHeader>
+          <div className="text-xs text-gray-500 px-1 pb-2">
+            You've done {nextWorkout?.completedDayIndices?.length || 0} of {activeProgram?.trainingDaysPerWeek || activeProgram?.weeklyPlan?.length} workouts this week.
+            Pick the next one or repeat one you've already done.
+          </div>
           <div className="space-y-2">
             {activeProgram?.weeklyPlan?.map((day: any, idx: number) => {
               const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
               const isScheduled = nextWorkout?.dayIndex === idx;
               const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
-              if (isDoneThisWeek) return null;
+              if (totalEx === 0) return null;
               return (
                 <button
                   key={day.id || idx}
                   className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
-                    isScheduled ? 'bg-sky-50 border-2 border-sky-300' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                    isDoneThisWeek
+                      ? 'bg-gray-50 border border-gray-200 opacity-60'
+                      : isScheduled ? 'bg-sky-50 border-2 border-sky-300' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                   }`}
                   onClick={() => {
-                    setShowSwapDialog(false);
-                    startProgramDay(idx);
+                    if (isDoneThisWeek) {
+                      setRepeatDayConfirm({ idx, day });
+                    } else {
+                      setShowSwapDialog(false);
+                      startProgramDay(idx);
+                    }
                   }}
                 >
                   <div className="flex items-center gap-2">
@@ -864,12 +875,47 @@ export default function ProgramPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    {isScheduled && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
+                    {isDoneThisWeek && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
+                    {isScheduled && !isDoneThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
                     <Play className="w-4 h-4 text-gray-400" />
                   </div>
                 </button>
               );
             })}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Repeat Day Confirmation Dialog */}
+      <Dialog open={!!repeatDayConfirm} onOpenChange={(open) => !open && setRepeatDayConfirm(null)}>
+        <DialogContent className="bg-white border-gray-200 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Repeat this workout?</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              You've already done {repeatDayConfirm?.day?.dayLabel} this week.
+              Doing it again is fine — just note it won't count toward your weekly goal of {activeProgram?.trainingDaysPerWeek || activeProgram?.weeklyPlan?.length} sessions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setRepeatDayConfirm(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-sky-500 hover:bg-sky-600"
+              onClick={() => {
+                if (repeatDayConfirm) {
+                  setRepeatDayConfirm(null);
+                  setShowSwapDialog(false);
+                  startProgramDay(repeatDayConfirm.idx);
+                }
+              }}
+            >
+              Repeat anyway
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
