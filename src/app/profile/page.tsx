@@ -955,7 +955,7 @@ export default function ProfilePage() {
                 <Dumbbell className="w-5 h-5 text-sky-400" />
                 {isTrainerMode ? 'Recent Client Sessions' : 'Recent Workouts'}
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-sky-500" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout')}>
+              <Button variant="ghost" size="sm" className="text-gray-400 hover:text-sky-500" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout/history')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
