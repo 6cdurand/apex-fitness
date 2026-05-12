@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useMedalStore, useWorkoutStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useMedalStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { evolvingMedals, getEvolutionGlowClass, getEvolutionFrameClass, getEvolutionLabel, isCloseToEvolving, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,7 +36,8 @@ export default function MedalsPage() {
     const totalWorkouts = userWorkouts.length;
     const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
     const totalPRs = userPBs.length;
-    const followers = user?.following?.length || 0;
+    // Get followers count from socialStore (v9-06 semantic bug fix)
+    const followersCount = useSocialStore.getState().getFollowersCount?.(user?.id || '') || 0;
     
     return evolvingMedals.map(medal => {
       let currentProgress = 0;
@@ -52,7 +53,7 @@ export default function MedalsPage() {
           currentProgress = totalPRs;
           break;
         case 'community-builder':
-          currentProgress = followers;
+          currentProgress = followersCount;
           break;
         case 'streak-master':
           currentProgress = evolvingMedalProgress[medal.id] || 0;

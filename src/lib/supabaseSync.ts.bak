@@ -1405,6 +1405,71 @@ export async function fetchMessagesFromSupabase(userId: string): Promise<{
 // ============ FRIENDSHIPS SYNC ============
 
 // Sync a follow relationship to Supabase
+export async function syncFollowToSupabase(followerId: string, followingId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const { error } = await supabase.from('friendships').upsert({
+      follower_id: followerId,
+      following_id: followingId,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'follower_id,following_id' });
+    
+    if (error) {
+      console.error('[Supabase] Error syncing follow:', error);
+      return false;
+    }
+    console.log('[Supabase] Follow synced:', followerId, '->', followingId);
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Follow sync error:', e);
+    return false;
+  }
+}
+
+// Remove a follow relationship from Supabase
+export async function removeFollowFromSupabase(followerId: string, followingId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  
+  try {
+    const { error } = await supabase.from('friendships')
+      .delete()
+      .eq('follower_id', followerId)
+      .eq('following_id', followingId);
+    
+    if (error) {
+      console.error('[Supabase] Error removing follow:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[Supabase] Unfollow error:', e);
+    return false;
+  }
+}
+
+// Fetch friendships for a user from Supabase
+export async function fetchFriendshipsFromSupabase(userId: string): Promise<{
+  followers: string[];
+  following: string[];
+} | null> {
+  if (!isSupabaseConfigured()) return null;
+  
+  try {
+    const [followersRes, followingRes] = await Promise.all([
+      supabase.from('friendships').select('follower_id').eq('following_id', userId),
+      supabase.from('friendships').select('following_id').eq('follower_id', userId),
+    ]);
+    
+    return {
+      followers: (followersRes.data || []).map((f: any) => f.follower_id),
+      following: (followingRes.data || []).map((f: any) => f.following_id),
+    };
+  } catch (e) {
+    console.error('[Supabase] Fetch friendships error:', e);
+    return null;
+  }
+}
 
 // ============ STRENGTH RATING SYNC ============
 
@@ -1488,11 +1553,10 @@ export async function fetchAllUserDataFromSupabase(userId: string): Promise<{
   console.log('[Supabase] Fetching all data for user:', userId);
   
   try {
-    const [coreData, messageData, following, followers, strengthRating] = await Promise.all([
+    const [coreData, messageData, friendshipData, strengthRating] = await Promise.all([
       fetchUserDataFromSupabase(userId),
       fetchMessagesFromSupabase(userId),
-      fetchFollowingFromSupabase(userId),
-      fetchFollowersFromSupabase(userId),
+      fetchFriendshipsFromSupabase(userId),
       fetchStrengthRatingFromSupabase(userId),
     ]);
     
@@ -1502,8 +1566,8 @@ export async function fetchAllUserDataFromSupabase(userId: string): Promise<{
       medals: coreData?.medals || [],
       messages: messageData?.messages || [],
       conversations: messageData?.conversations || [],
-      followers: followers || [],
-      following: following || [],
+      followers: friendshipData?.followers || [],
+      following: friendshipData?.following || [],
       strengthRating,
     };
   } catch (e) {
@@ -3681,7 +3745,7 @@ export async function fetchFollowingFromSupabase(
     }
 
     // Dedupe and return just IDs
-    return Array.from(new Set((data || []).map((row: any) => row.followee_id)));
+    return Array.from(new Set((data || []).map(row => row.followee_id)));
   } catch (err) {
     console.error('[FollowSync] Exception fetching following:', err);
     return [];
@@ -3711,7 +3775,7 @@ export async function fetchFollowersFromSupabase(
     }
 
     // Dedupe and return just IDs
-    return Array.from(new Set((data || []).map((row: any) => row.follower_id)));
+    return Array.from(new Set((data || []).map(row => row.follower_id)));
   } catch (err) {
     console.error('[FollowSync] Exception fetching followers:', err);
     return [];

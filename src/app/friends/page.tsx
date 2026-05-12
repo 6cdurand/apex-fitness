@@ -14,7 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Search, UserPlus, UserMinus, Users, BadgeCheck, MessageCircle, Calendar, Send } from 'lucide-react';
 import { toast } from 'sonner';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ProfileCard } from '@/components/ProfileCard';
 
 export default function FriendsPage() {
@@ -27,6 +27,7 @@ export default function FriendsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [unfollowConfirm, setUnfollowConfirm] = useState<{ userId: string; username: string } | null>(null);
   
   // Consultation booking state
   const [showBookConsultation, setShowBookConsultation] = useState(false);
@@ -75,8 +76,7 @@ export default function FriendsPage() {
   };
 
   const handleUnfollow = (userId: string, username: string) => {
-    unfollowUser(userId);
-    toast.success(`Unfollowed ${username}`);
+    setUnfollowConfirm({ userId, username });
   };
 
   const handleBookConsultation = (trainer: any) => {
@@ -326,7 +326,7 @@ export default function FriendsPage() {
                 isFriend={user?.following?.includes(selectedUser.id)}
                 onFollow={() => {
                   if (user?.following?.includes(selectedUser.id)) {
-                    unfollowUser(selectedUser.id);
+                    setUnfollowConfirm({ userId: selectedUser.id, username: selectedUser.username || selectedUser.displayName || 'User' });
                   } else {
                     followUser(selectedUser.id);
                   }
@@ -415,6 +415,37 @@ export default function FriendsPage() {
                 {isBooking ? 'Sending...' : 'Request Consultation'}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unfollow Confirmation Dialog (v9-06) */}
+      <Dialog open={!!unfollowConfirm} onOpenChange={() => setUnfollowConfirm(null)}>
+        <DialogContent className="bg-white border-gray-200 max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-gray-900">Unfollow @{unfollowConfirm?.username}?</DialogTitle>
+            <DialogDescription className="text-gray-500">You can re-follow anytime.</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setUnfollowConfirm(null)}
+              className="border-gray-200"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (unfollowConfirm) {
+                  unfollowUser(unfollowConfirm.userId);
+                  setUnfollowConfirm(null);
+                  toast.success(`Unfollowed @${unfollowConfirm.username}`);
+                }
+              }}
+            >
+              Unfollow
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

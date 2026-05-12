@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import {
   useMessageStore,
   mergeMessagesPreferRead,
@@ -434,6 +434,19 @@ export function SupabaseSync() {
     const timer = setTimeout(() => {
       useWorkoutStore.getState().hydrateExerciseNotesFromSupabase(user.id);
     }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user?.id, isIdentityNormalized]);
+
+  // Follow system hydration (v9-06) - runs after main data sync
+  useEffect(() => {
+    if (!isIdentityNormalized) return;
+    if (!isAuthenticated || !user?.id) return;
+    if (!isSupabaseConfigured()) return;
+
+    const timer = setTimeout(() => {
+      useSocialStore.getState().hydrateFollowsFromSupabase(user.id);
+    }, 250);
 
     return () => clearTimeout(timer);
   }, [isAuthenticated, user?.id, isIdentityNormalized]);
