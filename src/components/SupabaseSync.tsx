@@ -424,6 +424,20 @@ export function SupabaseSync() {
     syncFromSupabase();
   }, [isAuthenticated, user?.id, updateUser, isIdentityNormalized]);
 
+  // Exercise notes hydration (v9-04) - runs after main data sync
+  useEffect(() => {
+    if (!isIdentityNormalized) return;
+    if (!isAuthenticated || !user?.id) return;
+    if (!isSupabaseConfigured()) return;
+
+    // Slight delay to ensure main data sync completes first
+    const timer = setTimeout(() => {
+      useWorkoutStore.getState().hydrateExerciseNotesFromSupabase(user.id);
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, user?.id, isIdentityNormalized]);
+
   // SEPARATE effect for trainer data - syncs on EVERY mount for ALL authenticated users
   // This ensures cross-device consistency regardless of localStorage state
   useEffect(() => {

@@ -3544,3 +3544,96 @@ export async function fetchWorkoutTemplatesFromSupabase(userId: string): Promise
     return [];
   }
 }
+
+// ============================================================================
+// EXERCISE NOTES SYNC (v9-04)
+// ============================================================================
+
+export async function syncExerciseNoteToSupabase(
+  userId: string,
+  exerciseId: string,
+  notes: string,
+  trainerId: string | null = null
+): Promise<{ success: boolean; warning?: string }> {
+  try {
+    const payload = {
+      user_id: userId,
+      trainer_id: trainerId,
+      exercise_id: exerciseId,
+      notes,
+    };
+
+    const { error } = await getWorkoutClient()
+      .from('user_exercise_notes')
+      .upsert(payload, {
+        onConflict: 'user_id,trainer_id,exercise_id',
+      });
+
+    if (error) {
+      const errCode = (error as { code?: string }).code;
+      const errMsg = (error.message || '').toLowerCase();
+      
+      // Schema-drift retry: table doesn't exist yet (migration not applied)
+      if (errCode === '42P01' || errMsg.includes('relation') && errMsg.includes('does not exist')) {
+        console.warn(
+          '[ExerciseNotesSync] ⚠️ user_exercise_notes table missing — apply 20260512 migration.',
+          'Notes will save to localStorage only until migration applied.'
+        );
+        return { success: false, warning: 'user_exercise_notes table missing — apply 20260512 migration' };
+      }
+
+      // Column doesn't exist (schema version mismatch)
+      if (errCode === '42703' || errMsg.includes('column') && errMsg.includes('does not exist')) {
+        console.warn(
+          '[ExerciseNotesSync] ⚠️ Schema drift detected on user_exercise_notes.',
+          'Apply pending migrations to enable sync.',
+          { code: errCode, message: error.message }
+        );
+        return { success: false, warning: 'Schema drift on user_exercise_notes' };
+      }
+
+      // Other errors
+      console.error('[ExerciseNotesSync] Error syncing note:', error);
+      return { success: false };
+    }
+
+    return { success: true };
+  } catch (err) {
+    console.error('[ExerciseNotesSync] Exception syncing note:', err);
+    return { success: false };
+  }
+}
+
+export async function fetchExerciseNotesFromSupabase(
+  userId: string
+): Promise<Array<{ user_id: string; trainer_id: string | null; exercise_id: string; notes: string; updated_at: string }>> {
+  try {
+    const { data, error } = await getWorkoutClient()
+      .from('user_exercise_notes')
+      .select('user_id, trainer_id, exercise_id, notes, updated_at')
+      .eq('user_id', userId);
+
+    if (error) {
+      const errCode = (error as { code?: string }).code;
+      const errMsg = (error.message || '').toLowerCase();
+
+      // Schema-drift: table doesn't exist yet
+      if (errCode === '42P01' || errMsg.includes('relation') && errMsg.includes('does not exist')) {
+        console.warn(
+          '[ExerciseNotesSync] ⚠️ user_exercise_notes table missing — apply 20260512 migration.',
+          'Returning empty notes array (graceful degrade).'
+        );
+        return [];
+      }
+
+      // Other errors
+      console.error('[ExerciseNotesSync] Error fetching notes:', error);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('[ExerciseNotesSync] Exception fetching notes:', err);
+    return [];
+  }
+}

@@ -9,7 +9,7 @@ import { useAuthStore } from './authStore';
 import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
 import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
-import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase } from '../supabaseSync';
+import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
 import { __buildWorkoutCompletedNotification } from '../workoutCompletedNotification';
@@ -21,6 +21,9 @@ import { useSocialStore } from './socialStore';
 const getTrainerStore = () => useTrainerStore;
 const getMedalStore = () => useMedalStore;
 const getSocialStore = () => useSocialStore;
+
+// Module-level debounce tracking for exercise notes sync (v9-04)
+const exerciseNoteSyncTimeouts: Record<string, NodeJS.Timeout> = {};
 
 interface WorkoutState {
   activeWorkout: Workout | null;
@@ -112,6 +115,7 @@ interface WorkoutState {
   exerciseNotes: Record<string, string>;  // "userId:exerciseId" -> notes
   getExerciseNotes: (exerciseId: string) => string;
   setExerciseNotes: (exerciseId: string, notes: string) => void;
+  hydrateExerciseNotesFromSupabase: (userId: string) => Promise<void>;
   
   // Supabase sync for workout history
   loadWorkoutHistoryFromSupabase: (userId: string, isTrainer?: boolean) => Promise<void>;
@@ -1351,10 +1355,16 @@ export const useWorkoutStore = create<WorkoutState>()(
         const normId = normalizeExerciseId(exerciseId);
         // PT session: trainer is logged in, working with a client
         let key: string;
+        let targetUserId: string;
+        let trainerId: string | null;
         if (clientId && clientId !== userId) {
           key = `${userId}:${clientId}:${normId}`;
+          targetUserId = clientId;
+          trainerId = userId;
         } else {
           key = `${clientId || userId}:${normId}`;
+          targetUserId = clientId || userId;
+          trainerId = null;
         }
         set(state => ({
           exerciseNotes: {
@@ -1362,6 +1372,46 @@ export const useWorkoutStore = create<WorkoutState>()(
             [key]: notes,
           },
         }));
+
+        // Debounced Supabase sync (v9-04)
+        const syncKey = `${targetUserId}:${trainerId || ''}:${normId}`;
+        if (exerciseNoteSyncTimeouts[syncKey]) {
+          clearTimeout(exerciseNoteSyncTimeouts[syncKey]);
+        }
+        exerciseNoteSyncTimeouts[syncKey] = setTimeout(() => {
+          syncExerciseNoteToSupabase(targetUserId, normId, notes, trainerId).catch(() => {});
+          delete exerciseNoteSyncTimeouts[syncKey];
+        }, 750);
+      },
+
+      hydrateExerciseNotesFromSupabase: async (userId: string) => {
+        try {
+          const rows = await fetchExerciseNotesFromSupabase(userId);
+          if (rows.length === 0) return;
+
+          const updatedNotes: Record<string, string> = { ...get().exerciseNotes };
+
+          rows.forEach(row => {
+            // Determine key format matching setExerciseNotes
+            let key: string;
+            if (row.trainer_id) {
+              // Trainer note for client: trainerId:userId:exerciseId
+              key = `${row.trainer_id}:${row.user_id}:${row.exercise_id}`;
+            } else {
+              // Personal note: userId:exerciseId
+              key = `${row.user_id}:${row.exercise_id}`;
+            }
+
+            // Merge: Supabase wins by default (no local timestamp tracking yet)
+            // Future enhancement: compare row.updated_at with local timestamp if tracked
+            updatedNotes[key] = row.notes;
+          });
+
+          set({ exerciseNotes: updatedNotes });
+          console.log(`[ExerciseNotesSync] Hydrated ${rows.length} notes from Supabase`);
+        } catch (err) {
+          console.error('[ExerciseNotesSync] Exception during hydration:', err);
+        }
       },
 
       recalcActiveExercisePB: (rawExerciseId: string) => {
