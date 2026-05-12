@@ -83,6 +83,7 @@ export default function TodayPage() {
   const [pendingStartEvent, setPendingStartEvent] = useState<any>(null);
   const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
   const [showSwapWorkout, setShowSwapWorkout] = useState(false);
+  const [repeatDayConfirm, setRepeatDayConfirm] = useState<{ idx: number; day: any } | null>(null);
   const { updateCalendarEvent } = useTrainerStore();
   const startingSessionRef = useRef<string | null>(null);
   const [startingEventId, setStartingEventId] = useState<string | null>(null);
@@ -761,7 +762,7 @@ export default function TodayPage() {
               .map((wd: any, idx: number) => ({ ...wd, idx }))
               .filter((wd: any, idx: number) => {
                 const count = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
-                return count > 0 && !completedDayIndices.includes(idx) && idx !== dayIndex;
+                return count > 0 && idx !== dayIndex;
               });
             
             return (
@@ -812,26 +813,34 @@ export default function TodayPage() {
                     <DialogHeader>
                       <DialogTitle className="text-gray-900">Swap Workout</DialogTitle>
                       <DialogDescription className="text-gray-500">Pick a different workout for today</DialogDescription>
+                      <div className="text-xs text-gray-500 px-1 pt-1">
+                        You've done {completedDayIndices.length} of {program.trainingDaysPerWeek || program.weeklyPlan.length} workouts this week.
+                        Pick the next one or repeat one you've already done.
+                      </div>
                     </DialogHeader>
                     <div className="space-y-2 pt-1">
                       {program.weeklyPlan.map((wd: any, idx: number) => {
                         const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                         const isDone = completedDayIndices.includes(idx);
                         const isCurrent = idx === dayIndex;
-                        // Hide completed days AND empty days (builder may auto-populate
-                        // unused day labels with 0 exercises; don't offer those)
-                        if (isDone || wdEx === 0) return null;
+                        if (wdEx === 0) return null;
                         return (
                           <button
                             key={wd.id || idx}
                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
-                              isCurrent
+                              isDone
+                                ? 'border-gray-200 bg-gray-50 opacity-60'
+                                : isCurrent
                                 ? 'border-sky-300 bg-sky-50'
                                 : 'border-gray-200 hover:border-sky-300 hover:bg-sky-50/50'
                             }`}
                             onClick={() => {
-                              setShowSwapWorkout(false);
-                              startDay(idx, wd);
+                              if (isDone) {
+                                setRepeatDayConfirm({ idx, day: wd });
+                              } else {
+                                setShowSwapWorkout(false);
+                                startDay(idx, wd);
+                              }
                             }}
                           >
                             <div className="flex items-center gap-3">
@@ -846,12 +855,47 @@ export default function TodayPage() {
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              {isCurrent && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
+                              {isDone && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
+                              {isCurrent && !isDone && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
                               <Play className="w-4 h-4 text-gray-400" />
                             </div>
                           </button>
                         );
                       })}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Repeat Day Confirmation Dialog */}
+                <Dialog open={!!repeatDayConfirm} onOpenChange={(open) => !open && setRepeatDayConfirm(null)}>
+                  <DialogContent className="bg-white border-gray-200 max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Repeat this workout?</DialogTitle>
+                      <DialogDescription className="text-gray-500">
+                        You've already done {repeatDayConfirm?.day?.dayLabel} this week.
+                        Doing it again is fine — just note it won't count toward your weekly goal of {program.trainingDaysPerWeek || program.weeklyPlan.length} sessions.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setRepeatDayConfirm(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        className="flex-1 bg-sky-500 hover:bg-sky-600"
+                        onClick={() => {
+                          if (repeatDayConfirm) {
+                            setRepeatDayConfirm(null);
+                            setShowSwapWorkout(false);
+                            startDay(repeatDayConfirm.idx, repeatDayConfirm.day);
+                          }
+                        }}
+                      >
+                        Repeat anyway
+                      </Button>
                     </div>
                   </DialogContent>
                 </Dialog>
@@ -862,27 +906,48 @@ export default function TodayPage() {
           // FIXED schedule — only show start button on scheduled days
           if (!isScheduledToday && program.scheduleMode === 'fixed') {
             return (
-              <Card className="bg-gray-50 border-gray-200 shadow-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center">
-                      <Calendar className="w-5 h-5 text-gray-400" />
+              <>
+                <Card className="bg-gray-50 border-gray-200 shadow-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center">
+                        <Calendar className="w-5 h-5 text-gray-400" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 font-medium">{program.templateName}</p>
+                        <h3 className="font-semibold text-gray-900">Rest Day</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Next workout: <span className="font-medium text-sky-600 capitalize">{nextScheduledDay || 'soon'}</span>
+                          {' '}— {day?.dayLabel || 'Workout'} ({totalEx} exercises)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
+                        <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} left</p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 font-medium">{program.templateName}</p>
-                      <h3 className="font-semibold text-gray-900">Rest Day</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Next workout: <span className="font-medium text-sky-600 capitalize">{nextScheduledDay || 'soon'}</span>
-                        {' '}— {day?.dayLabel || 'Workout'} ({totalEx} exercises)
-                      </p>
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
+                        onClick={() => startDay(dayIndex, day)}
+                      >
+                        <Play className="w-4 h-4 mr-2" />
+                        Skip to {nextScheduledDay || 'next'} ({day?.dayLabel})
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-gray-200 text-gray-600"
+                        onClick={() => setShowSwapWorkout(true)}
+                      >
+                        <ArrowLeftRight className="w-4 h-4 mr-1" />
+                        Pick different
+                      </Button>
                     </div>
-                    <div className="text-right">
-                      <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
-                      <p className="text-xs text-gray-500 mt-0.5">{remainingThisWeek} left</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Swap Workout Dialog - shared with flexible mode above */}
+              </>
             );
           }
           
