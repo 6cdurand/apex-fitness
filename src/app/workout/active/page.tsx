@@ -1393,8 +1393,10 @@ export default function ActiveWorkoutPage() {
       let programDiff: ProgramDayDiff = {
         added: [],
         removed: [],
+        changed: [],
         addedCount: 0,
         removedCount: 0,
+        changedCount: 0,
         hasChanges: false,
       };
       if (isProgramWorkout) {
@@ -1411,7 +1413,7 @@ export default function ActiveWorkoutPage() {
             ? byIndex
             : activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completed.name);
           if (dayIdx >= 0) {
-            programDiff = computeProgramDayDiff(completed, activeProgram.weeklyPlan[dayIdx]);
+            programDiff = computeProgramDayDiff(completed, activeProgram.weeklyPlan[dayIdx] as any);
           }
         }
       }
@@ -4704,11 +4706,22 @@ export default function ActiveWorkoutPage() {
           onEscapeKeyDown={(e) => e.preventDefault()}
         >
           <DialogHeader>
-            <DialogTitle>Save changes to your program?</DialogTitle>
+            <DialogTitle>
+              {completedWorkoutData?.assignedBy && completedWorkoutData.assignedBy !== currentUser?.id
+                ? 'Override your trainer\'s program?'
+                : 'Update your program?'
+              }
+            </DialogTitle>
             <DialogDescription className="space-y-2 pt-2">
-              <span className="block">
-                You modified this workout. Update the program template with these changes for next time?
-              </span>
+              {completedWorkoutData?.assignedBy && completedWorkoutData.assignedBy !== currentUser?.id ? (
+                <span className="block">
+                  Your trainer set this program. Saving will replace their template with your version. Talk to them first if you want a permanent change.
+                </span>
+              ) : (
+                <span className="block">
+                  You modified this workout. Update your program template so next week's session uses these changes?
+                </span>
+              )}
               {programDiffForPrompt && (
                 <span className="block bg-gray-50 border border-gray-200 rounded-lg p-3 mt-2 space-y-1 text-xs">
                   {programDiffForPrompt.addedCount > 0 && (
@@ -4727,31 +4740,82 @@ export default function ActiveWorkoutPage() {
                       <span className="text-gray-700">{programDiffForPrompt.removed.join(', ')}</span>
                     </span>
                   )}
+                  {programDiffForPrompt.changedCount > 0 && (
+                    <span className="block">
+                      <span className="font-semibold text-amber-600">
+                        ~ Changed ({programDiffForPrompt.changedCount}):
+                      </span>{' '}
+                      <span className="text-gray-700">{programDiffForPrompt.changed.join(', ')}</span>
+                    </span>
+                  )}
                 </span>
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex gap-2 justify-end pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setSaveProgramChanges(false);
-                setShowSaveProgramPrompt(false);
-                setShowSummary(true);
-              }}
-            >
-              No, keep template as-is
-            </Button>
-            <Button
-              onClick={() => {
-                setSaveProgramChanges(true);
-                setShowSaveProgramPrompt(false);
-                setShowSummary(true);
-              }}
-              className="bg-sky-500 hover:bg-sky-600 text-white"
-            >
-              Yes, save changes
-            </Button>
+          <div className="space-y-2 pt-4">
+            {completedWorkoutData?.assignedBy && completedWorkoutData.assignedBy !== currentUser?.id ? (
+              // Trainer-programmed: destructive override flow
+              <>
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
+                    autoFocus
+                    onClick={() => {
+                      setSaveProgramChanges(false);
+                      setShowSaveProgramPrompt(false);
+                      setShowSummary(true);
+                    }}
+                  >
+                    Don't change trainer's template
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 text-rose-600 border-rose-300 hover:bg-rose-50"
+                    onClick={() => {
+                      setSaveProgramChanges(true);
+                      setShowSaveProgramPrompt(false);
+                      setShowSummary(true);
+                    }}
+                  >
+                    Override Anyway
+                  </Button>
+                </div>
+                <button
+                  className="w-full text-xs text-gray-500 hover:text-sky-600 pt-1"
+                  onClick={() => {
+                    setSaveProgramChanges(false);
+                    setShowSaveProgramPrompt(false);
+                    setShowSaveWorkoutDialog(true);
+                  }}
+                >
+                  Or, save as your own template
+                </button>
+              </>
+            ) : (
+              // Self-programmed: standard update flow
+              <div className="flex gap-2 justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSaveProgramChanges(false);
+                    setShowSaveProgramPrompt(false);
+                    setShowSummary(true);
+                  }}
+                >
+                  No, keep template as-is
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSaveProgramChanges(true);
+                    setShowSaveProgramPrompt(false);
+                    setShowSummary(true);
+                  }}
+                  className="bg-sky-500 hover:bg-sky-600 text-white"
+                >
+                  Yes, save changes
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

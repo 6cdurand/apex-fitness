@@ -27,21 +27,26 @@ export interface ProgramDayDiff {
   added: string[];
   /** Exercise names present in the program template but not the completed workout. */
   removed: string[];
+  /** Exercise names where sets/reps/weight differ from template (D17B). */
+  changed: string[];
   addedCount: number;
   removedCount: number;
-  /** Convenience: `addedCount > 0 || removedCount > 0`. */
+  changedCount: number;
+  /** Convenience: `addedCount > 0 || removedCount > 0 || changedCount > 0`. */
   hasChanges: boolean;
 }
 
 type CompletedExerciseShape = {
   exerciseId: string;
   exercise?: { name?: string };
+  sets?: Array<{ weight?: number; reps?: number; completed?: boolean }>;
 };
 
 type ProgramExerciseShape = {
   exerciseId: string;
   exerciseName?: string;
   name?: string;
+  sets?: Array<{ weight?: number; reps?: number }>;
 };
 
 type ProgramDayShape = {
@@ -51,8 +56,10 @@ type ProgramDayShape = {
 const EMPTY_DIFF: ProgramDayDiff = {
   added: [],
   removed: [],
+  changed: [],
   addedCount: 0,
   removedCount: 0,
+  changedCount: 0,
   hasChanges: false,
 };
 
@@ -62,9 +69,10 @@ export function computeProgramDayDiff(
 ): ProgramDayDiff {
   if (!programDay) return { ...EMPTY_DIFF };
 
-  // Collect original (program template) exercise ids + names.
+  // Collect original (program template) exercise ids + names + sets.
   const originalIds = new Set<string>();
   const originalNames = new Map<string, string>();
+  const originalSets = new Map<string, Array<{ weight?: number; reps?: number }>>();
   for (const block of programDay.blocks || []) {
     for (const ex of block.exercises || []) {
       if (!ex.exerciseId) continue;
@@ -74,20 +82,24 @@ export function computeProgramDayDiff(
           ex.exerciseId,
           ex.exerciseName || ex.name || 'Exercise',
         );
+        originalSets.set(ex.exerciseId, ex.sets || []);
       }
     }
   }
 
-  // Collect current (completed) exercise ids + names. Duplicates collapse
+  // Collect current (completed) exercise ids + names + completed sets. Duplicates collapse
   // via the Set, so an exercise that appears twice in the workout is
   // counted once (matches the historical behaviour).
   const currentIds = new Set<string>();
   const currentNames = new Map<string, string>();
+  const currentSets = new Map<string, Array<{ weight?: number; reps?: number }>>(); 
   for (const ex of completedWorkout.exercises || []) {
     if (!ex.exerciseId) continue;
     currentIds.add(ex.exerciseId);
     if (!currentNames.has(ex.exerciseId)) {
       currentNames.set(ex.exerciseId, ex.exercise?.name || 'Exercise');
+      // Only store completed sets for diff
+      currentSets.set(ex.exerciseId, (ex.sets || []).filter(s => s.completed));
     }
   }
 
@@ -101,11 +113,46 @@ export function computeProgramDayDiff(
     if (!currentIds.has(id)) removed.push(originalNames.get(id) || 'Exercise');
   }
 
+  // Detect changed exercises (present in both but with different set data)
+  const changed: string[] = [];
+  for (const id of currentIds) {
+    if (!originalIds.has(id)) continue; // Already counted in 'added'
+    
+    const origSets = originalSets.get(id) || [];
+    const currSets = currentSets.get(id) || [];
+    
+    // Compare set count
+    if (origSets.length !== currSets.length) {
+      changed.push(currentNames.get(id) || 'Exercise');
+      continue;
+    }
+    
+    // Compare weight/reps for each set (treat undefined/null as 0)
+    let setsChanged = false;
+    for (let i = 0; i < origSets.length; i++) {
+      const origWeight = origSets[i]?.weight ?? 0;
+      const origReps = origSets[i]?.reps ?? 0;
+      const currWeight = currSets[i]?.weight ?? 0;
+      const currReps = currSets[i]?.reps ?? 0;
+      
+      if (origWeight !== currWeight || origReps !== currReps) {
+        setsChanged = true;
+        break;
+      }
+    }
+    
+    if (setsChanged) {
+      changed.push(currentNames.get(id) || 'Exercise');
+    }
+  }
+
   return {
     added,
     removed,
+    changed,
     addedCount: added.length,
     removedCount: removed.length,
-    hasChanges: added.length > 0 || removed.length > 0,
+    changedCount: changed.length,
+    hasChanges: added.length > 0 || removed.length > 0 || changed.length > 0,
   };
 }
