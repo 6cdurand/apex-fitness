@@ -8,6 +8,7 @@ import { convertProgramDayToTemplate, normalizeSetCount } from '@/lib/programSta
 import { __shouldSkipClientFetch } from '@/lib/modeAwareFetchGate';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
+import { WeeklyProgressStrip } from '@/components/program/WeeklyProgressStrip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -602,6 +603,27 @@ export default function ProgramPage() {
                   </div>
                 )}
 
+                {/* v10-D4: Weekly Progress Strip */}
+                {nextWorkout && activeProgram && (
+                  <>
+                    <WeeklyProgressStrip
+                      program={activeProgram}
+                      completedDayIndices={nextWorkout.completedDayIndices}
+                      nextDayIndex={nextWorkout.dayIndex}
+                      nextScheduledDay={nextWorkout.nextScheduledDay}
+                      isScheduledToday={nextWorkout.isScheduledToday}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="w-full text-sky-600 hover:bg-sky-50 text-xs"
+                      onClick={() => router.push('/workout/history?filter=programs')}
+                    >
+                      View this week's workouts →
+                    </Button>
+                  </>
+                )}
+
                 {/* Workout day list — collapsed by default */}
                 <div className="space-y-1.5">
                   <button
@@ -639,8 +661,16 @@ export default function ProgramPage() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1">
-                            {isDoneThisWeek && <Badge className="text-[9px] bg-emerald-500/20 text-emerald-600 border-0">Done</Badge>}
-                            {isNext && !isDoneThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Next</Badge>}
+                            {isDoneThisWeek && (
+                              <Badge className="bg-emerald-100 text-emerald-700 text-[10px] border-0 flex items-center gap-0.5">
+                                <Check className="w-3 h-3" /> Done
+                              </Badge>
+                            )}
+                            {isNext && !isDoneThisWeek && nextWorkout?.isScheduledToday && (
+                              <Badge className="bg-sky-100 text-sky-700 text-[10px] border-0 flex items-center gap-0.5">
+                                <Target className="w-3 h-3" /> Today
+                              </Badge>
+                            )}
                             {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                           </div>
                         </button>
