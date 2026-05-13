@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { ProfileCardV2 } from '@/components/ProfileCardV2';
+import { WeeklyReportPreviewCard } from '@/components/WeeklyReportPreviewCard';
 import { WorkoutStatsCharts } from '@/components/WorkoutStatsCharts';
 import { TrainerStatsCharts } from '@/components/TrainerStatsCharts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -897,6 +898,9 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
         )}
+
+        {/* v10-D5: Weekly Report Preview Card (athlete mode only) */}
+        {!isTrainerMode && <WeeklyReportPreviewCard userId={user.id} />}
 
         {/* Personal Bests - hidden in trainer mode */}
         {!isTrainerMode && (

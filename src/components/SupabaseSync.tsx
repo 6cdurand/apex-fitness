@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore, useSocialStore } from '@/lib/store';
+import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore, useSocialStore, useReportStore } from '@/lib/store';
 import {
   useMessageStore,
   mergeMessagesPreferRead,
@@ -653,6 +653,36 @@ export function SupabaseSync() {
       }
     };
   }, [isAuthenticated, user?.id]);
+
+  // Weekly report auto-generation (v10-D5)
+  useEffect(() => {
+    if (!isIdentityNormalized) return;
+    if (!isAuthenticated || !user?.id) return;
+
+    const lastGen = localStorage.getItem(`apex-weekly-report-last-gen-${user.id}`);
+    const lastGenDate = lastGen ? new Date(lastGen) : null;
+    const now = new Date();
+    
+    // Find this week's Monday at 00:00
+    const day = now.getDay();
+    const offset = day === 0 ? -6 : 1 - day;
+    const thisMonday = new Date(now);
+    thisMonday.setHours(0, 0, 0, 0);
+    thisMonday.setDate(thisMonday.getDate() + offset);
+
+    // Generate if no prior or last gen was before this week's Monday
+    if (!lastGenDate || lastGenDate < thisMonday) {
+      setTimeout(() => {
+        try {
+          const report = useReportStore.getState().generateWeeklyReport();
+          localStorage.setItem(`apex-weekly-report-last-gen-${user.id}`, now.toISOString());
+          console.log('[SupabaseSync] Generated weekly report:', report.id);
+        } catch (e) {
+          console.warn('[SupabaseSync] Weekly report generation failed:', e);
+        }
+      }, 1500); // After other syncs settle
+    }
+  }, [isAuthenticated, user?.id, isIdentityNormalized]);
 
   return null;
 }
