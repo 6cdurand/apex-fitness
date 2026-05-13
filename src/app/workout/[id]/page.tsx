@@ -31,6 +31,7 @@ import {
   Save,
   Edit2,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -261,7 +262,22 @@ export default function WorkoutDetailPage() {
   // coach-note flow already covers feedback in that case.
   const trainerStore = useTrainerStore.getState();
   const viewerIsOwner = !!user && workout.userId === user.id;
-  const programDiff = (() => {
+  
+  // Helper to get client display name (v10-D3)
+  const getClientName = (userId: string): string => {
+    try {
+      const users = JSON.parse(localStorage.getItem('apex-users') || '[]');
+      const client = users.find((u: any) => u.id === userId);
+      return client?.displayName || client?.username || 'Client';
+    } catch {
+      return 'Client';
+    }
+  };
+  
+  // Legacy program diff (v10-D3: fallback for workouts before programEdit field)
+  const legacyProgramDiff = (() => {
+    // Skip if workout already has programEdit metadata (D2 data)
+    if (workout.programEdit) return null;
     if (viewerIsOwner) return null;
     if (isSessionTrainer && workout.coachNote) return null;
     const isProgWorkout = detectIsProgramWorkout({
@@ -342,6 +358,75 @@ export default function WorkoutDetailPage() {
 
       <ScrollArea className="flex-1">
         <div className="px-4 py-6 space-y-6">
+          {/* v10-D3: Program Edit Banner - shown to both athlete and trainer */}
+          {(workout.programEdit && (
+            workout.programEdit.added.length +
+            workout.programEdit.removed.length +
+            workout.programEdit.changed.length > 0
+          )) && (() => {
+            const isOwner = !!user && workout.userId === user.id;
+            const e = workout.programEdit!;
+            return (
+              <Card className="bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-sky-600" />
+                    <p className="font-semibold text-sky-700 text-sm">
+                      {isOwner ? 'You modified this from your program' : `${getClientName(workout.userId)} modified this from the program`}
+                    </p>
+                  </div>
+                  {e.added.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">+ Added ({e.added.length})</Badge>
+                      <span className="text-gray-700 leading-relaxed">{e.added.join(', ')}</span>
+                    </div>
+                  )}
+                  {e.removed.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Badge className="bg-rose-100 text-rose-700 border-rose-200">− Removed ({e.removed.length})</Badge>
+                      <span className="text-gray-700 leading-relaxed">{e.removed.join(', ')}</span>
+                    </div>
+                  )}
+                  {e.changed.length > 0 && (
+                    <div className="flex items-start gap-2 text-xs">
+                      <Badge className="bg-amber-100 text-amber-700 border-amber-200">~ Changed ({e.changed.length})</Badge>
+                      <span className="text-gray-700 leading-relaxed">{e.changed.join(', ')}</span>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-500 italic pt-1">
+                    Saved on {format(new Date(e.savedAt), 'MMM d, h:mm a')}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
+          {/* Legacy fallback banner (for workouts before D2) */}
+          {!workout.programEdit && legacyProgramDiff && (
+            <Card className="bg-gradient-to-r from-sky-50 to-blue-50 border-sky-200">
+              <CardContent className="p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4 text-sky-600" />
+                  <p className="font-semibold text-sky-700 text-sm">
+                    {viewerIsOwner ? 'You modified this from your program' : `${getClientName(workout.userId)} modified this from the program`}
+                  </p>
+                </div>
+                {legacyProgramDiff.addedNames.length > 0 && (
+                  <div className="flex items-start gap-2 text-xs">
+                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">+ Added ({legacyProgramDiff.addedNames.length})</Badge>
+                    <span className="text-gray-700 leading-relaxed">{legacyProgramDiff.addedNames.join(', ')}</span>
+                  </div>
+                )}
+                {legacyProgramDiff.removedNames.length > 0 && (
+                  <div className="flex items-start gap-2 text-xs">
+                    <Badge className="bg-rose-100 text-rose-700 border-rose-200">− Removed ({legacyProgramDiff.removedNames.length})</Badge>
+                    <span className="text-gray-700 leading-relaxed">{legacyProgramDiff.removedNames.join(', ')}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Summary Stats */}
           <div className="grid grid-cols-2 gap-3">
             <Card className="bg-white border-gray-200 shadow-sm">
@@ -682,34 +767,6 @@ export default function WorkoutDetailPage() {
             </Card>
           )}
 
-          {/* D16 Part D: Compared to program template — trainer-only diff
-              card. Renders only when the viewer is the program trainer
-              (privacy-check above already gates non-trainer viewers from
-              reaching this page) AND the client added/removed exercises
-              relative to the program template. See programDiff
-              computation block earlier in this file for the conditions. */}
-          {programDiff && (
-            <Card className="bg-gray-50 border border-gray-200 border-l-4 border-l-sky-500 shadow-sm">
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold text-sky-700 mb-2">
-                  Compared to program template
-                </p>
-                {programDiff.addedNames.length > 0 && (
-                  <p className="text-sm text-gray-800">
-                    <span className="font-medium text-emerald-700">Added:</span>{' '}
-                    {programDiff.addedNames.join(', ')}
-                  </p>
-                )}
-                {programDiff.removedNames.length > 0 && (
-                  <p className="text-sm text-gray-800 mt-1">
-                    <span className="font-medium text-rose-700">Removed:</span>{' '}
-                    {programDiff.removedNames.join(', ')}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
           {/* Workout Memory - Block-level summary for cardio/circuit/warmup */}
           {workout.blocks && workout.blocks.length > 0 && (() => {
             const memoryBlocks = workout.blocks.filter(b => 
@@ -810,7 +867,20 @@ export default function WorkoutDetailPage() {
                             </div>
                           )}
                           <div>
-                            <h3 className="font-semibold text-gray-900">{ex.exercise?.name || 'Unknown Exercise'}</h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">{ex.exercise?.name || 'Unknown Exercise'}</h3>
+                              {/* v10-D3: Per-exercise highlight pills */}
+                              {workout.programEdit && (() => {
+                                const exName = ex.exercise?.name || '';
+                                if (workout.programEdit.added.includes(exName)) {
+                                  return <Badge className="bg-emerald-100 text-emerald-700 text-[9px]">+ Added</Badge>;
+                                }
+                                if (workout.programEdit.changed.includes(exName)) {
+                                  return <Badge className="bg-amber-100 text-amber-700 text-[9px]">~ Modified</Badge>;
+                                }
+                                return null;
+                              })()}
+                            </div>
                             <p className="text-xs text-gray-500">
                               {ex.exercise?.primaryMuscles?.map(m => getMuscleDisplayName(m)).join(', ') || ''}
                             </p>
@@ -879,6 +949,19 @@ export default function WorkoutDetailPage() {
                   </Card>
                 );
               })}
+              
+              {/* v10-D3: Ghost cards for removed exercises */}
+              {workout.programEdit?.removed.map(name => (
+                <Card key={`removed-${name}`} className="bg-gray-50 border-gray-200 opacity-60 border-dashed">
+                  <CardContent className="p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500 line-through text-sm">{name}</span>
+                      <Badge className="bg-rose-100 text-rose-700 text-[9px]">Removed from program</Badge>
+                    </div>
+                    <span className="text-[10px] text-gray-400 italic">Not performed</span>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           </section>
             );
