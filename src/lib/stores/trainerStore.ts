@@ -1397,28 +1397,37 @@ export const useTrainerStore = create<TrainerState>()(
         
         const { workoutHistory } = getWorkoutStore().getState();
         
-        // Only count workouts that belong to THIS program
-        const programWorkoutsThisWeek = workoutHistory.filter((w: any) => {
+        // Helper: does this workout belong to THIS program? (v10-D1 dual detection)
+        const matchesProgram = (w: any): boolean => {
           if (w.userId !== userId || w.status !== 'completed' || w.deletedAt) return false;
-          if (!w.templateId?.startsWith(programPrefix)) return false;
+          // D17 fast path
+          if (w.sourceProgramId === program.id) return true;
+          // Legacy prefix path
+          return !!w.templateId?.startsWith(programPrefix);
+        };
+
+        // Helper: extract the day index this workout represents
+        const extractDayIndex = (w: any): number => {
+          if (typeof w.sourceDayIndex === 'number') return w.sourceDayIndex;
+          const suffix = w.templateId?.replace(programPrefix, '') || '';
+          return parseInt(suffix) || 0;
+        };
+
+        const programWorkoutsThisWeek = workoutHistory.filter((w: any) => {
+          if (!matchesProgram(w)) return false;
           const d = new Date(w.startTime);
           return d >= weekStart && d < weekEnd;
         });
         const completedThisWeek = programWorkoutsThisWeek.length;
         
-        // Track which day indices were completed this week
-        const completedDayIndices = programWorkoutsThisWeek.map((w: any) => {
-          const suffix = w.templateId?.replace(programPrefix, '') || '';
-          return parseInt(suffix) || 0;
-        });
+        const completedDayIndices = programWorkoutsThisWeek.map(extractDayIndex);
         
         const remainingThisWeek = Math.max(0, freq - completedThisWeek);
         
         // Compute cycle position from total lifetime program-specific completions
         const programStart = program.startDate ? new Date(program.startDate) : new Date(program.createdAt);
         const totalCompleted = workoutHistory.filter((w: any) => {
-          if (w.userId !== userId || w.status !== 'completed' || w.deletedAt) return false;
-          if (!w.templateId?.startsWith(programPrefix)) return false;
+          if (!matchesProgram(w)) return false;
           const d = new Date(w.startTime);
           return d >= programStart;
         }).length;
