@@ -354,6 +354,8 @@ export interface TierRange {
   intermediate: [number, number];
   advanced: [number, number];
   elite: [number, number];
+  /** v11-D4: polarity tells getTierFor1RM whether higher (most exercises) or lower (assisted variants) is better. Default 'higher-is-better'. */
+  polarity?: 'higher-is-better' | 'lower-is-better';
 }
 
 // A slice is a sub-component of a category (e.g., "Middle Chest" within "Chest")

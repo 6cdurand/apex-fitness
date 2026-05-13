@@ -1062,6 +1062,36 @@ export const useWorkoutStore = create<WorkoutState>()(
               if (!hasMedal('pullup-bw', targetUserId)) earnMedal('pullup-bw', targetUserId);
             }
             
+            // v11-D4: Assisted-graduation watcher
+            // If user just completed pull-up / chin-up / tricep-dips with a real PB
+            // AND has history of the assisted-variant, fire the graduation medal.
+            const graduationMap: Record<string, string> = {
+              'pull-up': 'assisted-pull-up',
+              'pull-ups': 'assisted-pull-up',
+              'chin-up': 'assisted-chin-up',
+              'chin-ups': 'assisted-chin-up',
+              'tricep-dips': 'assisted-dips',
+              'chest-dips': 'assisted-dips',
+              'dips': 'assisted-dips',
+            };
+            const assistedSibling = graduationMap[normalizedId];
+            if (assistedSibling) {
+              const hasAssistedHistory = get().workoutHistory.some(w =>
+                w.userId === targetUserId &&
+                w.status === 'completed' &&
+                !w.deletedAt &&
+                w.exercises?.some(e => normalizeExerciseId(e.exerciseId || '') === assistedSibling)
+              );
+              if (hasAssistedHistory) {
+                const medalId = normalizedId.includes('pull') ? 'pull-up-graduate' :
+                                normalizedId.includes('chin') ? 'chin-up-graduate' :
+                                'dips-graduate';
+                if (!hasMedal(medalId, targetUserId)) {
+                  earnMedal(medalId, targetUserId);
+                }
+              }
+            }
+            
             // T-BAR ROW milestones
             if (normalizedId === 't-bar-row' || normalizedId === 'tbar-row' || normalizedId === 'landmine-row') {
               if (actualWeight >= 130 && !hasMedal('tbar-130', targetUserId)) earnMedal('tbar-130', targetUserId);
@@ -1110,8 +1140,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           return newPB;
         }
 
-        // Update best volume if higher (skip for assisted exercises)
-        if (!isAssisted && existingPB && volume > (existingPB.bestVolume || 0)) {
+        // v11-D4: Update best volume if higher (works for both assisted and normal)
+        if (existingPB && volume > (existingPB.bestVolume || 0)) {
           const updatedPB: PersonalBest = { ...existingPB, bestVolume: volume };
           set(state => ({
             personalBests: state.personalBests.map(p => 
