@@ -8,6 +8,7 @@ import { calculateFullStrengthRating, getTierColor, getTierBgColor, getTierName 
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { WeeklyReportPreviewCard } from '@/components/WeeklyReportPreviewCard';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -708,6 +709,9 @@ export default function TodayPage() {
             </section>
           );
         })()}
+
+        {/* v10-D5: Weekly Report Preview Card (athlete mode only) */}
+        {user.mode !== 'trainer' && <WeeklyReportPreviewCard userId={user.id} />}
 
         {/* Next Workout — client mode, active program (today only) */}
         {user.mode !== 'trainer' && isToday && (() => {
