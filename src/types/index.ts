@@ -313,6 +313,17 @@ export interface Workout {
   // to the existing prefix + structural detection in detectIsProgramWorkout.
   sourceProgramId?: string;
   sourceDayIndex?: number;
+  // v10-D2: structural diff captured when athlete saved program changes.
+  // Renders the "Modified from program" banner + per-exercise pills on
+  // the workout detail page. Survives Supabase round-trips via program_edit column.
+  programEdit?: {
+    programId: string;
+    dayIndex: number;
+    added: string[];      // exercise names
+    removed: string[];    // exercise names
+    changed: string[];    // exercise names
+    savedAt: string;      // ISO timestamp
+  };
 }
 
 // Personal Best / Records
@@ -609,7 +620,8 @@ export interface WeeklyReport {
 export type NotificationType = 
   | 'weekly_report' | 'workout_assigned' | 'friend_request' 
   | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system'
-  | 'program_assigned' | 'session_booked' | 'workout_completed_summary';
+  | 'program_assigned' | 'session_booked' | 'workout_completed_summary'
+  | 'program_edited';  // v10-D2
 
 export interface Notification {
   id: string;

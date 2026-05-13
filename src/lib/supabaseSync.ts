@@ -586,6 +586,10 @@ function toDbWorkout(workout: Workout): any {
   if (workout.blocks !== undefined) {
     dbWorkout.blocks = workout.blocks || null;
   }
+  // v10-D2: program edit diff metadata
+  if (workout.programEdit !== undefined) {
+    dbWorkout.program_edit = workout.programEdit || null;
+  }
   return dbWorkout;
 }
 
@@ -610,6 +614,7 @@ function fromDbWorkout(dbWorkout: any): Workout {
     coachNote: dbWorkout.coach_note || undefined,
     releasedAt: dbWorkout.released_at || undefined,
     blocks: dbWorkout.blocks || undefined,
+    programEdit: dbWorkout.program_edit || undefined,
   };
 }
 
@@ -1017,6 +1022,7 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
         delete coreWorkout.coach_note;
         delete coreWorkout.released_at;
         delete coreWorkout.deleted_at;
+        delete coreWorkout.program_edit;  // v10-D2
         const retry = await getWorkoutClient()
           .from('workouts')
           .upsert(coreWorkout)
