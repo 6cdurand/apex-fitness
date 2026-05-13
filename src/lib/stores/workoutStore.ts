@@ -49,6 +49,7 @@ interface WorkoutState {
   endWorkout: (privateNotes?: string, sharedNotes?: string) => Promise<Workout | null>;
   updateActiveWorkoutNotes: (notes: string) => void;
   cancelWorkout: () => void;
+  setWorkoutProgramEdit: (workoutId: string, edit: Workout['programEdit']) => void;
   
   // Exercise actions
   addExercise: (exercise: Exercise) => void;
@@ -446,6 +447,19 @@ export const useWorkoutStore = create<WorkoutState>()(
           currentClientId: null,
           lastDeriveResult: null,
         });
+      },
+
+      setWorkoutProgramEdit: (workoutId, edit) => {
+        set(state => ({
+          workoutHistory: state.workoutHistory.map(w =>
+            w.id === workoutId ? { ...w, programEdit: edit } : w
+          ),
+        }));
+        // Persist to Supabase — reuse existing syncWorkoutToSupabase
+        const updated = get().workoutHistory.find(w => w.id === workoutId);
+        if (updated) {
+          import('../supabaseSync').then(m => m.syncWorkoutToSupabase(updated));
+        }
       },
 
       addExercise: (exercise) => {

@@ -1807,6 +1807,57 @@ export default function ActiveWorkoutPage() {
                   lastEditedBy: 'client',
                 };
                 trainerStore.updateClientProgram(activeProgram.id, { weeklyPlan: updatedPlan });
+
+                // v10-D2: persist diff metadata on the workout record
+                const addedNames = Array.from(newExerciseIds)
+                  .filter(id => !originalExerciseIds.has(id))
+                  .map(id => {
+                    const ex = updatedBlocks.flatMap(b => b.exercises).find(e => e.exerciseId === id);
+                    return ex?.exerciseName || ex?.name || 'Exercise';
+                  });
+                const removedNames = Array.from(originalExerciseIds)
+                  .filter(id => !newExerciseIds.has(id))
+                  .map(id => {
+                    const ex = (activeProgram.weeklyPlan[dayIdx]?.blocks || [])
+                      .flatMap((b: any) => b.exercises || [])
+                      .find((e: any) => e.exerciseId === id);
+                    return ex?.exerciseName || ex?.name || 'Exercise';
+                  });
+                // Use changed from programDiffForPrompt if available
+                const changedNames = programDiffForPrompt?.changed || [];
+                const nowIso2 = new Date().toISOString();
+
+                useWorkoutStore.getState().setWorkoutProgramEdit(completedWorkoutData.id, {
+                  programId: activeProgram.id,
+                  dayIndex: dayIdx,
+                  added: addedNames,
+                  removed: removedNames,
+                  changed: changedNames,
+                  savedAt: nowIso2,
+                });
+
+                // v10-D2: notify the trainer
+                const trainerId = activeProgram.trainerId;
+                if (trainerId && trainerId !== userId) {
+                  const athleteName = currentUser?.displayName || currentUser?.username || 'Your client';
+                  const dayLabel = activeProgram.weeklyPlan[dayIdx]?.dayLabel || `Day ${dayIdx + 1}`;
+                  const parts: string[] = [];
+                  if (addedNames.length) parts.push(`+${addedNames.length} added`);
+                  if (removedNames.length) parts.push(`-${removedNames.length} removed`);
+                  if (changedNames.length) parts.push(`~${changedNames.length} changed`);
+                  const summary = parts.join(', ');
+                  
+                  useSocialStore.getState().addNotification({
+                    userId: trainerId,
+                    type: 'program_edited' as any,
+                    title: `${athleteName} edited your program`,
+                    message: `${dayLabel}: ${summary || 'minor changes'}. Tap to review.`,
+                    link: `/workout/${completedWorkoutData.id}`,
+                    senderId: userId,
+                    programId: activeProgram.id,
+                    workoutId: completedWorkoutData.id,
+                  });
+                }
               }
             }
           }
