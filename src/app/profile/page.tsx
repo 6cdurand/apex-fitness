@@ -951,14 +951,19 @@ export default function ProfilePage() {
         </Card>
         )}
 
-        {/* Recent Workouts - Personal workouts in user mode, Client sessions in trainer mode */}
+        {/* Workout History - renamed from Recent Workouts (v11-D1) */}
         <Card className="bg-white border-gray-200 shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-gray-900 flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-sky-400" />
-                {isTrainerMode ? 'Recent Client Sessions' : 'Recent Workouts'}
-              </CardTitle>
+              <div>
+                <CardTitle className="text-gray-900 flex items-center gap-2">
+                  <Dumbbell className="w-5 h-5 text-sky-400" />
+                  {isTrainerMode ? 'Recent Client Sessions' : 'Workout History'}
+                </CardTitle>
+                {!isTrainerMode && (
+                  <p className="text-[11px] text-gray-500 mt-0.5">Last 5 sessions — tap See All for full history</p>
+                )}
+              </div>
               <Button variant="ghost" size="sm" className="text-gray-400 hover:text-sky-500" onClick={() => router.push(isTrainerMode ? '/clients' : '/workout/history')}>
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
@@ -1091,15 +1096,6 @@ export default function ProfilePage() {
             >
               <Edit className="w-5 h-5 mr-3 text-gray-500" />
               Edit Profile
-              <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start h-14 px-4 text-gray-600 hover:bg-gray-50 rounded-none border-b border-gray-200"
-              onClick={() => router.push('/workout/history')}
-            >
-              <Dumbbell className="w-5 h-5 mr-3 text-gray-500" />
-              Workout History
               <ChevronRight className="w-5 h-5 ml-auto text-gray-500" />
             </Button>
             {user.isTrainer && (
