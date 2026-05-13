@@ -70,6 +70,15 @@ export const maleTierRanges: Record<string, TierRange> = {
     advanced: [35, 55],
     elite: [55, 80],
   },
+  // v11-D4: Assisted Dips (counterweight kg, lower = better)
+  'assisted-dips': {
+    beginner: [35, 50],
+    novice: [20, 35],
+    intermediate: [10, 20],
+    advanced: [2.5, 10],
+    elite: [0, 2.5],
+    polarity: 'lower-is-better',
+  },
 
   // ========== BACK ==========
   // Deadlift (compound, steeper) - also counts for legs
@@ -147,6 +156,24 @@ export const maleTierRanges: Record<string, TierRange> = {
     intermediate: [12, 28],
     advanced: [28, 45],
     elite: [45, 65],
+  },
+  // v11-D4: Assisted Pull-Up (counterweight kg, lower = better)
+  'assisted-pull-up': {
+    beginner: [45, 60],
+    novice: [30, 45],
+    intermediate: [15, 30],
+    advanced: [5, 15],
+    elite: [0, 5],
+    polarity: 'lower-is-better',
+  },
+  // v11-D4: Assisted Chin-Up (counterweight kg, lower = better)
+  'assisted-chin-up': {
+    beginner: [45, 60],
+    novice: [30, 45],
+    intermediate: [15, 30],
+    advanced: [5, 15],
+    elite: [0, 5],
+    polarity: 'lower-is-better',
   },
   // T-Bar Row (compound)
   't-bar-row': {
@@ -265,6 +292,37 @@ export const femaleTierRanges: Record<string, TierRange> = Object.fromEntries(
         intermediate: [0, 25] as [number, number],
         advanced: [25, 43] as [number, number],
         elite: [43, 62] as [number, number],
+      }];
+    }
+    // v11-D4: Assisted exercises get custom female ranges (counterweight kg, lower = better)
+    if (exercise === 'assisted-dips') {
+      return [exercise, {
+        beginner: [30, 40] as [number, number],
+        novice: [18, 30] as [number, number],
+        intermediate: [9, 18] as [number, number],
+        advanced: [2.5, 9] as [number, number],
+        elite: [0, 2.5] as [number, number],
+        polarity: 'lower-is-better',
+      }];
+    }
+    if (exercise === 'assisted-pull-up') {
+      return [exercise, {
+        beginner: [40, 50] as [number, number],
+        novice: [28, 40] as [number, number],
+        intermediate: [14, 28] as [number, number],
+        advanced: [4, 14] as [number, number],
+        elite: [0, 4] as [number, number],
+        polarity: 'lower-is-better',
+      }];
+    }
+    if (exercise === 'assisted-chin-up') {
+      return [exercise, {
+        beginner: [40, 50] as [number, number],
+        novice: [28, 40] as [number, number],
+        intermediate: [14, 28] as [number, number],
+        advanced: [4, 14] as [number, number],
+        elite: [0, 4] as [number, number],
+        polarity: 'lower-is-better',
       }];
     }
     // Standard 65% scaling for other exercises
@@ -419,11 +477,23 @@ export function getTierFor1RM(oneRM: number, exerciseId: string, isMale: boolean
   const ranges = isMale ? maleTierRanges[exerciseId] : femaleTierRanges[exerciseId];
   if (!ranges) return 'beginner';
   
-  if (oneRM >= ranges.elite[0]) return 'elite';
-  if (oneRM >= ranges.advanced[0]) return 'advanced';
-  if (oneRM >= ranges.intermediate[0]) return 'intermediate';
-  if (oneRM >= ranges.novice[0]) return 'novice';
-  return 'beginner';
+  const isLowerBetter = ranges.polarity === 'lower-is-better';
+  
+  if (isLowerBetter) {
+    // For assisted exercises: lower counterweight = better (reverse tier checks)
+    if (oneRM <= ranges.elite[1]) return 'elite';
+    if (oneRM <= ranges.advanced[1]) return 'advanced';
+    if (oneRM <= ranges.intermediate[1]) return 'intermediate';
+    if (oneRM <= ranges.novice[1]) return 'novice';
+    return 'beginner';
+  } else {
+    // Standard: higher weight = better
+    if (oneRM >= ranges.elite[0]) return 'elite';
+    if (oneRM >= ranges.advanced[0]) return 'advanced';
+    if (oneRM >= ranges.intermediate[0]) return 'intermediate';
+    if (oneRM >= ranges.novice[0]) return 'novice';
+    return 'beginner';
+  }
 }
 
 /**
@@ -437,18 +507,36 @@ export function getProgressInTier(oneRM: number, exerciseId: string, isMale: boo
     return { tier: 'beginner', progress: 0 };
   }
   
+  const isLowerBetter = ranges.polarity === 'lower-is-better';
   const tiers: StrengthTier[] = ['beginner', 'novice', 'intermediate', 'advanced', 'elite'];
   
-  for (let i = tiers.length - 1; i >= 0; i--) {
-    const tier = tiers[i];
-    const [min, max] = ranges[tier];
-    
-    if (oneRM >= min) {
-      // Within this tier
-      const range = max - min;
-      const progress = range > 0 ? Math.min(100, ((oneRM - min) / range) * 100) : 100;
-      console.log(`[getProgressInTier] ${exerciseId}: oneRM=${oneRM}, tier=${tier}, min=${min}, max=${max}, progress=${progress.toFixed(1)}%`);
-      return { tier, progress };
+  if (isLowerBetter) {
+    // For assisted exercises: lower counterweight = better (check from elite down to beginner)
+    for (let i = tiers.length - 1; i >= 0; i--) {
+      const tier = tiers[i];
+      const [min, max] = ranges[tier];
+      
+      if (oneRM <= max) {
+        // Within this tier (lower is better, so we're measuring down from max)
+        const range = max - min;
+        const progress = range > 0 ? Math.min(100, ((max - oneRM) / range) * 100) : 100;
+        console.log(`[getProgressInTier] ${exerciseId} (lower-is-better): oneRM=${oneRM}, tier=${tier}, min=${min}, max=${max}, progress=${progress.toFixed(1)}%`);
+        return { tier, progress };
+      }
+    }
+  } else {
+    // Standard: higher weight = better
+    for (let i = tiers.length - 1; i >= 0; i--) {
+      const tier = tiers[i];
+      const [min, max] = ranges[tier];
+      
+      if (oneRM >= min) {
+        // Within this tier
+        const range = max - min;
+        const progress = range > 0 ? Math.min(100, ((oneRM - min) / range) * 100) : 100;
+        console.log(`[getProgressInTier] ${exerciseId}: oneRM=${oneRM}, tier=${tier}, min=${min}, max=${max}, progress=${progress.toFixed(1)}%`);
+        return { tier, progress };
+      }
     }
   }
   

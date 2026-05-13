@@ -240,6 +240,44 @@ export const milestoneMedals: MedalDefinition[] = [
     evolutionSpeed: 'very_slow' 
   },
 
+  // v11-D4: Assisted-graduation medals (3 medals)
+  {
+    id: 'pull-up-graduate',
+    name: 'Pull-Up Graduate',
+    description: 'Performed your first unassisted pull-up after progressing through assisted variants.',
+    icon: '🎓',
+    tier: 'gold',
+    category: 'strength',
+    rarity: 'epic',
+    requirement: 'First unassisted pull-up after assisted history',
+    target: 1,
+    evolutionSpeed: 'medium'
+  },
+  {
+    id: 'chin-up-graduate',
+    name: 'Chin-Up Graduate',
+    description: 'First unassisted chin-up after assisted-variant work.',
+    icon: '🎓',
+    tier: 'gold',
+    category: 'strength',
+    rarity: 'epic',
+    requirement: 'First unassisted chin-up after assisted history',
+    target: 1,
+    evolutionSpeed: 'medium'
+  },
+  {
+    id: 'dips-graduate',
+    name: 'Dips Graduate',
+    description: 'First unassisted dip after assisted-variant work.',
+    icon: '🎓',
+    tier: 'gold',
+    category: 'strength',
+    rarity: 'epic',
+    requirement: 'First unassisted dip after assisted history',
+    target: 1,
+    evolutionSpeed: 'medium'
+  },
+
   // === CATEGORY 3: CONSISTENCY & MILESTONES (18 medals) ===
   
   // Workout count milestones
