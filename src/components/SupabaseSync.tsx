@@ -500,6 +500,48 @@ export function SupabaseSync() {
     return () => clearTimeout(timer);
   }, [isAuthenticated, user?.id, isIdentityNormalized]);
 
+  // Client-program hydration (v10-D1) — load programs assigned TO this user
+  // regardless of role. Without this, /today is empty for any athlete who
+  // lands here without first visiting /program, because getNextProgramWorkout
+  // requires a populated clientPrograms[] in trainerStore.
+  const prevProgramCount = useRef(0);
+  useEffect(() => {
+    if (!isIdentityNormalized) return;
+    if (!isAuthenticated || !user?.id) return;
+    if (!isSupabaseConfigured()) return;
+
+    // Slight delay so trainer-data sync completes first (it includes
+    // the user's clients list which is unrelated but shares the store).
+    const timer = setTimeout(() => {
+      console.log('[SupabaseSync] Hydrating clientPrograms for', user.id);
+      useTrainerStore.getState().loadClientDataFromSupabase(user.id).then(() => {
+        // Diagnostic logging for hydration timing
+        const newCount = useTrainerStore.getState().clientPrograms.filter(p => p.clientId === user.id).length;
+        if (newCount > prevProgramCount.current) {
+          console.log(`[SupabaseSync] clientPrograms hydrated: ${prevProgramCount.current} → ${newCount} for ${user.id}`);
+          prevProgramCount.current = newCount;
+        }
+      });
+    }, 400);
+
+    // Foreground refetch — re-hydrate when the tab becomes visible so a
+    // freshly-assigned program shows up without a manual reload. Mirrors
+    // the listener already in /program/page.tsx but applies app-wide.
+    const refetch = () => {
+      if (document.visibilityState === 'visible' && user?.id) {
+        useTrainerStore.getState().loadClientDataFromSupabase(user.id);
+      }
+    };
+    window.addEventListener('focus', refetch);
+    document.addEventListener('visibilitychange', refetch);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('focus', refetch);
+      document.removeEventListener('visibilitychange', refetch);
+    };
+  }, [isAuthenticated, user?.id, isIdentityNormalized]);
+
   // ==========================================================================
   // M1 + M2: REALTIME MESSAGES + CONVERSATIONS SUBSCRIPTION
   // ==========================================================================

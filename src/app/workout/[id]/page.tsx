@@ -265,6 +265,8 @@ export default function WorkoutDetailPage() {
     if (viewerIsOwner) return null;
     if (isSessionTrainer && workout.coachNote) return null;
     const isProgWorkout = detectIsProgramWorkout({
+      sourceProgramId: workout.sourceProgramId,
+      sourceDayIndex: workout.sourceDayIndex,
       templateId: workout.templateId,
       workoutName: workout.name,
       workoutUserId: workout.userId,
