@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react';
 import { generateExerciseImage } from '@/lib/exerciseImageGen';
 import { exerciseLibraryMap } from '@/lib/exercises';
 import { getExerciseAnimationUrl } from '@/lib/exerciseAnimations';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Dumbbell } from 'lucide-react';
 
 interface ExerciseImageProps {
   exerciseId: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   showGenerateButton?: boolean;
+  /** v11-D3: callback fired when user taps "Suggest a video" on empty state */
+  onSuggestVideo?: (exerciseId: string) => void;
 }
 
 const SIZE_MAP = {
@@ -19,7 +21,7 @@ const SIZE_MAP = {
   lg: 'w-full aspect-square max-w-[280px] rounded-2xl',
 };
 
-export function ExerciseImage({ exerciseId, size = 'md', className = '', showGenerateButton = false }: ExerciseImageProps) {
+export function ExerciseImage({ exerciseId, size = 'md', className = '', showGenerateButton = false, onSuggestVideo }: ExerciseImageProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +66,36 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
     setGenerating(false);
   };
 
-  // If no image available at all, render nothing (no emoji placeholder)
+  // If no image available at all, render elegant empty state (v11-D3)
   if (!imageUrl && !animationUrl) {
-    return null;
+    const exerciseName = exercise?.name || exerciseId;
+    const muscleGroups = exercise?.primaryMuscles?.slice(0, 2).join(' · ') || '';
+    
+    const handleSuggest = () => {
+      onSuggestVideo?.(exerciseId);
+    };
+
+    return (
+      <div className={`relative bg-gradient-to-br from-sky-50 to-blue-50 border border-sky-100 flex flex-col items-center justify-center text-center p-2 ${SIZE_MAP[size]} ${className}`}>
+        <Dumbbell className="w-6 h-6 text-sky-300 mb-1" />
+        {size === 'lg' && (
+          <>
+            <p className="text-xs font-medium text-gray-700 line-clamp-1 px-1">{exerciseName}</p>
+            {muscleGroups && (
+              <p className="text-[9px] text-gray-500 mt-0.5">{muscleGroups}</p>
+            )}
+            {showGenerateButton && onSuggestVideo && (
+              <button
+                onClick={handleSuggest}
+                className="mt-2 text-[10px] text-sky-600 hover:text-sky-700 underline"
+              >
+                Suggest a video
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
   }
 
   const src = imageUrl || animationUrl || '';

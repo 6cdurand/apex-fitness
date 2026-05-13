@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ExerciseImage } from '@/components/ExerciseImage';
@@ -98,6 +100,12 @@ export function ExerciseHowTo({
   const [open, setOpen] = useState(false);
   const [aiCues, setAiCues] = useState<{ setup: string; execution: string[]; commonMistakes: string[]; tips: string[] } | null>(null);
   const [loadingCues, setLoadingCues] = useState(false);
+  
+  // v11-D3: Suggest a video modal
+  const [showSuggestModal, setShowSuggestModal] = useState(false);
+  const [suggestUrl, setSuggestUrl] = useState('');
+  const [suggestNote, setSuggestNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const exercise = getExerciseById(exerciseId);
   const normalizedId = normalizeExerciseId(exerciseId);
@@ -241,7 +249,13 @@ export function ExerciseHowTo({
               </div>
             ) : (
               <div className="flex justify-center">
-                <ExerciseImage exerciseId={exerciseId} size="lg" showGenerateButton className="max-w-[200px]" />
+                <ExerciseImage 
+                  exerciseId={exerciseId} 
+                  size="lg" 
+                  showGenerateButton 
+                  className="max-w-[200px]" 
+                  onSuggestVideo={() => setShowSuggestModal(true)}
+                />
               </div>
             )}
 
@@ -441,6 +455,64 @@ export function ExerciseHowTo({
                 No exercise information available for this exercise.
               </p>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* v11-D3: Suggest a video modal */}
+      <Dialog open={showSuggestModal} onOpenChange={setShowSuggestModal}>
+        <DialogContent className="bg-white border-gray-200 max-w-md">
+          <DialogHeader>
+            <DialogTitle>Suggest a video for {name}</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              Help us improve the exercise library. Paste a YouTube URL or describe a good demo video.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              placeholder="https://youtube.com/watch?v=…"
+              value={suggestUrl}
+              onChange={(e) => setSuggestUrl(e.target.value)}
+            />
+            <textarea
+              className="w-full h-20 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none"
+              placeholder="Optional note (e.g., 'this athlete demo has the cleanest form')"
+              value={suggestNote}
+              onChange={(e) => setSuggestNote(e.target.value)}
+            />
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setShowSuggestModal(false)}>Cancel</Button>
+              <Button
+                className="bg-sky-500 hover:bg-sky-600 text-white"
+                disabled={!suggestUrl.trim() || submitting}
+                onClick={async () => {
+                  setSubmitting(true);
+                  try {
+                    await fetch('/api/exercise-suggestion', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        exerciseId: normalizedId,
+                        exerciseName: name,
+                        url: suggestUrl,
+                        note: suggestNote,
+                        submittedBy: scopedUserId,
+                      }),
+                    });
+                    toast.success('Suggestion sent! Thanks.');
+                    setShowSuggestModal(false);
+                    setSuggestUrl('');
+                    setSuggestNote('');
+                  } catch {
+                    toast.error('Failed to send. Try again.');
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+              >
+                {submitting ? 'Sending…' : 'Submit'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
