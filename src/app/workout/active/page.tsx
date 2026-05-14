@@ -14,6 +14,7 @@ import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedN
 import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase, getClientExerciseHistory } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
+import { getLastWorkoutWithExercise } from '@/lib/getLastSetForExercise';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -215,6 +216,7 @@ export default function ActiveWorkoutPage() {
     startWorkoutTimer,
     resetRestTimer,
     getPBForExercise,
+    getPBForExerciseForUser,
     currentClientId,
     getExerciseNotes,
     setExerciseNotes,
@@ -1086,8 +1088,12 @@ export default function ActiveWorkoutPage() {
     const exercise = activeWorkout?.exercises.find(e => e.id === exerciseId);
     if (exercise) {
       const newRM = calculate1RM(weight, reps);
-      // Get the updated PB after completeSet ran
-      const pb = getPBForExercise(exercise.exerciseId);
+      // Get the updated PB after completeSet ran.
+      // v12-D4: scope PB to the workout's owner. In trainer-mode, activeWorkout.userId
+      // is the client's id; without explicit scoping we'd read the trainer's PB.
+      const pb = activeWorkout
+        ? getPBForExerciseForUser(exercise.exerciseId, activeWorkout.userId)
+        : getPBForExercise(exercise.exerciseId);
       // Only show PB toast if:
       // 1. We have a valid 1RM calculation
       // 2. The stored PB matches our lift (meaning our lift became the new PB)
@@ -3386,15 +3392,17 @@ export default function ActiveWorkoutPage() {
                   // WARMUP/STRENGTH LAYOUT - Full-width exercise cards with sets
                   <div className="divide-y divide-gray-800">
                     {blockExercises.map((workoutExercise: any) => {
-                      const exercisePB = getPBForExercise(workoutExercise.exerciseId);
-                      // Filter workout history by current client/user to show only their previous results
-                      const clientWorkoutHistory = workoutHistory.filter((w: any) => 
-                        w.userId === workout.userId
+                      // v12-D4: PB lookup scoped to workout owner (client in PT mode).
+                      const exercisePB = getPBForExerciseForUser(workoutExercise.exerciseId, workout.userId);
+                      // v12-D4: most-recent COMPLETED workout for this exercise,
+                      // properly sorted by endTime (not array-order which surfaced
+                      // workouts from a month ago as "previous").
+                      const lastWorkout = getLastWorkoutWithExercise(
+                        workoutHistory,
+                        workoutExercise.exerciseId,
+                        workout.userId,
                       );
                       const normalizedExId = normalizeExerciseId(workoutExercise.exerciseId || '');
-                      const lastWorkout = clientWorkoutHistory.find((w: any) => 
-                        w.exercises?.some((e: any) => normalizeExerciseId(e.exerciseId || '') === normalizedExId)
-                      );
                       const lastExerciseData = lastWorkout?.exercises?.find((e: any) => 
                         normalizeExerciseId(e.exerciseId || '') === normalizedExId
                       );
@@ -3910,7 +3918,8 @@ export default function ActiveWorkoutPage() {
           
           {/* Exercises without blocks */}
           {workout.exercises.filter((e: any) => !e.blockId).map((workoutExercise, index) => {
-            const pb = getPBForExercise(workoutExercise.exerciseId);
+            // v12-D4: PB lookup scoped to workout owner (client in PT mode).
+            const pb = getPBForExerciseForUser(workoutExercise.exerciseId, workout.userId);
             
             // Check if this exercise is in a superset
             const isInSuperset = !!workoutExercise.groupId;

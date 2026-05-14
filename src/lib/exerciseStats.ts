@@ -290,8 +290,12 @@ export function calculateExerciseStats(
   
   if (ranges && allTimeBest1RM > 0) {
     currentTier = getTierFor1RM(allTimeBest1RM, normalizedId, isMale);
-    // Calculate progress within tier
-    const tierBounds = ranges[currentTier as keyof typeof ranges];
+    // Calculate progress within tier.
+    // v11-D4 added a `polarity` string field to TierRange, so `keyof TierRange`
+    // now includes 'polarity'. Restrict to the tuple-valued tier keys so we
+    // know tierBounds is [number, number] | undefined.
+    type TierKey = 'beginner' | 'novice' | 'intermediate' | 'advanced' | 'elite';
+    const tierBounds = ranges[currentTier as TierKey];
     if (tierBounds) {
       const [min, max] = tierBounds;
       tierProgress = max > min ? Math.min(100, ((allTimeBest1RM - min) / (max - min)) * 100) : 100;
