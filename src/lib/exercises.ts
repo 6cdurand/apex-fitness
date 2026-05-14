@@ -1430,15 +1430,7 @@ const _rawExerciseLibrary: Exercise[] = [
     equipment: 'other',
   
   instructions: 'Place band above knees, lie on back with knees bent, drive hips up pushing knees out, squeeze glutes.',},
-  {
-    id: 'glute-bridge',
-    name: 'Glute Bridge',
-    primaryMuscles: ['glutes'],
-    secondaryMuscles: ['hamstrings'],
-    category: 'warmup',
-    equipment: 'bodyweight',
-  
-  instructions: 'Lie on back with knees bent, drive hips up squeezing glutes at the top, lower with control.',},
+  // glute-bridge: removed duplicate (canonical entry above with category 'isolation')
   {
     id: 'banded-clamshells',
     name: 'Banded Clamshells',
@@ -1475,24 +1467,8 @@ const _rawExerciseLibrary: Exercise[] = [
     equipment: 'bodyweight',
   
   instructions: 'On all fours, extend opposite arm and leg simultaneously, hold briefly, return and switch sides.',},
-  {
-    id: 'dead-bug',
-    name: 'Dead Bug',
-    primaryMuscles: ['abs'],
-    secondaryMuscles: [],
-    category: 'warmup',
-    equipment: 'bodyweight',
-  
-  instructions: 'Lie on back with arms up and knees at 90 degrees, extend opposite arm and leg while keeping back flat.',},
-  {
-    id: 'cat-cow-stretch',
-    name: 'Cat-Cow Stretch',
-    primaryMuscles: ['lower_back'],
-    secondaryMuscles: ['abs'],
-    category: 'warmup',
-    equipment: 'bodyweight',
-  
-  instructions: 'On all fours, alternate between arching back up (cat) and dropping belly down (cow).',},
+  // dead-bug: removed duplicate (canonical entry above)
+  // cat-cow-stretch: removed duplicate (canonical entry above with category 'stretching')
   {
     id: 'world-greatest-stretch',
     name: 'World\'s Greatest Stretch',
@@ -1646,15 +1622,7 @@ const _rawExerciseLibrary: Exercise[] = [
     equipment: 'bodyweight',
   
   instructions: 'Jump feet out wide while raising arms overhead, jump back to start. Maintain a steady rhythm.',},
-  {
-    id: 'mountain-climbers',
-    name: 'Mountain Climbers',
-    primaryMuscles: ['abs'],
-    secondaryMuscles: ['quads', 'shoulders'],
-    category: 'warmup',
-    equipment: 'bodyweight',
-  
-  instructions: 'Start in a push-up position, alternate driving knees toward chest in a running motion.',},
+  // mountain-climbers: removed duplicate (canonical entry above)
   {
     id: 'plank-hold',
     name: 'Plank Hold',
@@ -1664,14 +1632,7 @@ const _rawExerciseLibrary: Exercise[] = [
     equipment: 'bodyweight',
   
   instructions: 'Hold a forearm or high plank position keeping body in a straight line. Engage core throughout.',},
-  {
-    id: 'side-plank',
-    name: 'Side Plank',
-    primaryMuscles: ['obliques'],
-    secondaryMuscles: ['abs'],
-    category: 'warmup',
-    equipment: 'bodyweight',
-  },
+  // side-plank: removed duplicate (canonical entry above)
   {
     id: '90-90-hip-stretch',
     name: '90/90 Hip Stretch',
@@ -2047,19 +2008,79 @@ const _rawExerciseLibrary: Exercise[] = [
   },
 ];
 
-// Deduplicated export — first occurrence of each ID wins
-export const exerciseLibrary: Exercise[] = (() => {
-  const seen = new Set<string>();
-  return _rawExerciseLibrary.filter(ex => {
-    if (seen.has(ex.id)) return false;
-    seen.add(ex.id);
-    return true;
-  });
+// ============ EXERCISE ID REDIRECTS (legacy → canonical) ============
+//
+// v12-D5: When an exercise gets renamed or merged, add the legacy id here
+// pointing to the canonical id. Lookups via `resolveExerciseId(id)` will
+// transparently follow the redirect, so old saved workouts keep resolving
+// after a rename. Keep this map alphabetised and add a comment explaining
+// each entry so future devs know why.
+//
+// IMPORTANT: A redirect target MUST exist in `_rawExerciseLibrary`. The
+// build-time guard below verifies this on module load.
+export const EXERCISE_ID_REDIRECTS: Readonly<Record<string, string>> = Object.freeze({
+  // No redirects yet. Example for future use:
+  // 'bench-press-barbell': 'bench-press', // renamed 2026-05
+});
+
+/**
+ * Resolve a possibly-legacy exercise id to its canonical form.
+ * Returns the input unchanged if no redirect is registered.
+ */
+export function resolveExerciseId(id: string): string {
+  return EXERCISE_ID_REDIRECTS[id] ?? id;
+}
+
+// ============ BUILD-TIME GUARD (duplicates + dangling redirects) ============
+//
+// Runs once on module load. Throws in dev/build so duplicates are caught at
+// the earliest possible moment instead of silently winning-or-losing in the
+// dedup filter. Production keeps the same throw to surface bad merges loudly.
+(function assertExerciseLibraryIntegrity() {
+  const seen = new Map<string, number>();
+  const dups: string[] = [];
+  for (let i = 0; i < _rawExerciseLibrary.length; i++) {
+    const id = _rawExerciseLibrary[i].id;
+    if (seen.has(id)) {
+      dups.push(`'${id}' (first at index ${seen.get(id)}, again at index ${i})`);
+    } else {
+      seen.set(id, i);
+    }
+  }
+  if (dups.length > 0) {
+    throw new Error(
+      `[exercises.ts] Duplicate exercise ids in _rawExerciseLibrary:\n  - ${dups.join('\n  - ')}\n` +
+      `Each id must appear exactly once. If you intended to rename, add an entry to EXERCISE_ID_REDIRECTS instead.`
+    );
+  }
+  // Dangling-redirect check: every redirect target must resolve to a real id.
+  const dangling: string[] = [];
+  for (const [from, to] of Object.entries(EXERCISE_ID_REDIRECTS)) {
+    if (from === to) {
+      dangling.push(`'${from}' redirects to itself`);
+    } else if (!seen.has(to)) {
+      dangling.push(`'${from}' → '${to}' (target not in library)`);
+    } else if (EXERCISE_ID_REDIRECTS[to]) {
+      dangling.push(`'${from}' → '${to}' → '${EXERCISE_ID_REDIRECTS[to]}' (chained redirect; flatten it)`);
+    }
+  }
+  if (dangling.length > 0) {
+    throw new Error(
+      `[exercises.ts] Invalid EXERCISE_ID_REDIRECTS entries:\n  - ${dangling.join('\n  - ')}`
+    );
+  }
 })();
 
-// Get exercise by ID — O(1) via pre-built Map
+// Deduplicated export. The guard above already ensures _rawExerciseLibrary
+// has no duplicates, so this is now a pure typed alias — kept as a separate
+// const for backwards compatibility with existing imports.
+export const exerciseLibrary: Exercise[] = _rawExerciseLibrary;
+
+// Get exercise by ID — O(1) via pre-built Map.
+// v12-D5: Follows EXERCISE_ID_REDIRECTS so saved workouts that reference a
+// legacy id keep resolving after a canonical rename.
 export function getExerciseById(id: string): Exercise | undefined {
-  return exerciseLibraryMap.get(id);
+  return exerciseLibraryMap.get(resolveExerciseId(id));
 }
 
 // Search exercises by name, muscles, equipment, and category
