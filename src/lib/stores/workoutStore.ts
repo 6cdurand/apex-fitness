@@ -1204,11 +1204,11 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (userId && assignedBy) {
           const trainerStore = getTrainerStore().getState();
           
-          // Decrement totalSessions stored counter on client record
-          const clientRecord = trainerStore.clients.find((c: any) => c.clientId === userId);
-          if (clientRecord && (clientRecord.totalSessions ?? 0) > 0) {
-            trainerStore.updateClient(userId, { totalSessions: Math.max(0, (clientRecord.totalSessions ?? 0) - 1) });
-          }
+          // v12-D2: REMOVED — totalSessions is now derived in Supabase via the
+          // trainer_sessions_recompute_counters trigger. When the matching
+          // trainer_sessions row gets cancelled (status='cancelled') below,
+          // the trigger refilters the count and updates total_sessions
+          // automatically. Decrementing here would double-count.
           
           // Decrement package usedSessions
           const activePackage = trainerStore.sessionPackages.find(

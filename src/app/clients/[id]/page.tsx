@@ -18,6 +18,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { EditHistoricalOffsetModal } from '@/components/clients/EditHistoricalOffsetModal';
 import { 
   ArrowLeft,
   MessageCircle, 
@@ -356,6 +357,8 @@ export default function ClientDetailPage() {
   };
 
   const [showRemoveClientConfirm, setShowRemoveClientConfirm] = useState(false);
+  // v12-D3: historical-offset edit modal state
+  const [showHistoricalOffsetModal, setShowHistoricalOffsetModal] = useState(false);
 
   const handleDeleteClient = () => {
     // Only remove from trainer's client list - do NOT delete from Supabase
@@ -1126,6 +1129,61 @@ export default function ClientDetailPage() {
               Import Client History (for existing clients)
             </Button>
             
+            {/* v12-D3: Session Tracking — three counters surfaced separately
+                so the trainer sees lifetime vs. package-usage vs. calendar
+                completions at a glance. Lifetime is editable via the modal
+                so historical (pre-Catalift) sessions can be recorded. */}
+            <Card className="bg-white border-gray-200 shadow-sm">
+              <CardContent className="p-4">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Session tracking
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Lifetime sessions — derived: offset + logged */}
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {clientRelation?.totalSessions ?? 0}
+                    </p>
+                    <p className="text-xs text-gray-500">Lifetime</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {clientRelation?.historicalSessionsOffset ?? 0} pre-Catalift
+                      {' + '}
+                      {Math.max(0, (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0))} logged
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowHistoricalOffsetModal(true)}
+                      className="text-[11px] text-sky-500 hover:text-sky-600 hover:underline mt-1"
+                    >
+                      Edit historical
+                    </button>
+                  </div>
+
+                  {/* Active package usage */}
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {activePackage ? `${activePackage.usedSessions || 0}/${activePackage.totalSessions === -1 ? '∞' : activePackage.totalSessions}` : '—'}
+                    </p>
+                    <p className="text-xs text-gray-500">Package usage</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {activePackage ? (activePackage.status === 'completed' ? 'Completed' : 'Active') : 'No active package'}
+                    </p>
+                  </div>
+
+                  {/* Calendar completions */}
+                  <div>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {completedWorkouts}
+                    </p>
+                    <p className="text-xs text-gray-500">Workouts logged</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      In Catalift
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-3">
               <Card className="bg-white border-gray-200 shadow-sm">
@@ -3207,6 +3265,34 @@ export default function ClientDetailPage() {
         variant="destructive"
         onConfirm={handleDeleteClient}
         icon={<Trash2 className="w-5 h-5 text-red-400" />}
+      />
+
+      {/* v12-D3: Edit historical-sessions offset modal */}
+      <EditHistoricalOffsetModal
+        open={showHistoricalOffsetModal}
+        onOpenChange={setShowHistoricalOffsetModal}
+        currentOffset={clientRelation?.historicalSessionsOffset ?? 0}
+        loggedSessions={Math.max(
+          0,
+          (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0)
+        )}
+        clientName={clientUser?.displayName || getClientNameUtil(clientId)}
+        onSave={async (newOffset) => {
+          // Optimistic local update; the BEFORE-UPDATE trigger on
+          // trainer_clients.historical_sessions_offset (see migration
+          // 20260514_add_session_counter_consistency.sql) recomputes
+          // total_sessions = newOffset + count(trainer_sessions) so the
+          // lifetime stat will match on the next fetch.
+          const loggedNow = Math.max(
+            0,
+            (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0)
+          );
+          updateClient(clientId, {
+            historicalSessionsOffset: newOffset,
+            totalSessions: newOffset + loggedNow,
+          });
+          toast.success('Historical sessions updated');
+        }}
       />
 
       {/* Client Profile Card Popup */}

@@ -1785,6 +1785,8 @@ export async function syncTrainerClientToSupabase(client: {
   goals?: string[];
   totalSessions?: number;
   totalPaid?: number;
+  /** v12-D1: pre-Catalift / off-app sessions; trigger derives total_sessions from this. */
+  historicalSessionsOffset?: number;
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
 }): Promise<boolean> {
@@ -1810,9 +1812,13 @@ export async function syncTrainerClientToSupabase(client: {
       notes: client.notes || null,
       goals: client.goals || null,
     };
-    // Include lifetime counters if provided
+    // Include lifetime counters if provided.
+    // v12-D1+D2: total_sessions writes are now derived server-side by trigger,
+    // but we still pass the value through so the schema-drift retry pattern
+    // works on installs where the migration hasn't been applied yet.
     if (client.totalSessions !== undefined) dbClient.total_sessions = client.totalSessions;
     if (client.totalPaid !== undefined) dbClient.total_paid = client.totalPaid;
+    if (client.historicalSessionsOffset !== undefined) dbClient.historical_sessions_offset = client.historicalSessionsOffset;
     if (client.totalSessionsOffset !== undefined) dbClient.total_sessions_offset = client.totalSessionsOffset;
     if (client.totalPaidOffset !== undefined) dbClient.total_paid_offset = client.totalPaidOffset;
     
@@ -1888,6 +1894,9 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       goals: c.goals,
       totalSessions: c.total_sessions ?? undefined,
       totalPaid: c.total_paid ?? undefined,
+      // v12-D1: prefer the new column name; fall back to the legacy one for
+      // installs that haven't applied 20260514_add_session_counter_consistency.sql yet.
+      historicalSessionsOffset: c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
       // Attach client user info so getClientDisplayInfo finds it

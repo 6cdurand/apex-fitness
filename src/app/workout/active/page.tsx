@@ -1641,20 +1641,25 @@ export default function ActiveWorkoutPage() {
         s.workoutId === completedWorkoutData.id
       );
       
-      // Always increment package usedSessions when a PT workout completes
+      // v12-D2: Optimistic local increment for package usedSessions/paidSessions.
+      // The session_packages.used_sessions in Supabase is still authoritative
+      // (no trigger covers it yet — see v13). Local Zustand state updates
+      // immediately so the trainer UI reacts without waiting for round-trip.
       if (activePackage) {
         updateSessionPackage(activePackage.id, {
           usedSessions: (activePackage.usedSessions || 0) + 1,
           ...(sessionPaid ? { paidSessions: (activePackage.paidSessions || 0) + 1 } : {}),
         });
       }
-      
-      // Increment totalSessions stored counter on client record (+1 per completed workout)
-      const { clients, updateClient } = useTrainerStore.getState();
-      const clientRecord = clients.find(c => c.clientId === completedWorkoutData.clientId);
-      if (clientRecord) {
-        updateClient(completedWorkoutData.clientId, { totalSessions: (clientRecord.totalSessions ?? 0) + 1 });
-      }
+
+      // v12-D2: REMOVED — totalSessions is now derived in Supabase via the
+      // trainer_sessions_recompute_counters trigger (see migration
+      // 20260514_add_session_counter_consistency.sql). Incrementing it here
+      // double-counted with the trigger after migration applied.
+      // Local Zustand totalSessions still updates via the trigger's reflection
+      // in the next fetchUserDataFromSupabase pass. If the migration hasn't
+      // been applied yet, the counter will still update because the existing
+      // session record (created via markSessionCompleted) carries the count.
       
       if (sessionPaid) {
         // Mark session as paid
@@ -1675,10 +1680,14 @@ export default function ActiveWorkoutPage() {
             paidAt: new Date().toISOString(),
           });
         }
-        // Increment totalPaid stored counter on client record
+        // v12-D2: Optimistic increment of totalPaid via the store's updateClient.
+        // totalPaid is a different counter from totalSessions and is NOT yet
+        // covered by a Supabase trigger (deferred to v13). Keep the manual
+        // increment so paid-session count stays accurate; switch to derived
+        // when the v13 payments-counter trigger lands.
         const freshClient = useTrainerStore.getState().clients.find(c => c.clientId === completedWorkoutData.clientId);
         if (freshClient) {
-          updateClient(completedWorkoutData.clientId, { totalPaid: (freshClient.totalPaid ?? 0) + 1 });
+          useTrainerStore.getState().updateClient(completedWorkoutData.clientId, { totalPaid: (freshClient.totalPaid ?? 0) + 1 });
         }
       }
     }
