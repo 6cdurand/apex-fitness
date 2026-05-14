@@ -395,6 +395,7 @@ export const useTrainerStore = create<TrainerState>()(
               goals: updatedClient.goals,
               totalSessions: updatedClient.totalSessions,
               totalPaid: updatedClient.totalPaid,
+              historicalSessionsOffset: updatedClient.historicalSessionsOffset,
               totalSessionsOffset: updatedClient.totalSessionsOffset,
               totalPaidOffset: updatedClient.totalPaidOffset,
             });

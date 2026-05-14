@@ -495,8 +495,14 @@ export interface TrainerClient {
   notes?: string;
   onboardingComplete: boolean;
   // Decoupled lifetime counters — editable, not controlled by packages
-  totalSessions?: number;  // Stored counter — +1 on workout complete, or manual inline edit
-  totalPaid?: number;       // Stored counter — only changes on explicit user action (log payment, inline edit, paid toggle)
+  // v12-D1+D2: total_sessions is now DERIVED in Supabase via the
+  // trainer_sessions_recompute_counters trigger. The app reads this value
+  // but no longer increments it directly. historicalSessionsOffset is the
+  // pre-Catalift / off-app session count that gets summed with the
+  // trainer_sessions count to produce total_sessions.
+  totalSessions?: number;        // DERIVED — historicalSessionsOffset + count(trainer_sessions completed/no_show)
+  totalPaid?: number;            // Stored counter — only changes on explicit user action (deferred derivation to v13)
+  historicalSessionsOffset?: number;  // Sessions with this client BEFORE Catalift / off-app. Editable.
   // DEPRECATED — no longer used, kept for backwards compat
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
