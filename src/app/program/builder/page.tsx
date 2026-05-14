@@ -1090,12 +1090,16 @@ function ProgramBuilderContent() {
                       </div>
                     </div>
                     
+                    {/* v12-D6: Solid backdrop under exercise list keeps text
+                        contrast consistent regardless of the tinted block bg
+                        (bg-blue-500/10 for Push, etc) layered over bg-gray-900. */}
+                    <div className="bg-gray-900/60">
                     {/* Numbered exercise list */}
                     <div className="divide-y divide-white/5">
                       {block.exercises.map((ex, exIdx) => (
                         <div key={ex.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-                          <GripVertical className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 cursor-grab" />
-                          <span className="text-xs text-gray-400 w-5 flex-shrink-0">{exIdx + 1}.</span>
+                          <GripVertical className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 cursor-grab" />
+                          <span className="text-xs text-gray-300 w-5 flex-shrink-0">{exIdx + 1}.</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
                               {/* Exercise names render on the dark program-builder
@@ -1106,7 +1110,7 @@ function ProgramBuilderContent() {
                               <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
                               <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
                             </div>
-                            <p className="text-xs text-gray-300 mt-0.5">
+                            <p className="text-xs text-gray-200 mt-0.5">
                               {ex.sets} × {ex.reps} reps · {ex.rest} rest
                             </p>
                           </div>
@@ -1141,11 +1145,12 @@ function ProgramBuilderContent() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs text-gray-400 hover:text-white w-full"
+                        className="h-7 text-xs text-gray-300 hover:text-white w-full"
                         onClick={() => { setShowAddExercise(block.id); setExerciseSearch(''); }}
                       >
                         <Plus className="w-3 h-3 mr-1" /> Add Exercise
                       </Button>
+                    </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -1513,9 +1518,9 @@ function ProgramBuilderContent() {
             <div className="space-y-3">
               {filteredLibraryBlocks.length === 0 && (
                 <div className="text-center py-8">
-                  <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                  <p className="text-sm text-gray-300">No blocks found</p>
-                  <p className="text-xs text-gray-400 mt-1">Create blocks in the workout builder to see them here</p>
+                  <Dumbbell className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  <p className="text-sm text-gray-200">No blocks found</p>
+                  <p className="text-xs text-gray-300 mt-1">Create blocks in the workout builder to see them here</p>
                 </div>
               )}
               {filteredLibraryBlocks.map((sb) => {
@@ -1640,12 +1645,12 @@ function ProgramBuilderContent() {
                               >
                                 <div>
                                   <p className="font-medium text-sm">{ex.name}</p>
-                                  <p className="text-xs text-gray-500">{ex.equipment}</p>
+                                  <p className="text-xs text-gray-300">{ex.equipment}</p>
                                 </div>
                               </Button>
                             ))
                           ) : (
-                            <p className="text-sm text-gray-500 text-center py-4">No direct swaps available</p>
+                            <p className="text-sm text-gray-300 text-center py-4">No direct swaps available</p>
                           )}
                         </div>
                       </ScrollArea>
@@ -1685,7 +1690,7 @@ function ProgramBuilderContent() {
                                 >
                                   <div>
                                     <p className="font-medium text-sm">{ex.name}</p>
-                                    <p className="text-xs text-gray-500 capitalize">
+                                    <p className="text-xs text-gray-300 capitalize">
                                       {lib?.primaryMuscles?.join(', ') || ex.pattern}
                                     </p>
                                   </div>
@@ -1735,7 +1740,7 @@ function ProgramBuilderContent() {
                               >
                                 <div>
                                   <p className="font-medium text-sm">{ex.name}</p>
-                                  <p className="text-xs text-gray-500 capitalize">
+                                  <p className="text-xs text-gray-300 capitalize">
                                     {libEntry?.equipment || ex.category}
                                     {libEntry?.primaryMuscles?.length ? ` · ${libEntry.primaryMuscles.join(', ')}` : ''}
                                   </p>
