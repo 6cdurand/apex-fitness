@@ -9,6 +9,7 @@ import { useAuthStore } from './authStore';
 import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
 import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
+import { getLastSetForExercise, getLastSetForExerciseAtIndex } from '../getLastSetForExercise';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
@@ -82,6 +83,13 @@ interface WorkoutState {
   // PB actions
   checkAndUpdatePB: (exerciseId: string, weight: number, reps: number, workoutId: string) => PersonalBest | null;
   getPBForExercise: (exerciseId: string) => PersonalBest | undefined;
+  /**
+   * v12-D4: PB lookup with explicit userId. Use this in trainer-mode flows
+   * where the active workout belongs to a CLIENT but getActiveUserId() may
+   * return the trainer's id. Pass the workout.userId (the client's id) to
+   * scope the PB to the correct user.
+   */
+  getPBForExerciseForUser: (exerciseId: string, userId: string) => PersonalBest | undefined;
   
   // History
   getWorkoutHistory: () => Workout[];
@@ -470,19 +478,10 @@ export const useWorkoutStore = create<WorkoutState>()(
         const normalizedId = normalizeExerciseId(exercise.id);
         const pb = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
         
-        // Find last workout data for this exercise
-        const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
-        let lastSetData: { weight?: number; reps?: number; duration?: number } | undefined;
-        for (const workout of userWorkoutHistory) {
-          const matchingEx = workout.exercises?.find(e => normalizeExerciseId(e.exerciseId || '') === normalizedId);
-          if (matchingEx && matchingEx.sets?.length > 0) {
-            const completedSet = matchingEx.sets.find(s => s.completed && (s.weight || s.duration));
-            if (completedSet) {
-              lastSetData = { weight: completedSet.weight, reps: completedSet.reps, duration: completedSet.duration };
-              break;
-            }
-          }
-        }
+        // v12-D4: most-recent completed set, properly sorted by date.
+        // Previously this used `for...break` over unsorted history which
+        // surfaced random old workouts as "previous".
+        const lastSetData = getLastSetForExercise(workoutHistory, exercise.id, targetUserId);
         
         // Extract block metadata if present
         const { blockId, blockName, blockType, ...exerciseData } = exercise as any;
@@ -584,19 +583,13 @@ export const useWorkoutStore = create<WorkoutState>()(
         const lastSet = exercise.sets[exercise.sets.length - 1];
         const newSetIndex = exercise.sets.length;
         
-        // Find last workout data for this exercise at this set index
-        const userWorkoutHistory = workoutHistory.filter(w => w.userId === targetUserId);
-        let lastSetData: { weight?: number; reps?: number } | undefined;
-        for (const workout of userWorkoutHistory) {
-          const matchingEx = workout.exercises?.find(e => normalizeExerciseId(e.exerciseId || '') === normalizedExId);
-          if (matchingEx && matchingEx.sets?.length > newSetIndex) {
-            const historicalSet = matchingEx.sets[newSetIndex];
-            if (historicalSet?.completed && historicalSet.weight && historicalSet.reps) {
-              lastSetData = { weight: historicalSet.weight, reps: historicalSet.reps };
-              break;
-            }
-          }
-        }
+        // v12-D4: most-recent completed set at this index, properly sorted.
+        const lastSetData = getLastSetForExerciseAtIndex(
+          workoutHistory,
+          exercise.exerciseId,
+          targetUserId,
+          newSetIndex,
+        );
 
         // Auto-detect assisted exercises by name
         const exerciseName = exercise.exercise?.name || '';
@@ -1161,8 +1154,22 @@ export const useWorkoutStore = create<WorkoutState>()(
         // miss the stored PB whose exerciseId is 'bench-press'. Ad-hoc
         // library exercises only matched by coincidence because their
         // library id was already in canonical form.
+        //
+        // v12-D4: when running a workout for a CLIENT in trainer-mode,
+        // getActiveUserId() may return the trainer's id while the workout
+        // belongs to the client. Prefer getPBForExerciseForUser(id, userId)
+        // in those flows. This method is kept for backwards-compat with
+        // call sites that always operate on the active user (self-mode).
         const normalizedId = normalizeExerciseId(exerciseId || '');
         return get().personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
+      },
+
+      getPBForExerciseForUser: (exerciseId, userId) => {
+        // v12-D4: explicit-userId variant. Use this in any flow where the
+        // active-user and the workout-owner can diverge (e.g. trainer
+        // running a PT session for a client). Caller passes workout.userId.
+        const normalizedId = normalizeExerciseId(exerciseId || '');
+        return get().personalBests.find(p => p.exerciseId === normalizedId && p.userId === userId);
       },
 
       getWorkoutHistory: () => {
