@@ -27,7 +27,8 @@ import {
   X,
   Plus,
   Pencil,
-  Search
+  Search,
+  History
 } from 'lucide-react';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isToday, parseISO, subMonths } from 'date-fns';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -558,7 +559,22 @@ export default function PaymentsPage() {
                           </p>
                         </div>
                       </div>
-                      
+
+                      {/* v13-D2: Per-client workout history link. Symmetric in styling with the
+                          "Log Payment" affordance in the header row — ghost button, small icon,
+                          text-xs label. Routes to /workout/history?clientId=X (trainer-mode-gated). */}
+                      <div className="flex justify-end mb-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => router.push(`/workout/history?clientId=${client.clientId}`)}
+                          className="h-8 text-gray-500 hover:text-sky-600 gap-1 px-2 text-xs"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                          View workout history
+                        </Button>
+                      </div>
+
                       {/* Package info line (optional — display only) */}
                       {client.packageInfo && !client.packageInfo.isContinuous && client.packageInfo.totalSessions > 0 && (
                         <div className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-3 py-1.5 mb-3 text-xs">
