@@ -1,9 +1,10 @@
 /**
- * v12-D3: Edit a client's historical_sessions_offset (sessions completed
- * with this client BEFORE Catalift / off-app). The Supabase
- * `recompute_after_offset_change` trigger derives total_sessions from
- * (offset + count of trainer_sessions) on save, so the lifetime stat
- * updates without the app touching total_sessions directly.
+ * v12-D3 / v13-D1: Edit a client's historical_sessions_offset (sessions
+ * completed with this client BEFORE Catalift / off-app). The Supabase
+ * `recompute_after_offset_change_v2` trigger derives total_sessions from
+ * (offset + count of calendar_events where type='session' and
+ * status='completed') on save, so the lifetime stat updates without the
+ * app touching total_sessions directly.
  */
 
 'use client';
