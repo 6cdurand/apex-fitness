@@ -1652,15 +1652,28 @@ export default function ActiveWorkoutPage() {
         });
       }
 
-      // v12-D2: REMOVED — totalSessions is now derived in Supabase via the
-      // trainer_sessions_recompute_counters trigger (see migration
-      // 20260514_add_session_counter_consistency.sql). Incrementing it here
-      // double-counted with the trigger after migration applied.
-      // Local Zustand totalSessions still updates via the trigger's reflection
-      // in the next fetchUserDataFromSupabase pass. If the migration hasn't
-      // been applied yet, the counter will still update because the existing
-      // session record (created via markSessionCompleted) carries the count.
-      
+      // v13-D1: total_sessions is now derived in Supabase via the
+      // calendar_events_recompute_counters trigger (see migration
+      // 20260518_session_counter_fix_calendar_events.sql). The trigger
+      // fires whenever calendar_events.status changes to 'completed' for
+      // a (trainer_id, client_id) pair. Both completion paths create or
+      // patch a calendar_events row, so the count stays accurate.
+
+      // v13-D1: surface confirmation that the session was counted.
+      // Reads the current count optimistically; the trigger reconciles
+      // with the authoritative count on the next fetch.
+      const counterClient = useTrainerStore.getState()
+        .clients.find(c => c.clientId === completedWorkoutData.clientId);
+      const clientName = counterClient?.client?.displayName
+        || (counterClient as any)?.displayName
+        || (counterClient as any)?.name
+        || 'this client';
+      const currentTotal = (counterClient?.totalSessions ?? 0) + 1;  // optimistic +1
+      toast.success(
+        `Session counted toward ${clientName}'s lifetime total (${currentTotal}).`,
+        { duration: 4000 }
+      );
+
       if (sessionPaid) {
         // Mark session as paid
         if (sessionRecord && !sessionRecord.paid) {
