@@ -1789,6 +1789,8 @@ export async function syncTrainerClientToSupabase(client: {
   historicalSessionsOffset?: number;
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
+  /** v14-D1: per-client toggle gating the calendar-driven auto-tick of total_sessions. */
+  autoCountSessions?: boolean;
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) {
     console.log('[Client Sync] Supabase not configured');
@@ -1821,6 +1823,10 @@ export async function syncTrainerClientToSupabase(client: {
     if (client.historicalSessionsOffset !== undefined) dbClient.historical_sessions_offset = client.historicalSessionsOffset;
     if (client.totalSessionsOffset !== undefined) dbClient.total_sessions_offset = client.totalSessionsOffset;
     if (client.totalPaidOffset !== undefined) dbClient.total_paid_offset = client.totalPaidOffset;
+    // v14-D1: per-client auto-count toggle. Schema-drift safe — omitted from
+    // the payload on installs that haven't applied 20260519, just like
+    // historicalSessionsOffset above.
+    if (client.autoCountSessions !== undefined) dbClient.auto_count_sessions = client.autoCountSessions;
     
     console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
     
@@ -1899,6 +1905,9 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       historicalSessionsOffset: c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
+      // v14-D1: default to TRUE so rows from pre-migration installs hydrate
+      // with the v13-D1 auto-count behavior (zero visible change).
+      autoCountSessions: c.auto_count_sessions ?? true,
       // Attach client user info so getClientDisplayInfo finds it
       client: userMap[c.client_id] || undefined,
     }));

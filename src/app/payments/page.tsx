@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { 
   DollarSign, 
   Calendar, 
@@ -161,6 +162,11 @@ export default function PaymentsPage() {
       paymentDue,
       sessionsUntilPaymentDue,
       paymentCycleAmount,
+      // v14-D1: surface the per-client auto-count toggle on the view-model so
+      // the Switch in the JSX can read it without a separate store lookup.
+      // The toggle's onCheckedChange handler still re-resolves the raw store
+      // record (via `clients.find`) to read the canonical offset for rebucket.
+      autoCountSessions: client?.autoCountSessions,
     };
   };
 
@@ -560,19 +566,86 @@ export default function PaymentsPage() {
                         </div>
                       </div>
 
-                      {/* v13-D2: Per-client workout history link. Symmetric in styling with the
-                          "Log Payment" affordance in the header row — ghost button, small icon,
-                          text-xs label. Routes to /workout/history?clientId=X (trainer-mode-gated). */}
-                      <div className="flex justify-end mb-3">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => router.push(`/workout/history?clientId=${client.clientId}`)}
-                          className="h-8 text-gray-500 hover:text-sky-600 gap-1 px-2 text-xs"
-                        >
-                          <History className="w-3.5 h-3.5" />
-                          View workout history
-                        </Button>
+                      {/* v14-D1 + v13-D2: Per-client auto-count toggle (left) and workout-history
+                          link (right). When auto-count is OFF, surface a manual "+1 session"
+                          button between them — writes via historicalSessionsOffset so the
+                          increment survives any future recompute. */}
+                      <div className="flex items-center justify-between mb-3 gap-2">
+                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <Switch
+                            checked={client.autoCountSessions !== false}
+                            onCheckedChange={(checked) => {
+                              const targetClient = clients.find(c => c.clientId === client.clientId);
+                              if (!targetClient) return;
+                              // Optimistic local rebucket so the visible total_sessions doesn't
+                              // jump between this paint and the next fetch. The BEFORE-UPDATE
+                              // trigger applies the same rebucket server-side.
+                              const oldOffset = targetClient.historicalSessionsOffset ?? 0;
+                              const oldTotal = targetClient.totalSessions ?? 0;
+                              const calendarCount = Math.max(0, oldTotal - oldOffset);
+                              let newOffset = oldOffset;
+                              if (checked === false) {
+                                // ON -> OFF: fold calendar contribution into the offset bucket.
+                                newOffset = oldOffset + calendarCount;
+                              } else {
+                                // OFF -> ON: pull calendar contribution back out.
+                                newOffset = Math.max(0, oldOffset - calendarCount);
+                              }
+                              const newTotal = checked
+                                ? newOffset + calendarCount
+                                : newOffset;
+                              updateClient(client.clientId, {
+                                autoCountSessions: checked,
+                                historicalSessionsOffset: newOffset,
+                                totalSessions: newTotal,
+                              });
+                              toast.success(
+                                checked
+                                  ? `Auto-count ON for ${client.info.name}. Calendar completions will tick the counter.`
+                                  : `Auto-count OFF for ${client.info.name}. Use the "+1 session" button to count manually.`,
+                                { duration: 3500 }
+                              );
+                            }}
+                            aria-label="Auto-count sessions"
+                          />
+                          <span className="text-xs text-gray-500">Auto-count sessions</span>
+                        </label>
+
+                        <div className="flex items-center gap-1">
+                          {client.autoCountSessions === false && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const targetClient = clients.find(c => c.clientId === client.clientId);
+                                if (!targetClient) return;
+                                const newOffset = (targetClient.historicalSessionsOffset ?? 0) + 1;
+                                const newTotal = (targetClient.totalSessions ?? 0) + 1;
+                                updateClient(client.clientId, {
+                                  historicalSessionsOffset: newOffset,
+                                  totalSessions: newTotal,
+                                });
+                                toast.success(
+                                  `+1 session counted for ${client.info.name} (lifetime: ${newTotal}).`,
+                                  { duration: 3500 }
+                                );
+                              }}
+                              className="h-8 text-gray-500 hover:text-sky-600 gap-1 px-2 text-xs"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              +1 session
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => router.push(`/workout/history?clientId=${client.clientId}`)}
+                            className="h-8 text-gray-500 hover:text-sky-600 gap-1 px-2 text-xs"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            View workout history
+                          </Button>
+                        </div>
                       </div>
 
                       {/* Package info line (optional — display only) */}

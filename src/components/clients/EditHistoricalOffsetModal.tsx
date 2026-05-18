@@ -1,10 +1,14 @@
 /**
- * v12-D3 / v13-D1: Edit a client's historical_sessions_offset (sessions
- * completed with this client BEFORE Catalift / off-app). The Supabase
- * `recompute_after_offset_change_v2` trigger derives total_sessions from
- * (offset + count of calendar_events where type='session' and
- * status='completed') on save, so the lifetime stat updates without the
- * app touching total_sessions directly.
+ * v12-D3 / v13-D1 / v14-D1: Edit a client's historical_sessions_offset.
+ *
+ * Semantics:
+ * - When auto_count_sessions = TRUE (default): offset represents pre-Catalift
+ *   / off-app sessions. The Supabase BEFORE-UPDATE trigger derives
+ *   total_sessions = offset + COUNT(completed calendar_events) so the lifetime
+ *   stat updates without the app touching total_sessions directly.
+ * - When auto_count_sessions = FALSE: offset doubles as the manual count
+ *   bucket. The "+1 session" button on /payments and any direct edit here
+ *   both write to this column; total_sessions = offset under the OFF formula.
  */
 
 'use client';
