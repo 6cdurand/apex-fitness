@@ -389,7 +389,11 @@ export const useWorkoutStore = create<WorkoutState>()(
           );
           
           if (!existingSession) {
-            // Create a new completed session record
+            // Create a new completed session record.
+            // NOTE: v13-D1 pivoted the session counter from trainer_sessions
+            // to calendar_events; this addSession write is retained for
+            // legacy session-list UI but is NOT the source of truth for
+            // trainer_clients.total_sessions. The addCalendarEvent below is.
             trainerStore.addSession({
               clientId,
               trainerId,
@@ -404,17 +408,32 @@ export const useWorkoutStore = create<WorkoutState>()(
               paid: false,
             });
             
-            // Also create a calendar event for the day
-            trainerStore.addCalendarEvent({
-              title: completedWorkout.name,
-              type: 'session',
-              date: todayStr,
-              clientId,
-              status: 'completed',
-              notes: `Completed PT session`,
-            });
+            // Also create a calendar event for the day.
+            // V14-D9: await + log on failure. If this write fails, the
+            // v13-D1 calendar-events trigger never fires and
+            // trainer_clients.total_sessions is stale until the next
+            // calendar operation for this (trainer, client) pair.
+            // NOTE: addCalendarEvent currently returns void and dispatches
+            // its Supabase write fire-and-forget internally; the await is
+            // a no-op today but guards us against silent regressions if
+            // that contract changes, and the try/catch still traps any
+            // synchronous throw inside the store action.
+            try {
+              await trainerStore.addCalendarEvent({
+                title: completedWorkout.name,
+                type: 'session',
+                date: todayStr,
+                clientId,
+                status: 'completed',
+                notes: `Completed PT session`,
+              });
+            } catch (e) {
+              console.error('[WorkoutStore] Failed to create calendar event for PT session:', e);
+              console.error('[WorkoutStore] Session counter will be stale until next calendar operation for:', { trainerId, clientId });
+            }
 
-            // Create in-app notification for client
+            // Create in-app notification for client.
+            // V14-D9: try/catch — cosmetic only; primary workout is saved.
             const socialStore = getSocialStore().getState();
             const authUser = useAuthStore.getState().user;
             const trainerName = authUser?.displayName || 'Your trainer';
@@ -431,10 +450,22 @@ export const useWorkoutStore = create<WorkoutState>()(
               trainerId,
             });
 
-            socialStore.addNotification(notificationPayload);
+            try {
+              await socialStore.addNotification(notificationPayload);
+            } catch (e) {
+              console.error('[WorkoutStore] Failed to send in-app notification for PT session:', e);
+            }
           } else {
-            // Mark the existing session as completed
-            trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
+            // Mark the existing session as completed.
+            // V14-D9: try/catch — same session-counter impact as the
+            // addCalendarEvent path above (markSessionComplete also lands
+            // a calendar-events row via its v13-D1 path).
+            try {
+              await trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
+            } catch (e) {
+              console.error('[WorkoutStore] Failed to mark existing session complete:', e);
+              console.error('[WorkoutStore] Session counter may be stale for:', { trainerId, clientId });
+            }
           }
         }
 
@@ -457,16 +488,24 @@ export const useWorkoutStore = create<WorkoutState>()(
         });
       },
 
-      setWorkoutProgramEdit: (workoutId, edit) => {
+      setWorkoutProgramEdit: async (workoutId, edit) => {
         set(state => ({
           workoutHistory: state.workoutHistory.map(w =>
             w.id === workoutId ? { ...w, programEdit: edit } : w
           ),
         }));
-        // Persist to Supabase — reuse existing syncWorkoutToSupabase
+        // Persist to Supabase — reuse existing syncWorkoutToSupabase.
+        // V14-D9: await + log on failure so orphaned localStorage state is
+        // surfaced. The primary workout record is already saved; this is
+        // metadata-only, so no UI toast is needed — the finish flow already
+        // showed the summary screen.
         const updated = get().workoutHistory.find(w => w.id === workoutId);
         if (updated) {
-          import('../supabaseSync').then(m => m.syncWorkoutToSupabase(updated));
+          const { syncWorkoutToSupabase } = await import('../supabaseSync');
+          const ok = await syncWorkoutToSupabase(updated);
+          if (!ok) {
+            console.error('[WorkoutStore] Failed to persist programEdit metadata for:', workoutId);
+          }
         }
       },
 
