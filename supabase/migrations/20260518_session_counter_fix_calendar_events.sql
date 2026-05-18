@@ -2,21 +2,25 @@
 -- Sprint v13 dispatch 01 — supersedes v12-D1.
 -- Pivots the session-counter source from trainer_sessions (dead table) to
 -- calendar_events (where completions actually land per workoutStore.ts:354-415).
--- Idempotent. Safe to apply whether or not v12-D1 was applied.
+-- Idempotent. Type-safe across uuid/text column variations.
 
 BEGIN;
 
 -- 1. DROP v12-D1 triggers + functions if they exist (no-op if not).
 DROP TRIGGER IF EXISTS trainer_sessions_recompute_counters ON public.trainer_sessions;
 DROP TRIGGER IF EXISTS trainer_clients_offset_recompute ON public.trainer_clients;
+DROP TRIGGER IF EXISTS trainer_clients_offset_recompute_v2 ON public.trainer_clients;
+DROP TRIGGER IF EXISTS calendar_events_recompute_counters ON public.calendar_events;
 DROP FUNCTION IF EXISTS public.recompute_trainer_client_total_sessions();
 DROP FUNCTION IF EXISTS public.recompute_after_offset_change();
+DROP FUNCTION IF EXISTS public.recompute_after_offset_change_v2();
+DROP FUNCTION IF EXISTS public.recompute_total_sessions_from_calendar();
 
--- 2. historical_sessions_offset stays — added by v12-D1 (idempotent guard if v12-D1 unapplied).
+-- 2. Add historical_sessions_offset column (idempotent).
 ALTER TABLE public.trainer_clients
   ADD COLUMN IF NOT EXISTS historical_sessions_offset INTEGER NOT NULL DEFAULT 0;
 
--- One-time migrate from legacy total_sessions_offset if v12-D1 wasn't applied.
+-- One-time migrate from legacy total_sessions_offset if it exists.
 DO $$ BEGIN
   IF EXISTS (
     SELECT 1 FROM information_schema.columns
@@ -33,6 +37,7 @@ END $$;
 -- 3. Idempotent backfill: capture any current manual edit on total_sessions
 -- as historical_sessions_offset BEFORE the trigger attaches, so visible
 -- numbers stay unchanged on first run. Safe to re-run.
+-- TYPE-SAFE: cast both sides of join keys to text.
 WITH derived AS (
   SELECT
     tc.trainer_id,
@@ -40,10 +45,10 @@ WITH derived AS (
     COALESCE(
       (SELECT COUNT(*)::INT
          FROM public.calendar_events ce
-        WHERE ce.trainer_id = tc.trainer_id
-          AND ce.client_id  = tc.client_id
-          AND ce.type       = 'session'
-          AND ce.status     = 'completed'
+        WHERE ce.trainer_id::text = tc.trainer_id::text
+          AND ce.client_id::text  = tc.client_id::text
+          AND ce.type             = 'session'
+          AND ce.status           = 'completed'
       ), 0) AS counted
   FROM public.trainer_clients tc
 )
@@ -53,22 +58,23 @@ UPDATE public.trainer_clients tc
          COALESCE(tc.total_sessions, 0) - d.counted
        )
   FROM derived d
- WHERE d.trainer_id = tc.trainer_id
-   AND d.client_id  = tc.client_id
+ WHERE d.trainer_id::text = tc.trainer_id::text
+   AND d.client_id::text  = tc.client_id::text
    AND COALESCE(tc.total_sessions, 0) > d.counted
    AND tc.historical_sessions_offset < (COALESCE(tc.total_sessions, 0) - d.counted);
 
--- 4. Trigger function: recompute trainer_clients.total_sessions from
--- calendar_events for the affected (trainer_id, client_id) pair.
+-- 4. Trigger function on calendar_events.
+-- TYPE-SAFE: variable types matched to source column via %TYPE; joins cast to text.
 CREATE OR REPLACE FUNCTION public.recompute_total_sessions_from_calendar()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_trainer_id UUID;
-  v_client_id  TEXT;
+  v_trainer_id calendar_events.trainer_id%TYPE;
+  v_client_id  calendar_events.client_id%TYPE;
+  v_old_trainer_id calendar_events.trainer_id%TYPE;
+  v_old_client_id  calendar_events.client_id%TYPE;
 BEGIN
-  -- Use OLD for DELETE, NEW for INSERT/UPDATE.
   IF TG_OP = 'DELETE' THEN
     v_trainer_id := OLD.trainer_id;
     v_client_id  := OLD.client_id;
@@ -77,7 +83,6 @@ BEGIN
     v_client_id  := NEW.client_id;
   END IF;
 
-  -- Skip if no client linkage on the event.
   IF v_client_id IS NULL OR v_trainer_id IS NULL THEN
     RETURN COALESCE(NEW, OLD);
   END IF;
@@ -86,48 +91,48 @@ BEGIN
      SET total_sessions = COALESCE(tc.historical_sessions_offset, 0) + (
            SELECT COUNT(*)::INT
              FROM public.calendar_events ce
-            WHERE ce.trainer_id = v_trainer_id
-              AND ce.client_id  = v_client_id
-              AND ce.type       = 'session'
-              AND ce.status     = 'completed'
+            WHERE ce.trainer_id::text = v_trainer_id::text
+              AND ce.client_id::text  = v_client_id::text
+              AND ce.type             = 'session'
+              AND ce.status           = 'completed'
          ),
          updated_at = NOW()
-   WHERE tc.trainer_id = v_trainer_id
-     AND tc.client_id  = v_client_id;
+   WHERE tc.trainer_id::text = v_trainer_id::text
+     AND tc.client_id::text  = v_client_id::text;
 
-  -- If client linkage CHANGED on UPDATE, recompute the OLD pair too.
-  IF TG_OP = 'UPDATE'
-     AND (OLD.trainer_id IS DISTINCT FROM NEW.trainer_id
-          OR OLD.client_id IS DISTINCT FROM NEW.client_id)
-     AND OLD.client_id IS NOT NULL AND OLD.trainer_id IS NOT NULL THEN
-    UPDATE public.trainer_clients tc
-       SET total_sessions = COALESCE(tc.historical_sessions_offset, 0) + (
-             SELECT COUNT(*)::INT
-               FROM public.calendar_events ce
-              WHERE ce.trainer_id = OLD.trainer_id
-                AND ce.client_id  = OLD.client_id
-                AND ce.type       = 'session'
-                AND ce.status     = 'completed'
-           ),
-           updated_at = NOW()
-     WHERE tc.trainer_id = OLD.trainer_id
-       AND tc.client_id  = OLD.client_id;
+  IF TG_OP = 'UPDATE' THEN
+    v_old_trainer_id := OLD.trainer_id;
+    v_old_client_id  := OLD.client_id;
+    IF (v_old_trainer_id IS DISTINCT FROM v_trainer_id
+        OR v_old_client_id IS DISTINCT FROM v_client_id)
+       AND v_old_client_id IS NOT NULL AND v_old_trainer_id IS NOT NULL THEN
+      UPDATE public.trainer_clients tc
+         SET total_sessions = COALESCE(tc.historical_sessions_offset, 0) + (
+               SELECT COUNT(*)::INT
+                 FROM public.calendar_events ce
+                WHERE ce.trainer_id::text = v_old_trainer_id::text
+                  AND ce.client_id::text  = v_old_client_id::text
+                  AND ce.type             = 'session'
+                  AND ce.status           = 'completed'
+             ),
+             updated_at = NOW()
+       WHERE tc.trainer_id::text = v_old_trainer_id::text
+         AND tc.client_id::text  = v_old_client_id::text;
+    END IF;
   END IF;
 
   RETURN COALESCE(NEW, OLD);
 END;
 $$;
 
-DROP TRIGGER IF EXISTS calendar_events_recompute_counters ON public.calendar_events;
 CREATE TRIGGER calendar_events_recompute_counters
 AFTER INSERT OR UPDATE OF status, type, client_id, trainer_id OR DELETE
 ON public.calendar_events
 FOR EACH ROW
 EXECUTE FUNCTION public.recompute_total_sessions_from_calendar();
 
--- 5. BEFORE-UPDATE trigger on trainer_clients.historical_sessions_offset
--- so manual edits via EditHistoricalOffsetModal recompute total_sessions
--- immediately without waiting for a calendar_events change.
+-- 5. BEFORE-UPDATE trigger on trainer_clients.historical_sessions_offset.
+-- TYPE-SAFE: subquery joins cast to text.
 CREATE OR REPLACE FUNCTION public.recompute_after_offset_change_v2()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -137,50 +142,32 @@ BEGIN
     NEW.total_sessions := COALESCE(NEW.historical_sessions_offset, 0) + (
       SELECT COUNT(*)::INT
         FROM public.calendar_events ce
-       WHERE ce.trainer_id = NEW.trainer_id
-         AND ce.client_id  = NEW.client_id
-         AND ce.type       = 'session'
-         AND ce.status     = 'completed'
+       WHERE ce.trainer_id::text = NEW.trainer_id::text
+         AND ce.client_id::text  = NEW.client_id::text
+         AND ce.type             = 'session'
+         AND ce.status           = 'completed'
     );
   END IF;
   RETURN NEW;
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trainer_clients_offset_recompute_v2 ON public.trainer_clients;
 CREATE TRIGGER trainer_clients_offset_recompute_v2
 BEFORE UPDATE ON public.trainer_clients
 FOR EACH ROW
 EXECUTE FUNCTION public.recompute_after_offset_change_v2();
 
 -- 6. Final reconcile pass: recompute every trainer_clients row from current
--- calendar_events state. After this, the screenshot's Catherine S = 38 etc.
--- will be EITHER unchanged (if historical_sessions_offset captured the
--- difference in step 3) OR drop to the actual calendar_events count
--- (if the user prefers a clean slate — they can edit the offset upward
--- via EditHistoricalOffsetModal).
+-- calendar_events state. TYPE-SAFE: cast both sides of subquery join.
 UPDATE public.trainer_clients tc
    SET total_sessions = COALESCE(tc.historical_sessions_offset, 0) + (
          SELECT COUNT(*)::INT
            FROM public.calendar_events ce
-          WHERE ce.trainer_id = tc.trainer_id
-            AND ce.client_id  = tc.client_id
-            AND ce.type       = 'session'
-            AND ce.status     = 'completed'
+          WHERE ce.trainer_id::text = tc.trainer_id::text
+            AND ce.client_id::text  = tc.client_id::text
+            AND ce.type             = 'session'
+            AND ce.status           = 'completed'
        ),
        updated_at = NOW();
 
 COMMIT;
-
--- POST-APPLY VERIFICATION (run separately):
---   SELECT client_id, total_sessions, historical_sessions_offset
---     FROM public.trainer_clients
---    WHERE trainer_id = '<trainer-uuid>'
---    ORDER BY total_sessions DESC LIMIT 20;
---
---   SELECT client_id, COUNT(*) FILTER (WHERE status='completed') AS completed_events
---     FROM public.calendar_events
---    WHERE trainer_id = '<trainer-uuid>' AND type='session'
---    GROUP BY client_id ORDER BY completed_events DESC LIMIT 20;
---
--- For each client, total_sessions should equal historical_sessions_offset + completed_events.
