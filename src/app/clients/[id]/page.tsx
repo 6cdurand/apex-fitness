@@ -1179,6 +1179,14 @@ export default function ClientDetailPage() {
                     <p className="text-[10px] text-gray-400 mt-0.5">
                       In Catalift
                     </p>
+                    {/* v13-D2: Drill into this client's full workout history. */}
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/workout/history?clientId=${clientId}`)}
+                      className="text-[11px] text-sky-500 hover:text-sky-600 hover:underline mt-1"
+                    >
+                      View history →
+                    </button>
                   </div>
                 </div>
               </CardContent>

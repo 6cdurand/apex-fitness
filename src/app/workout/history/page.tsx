@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { getClientName } from '@/lib/clientUtils';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -15,8 +16,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { format, isThisWeek, isThisMonth, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from 'date-fns';
 import BlockMemoryCard from '@/components/BlockMemoryCard';
 
-export default function WorkoutHistoryPage() {
+function WorkoutHistoryPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const clientIdFilter = searchParams.get('clientId');
   const { isAuthenticated, user } = useAuthStore();
   const { workoutHistory, personalBests, updateCompletedWorkout, updateWorkoutNotes } = useWorkoutStore();
   const { saveToWorkoutLibrary } = useTrainerStore();
@@ -43,11 +46,22 @@ export default function WorkoutHistoryPage() {
 
   // Only show the logged-in user's own workouts (privacy: exclude other clients' workouts)
   // Trainers in trainer mode also see PT sessions they conducted (assignedBy)
+  const isTrainerMode = !!user?.isTrainer && user?.mode === 'trainer';
+  // v13-D2: when a trainer is scoping to a specific client via ?clientId=X,
+  // show ONLY PT sessions where that client is the workout user AND this
+  // trainer is the assigning trainer. Athlete-mode users (isTrainerMode=false)
+  // ignore the URL param and only see their own workouts — privacy gate.
+  const scopedClientName = clientIdFilter && isTrainerMode
+    ? getClientName(clientIdFilter)
+    : null;
   const activeWorkouts = workoutHistory.filter(w => {
     if (w.deletedAt) return false;
     if (!user) return false;
+    if (clientIdFilter && isTrainerMode) {
+      return w.userId === clientIdFilter && w.assignedBy === user.id;
+    }
     if (w.userId === user.id) return true; // Own workouts
-    if (user.isTrainer && user.mode === 'trainer' && w.assignedBy === user.id) return true; // PT sessions trainer ran
+    if (isTrainerMode && w.assignedBy === user.id) return true; // PT sessions trainer ran
     return false;
   });
 
@@ -145,6 +159,26 @@ export default function WorkoutHistoryPage() {
       />
 
       <div className="px-4 py-4">
+        {/* v13-D2: Scoped-to-client banner (trainer mode only). */}
+        {clientIdFilter && isTrainerMode && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+            <div className="flex items-center gap-2 text-sm text-sky-700">
+              <Users className="w-4 h-4" />
+              <span>
+                Showing PT sessions for{' '}
+                <span className="font-semibold">{scopedClientName}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => router.push('/workout/history')}
+              className="text-xs text-sky-600 hover:text-sky-700 hover:underline"
+            >
+              View my own workouts
+            </button>
+          </div>
+        )}
+
         {/* Search */}
         <div className="relative mb-6">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
@@ -771,5 +805,17 @@ export default function WorkoutHistoryPage() {
         </Dialog>
       </div>
     </MainLayout>
+  );
+}
+
+// v13-D2: Suspense wrapper is required because useSearchParams (used inside
+// WorkoutHistoryPageContent for the ?clientId=X scope) opts the page into a
+// client-side bailout during static prerender. Without the boundary, next
+// build fails on /workout/history.
+export default function WorkoutHistoryPage() {
+  return (
+    <Suspense fallback={<MainLayout><PageHeader title="Workout History" showBack /></MainLayout>}>
+      <WorkoutHistoryPageContent />
+    </Suspense>
   );
 }
