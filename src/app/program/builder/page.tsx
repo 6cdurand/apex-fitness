@@ -12,6 +12,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -40,6 +48,9 @@ import {
   Eye,
   ArrowLeftRight,
   Clock,
+  Folder,
+  FolderInput,
+  FolderPlus,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
@@ -226,7 +237,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, getActiveProgram } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -281,6 +292,12 @@ function ProgramBuilderContent() {
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
+  // v13-D3: folder filter chips + create-folder dialog wiring. activeFolder=null
+  // means "All blocks"; any other value scopes the list to blocks whose
+  // SavedBlock.folder matches exactly.
+  const [activeFolder, setActiveFolder] = useState<string | null>(null);
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [moveTargetBlockId, setMoveTargetBlockId] = useState<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>(existingProgram?.scheduleMode || 'fixed');
   const [trainingFrequency, setTrainingFrequency] = useState(existingProgram?.trainingDaysPerWeek || daysPerWeek);
   const [fixedDays, setFixedDays] = useState<Weekday[]>(existingProgram?.selectedDays as Weekday[] || []);
@@ -465,8 +482,18 @@ function ProgramBuilderContent() {
   }, [workoutHistory, targetUserId]);
   
   // ── Block Library: use savedBlocks from store ──
+  // v13-D3: derived folder list, sorted alphabetically, dedup'd via Set.
+  const folderList = useMemo(() => {
+    return [...new Set((savedBlocks || []).map(b => b.folder).filter(Boolean) as string[])]
+      .sort((a, b) => a.localeCompare(b));
+  }, [savedBlocks]);
+
   const filteredLibraryBlocks = useMemo(() => {
     let blocks = savedBlocks || [];
+    // v13-D3: folder filter runs first — narrows the set before type/search.
+    if (activeFolder !== null) {
+      blocks = blocks.filter(b => b.folder === activeFolder);
+    }
     if (blockLibraryFilter !== 'all') {
       blocks = blocks.filter(b => b.type === blockLibraryFilter);
     }
@@ -478,7 +505,7 @@ function ProgramBuilderContent() {
       );
     }
     return blocks;
-  }, [savedBlocks, blockLibraryFilter, blockLibrarySearch]);
+  }, [savedBlocks, blockLibraryFilter, blockLibrarySearch, activeFolder]);
 
   const addBlockFromLibrary = (savedBlock: any) => {
     setDays(prev => prev.map((day, i) => {
@@ -1460,7 +1487,15 @@ function ProgramBuilderContent() {
       </Dialog>
 
       {/* ── Block Library Dialog ── */}
-      <Dialog open={showBlockLibrary} onOpenChange={setShowBlockLibrary}>
+      <Dialog
+        open={showBlockLibrary}
+        onOpenChange={(open) => {
+          setShowBlockLibrary(open);
+          // v13-D3: reset the folder filter on close so a fresh open lands
+          // on "All blocks".
+          if (!open) setActiveFolder(null);
+        }}
+      >
         <DialogContent className="bg-gray-900 border-gray-700 max-w-md max-h-[80vh] p-0">
           <div className="p-4 border-b border-gray-800">
             <div className="flex items-center justify-between mb-3">
@@ -1501,6 +1536,54 @@ function ProgramBuilderContent() {
                   {bt.icon} {bt.label}
                 </Button>
               ))}
+            </div>
+
+            {/* v13-D3: folder filter chips. Sits between the type-filter row
+                and the search input. "All blocks" is the default; per-folder
+                chips render only when at least one saved block has a folder. */}
+            <div className="border-b border-gray-800 pb-3 mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-gray-300">Folders</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setMoveTargetBlockId(null); setShowCreateFolderDialog(true); }}
+                  className="h-6 text-xs gap-1 text-gray-300 hover:text-white"
+                >
+                  <FolderPlus className="w-3.5 h-3.5" /> New folder
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setActiveFolder(null)}
+                  className={`h-6 px-2 text-xs rounded border ${
+                    activeFolder === null
+                      ? 'bg-sky-500/20 border-sky-500 text-sky-300'
+                      : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-500'
+                  }`}
+                >
+                  All blocks ({savedBlocks.length})
+                </button>
+                {folderList.map(folder => {
+                  const count = savedBlocks.filter(b => b.folder === folder).length;
+                  return (
+                    <button
+                      key={folder}
+                      type="button"
+                      onClick={() => setActiveFolder(folder)}
+                      className={`h-6 px-2 text-xs rounded border flex items-center gap-1 ${
+                        activeFolder === folder
+                          ? 'bg-sky-500/20 border-sky-500 text-sky-300'
+                          : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-500'
+                      }`}
+                    >
+                      <Folder className="w-3 h-3" />
+                      {folder} ({count})
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="relative">
@@ -1548,6 +1631,52 @@ function ProgramBuilderContent() {
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </Button>
+                          {/* v13-D3: move-to-folder dropdown. Stops propagation
+                              so the parent Card's onClick (addBlockFromLibrary)
+                              doesn't fire. "Remove from folder" clears the field. */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-gray-400 hover:text-sky-400"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Move to folder"
+                              >
+                                <FolderInput className="w-3.5 h-3.5" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <DropdownMenuItem
+                                onClick={() => { updateBlock(sb.id, { folder: undefined }); toast.success('Removed from folder'); }}
+                              >
+                                Remove from folder
+                              </DropdownMenuItem>
+                              {folderList.length > 0 && <DropdownMenuSeparator />}
+                              {folderList.map(f => (
+                                <DropdownMenuItem
+                                  key={f}
+                                  onClick={() => { updateBlock(sb.id, { folder: f }); toast.success(`Moved to "${f}"`); }}
+                                >
+                                  <Folder className="w-3.5 h-3.5 mr-2 text-gray-400" />
+                                  {f}
+                                </DropdownMenuItem>
+                              ))}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setMoveTargetBlockId(sb.id);
+                                  setShowCreateFolderDialog(true);
+                                }}
+                              >
+                                <FolderPlus className="w-3.5 h-3.5 mr-2 text-gray-400" />
+                                New folder…
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2056,6 +2185,21 @@ function ProgramBuilderContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* v13-D3: Create-folder / move-to-new-folder dialog. Shared between
+          the "New folder" button in the chips row (moveTargetBlockId=null —
+          just create the label) and the per-block "New folder…" menu item
+          (moveTargetBlockId=<id> — move that block into the new folder). */}
+      <CreateFolderDialog
+        open={showCreateFolderDialog}
+        onOpenChange={(open) => {
+          setShowCreateFolderDialog(open);
+          if (!open) setMoveTargetBlockId(null);
+        }}
+        existingFolders={folderList}
+        moveTargetBlockId={moveTargetBlockId}
+        onCreated={(name) => setActiveFolder(name)}
+      />
 
       {/* ── Bottom bar (days step only) ── */}
       {builderStep === 'days' && (
