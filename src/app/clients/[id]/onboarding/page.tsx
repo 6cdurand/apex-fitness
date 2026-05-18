@@ -247,6 +247,11 @@ export default function ClientOnboardingPage() {
     }
   };
 
+  const handleSkip = () => {
+    toast.success('Onboarding skipped — you can complete it later from the client profile.');
+    router.push('/clients');
+  };
+
   const handleFinish = () => {
     const actualClientId = createdClientId || clientId;
     const trainerId = user?.id || '';
@@ -471,14 +476,24 @@ export default function ClientOnboardingPage() {
                 <h1 className="text-xl font-bold text-white">Onboarding</h1>
                 <p className="text-white/80 text-sm">{accountName}</p>
               </div>
-              <Button
-                size="sm"
-                onClick={handleFinish}
-                disabled={!primaryGoal}
-                className="bg-white text-sky-600 hover:bg-gray-100 font-semibold"
-              >
-                <Check className="w-4 h-4 mr-1" /> Finish
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSkip}
+                  className="text-white hover:bg-white/10 font-medium"
+                >
+                  Skip
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleFinish}
+                  disabled={!primaryGoal}
+                  className="bg-white text-sky-600 hover:bg-gray-100 font-semibold"
+                >
+                  <Check className="w-4 h-4 mr-1" /> Finish
+                </Button>
+              </div>
             </div>
           </header>
 
