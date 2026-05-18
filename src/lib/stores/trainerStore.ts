@@ -398,6 +398,7 @@ export const useTrainerStore = create<TrainerState>()(
               historicalSessionsOffset: updatedClient.historicalSessionsOffset,
               totalSessionsOffset: updatedClient.totalSessionsOffset,
               totalPaidOffset: updatedClient.totalPaidOffset,
+              autoCountSessions: updatedClient.autoCountSessions,
             });
           });
         }

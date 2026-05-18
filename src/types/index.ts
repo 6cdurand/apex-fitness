@@ -506,6 +506,11 @@ export interface TrainerClient {
   // DEPRECATED — no longer used, kept for backwards compat
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
+  // v14-D1: per-client toggle. When TRUE (default), the v13-D1 calendar
+  // trigger auto-ticks total_sessions. When FALSE, calendar completions are
+  // tracked but do not auto-count; the trainer uses the manual "+1 session"
+  // button on /payments to increment, which writes via historical_sessions_offset.
+  autoCountSessions?: boolean;
 }
 
 // Client Group (for group fitness classes)
