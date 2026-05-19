@@ -64,6 +64,10 @@ interface AuthState {
    */
   updateAutoCountDefault: (newDefault: boolean) => Promise<void>;
   /**
+   * v14-D11: persist the trainer's block-library folder chip ordering.
+   */
+  updateBlockFolderOrder: (order: string[]) => Promise<void>;
+  /**
    * Heal-on-mount identity normalization.
    *
    * Rewrites the in-memory user.id AND the corresponding `apex-users`
@@ -408,6 +412,18 @@ export const useAuthStore = create<AuthState>()(
           // Revert optimistic
           set({ user: { ...currentUser } });
           console.error('[v14-D10] Failed to persist auto_count_sessions_default; reverted local state.');
+        }
+      },
+
+      updateBlockFolderOrder: async (order: string[]) => {
+        const currentUser = get().user;
+        if (!currentUser) return;
+        set({ user: { ...currentUser, blockFolderOrder: order } });
+        const { syncBlockFolderOrderToSupabase } = await import('../supabaseSync');
+        const ok = await syncBlockFolderOrderToSupabase(currentUser.id, order);
+        if (!ok) {
+          set({ user: { ...currentUser } });
+          console.error('[v14-D11] Failed to persist block_folder_order.');
         }
       },
 

@@ -20,6 +20,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
+import { RenameFolderDialog } from '@/components/program/RenameFolderDialog';
+import { DeleteFolderDialog } from '@/components/program/DeleteFolderDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -51,6 +53,10 @@ import {
   Folder,
   FolderInput,
   FolderPlus,
+  MoreVertical,
+  Pencil,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
@@ -236,8 +242,8 @@ function ProgramBuilderContent() {
   const searchParams = useSearchParams();
   const clientIdParam = searchParams.get('clientId');
   
-  const { user } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram } = useTrainerStore();
+  const { user, updateBlockFolderOrder } = useAuthStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -298,6 +304,9 @@ function ProgramBuilderContent() {
   const [activeFolder, setActiveFolder] = useState<string | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [moveTargetBlockId, setMoveTargetBlockId] = useState<string | null>(null);
+  // v14-D11: folder management dialogs
+  const [renameFolderTarget, setRenameFolderTarget] = useState<string | null>(null);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<string | null>(null);
   const [scheduleMode, setScheduleMode] = useState<'fixed' | 'flexible'>(existingProgram?.scheduleMode || 'fixed');
   const [trainingFrequency, setTrainingFrequency] = useState(existingProgram?.trainingDaysPerWeek || daysPerWeek);
   const [fixedDays, setFixedDays] = useState<Weekday[]>(existingProgram?.selectedDays as Weekday[] || []);
@@ -483,10 +492,16 @@ function ProgramBuilderContent() {
   
   // ── Block Library: use savedBlocks from store ──
   // v13-D3: derived folder list, sorted alphabetically, dedup'd via Set.
+  // v14-D11: respect user.blockFolderOrder for custom ordering; un-ordered folders sort lexically after.
   const folderList = useMemo(() => {
-    return [...new Set((savedBlocks || []).map(b => b.folder).filter(Boolean) as string[])]
-      .sort((a, b) => a.localeCompare(b));
-  }, [savedBlocks]);
+    const seen = new Set<string>();
+    const raw = (savedBlocks || []).map(b => b.folder).filter(Boolean) as string[];
+    raw.forEach(f => seen.add(f));
+    const order = user?.blockFolderOrder ?? [];
+    const ordered = order.filter(f => seen.has(f));
+    const remainder = [...seen].filter(f => !order.includes(f)).sort((a, b) => a.localeCompare(b));
+    return [...ordered, ...remainder];
+  }, [savedBlocks, user?.blockFolderOrder]);
 
   const filteredLibraryBlocks = useMemo(() => {
     let blocks = savedBlocks || [];
@@ -531,6 +546,35 @@ function ProgramBuilderContent() {
     setShowBlockLibrary(false);
     toast.success(`Added "${savedBlock.name}" block`);
   };
+
+  // v14-D11: folder management handlers
+  const openRenameFolderDialog = (folder: string) => setRenameFolderTarget(folder);
+  const openDeleteFolderDialog = (folder: string) => setDeleteFolderTarget(folder);
+
+  const moveFolderUp = (folder: string) => {
+    const current = user?.blockFolderOrder ?? folderList;
+    const reordered = [...current];
+    const idx = reordered.indexOf(folder);
+    if (idx > 0) {
+      [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+      updateBlockFolderOrder(reordered);
+    }
+  };
+
+  const moveFolderDown = (folder: string) => {
+    const current = user?.blockFolderOrder ?? folderList;
+    const reordered = [...current];
+    const idx = reordered.indexOf(folder);
+    if (idx >= 0 && idx < reordered.length - 1) {
+      [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+      updateBlockFolderOrder(reordered);
+    }
+  };
+
+  const deleteFolderBlockCount = useMemo(
+    () => deleteFolderTarget ? savedBlocks.filter(b => b.folder === deleteFolderTarget).length : 0,
+    [deleteFolderTarget, savedBlocks]
+  );
 
   // ── Stats ──
   const activeDay = days[activeDayIndex];
@@ -1565,22 +1609,58 @@ function ProgramBuilderContent() {
                 >
                   All blocks ({savedBlocks.length})
                 </button>
-                {folderList.map(folder => {
+                {folderList.map((folder, idx) => {
                   const count = savedBlocks.filter(b => b.folder === folder).length;
                   return (
-                    <button
-                      key={folder}
-                      type="button"
-                      onClick={() => setActiveFolder(folder)}
-                      className={`h-6 px-2 text-xs rounded border flex items-center gap-1 ${
-                        activeFolder === folder
-                          ? 'bg-sky-500/20 border-sky-500 text-sky-300'
-                          : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-500'
-                      }`}
-                    >
-                      <Folder className="w-3 h-3" />
-                      {folder} ({count})
-                    </button>
+                    <div key={folder} className="flex items-center group">
+                      <button
+                        onClick={() => setActiveFolder(folder)}
+                        className={`h-6 pl-2 pr-1 text-xs rounded-l border flex items-center gap-1 ${
+                          activeFolder === folder
+                            ? 'bg-sky-500/20 border-sky-500 text-sky-300'
+                            : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-500'
+                        }`}
+                      >
+                        <Folder className="w-3 h-3" />
+                        {folder} ({count})
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            className={`h-6 px-1 text-xs rounded-r border-r border-y flex items-center ${
+                              activeFolder === folder
+                                ? 'border-sky-500 text-sky-300 hover:bg-sky-500/30'
+                                : 'border-gray-700 text-gray-500 hover:text-gray-300 hover:bg-gray-700'
+                            }`}
+                            aria-label={`Manage folder ${folder}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MoreVertical className="w-3 h-3" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => openRenameFolderDialog(folder)}>
+                            <Pencil className="w-4 h-4 mr-2" /> Rename folder
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openDeleteFolderDialog(folder)} className="text-red-400 focus:text-red-300">
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete folder…
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            disabled={idx === 0}
+                            onClick={() => moveFolderUp(folder)}
+                          >
+                            <ArrowUp className="w-4 h-4 mr-2" /> Move up
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            disabled={idx === folderList.length - 1}
+                            onClick={() => moveFolderDown(folder)}
+                          >
+                            <ArrowDown className="w-4 h-4 mr-2" /> Move down
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   );
                 })}
               </div>
@@ -2199,6 +2279,37 @@ function ProgramBuilderContent() {
         existingFolders={folderList}
         moveTargetBlockId={moveTargetBlockId}
         onCreated={(name) => setActiveFolder(name)}
+      />
+
+      <RenameFolderDialog
+        open={!!renameFolderTarget}
+        onOpenChange={(open) => { if (!open) setRenameFolderTarget(null); }}
+        folderName={renameFolderTarget}
+        existingFolders={folderList}
+        onRenamed={(_, newName) => {
+          // After rename, re-set activeFolder to the new name if the active was the renamed one.
+          if (activeFolder === renameFolderTarget) setActiveFolder(newName);
+          // Patch the order array so the renamed folder keeps its position.
+          if (user?.blockFolderOrder?.includes(renameFolderTarget ?? '')) {
+            updateBlockFolderOrder(user.blockFolderOrder.map(f => f === renameFolderTarget ? newName : f));
+          }
+        }}
+      />
+
+      <DeleteFolderDialog
+        open={!!deleteFolderTarget}
+        onOpenChange={(open) => { if (!open) setDeleteFolderTarget(null); }}
+        folderName={deleteFolderTarget}
+        existingFolders={folderList}
+        blockCount={deleteFolderBlockCount}
+        onDeleted={(name) => {
+          // Reset active filter if it was the deleted folder.
+          if (activeFolder === name) setActiveFolder(null);
+          // Remove from the order array.
+          if (user?.blockFolderOrder?.includes(name)) {
+            updateBlockFolderOrder(user.blockFolderOrder.filter(f => f !== name));
+          }
+        }}
       />
 
       {/* ── Bottom bar (days step only) ── */}
