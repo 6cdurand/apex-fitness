@@ -654,9 +654,9 @@ export default function PaymentsPage() {
                             });
 
                             const labelMap: Record<string, string> = {
-                              on: `Auto-count FORCED ON for ${client.info.name}.`,
-                              off: `Auto-count FORCED OFF for ${client.info.name}. Use +1 button to count manually.`,
-                              default: `${client.info.name} now follows account default (${trainerDefault ? 'ON' : 'OFF'}).`,
+                              on: `${client.info.name}: sessions will ALWAYS count.`,
+                              off: `${client.info.name}: sessions will NEVER auto-count. Use the +1 button to count manually.`,
+                              default: `${client.info.name} now follows the trainer default (currently ${trainerDefault ? 'ON' : 'OFF'}).`,
                             };
                             toast.success(labelMap[value], { duration: 3500 });
                           }}
@@ -666,10 +666,10 @@ export default function PaymentsPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="default">
-                              Use account default ({user?.autoCountSessionsDefault !== false ? 'ON' : 'OFF'})
+                              Follow trainer default — currently {user?.autoCountSessionsDefault !== false ? 'ON' : 'OFF'}
                             </SelectItem>
-                            <SelectItem value="on">Force ON</SelectItem>
-                            <SelectItem value="off">Force OFF</SelectItem>
+                            <SelectItem value="on">Always count</SelectItem>
+                            <SelectItem value="off">Never count</SelectItem>
                           </SelectContent>
                         </Select>
 
