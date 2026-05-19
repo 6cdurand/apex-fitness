@@ -25,9 +25,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ExerciseImage } from '@/components/ExerciseImage';
 import { ExerciseHowTo } from '@/components/ExerciseHowTo';
+import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
 import { useTrainerStore, useAuthStore, useWorkoutStore } from '@/lib/store';
 import { defaultTemplates } from '@/lib/templates';
 import { BlockType, MovementPattern } from '@/types';
@@ -55,6 +63,10 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
+  FolderPlus,
+  Folder,
+  FolderInput,
+  MoreVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
@@ -432,6 +444,8 @@ function WorkoutBuilderContent() {
   const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
   const [blockToDelete, setBlockToDelete] = useState<any>(null);
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [moveTargetBlockId, setMoveTargetBlockId] = useState<string | null>(null);
   
   // Custom exercise state
   const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
@@ -2848,37 +2862,50 @@ function WorkoutBuilderContent() {
           {/* Folder filter */}
           {(() => {
             const folders = [...new Set(savedBlocks.map(b => b.folder).filter(Boolean))] as string[];
-            return folders.length > 0 ? (
-              <div className="flex gap-1.5 mb-2 flex-wrap">
-                <Button
-                  variant={blockFolderFilter === 'all' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBlockFolderFilter('all')}
-                  className="h-7 text-xs"
-                >
-                  All Folders
-                </Button>
-                <Button
-                  variant={blockFolderFilter === '' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setBlockFolderFilter('')}
-                  className="h-7 text-xs"
-                >
-                  Unfiled
-                </Button>
-                {folders.map(f => (
+            return (
+              <div className="mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-medium text-gray-300">Folders</span>
                   <Button
-                    key={f}
-                    variant={blockFolderFilter === f ? 'default' : 'outline'}
+                    variant="outline"
                     size="sm"
-                    onClick={() => setBlockFolderFilter(f)}
-                    className="h-7 text-xs gap-1"
+                    className="h-8 text-xs gap-1.5"
+                    onClick={() => { setMoveTargetBlockId(null); setShowCreateFolderDialog(true); }}
                   >
-                    📁 {f}
+                    <FolderPlus className="w-3.5 h-3.5" /> New folder
                   </Button>
-                ))}
+                </div>
+                <div className="flex gap-1.5 flex-wrap">
+                  <Button
+                    variant={blockFolderFilter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBlockFolderFilter('all')}
+                    className="h-7 text-xs"
+                  >
+                    All Folders
+                  </Button>
+                  <Button
+                    variant={blockFolderFilter === '' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBlockFolderFilter('')}
+                    className="h-7 text-xs"
+                  >
+                    Unfiled
+                  </Button>
+                  {folders.map(f => (
+                    <Button
+                      key={f}
+                      variant={blockFolderFilter === f ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setBlockFolderFilter(f)}
+                      className="h-7 text-xs gap-1"
+                    >
+                      📁 {f}
+                    </Button>
+                  ))}
+                </div>
               </div>
-            ) : null;
+            );
           })()}
           {/* Type filter */}
           <div className="flex gap-2 mb-4 flex-wrap">
@@ -2988,17 +3015,27 @@ function WorkoutBuilderContent() {
                               >
                                 {previewBlockId === block.id ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setBlockToDelete(block);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                  <DropdownMenuItem onClick={() => { setMoveTargetBlockId(block.id); setShowCreateFolderDialog(true); }}>
+                                    <FolderPlus className="w-4 h-4 mr-2" /> New folder…
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setBlockToDelete(block); }} className="text-red-400 focus:text-red-300">
+                                    <Trash2 className="w-4 h-4 mr-2" /> Delete block
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                           </div>
                           {/* Exercise Preview */}
@@ -3321,6 +3358,18 @@ function WorkoutBuilderContent() {
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* Create Folder Dialog */}
+      <CreateFolderDialog
+        open={showCreateFolderDialog}
+        onOpenChange={(open) => {
+          setShowCreateFolderDialog(open);
+          if (!open) setMoveTargetBlockId(null);
+        }}
+        existingFolders={[...new Set(savedBlocks.map(b => b.folder).filter(Boolean))] as string[]}
+        moveTargetBlockId={moveTargetBlockId}
+        onCreated={(name) => setBlockFolderFilter(name)}
+      />
     </div>
   );
 }
