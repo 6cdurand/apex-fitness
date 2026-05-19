@@ -3862,3 +3862,115 @@ export async function deleteBlockFolderInSupabase(
     return { ok: false, count: 0 };
   }
 }
+
+/**
+ * v14-D3: Persist a trainer-saved program to Supabase.
+ */
+export async function syncSavedProgramToSupabase(program: any): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase
+      .from('saved_programs')
+      .upsert({
+        id: program.id,
+        trainer_id: program.trainerId,
+        name: program.name,
+        description: program.description || null,
+        phase: program.phase || null,
+        goals: program.goals || [],
+        duration_weeks: program.durationWeeks,
+        days_per_week: program.daysPerWeek,
+        structure: program.structure || null,
+        class_safe: program.classSafe ?? false,
+        auto_repeat: program.autoRepeat ?? false,
+        days: program.days,
+        source_template_id: program.sourceTemplateId || null,
+        times_assigned: program.timesAssigned || 0,
+        last_assigned_at: program.lastAssignedAt || null,
+        created_at: program.createdAt,
+        updated_at: program.updatedAt,
+      }, { onConflict: 'id' });
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
+        console.warn('[v14-D3] saved_programs table missing — apply migration 20260522.');
+        return false;
+      }
+      console.error('[v14-D3] syncSavedProgramToSupabase failed:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[v14-D3] syncSavedProgramToSupabase exception:', e);
+    return false;
+  }
+}
+
+/**
+ * v14-D3: Fetch all saved programs for a trainer.
+ */
+export async function fetchSavedProgramsFromSupabase(trainerId: string): Promise<any[]> {
+  if (!isSupabaseConfigured()) return [];
+  try {
+    const { data, error } = await supabase
+      .from('saved_programs')
+      .select('*')
+      .eq('trainer_id', trainerId)
+      .order('updated_at', { ascending: false });
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
+        console.warn('[v14-D3] saved_programs table missing — returning empty list.');
+        return [];
+      }
+      console.error('[v14-D3] fetchSavedProgramsFromSupabase failed:', error);
+      return [];
+    }
+    // Map snake_case to camelCase
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      trainerId: row.trainer_id,
+      name: row.name,
+      description: row.description,
+      phase: row.phase,
+      goals: row.goals || [],
+      durationWeeks: row.duration_weeks,
+      daysPerWeek: row.days_per_week,
+      structure: row.structure,
+      classSafe: row.class_safe,
+      autoRepeat: row.auto_repeat,
+      days: row.days || [],
+      sourceTemplateId: row.source_template_id,
+      timesAssigned: row.times_assigned || 0,
+      lastAssignedAt: row.last_assigned_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (e) {
+    console.error('[v14-D3] fetchSavedProgramsFromSupabase exception:', e);
+    return [];
+  }
+}
+
+/**
+ * v14-D3: Delete a saved program from Supabase.
+ */
+export async function deleteSavedProgramFromSupabase(programId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase
+      .from('saved_programs')
+      .delete()
+      .eq('id', programId);
+    if (error) {
+      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
+        console.warn('[v14-D3] saved_programs table missing — returning false.');
+        return false;
+      }
+      console.error('[v14-D3] deleteSavedProgramFromSupabase failed:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[v14-D3] deleteSavedProgramFromSupabase exception:', e);
+    return false;
+  }
+}

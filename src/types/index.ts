@@ -1012,6 +1012,28 @@ export interface TemplateExercise {
   injuryFlags: InjuryFlag[]; // Which injuries this exercise may aggravate
 }
 
+// Trainer-saved program template (for reuse across clients)
+export interface SavedProgram {
+  id: string;
+  trainerId: string;
+  name: string;
+  description?: string;
+  phase?: string;
+  goals?: string[];
+  durationWeeks: number;
+  daysPerWeek: number;
+  structure?: string;
+  // v14-D3: classSafe kept in type for forward-compat but UI no longer reads it.
+  classSafe?: boolean;
+  autoRepeat?: boolean;
+  days: ClientWorkoutDay[];
+  sourceTemplateId?: string;
+  timesAssigned: number;
+  lastAssignedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Client's assigned program (instance of a template)
 export interface ClientProgram {
   id: string;

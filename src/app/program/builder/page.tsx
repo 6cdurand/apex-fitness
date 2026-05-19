@@ -22,6 +22,7 @@ import {
 import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
 import { RenameFolderDialog } from '@/components/program/RenameFolderDialog';
 import { DeleteFolderDialog } from '@/components/program/DeleteFolderDialog';
+import { SaveProgramDialog } from '@/components/program/SaveProgramDialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -243,7 +244,7 @@ function ProgramBuilderContent() {
   const clientIdParam = searchParams.get('clientId');
   
   const { user, updateBlockFolderOrder } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder, saveProgramAsTemplate } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -330,6 +331,9 @@ function ProgramBuilderContent() {
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [saveToLibrary, setSaveToLibrary] = useState(false);
   const [libraryName, setLibraryName] = useState('');
+  
+  // v14-D3: Save as template dialog
+  const [showSaveProgramDialog, setShowSaveProgramDialog] = useState(false);
   
   const actualWeeks = durationWeeks === 0 ? parseInt(customWeeks) || 4 : durationWeeks;
   
@@ -789,6 +793,46 @@ function ProgramBuilderContent() {
     const totalSessions = actualWeeks * effectiveFrequency;
     toast.success(`Program created! ${totalSessions} sessions scheduled.`);
     router.back();
+  };
+
+  // v14-D3: Save program as reusable template
+  const handleSaveProgramAsTemplate = async (name: string, description: string) => {
+    const weeklyPlan = days.map(d => ({
+      id: d.id,
+      dayLabel: d.label,
+      scheduledDay: d.scheduledDay,
+      blocks: d.blocks.map(b => ({
+        id: b.id,
+        type: b.type,
+        name: b.name,
+        exercises: b.exercises.map(e => ({
+          id: e.id,
+          exerciseId: e.exerciseId,
+          exerciseName: e.exerciseName,
+          movementPattern: e.movementPattern,
+          sets: e.sets,
+          reps: e.reps,
+          rest: e.rest,
+          repType: e.repType,
+          setStyle: e.setStyle,
+          tempo: e.tempo,
+          notes: e.notes,
+        })),
+      })),
+    }));
+    
+    await saveProgramAsTemplate({
+      name,
+      description,
+      phase,
+      goals: [goal],
+      durationWeeks: actualWeeks,
+      daysPerWeek,
+      structure: scheduleMode === 'fixed' ? 'Fixed days' : 'Flexible',
+      autoRepeat,
+      days: weeklyPlan,
+      sourceTemplateId: existingProgram?.templateId,
+    });
   };
 
   // ── Render ───────────────────────────────────────────────
@@ -1418,20 +1462,33 @@ function ProgramBuilderContent() {
               </CardContent>
             </Card>
             
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                className="flex-1 border-gray-700 text-gray-300"
-                onClick={() => setBuilderStep('days')}
-              >
-                Back
-              </Button>
-              <Button
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
-                onClick={() => setShowSaveDialog(true)}
-              >
-                <Save className="w-4 h-4 mr-2" /> Activate Program
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-700 text-gray-300"
+                  onClick={() => setBuilderStep('days')}
+                >
+                  Back
+                </Button>
+                <Button
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                  onClick={() => setShowSaveDialog(true)}
+                >
+                  <Save className="w-4 h-4 mr-2" /> Activate Program
+                </Button>
+              </div>
+              {isTrainerMode && (
+                <Button
+                  variant="outline"
+                  className="w-full border-sky-500/50 text-sky-400 hover:bg-sky-500/10"
+                  onClick={() => setShowSaveProgramDialog(true)}
+                  disabled={!programName || days.length === 0}
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  Save as template
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -2310,6 +2367,23 @@ function ProgramBuilderContent() {
             updateBlockFolderOrder(user.blockFolderOrder.filter(f => f !== name));
           }
         }}
+      />
+
+      {/* v14-D3: Save Program Dialog */}
+      <SaveProgramDialog
+        open={showSaveProgramDialog}
+        onOpenChange={setShowSaveProgramDialog}
+        defaultName={programName}
+        programData={{
+          days,
+          daysPerWeek,
+          durationWeeks: actualWeeks,
+          phase,
+          goals: [goal],
+          structure: scheduleMode === 'fixed' ? 'Fixed days' : 'Flexible',
+          autoRepeat,
+        }}
+        onSave={handleSaveProgramAsTemplate}
       />
 
       {/* ── Bottom bar (days step only) ── */}
