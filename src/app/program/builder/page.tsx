@@ -23,6 +23,7 @@ import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
 import { RenameFolderDialog } from '@/components/program/RenameFolderDialog';
 import { DeleteFolderDialog } from '@/components/program/DeleteFolderDialog';
 import { SaveProgramDialog } from '@/components/program/SaveProgramDialog';
+import { WorkoutDayBuilder } from '@/components/program/WorkoutDayBuilder';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
@@ -1008,6 +1009,8 @@ function ProgramBuilderContent() {
         {/* ══════════════════════════════════════════════════════ */}
         {/* STEP 2: BUILD DAYS                                    */}
         {/* ══════════════════════════════════════════════════════ */}
+        {/* STEP 2: BUILD DAYS — v14-D13 unified with workout builder */}
+        {/* ══════════════════════════════════════════════════════ */}
         {builderStep === 'days' && (
           <div className="space-y-4">
             {/* Day tabs */}
@@ -1066,211 +1069,22 @@ function ProgramBuilderContent() {
                 )}
               </div>
             )}
-            
-            {/* Training Phase / rep-set range selector — applies to new exercises on this day,
-                 and can be applied retroactively to every exercise in the current day. */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-700">Rep / Set Range</span>
-                <span className="text-[10px] text-gray-500">Applies to new exercises</span>
-              </div>
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
-                {TRAINING_PHASES.map((tp) => {
-                  const isActive = phase === tp.id;
-                  return (
-                    <button
-                      key={tp.id}
-                      type="button"
-                      onClick={() => setPhase(tp.id as TrainingPhase)}
-                      className={`px-2 py-1.5 rounded-md border text-[11px] leading-tight text-left transition-colors ${
-                        isActive
-                          ? 'bg-sky-500 border-sky-500 text-white'
-                          : 'bg-white border-gray-200 text-gray-700 hover:border-sky-300'
-                      }`}
-                    >
-                      <div className="font-semibold">{tp.name}</div>
-                      {tp.id !== 'none' && (
-                        <div className={`text-[10px] ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
-                          {tp.sets}×{tp.reps} • {tp.rest}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              {(phase as string) !== 'none' && activeDay && activeDay.blocks.some(b => b.exercises.length > 0) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 text-[11px] border-sky-300 text-sky-700 hover:bg-sky-50 gap-1"
-                  onClick={() => {
-                    const tp = TRAINING_PHASES.find(p => p.id === phase);
-                    if (!tp || !activeDay) return;
-                    setDays(prev => prev.map((d, i) => i !== activeDayIndex ? d : {
-                      ...d,
-                      blocks: d.blocks.map(b => ({
-                        ...b,
-                        exercises: b.exercises.map(ex => ({ ...ex, sets: tp.sets, reps: tp.reps, rest: tp.rest })),
-                      })),
-                    }));
-                    toast.success(`${tp.name} range applied to ${activeDay.label}`);
-                  }}
-                >
-                  <RotateCcw className="h-3 w-3" /> Apply to all exercises in this day
-                </Button>
-              )}
-            </div>
 
-            {/* Add Block: type buttons + library */}
-            <div className="flex gap-1 flex-wrap items-center">
-              <span className="text-xs text-gray-400 mr-1">Add Block:</span>
-              {BLOCK_TYPES.map(bt => (
-                <Button
-                  key={bt.value}
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs border-gray-700 text-gray-300 hover:border-gray-500 gap-1"
-                  onClick={() => addBlock(bt.value)}
-                >
-                  {bt.icon} {bt.label}
-                </Button>
-              ))}
-              <Button
-                variant="outline"
-                size="sm"
-                className={`h-8 text-xs gap-1 ${showBlockLibrary ? 'border-sky-500 text-sky-400 bg-sky-500/10' : 'border-gray-700 text-gray-300 hover:border-gray-500'}`}
-                onClick={() => { setShowBlockLibrary(true); setBlockLibraryFilter('all'); setBlockLibrarySearch(''); }}
-              >
-                <Dumbbell className="h-3.5 w-3.5" /> Block Library ({savedBlocks.length})
-              </Button>
-            </div>
-            
-            {/* Blocks & exercises */}
-            {activeDay?.blocks.length === 0 && (
-              <Card className="bg-gray-900/50 border-gray-800 border-dashed">
-                <CardContent className="p-8 text-center">
-                  <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-                  <p className="text-sm text-gray-300">Add a block to start building this day</p>
-                </CardContent>
-              </Card>
+            {/* WorkoutDayBuilder replaces the old block/exercise UI */}
+            {activeDay && (
+              <WorkoutDayBuilder
+                blocks={activeDay.blocks as any}
+                onBlocksChange={(nextBlocks) => {
+                  setDays(prev => prev.map((d, i) => 
+                    i === activeDayIndex ? { ...d, blocks: nextBlocks as any } : d
+                  ));
+                }}
+                embedded
+                dayLabel={activeDay.label}
+                enableBlockLibrary={false}
+                targetUserId={targetUserId}
+              />
             )}
-            
-            {activeDay?.blocks.map((block) => {
-              const styles = getBlockStyles(block.type);
-              const blockIcon = BLOCK_TYPES.find(bt => bt.value === block.type)?.icon;
-              return (
-                <Card key={block.id} className={`${styles.bg} ${styles.border} border overflow-hidden`}>
-                  <CardContent className="p-0">
-                    {/* Block header */}
-                    <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className="flex-shrink-0">{blockIcon}</span>
-                        <Input
-                          value={block.name}
-                          onChange={e => {
-                            setDays(prev => prev.map((d, i) => {
-                              if (i !== activeDayIndex) return d;
-                              return { ...d, blocks: d.blocks.map(b => b.id === block.id ? { ...b, name: e.target.value } : b) };
-                            }));
-                          }}
-                          className="bg-transparent border-none text-white text-sm font-medium h-7 p-0 focus-visible:ring-0"
-                        />
-                        <Badge className={`text-[10px] ${styles.badge} border flex-shrink-0`}>
-                          {block.type}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-gray-500 hover:text-sky-400"
-                          title="Save block to library"
-                          onClick={() => {
-                            setSaveBlockId(block.id);
-                            setSaveBlockName(block.name);
-                            setSaveBlockFolder('');
-                            setShowSaveBlockDialog(true);
-                          }}
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-gray-500 hover:text-red-400"
-                          onClick={() => removeBlock(block.id)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {/* v12-D6: Solid backdrop under exercise list keeps text
-                        contrast consistent regardless of the tinted block bg
-                        (bg-blue-500/10 for Push, etc) layered over bg-gray-900. */}
-                    <div className="bg-gray-900/60">
-                    {/* Numbered exercise list */}
-                    <div className="divide-y divide-white/5">
-                      {block.exercises.map((ex, exIdx) => (
-                        <div key={ex.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-                          <GripVertical className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 cursor-grab" />
-                          <span className="text-xs text-gray-300 w-5 flex-shrink-0">{exIdx + 1}.</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              {/* Exercise names render on the dark program-builder
-                                  theme — text-gray-900 was near-black on the
-                                  bg-blue-500/10 over bg-gray-900 backdrop and read
-                                  as a blank row to Christo. Switch to text-white
-                                  to match the rest of the dark UI. */}
-                              <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
-                              <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                            </div>
-                            <p className="text-xs text-gray-200 mt-0.5">
-                              {ex.sets} × {ex.reps} reps · {ex.rest} rest
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-gray-500 hover:text-sky-400"
-                              onClick={() => {
-                                setEditingExercise({ blockId: block.id, exercise: { ...ex } });
-                                setShowSwapPanel(false);
-                                setSwapSearch('');
-                              }}
-                            >
-                              <Edit className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-gray-500 hover:text-red-400"
-                              onClick={() => removeExercise(block.id, ex.id)}
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* Add exercise button */}
-                    <div className="px-3 py-2 border-t border-white/5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-gray-300 hover:text-white w-full"
-                        onClick={() => { setShowAddExercise(block.id); setExerciseSearch(''); }}
-                      >
-                        <Plus className="w-3 h-3 mr-1" /> Add Exercise
-                      </Button>
-                    </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
             
             {/* Bottom nav for days step */}
             <div className="flex gap-3 pt-2">
