@@ -37,7 +37,16 @@ import {
   Heart,
   ArrowLeftRight,
   Eye,
+  ChevronDown,
+  Link,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { BlockType } from '@/types';
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
@@ -60,6 +69,17 @@ interface WorkoutExercise {
   notes?: string;
   setStyle: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
   setDetails?: string[];
+  // v14-D6: superset grouping
+  groupId?: string;
+  groupType?: 'superset' | 'triset' | 'giant_set';
+  groupOrder?: string;
+  // v14-D6: planned drop-set follow-up steps
+  dropSetSteps?: Array<{
+    id: string;
+    dropType: 'weight' | 'reps';
+    amount: string;
+    notes?: string;
+  }>;
 }
 
 interface WorkoutBlock {
@@ -169,6 +189,8 @@ export function WorkoutDayBuilder({
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: WorkoutExercise } | null>(null);
   const [showSwapPanel, setShowSwapPanel] = useState(false);
   const [swapSearch, setSwapSearch] = useState('');
+  // v14-D6: superset picker state
+  const [supersetSource, setSupersetSource] = useState<{ blockId: string; exerciseId: string } | null>(null);
   
   const exerciseUsageCounts = useMemo(() => {
     if (!targetUserId) return {};
@@ -242,6 +264,74 @@ export function WorkoutDayBuilder({
     if (!editingExercise) return;
     updateExercise(editingExercise.blockId, editingExercise.exercise.id, editingExercise.exercise);
     setEditingExercise(null);
+  };
+
+  // v14-D6: drop-set and superset handlers
+  const handleAddDropSetStep = (blockId: string, exerciseId: string) => {
+    onBlocksChange(blocks.map(b => b.id !== blockId ? b : {
+      ...b,
+      exercises: b.exercises.map(e => e.id !== exerciseId ? e : {
+        ...e,
+        dropSetSteps: [
+          ...(e.dropSetSteps ?? []),
+          { id: crypto.randomUUID(), dropType: 'weight' as const, amount: '-10kg' },
+        ],
+      }),
+    }));
+  };
+
+  const openSupersetPicker = (blockId: string, sourceExerciseId: string) => {
+    setSupersetSource({ blockId, exerciseId: sourceExerciseId });
+  };
+
+  const handlePairSuperset = (targetExerciseId: string) => {
+    if (!supersetSource) return;
+    const { blockId, exerciseId: sourceId } = supersetSource;
+    const groupId = `superset-${Date.now()}`;
+    onBlocksChange(blocks.map(b => b.id !== blockId ? b : {
+      ...b,
+      exercises: b.exercises.map(e => {
+        if (e.id === sourceId) return { ...e, groupId, groupType: 'superset' as const, groupOrder: 'A1' };
+        if (e.id === targetExerciseId) return { ...e, groupId, groupType: 'superset' as const, groupOrder: 'A2' };
+        return e;
+      }),
+    }));
+    setSupersetSource(null);
+    toast.success('Superset created.');
+  };
+
+  const handleRemoveFromSuperset = (blockId: string, exerciseId: string) => {
+    const block = blocks.find(b => b.id === blockId);
+    const sourceEx = block?.exercises.find(e => e.id === exerciseId);
+    if (!sourceEx?.groupId) return;
+    const sharedGroupId = sourceEx.groupId;
+    onBlocksChange(blocks.map(b => b.id !== blockId ? b : {
+      ...b,
+      exercises: b.exercises.map(e => e.groupId === sharedGroupId
+        ? { ...e, groupId: undefined, groupType: undefined, groupOrder: undefined }
+        : e),
+    }));
+    toast.success('Superset removed.');
+  };
+
+  const updateDropSetStep = (blockId: string, exerciseId: string, stepId: string, patch: Partial<{ dropType: 'weight' | 'reps'; amount: string; notes?: string }>) => {
+    onBlocksChange(blocks.map(b => b.id !== blockId ? b : {
+      ...b,
+      exercises: b.exercises.map(e => e.id !== exerciseId ? e : {
+        ...e,
+        dropSetSteps: (e.dropSetSteps ?? []).map(s => s.id === stepId ? { ...s, ...patch } : s),
+      }),
+    }));
+  };
+
+  const removeDropSetStep = (blockId: string, exerciseId: string, stepId: string) => {
+    onBlocksChange(blocks.map(b => b.id !== blockId ? b : {
+      ...b,
+      exercises: b.exercises.map(e => e.id !== exerciseId ? e : {
+        ...e,
+        dropSetSteps: (e.dropSetSteps ?? []).filter(s => s.id !== stepId),
+      }),
+    }));
   };
   
   const currentBlock = showAddExercise ? blocks.find(b => b.id === showAddExercise) : null;
@@ -360,52 +450,121 @@ export function WorkoutDayBuilder({
               <div className="bg-gray-900/60">
                 {/* Exercise list */}
                 <div className="divide-y divide-white/5">
-                  {block.exercises.map((ex, exIdx) => (
-                    <div key={ex.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
-                      <GripVertical className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 cursor-grab" />
-                      
-                      {/* Exercise image */}
-                      <div className="w-10 h-10 flex-shrink-0">
-                        <ExerciseImage
-                          exerciseId={ex.exerciseId}
-                          size="sm"
-                          className="rounded-md"
-                        />
-                      </div>
-                      
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
-                          <ExerciseHowTo exerciseId={ex.exerciseId} exerciseName={ex.exerciseName} />
+                  {block.exercises.map((ex, exIdx) => {
+                    const isInSuperset = !!ex.groupId;
+                    const partner = isInSuperset
+                      ? block.exercises.find(e => e.groupId === ex.groupId && e.id !== ex.id)
+                      : null;
+                    return (
+                    <div key={ex.id} className={isInSuperset ? "relative ml-2 pl-3 border-l-4 border-amber-400/70" : "relative"}>
+                      {isInSuperset && (
+                        <div className="flex items-center gap-2 px-3 pt-2 pb-0.5 text-[10px] text-amber-400 font-semibold uppercase tracking-wide">
+                          <ArrowLeftRight className="w-3 h-3" />
+                          {ex.groupOrder ?? 'A1'} — paired with {partner?.exerciseName ?? '…'}
                         </div>
-                        <p className="text-xs text-gray-200 mt-0.5">
-                          {ex.sets} × {ex.reps} {ex.repType === 'time' ? '' : 'reps'} · {ex.rest} rest
-                        </p>
+                      )}
+                      <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-white/5 transition-colors">
+                        <GripVertical className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 cursor-grab" />
+                        
+                        {/* Exercise image */}
+                        <div className="w-10 h-10 flex-shrink-0">
+                          <ExerciseImage
+                            exerciseId={ex.exerciseId}
+                            size="sm"
+                            className="rounded-md"
+                          />
+                        </div>
+                        
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm text-white font-medium truncate">{ex.exerciseName}</p>
+                            <ExerciseHowTo exerciseId={ex.exerciseId} exerciseName={ex.exerciseName} />
+                          </div>
+                          <p className="text-xs text-gray-200 mt-0.5">
+                            {ex.sets} × {ex.reps} {ex.repType === 'time' ? '' : 'reps'} · {ex.rest} rest
+                          </p>
+                        </div>
+                        
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-amber-400"
+                                      title="Link to another exercise">
+                                <Link className="w-3 h-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleAddDropSetStep(block.id, ex.id)}>
+                                <ChevronDown className="w-4 h-4 mr-2 text-orange-400" />
+                                Add drop set step
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openSupersetPicker(block.id, ex.id)}
+                                                disabled={!!ex.groupId}>
+                                <ArrowLeftRight className="w-4 h-4 mr-2 text-amber-400" />
+                                {ex.groupId ? 'Already in superset' : 'Superset with…'}
+                              </DropdownMenuItem>
+                              {ex.groupId && (
+                                <DropdownMenuItem onClick={() => handleRemoveFromSuperset(block.id, ex.id)}>
+                                  <X className="w-4 h-4 mr-2 text-red-400" />
+                                  Remove from superset
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-500 hover:text-sky-400"
+                            onClick={() => {
+                              setEditingExercise({ blockId: block.id, exercise: { ...ex } });
+                              setShowSwapPanel(false);
+                            }}
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-gray-500 hover:text-red-400"
+                            onClick={() => removeExercise(block.id, ex.id)}
+                          >
+                            <X className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
                       
-                      <div className="flex items-center gap-0.5 flex-shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-500 hover:text-sky-400"
-                          onClick={() => {
-                            setEditingExercise({ blockId: block.id, exercise: { ...ex } });
-                            setShowSwapPanel(false);
-                          }}
-                        >
-                          <Edit2 className="w-3 h-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-gray-500 hover:text-red-400"
-                          onClick={() => removeExercise(block.id, ex.id)}
-                        >
-                          <X className="w-3 h-3" />
-                        </Button>
-                      </div>
+                      {/* v14-D6: render planned drop-set steps as indented sub-rows */}
+                      {(ex.dropSetSteps?.length ?? 0) > 0 && (
+                        <div className="mt-1.5 ml-6 mr-3 mb-2 space-y-1">
+                          {ex.dropSetSteps!.map((step, idx) => (
+                            <div key={step.id} className="flex items-center gap-2 text-xs text-orange-300/90 bg-orange-500/5 border border-orange-500/20 rounded px-2 py-1">
+                              <ChevronDown className="w-3 h-3 text-orange-400 flex-shrink-0" />
+                              <span className="font-mono text-[10px] text-orange-300/60">Drop {idx + 1}</span>
+                              <Select value={step.dropType} onValueChange={(v) => updateDropSetStep(block.id, ex.id, step.id, { dropType: v as 'weight' | 'reps' })}>
+                                <SelectTrigger className="h-6 w-24 text-xs bg-transparent border-orange-500/30">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="weight">Drop weight</SelectItem>
+                                  <SelectItem value="reps">Drop to reps</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                value={step.amount}
+                                onChange={(e) => updateDropSetStep(block.id, ex.id, step.id, { amount: e.target.value })}
+                                className="h-6 w-20 text-xs bg-transparent border-orange-500/30"
+                                placeholder={step.dropType === 'weight' ? '-10kg' : '5'}
+                              />
+                              <Button variant="ghost" size="icon" className="h-5 w-5 text-orange-400 hover:text-red-400"
+                                      onClick={() => removeDropSetStep(block.id, ex.id, step.id)}>
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  )})}
                 </div>
                 
                 {/* Add exercise button */}
@@ -701,6 +860,35 @@ export function WorkoutDayBuilder({
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v14-D6: Superset Picker Dialog */}
+      <Dialog open={!!supersetSource} onOpenChange={(open) => !open && setSupersetSource(null)}>
+        <DialogContent className="bg-gray-900 border-gray-800 text-white">
+          <DialogHeader>
+            <DialogTitle>Pair with another exercise</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Select an exercise in the same block to superset with. They&apos;ll render as A1/A2 paired during workouts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {supersetSource && (() => {
+              const block = blocks.find(b => b.id === supersetSource.blockId);
+              const sourceId = supersetSource.exerciseId;
+              const candidates = (block?.exercises ?? []).filter(e => e.id !== sourceId && !e.groupId);
+              if (candidates.length === 0) {
+                return <p className="text-sm text-gray-500 text-center py-4">No other available exercises in this block. Add another exercise or remove an existing superset first.</p>;
+              }
+              return candidates.map(c => (
+                <Button key={c.id} variant="outline" className="w-full justify-start border-gray-700 text-white hover:bg-gray-800"
+                        onClick={() => handlePairSuperset(c.id)}>
+                  <ArrowLeftRight className="w-4 h-4 mr-2 text-amber-400" />
+                  {c.exerciseName}
+                </Button>
+              ));
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
       
