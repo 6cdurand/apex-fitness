@@ -229,6 +229,8 @@ interface TrainerState {
   deleteBlock: (blockId: string) => void;
   getBlock: (blockId: string) => SavedBlock | undefined;
   getBlocksByType: (type: BlockType) => SavedBlock[];
+  renameBlockFolder: (oldName: string, newName: string) => Promise<{ ok: boolean; count: number }>;
+  deleteBlockFolder: (folderName: string, targetFolder: string | null) => Promise<{ ok: boolean; count: number }>;
   
   // Block Performance Tracking
   recordBlockPerformance: (performance: Omit<BlockPerformance, 'id' | 'performedAt'>) => BlockPerformance;
@@ -1961,6 +1963,32 @@ export const useTrainerStore = create<TrainerState>()(
       getBlocksByType: (type) => {
         const trainerId = useAuthStore.getState().user?.id;
         return get().savedBlocks.filter(b => b.type === type && b.trainerId === trainerId);
+      },
+
+      renameBlockFolder: async (oldName: string, newName: string) => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return { ok: false, count: 0 };
+        // Optimistic local
+        set(state => ({
+          savedBlocks: state.savedBlocks.map(b =>
+            b.folder === oldName ? { ...b, folder: newName } : b
+          ),
+        }));
+        const { renameBlockFolderInSupabase } = await import('../supabaseSync');
+        return await renameBlockFolderInSupabase(trainerId, oldName, newName);
+      },
+
+      deleteBlockFolder: async (folderName: string, targetFolder: string | null) => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return { ok: false, count: 0 };
+        // Optimistic local
+        set(state => ({
+          savedBlocks: state.savedBlocks.map(b =>
+            b.folder === folderName ? { ...b, folder: targetFolder ?? undefined } : b
+          ),
+        }));
+        const { deleteBlockFolderInSupabase } = await import('../supabaseSync');
+        return await deleteBlockFolderInSupabase(trainerId, folderName, targetFolder);
       },
 
       // Block Performance Tracking

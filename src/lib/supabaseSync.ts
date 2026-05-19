@@ -293,6 +293,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
       following: [],
       trainerId: data.trainer_id || undefined, // Link to trainer if this is a client
       autoCountSessionsDefault: data.auto_count_sessions_default ?? true, // v14-D10: trainer-level default
+      blockFolderOrder: data.block_folder_order ?? undefined, // v14-D11: folder chip ordering
     };
     
     console.log('User logged in from Supabase:', email);
@@ -3775,5 +3776,89 @@ export async function fetchFollowersFromSupabase(
   } catch (err) {
     console.error('[FollowSync] Exception fetching followers:', err);
     return [];
+  }
+}
+
+/**
+ * v14-D11: persist the trainer's block-library folder ordering.
+ */
+export async function syncBlockFolderOrderToSupabase(
+  userId: string,
+  order: string[]
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ block_folder_order: order, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) {
+      if (error.message?.includes('block_folder_order')) {
+        console.warn('[v14-D11] block_folder_order column not present; apply migration 20260521.');
+        return false;
+      }
+      console.error('[v14-D11] Failed to sync block_folder_order:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[v14-D11] syncBlockFolderOrderToSupabase exception:', e);
+    return false;
+  }
+}
+
+/**
+ * v14-D11: rename a folder across all of the trainer's saved blocks in one round trip.
+ * RLS already gates `saved_blocks` to the trainer's rows, so the UPDATE is naturally scoped.
+ */
+export async function renameBlockFolderInSupabase(
+  trainerId: string,
+  oldName: string,
+  newName: string
+): Promise<{ ok: boolean; count: number }> {
+  if (!isSupabaseConfigured()) return { ok: false, count: 0 };
+  try {
+    const { data, error } = await supabase
+      .from('saved_blocks')
+      .update({ folder: newName, updated_at: new Date().toISOString() })
+      .eq('trainer_id', trainerId)
+      .eq('folder', oldName)
+      .select('id');
+    if (error) {
+      console.error('[v14-D11] renameBlockFolder failed:', error);
+      return { ok: false, count: 0 };
+    }
+    return { ok: true, count: data?.length ?? 0 };
+  } catch (e) {
+    console.error('[v14-D11] renameBlockFolder exception:', e);
+    return { ok: false, count: 0 };
+  }
+}
+
+/**
+ * v14-D11: delete a folder by reassigning all its blocks to a target folder (or unfiled).
+ * Pass targetFolder=null to "Remove from folder" entirely (folder set to empty/NULL).
+ */
+export async function deleteBlockFolderInSupabase(
+  trainerId: string,
+  folderName: string,
+  targetFolder: string | null
+): Promise<{ ok: boolean; count: number }> {
+  if (!isSupabaseConfigured()) return { ok: false, count: 0 };
+  try {
+    const { data, error } = await supabase
+      .from('saved_blocks')
+      .update({ folder: targetFolder, updated_at: new Date().toISOString() })
+      .eq('trainer_id', trainerId)
+      .eq('folder', folderName)
+      .select('id');
+    if (error) {
+      console.error('[v14-D11] deleteBlockFolder failed:', error);
+      return { ok: false, count: 0 };
+    }
+    return { ok: true, count: data?.length ?? 0 };
+  } catch (e) {
+    console.error('[v14-D11] deleteBlockFolder exception:', e);
+    return { ok: false, count: 0 };
   }
 }

@@ -51,6 +51,9 @@ export interface User {
    *  auto_count_sessions falls back to this when NULL ("follow trainer default"). Read by the
    *  BEFORE-UPDATE trigger on trainer_clients and the AFTER trigger on calendar_events. */
   autoCountSessionsDefault?: boolean;
+  /** v14-D11: per-trainer ordering for block-library folder chips. NULL/empty = lexical default.
+   *  Folders not in this array sort lexically AFTER ordered ones. */
+  blockFolderOrder?: string[];
 }
 
 // Exercise Types
