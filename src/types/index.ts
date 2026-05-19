@@ -185,6 +185,17 @@ export interface WorkoutBlock {
     intervalRest?: string; // e.g., "90s"
     // Warmup/cooldown sequence duration per exercise
     sequenceDuration?: number; // seconds, default 30
+    // Superset grouping fields (v14-D6)
+    groupId?: string;
+    groupType?: SupersetGroupType;
+    groupOrder?: string; // A1, A2, etc.
+    // v14-D6: planned drop-set follow-up steps
+    dropSetSteps?: Array<{
+      id: string;
+      dropType: 'weight' | 'reps';
+      amount: string; // e.g. "-10kg" (weight drop), "5" (rep target)
+      notes?: string;
+    }>;
   }[];
 }
 
@@ -226,6 +237,17 @@ export interface SavedBlock {
     tempo?: string;
     notes?: string;
     setStyle?: 'fixed' | 'pyramid' | 'reverse-pyramid' | '5x5' | 'drop-set' | 'amrap';
+    // Superset grouping fields (v14-D6)
+    groupId?: string;
+    groupType?: SupersetGroupType;
+    groupOrder?: string;
+    // v14-D6: planned drop-set follow-up steps
+    dropSetSteps?: Array<{
+      id: string;
+      dropType: 'weight' | 'reps';
+      amount: string;
+      notes?: string;
+    }>;
   }[];
   // Circuit-specific settings
   circuitStyle?: 'rounds' | 'amrap' | 'emom' | 'forTime' | 'tabata';
