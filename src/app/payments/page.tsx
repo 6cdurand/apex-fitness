@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { getEffectiveAutoCount } from '@/lib/stores/trainerStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,7 +51,7 @@ interface ClientPaymentSettings {
 
 export default function PaymentsPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, updateAutoCountDefault } = useAuthStore();
   const { sessions, payments, clients, sessionPackages, addPayment, deletePayment, updateSessionPackage, addSessionPackage, updateClient, getPackagesForClient, calendarEvents, getEventsForDate } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('clients');
@@ -399,6 +400,49 @@ export default function PaymentsPage() {
       />
 
       <div className="px-4 pb-24">
+        {/* v14-D10: master auto-count toggle. Sets the trainer's default for all clients
+            without a per-client override. Per-client tristate below each client card can
+            force ON/OFF or follow this default. Server-side bulk rebucket via the AFTER
+            trigger on users preserves visible total_sessions for every "follow default" row. */}
+        <Card className="bg-white border-gray-200 shadow-sm mb-4">
+          <CardContent className="p-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-sky-50 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4 text-sky-500" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900">Auto-count sessions by default</p>
+                <p className="text-xs text-gray-500 truncate">
+                  {user?.autoCountSessionsDefault !== false
+                    ? 'Completed calendar sessions automatically tick each client’s total. Override per client below.'
+                    : 'Calendar sessions do NOT auto-tick. Use the +1 button on each client card to count manually.'}
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={user?.autoCountSessionsDefault !== false}
+              onCheckedChange={async (checked) => {
+                if (!user) return;
+                // Trigger the bulk rebucket on the server. UI rebucket per row is unnecessary
+                // because the server returns updated trainer_clients on the next fetch; the
+                // master toggle's visible effect is "all 'follow default' cards' counters
+                // stay where they were" — no per-row UI tweaking needed.
+                await updateAutoCountDefault(checked);
+                toast.success(
+                  checked
+                    ? 'Auto-count default ON. Calendar sessions will tick each client’s total (unless they have a per-client override).'
+                    : 'Auto-count default OFF. Use the +1 button per client to count manually (unless they have a per-client override).',
+                  { duration: 4000 }
+                );
+                // Refresh the trainer-clients fetch so the per-client tristates reflect the
+                // server-rebucket state without a hard refresh.
+                // Note: we'll use the existing client-reload pattern from the component
+              }}
+              aria-label="Auto-count sessions by default"
+            />
+          </CardContent>
+        </Card>
+
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3 mb-6">
           <Card className="bg-white border-gray-200 shadow-sm">
@@ -566,53 +610,75 @@ export default function PaymentsPage() {
                         </div>
                       </div>
 
-                      {/* v14-D1 + v13-D2: Per-client auto-count toggle (left) and workout-history
-                          link (right). When auto-count is OFF, surface a manual "+1 session"
+                      {/* v14-D10: Per-client auto-count tristate (left) and workout-history
+                          link (right). When effective auto is OFF, surface a manual "+1 session"
                           button between them — writes via historicalSessionsOffset so the
                           increment survives any future recompute. */}
                       <div className="flex items-center justify-between mb-3 gap-2">
-                        <label className="flex items-center gap-2 cursor-pointer select-none">
-                          <Switch
-                            checked={client.autoCountSessions !== false}
-                            onCheckedChange={(checked) => {
-                              const targetClient = clients.find(c => c.clientId === client.clientId);
-                              if (!targetClient) return;
-                              // Optimistic local rebucket so the visible total_sessions doesn't
-                              // jump between this paint and the next fetch. The BEFORE-UPDATE
-                              // trigger applies the same rebucket server-side.
-                              const oldOffset = targetClient.historicalSessionsOffset ?? 0;
-                              const oldTotal = targetClient.totalSessions ?? 0;
-                              const calendarCount = Math.max(0, oldTotal - oldOffset);
-                              let newOffset = oldOffset;
-                              if (checked === false) {
-                                // ON -> OFF: fold calendar contribution into the offset bucket.
-                                newOffset = oldOffset + calendarCount;
-                              } else {
-                                // OFF -> ON: pull calendar contribution back out.
-                                newOffset = Math.max(0, oldOffset - calendarCount);
-                              }
-                              const newTotal = checked
-                                ? newOffset + calendarCount
-                                : newOffset;
-                              updateClient(client.clientId, {
-                                autoCountSessions: checked,
-                                historicalSessionsOffset: newOffset,
-                                totalSessions: newTotal,
-                              });
-                              toast.success(
-                                checked
-                                  ? `Auto-count ON for ${client.info.name}. Calendar completions will tick the counter.`
-                                  : `Auto-count OFF for ${client.info.name}. Use the "+1 session" button to count manually.`,
-                                { duration: 3500 }
-                              );
-                            }}
-                            aria-label="Auto-count sessions"
-                          />
-                          <span className="text-xs text-gray-500">Auto-count sessions</span>
-                        </label>
+                        <Select
+                          value={
+                            client.autoCountSessions === true ? 'on' :
+                            client.autoCountSessions === false ? 'off' :
+                            'default'
+                          }
+                          onValueChange={(value) => {
+                            const targetClient = clients.find(c => c.clientId === client.clientId);
+                            if (!targetClient) return;
+                            // Map the new selection to autoCountSessions value.
+                            const newAutoCount: boolean | null =
+                              value === 'on' ? true :
+                              value === 'off' ? false :
+                              null; // 'default'
+
+                            // Compute effective old + new for visible-total preservation.
+                            const trainerDefault = user?.autoCountSessionsDefault !== false;
+                            const oldEffective = getEffectiveAutoCount(targetClient.autoCountSessions, trainerDefault);
+                            const newEffective = getEffectiveAutoCount(newAutoCount, trainerDefault);
+
+                            // Optimistic local rebucket (same math as v14-D1 + the server BEFORE trigger).
+                            const oldOffset = targetClient.historicalSessionsOffset ?? 0;
+                            const oldTotal = targetClient.totalSessions ?? 0;
+                            const calendarCount = Math.max(0, oldTotal - oldOffset);
+                            let newOffset = oldOffset;
+                            if (oldEffective === true && newEffective === false) {
+                              newOffset = oldOffset + calendarCount;
+                            } else if (oldEffective === false && newEffective === true) {
+                              newOffset = Math.max(0, oldOffset - calendarCount);
+                            }
+                            const newTotal = newEffective ? newOffset + calendarCount : newOffset;
+
+                            updateClient(client.clientId, {
+                              autoCountSessions: newAutoCount,
+                              historicalSessionsOffset: newOffset,
+                              totalSessions: newTotal,
+                            });
+
+                            const labelMap: Record<string, string> = {
+                              on: `Auto-count FORCED ON for ${client.info.name}.`,
+                              off: `Auto-count FORCED OFF for ${client.info.name}. Use +1 button to count manually.`,
+                              default: `${client.info.name} now follows account default (${trainerDefault ? 'ON' : 'OFF'}).`,
+                            };
+                            toast.success(labelMap[value], { duration: 3500 });
+                          }}
+                        >
+                          <SelectTrigger className="w-auto h-8 bg-white border-gray-200 text-xs text-gray-700" aria-label="Auto-count override">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="default">
+                              Use account default ({user?.autoCountSessionsDefault !== false ? 'ON' : 'OFF'})
+                            </SelectItem>
+                            <SelectItem value="on">Force ON</SelectItem>
+                            <SelectItem value="off">Force OFF</SelectItem>
+                          </SelectContent>
+                        </Select>
 
                         <div className="flex items-center gap-1">
-                          {client.autoCountSessions === false && (
+                          {(() => {
+                            const trainerDefault = user?.autoCountSessionsDefault !== false;
+                            const effective = getEffectiveAutoCount(client.autoCountSessions, trainerDefault);
+                            return effective === false;
+                          })() && (
                             <Button
                               variant="ghost"
                               size="sm"

@@ -1,14 +1,13 @@
 /**
- * v12-D3 / v13-D1 / v14-D1: Edit a client's historical_sessions_offset.
+ * v12-D3 / v13-D1 / v14-D1 + v14-D10: Edit a client's historical_sessions_offset.
  *
- * Semantics:
- * - When auto_count_sessions = TRUE (default): offset represents pre-Catalift
- *   / off-app sessions. The Supabase BEFORE-UPDATE trigger derives
- *   total_sessions = offset + COUNT(completed calendar_events) so the lifetime
- *   stat updates without the app touching total_sessions directly.
- * - When auto_count_sessions = FALSE: offset doubles as the manual count
- *   bucket. The "+1 session" button on /payments and any direct edit here
- *   both write to this column; total_sessions = offset under the OFF formula.
+ * Semantics (HYBRID model — effective auto resolved via getEffectiveAutoCount):
+ * - Effective auto ON (per-client override TRUE, OR per-client NULL + trainer default ON):
+ *   editing offset shifts total_sessions by (new_offset - old_offset). v13-D1 + v14-D10 BEFORE
+ *   trigger applies the rebucket; UI optimistic-updates total to match.
+ * - Effective auto OFF (per-client override FALSE, OR per-client NULL + trainer default OFF):
+ *   total_sessions = offset directly. Editing offset sets total to the same value.
+ * "Effective" = resolve via getEffectiveAutoCount(perClient, trainerDefault) from trainerStore.
  */
 
 'use client';

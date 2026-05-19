@@ -292,6 +292,7 @@ export async function loginFromSupabase(email: string, password: string): Promis
       followers: [],
       following: [],
       trainerId: data.trainer_id || undefined, // Link to trainer if this is a client
+      autoCountSessionsDefault: data.auto_count_sessions_default ?? true, // v14-D10: trainer-level default
     };
     
     console.log('User logged in from Supabase:', email);
@@ -1789,8 +1790,8 @@ export async function syncTrainerClientToSupabase(client: {
   historicalSessionsOffset?: number;
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
-  /** v14-D1: per-client toggle gating the calendar-driven auto-tick of total_sessions. */
-  autoCountSessions?: boolean;
+  /** v14-D1 + v14-D10: per-client override. boolean = explicit override; null = follow trainer default. */
+  autoCountSessions?: boolean | null;
 }): Promise<boolean> {
   if (!isSupabaseConfigured()) {
     console.log('[Client Sync] Supabase not configured');
@@ -1823,10 +1824,11 @@ export async function syncTrainerClientToSupabase(client: {
     if (client.historicalSessionsOffset !== undefined) dbClient.historical_sessions_offset = client.historicalSessionsOffset;
     if (client.totalSessionsOffset !== undefined) dbClient.total_sessions_offset = client.totalSessionsOffset;
     if (client.totalPaidOffset !== undefined) dbClient.total_paid_offset = client.totalPaidOffset;
-    // v14-D1: per-client auto-count toggle. Schema-drift safe — omitted from
-    // the payload on installs that haven't applied 20260519, just like
-    // historicalSessionsOffset above.
-    if (client.autoCountSessions !== undefined) dbClient.auto_count_sessions = client.autoCountSessions;
+    // v14-D10: support null ("follow trainer default") in addition to TRUE/FALSE.
+    // The check !== undefined allows null to flow through to the DB as NULL.
+    if (client.autoCountSessions !== undefined) {
+      dbClient.auto_count_sessions = client.autoCountSessions; // boolean | null
+    }
     
     console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
     
@@ -1850,6 +1852,40 @@ export async function syncTrainerClientToSupabase(client: {
     return true;
   } catch (e: any) {
     console.error('[Client Sync] ❌ Exception:', e?.message || e);
+    return false;
+  }
+}
+
+/**
+ * v14-D10: update the trainer's `auto_count_sessions_default` flag.
+ * This is the master toggle on /payments. Flipping it triggers a bulk rebucket of every
+ * trainer_clients row where auto_count_sessions IS NULL (via the AFTER trigger on users).
+ * Returns true on success, false on error (caller toasts the user accordingly).
+ */
+export async function syncAutoCountDefaultToSupabase(
+  userId: string,
+  newDefault: boolean
+): Promise<boolean> {
+  if (!isSupabaseConfigured()) {
+    return false;
+  }
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({ auto_count_sessions_default: newDefault, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) {
+      // Schema-drift retry: if the column doesn't exist (migration not applied), log and bail.
+      if (error.message?.includes('auto_count_sessions_default')) {
+        console.warn('[v14-D10] auto_count_sessions_default column not present yet. Apply migration 20260520_hybrid_auto_count_default.sql via Supabase Dashboard.');
+        return false;
+      }
+      console.error('[v14-D10] Failed to update auto_count_sessions_default:', error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[v14-D10] syncAutoCountDefaultToSupabase exception:', e);
     return false;
   }
 }
@@ -1905,9 +1941,9 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       historicalSessionsOffset: c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
-      // v14-D1: default to TRUE so rows from pre-migration installs hydrate
-      // with the v13-D1 auto-count behavior (zero visible change).
-      autoCountSessions: c.auto_count_sessions ?? true,
+      // v14-D10: preserve null so the UI can render "Use account default" instead of "Force ON".
+      // Resolution to effective boolean is centralized in `getEffectiveAutoCount()` (see trainerStore).
+      autoCountSessions: c.auto_count_sessions, // boolean | null | undefined
       // Attach client user info so getClientDisplayInfo finds it
       client: userMap[c.client_id] || undefined,
     }));

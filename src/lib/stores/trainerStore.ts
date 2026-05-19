@@ -2,6 +2,23 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * v14-D10: resolve the effective auto-count flag for a (trainer, client) pair.
+ * Per-client override (boolean) wins; otherwise falls through to the trainer's account default;
+ * if neither is set, defaults to TRUE (the v13-D1 behavior).
+ *
+ * UI uses this for rendering: the +1 button shows when effectiveAuto === false; the per-client
+ * `<Select>` defaults to "Use account default" when autoCountSessions == null/undefined.
+ */
+export function getEffectiveAutoCount(
+  perClient: boolean | null | undefined,
+  trainerDefault: boolean | undefined
+): boolean {
+  if (perClient !== null && perClient !== undefined) return perClient;
+  if (trainerDefault !== undefined) return trainerDefault;
+  return true;
+}
 import {
   TrainerClient, ClientGroup, CalendarEvent, ClientSession, ClientPayment,
   SessionPackage, BookingRequest, ClientProgram, ClientProgrammingProfile,

@@ -47,6 +47,10 @@ export interface User {
     calendar?: { connected: boolean; provider?: 'apple' | 'google' };
     stripe?: { connected: boolean; accountId?: string };
   };
+  /** v14-D10: trainer-level default for auto-counting sessions. Each trainer_clients row's
+   *  auto_count_sessions falls back to this when NULL ("follow trainer default"). Read by the
+   *  BEFORE-UPDATE trigger on trainer_clients and the AFTER trigger on calendar_events. */
+  autoCountSessionsDefault?: boolean;
 }
 
 // Exercise Types
@@ -506,11 +510,11 @@ export interface TrainerClient {
   // DEPRECATED — no longer used, kept for backwards compat
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
-  // v14-D1: per-client toggle. When TRUE (default), the v13-D1 calendar
-  // trigger auto-ticks total_sessions. When FALSE, calendar completions are
-  // tracked but do not auto-count; the trainer uses the manual "+1 session"
-  // button on /payments to increment, which writes via historical_sessions_offset.
-  autoCountSessions?: boolean;
+  // v14-D1 + v14-D10: per-client override of auto-count. UNDEFINED/NULL = follow the trainer's
+  // `users.auto_count_sessions_default` (HYBRID model — master toggle on /payments). TRUE = "Force ON".
+  // FALSE = "Force OFF". The COALESCE chain in the v14-D10 trigger functions resolves the effective
+  // value.
+  autoCountSessions?: boolean | null;
 }
 
 // Client Group (for group fitness classes)
