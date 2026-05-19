@@ -53,6 +53,7 @@ export default function WorkoutDetailPage() {
   const { isAuthenticated, user } = useAuthStore();
   const { workoutHistory, deleteWorkout, startFromTemplate, personalBests, updateWorkoutNotes, updateCompletedWorkout } = useWorkoutStore();
   const { medals } = useMedalStore();
+  const { clientPrograms } = useTrainerStore();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [notes, setNotes] = useState('');
   const [sharedNotesText, setSharedNotesText] = useState('');
@@ -252,6 +253,18 @@ export default function WorkoutDetailPage() {
     sum + ex.sets.filter(s => s.completed).reduce((s, set) => s + (set.reps || 0), 0), 0
   );
 
+  // v14-D7: compute workout count when showProgramWorkoutCount is enabled
+  const workoutCount = (() => {
+    if (!workout.showProgramWorkoutCount || !workout.sourceProgramId || workout.sourceDayIndex === undefined) {
+      return null;
+    }
+    const program = clientPrograms.find(p => p.id === workout.sourceProgramId);
+    if (!program?.weeklyPlan) return null;
+    const totalWorkouts = program.weeklyPlan.length;
+    const currentWorkout = (workout.sourceDayIndex || 0) + 1;
+    return { current: currentWorkout, total: totalWorkouts };
+  })();
+
   // D16 Part D: compute the program-template diff for the trainer view.
   // Renders only when:
   //   - the viewer is NOT the workout owner (so they're a trainer/observer),
@@ -358,6 +371,15 @@ export default function WorkoutDetailPage() {
 
       <ScrollArea className="flex-1">
         <div className="px-4 py-6 space-y-6">
+          {/* v14-D7: Workout count badge */}
+          {workoutCount && (
+            <div className="flex justify-center">
+              <Badge className="bg-gradient-to-r from-sky-500 to-blue-600 text-white px-4 py-2 text-sm font-semibold">
+                Workout {workoutCount.current} of {workoutCount.total}
+              </Badge>
+            </div>
+          )}
+
           {/* v10-D3: Program Edit Banner - shown to both athlete and trainer */}
           {(workout.programEdit && (
             workout.programEdit.added.length +
@@ -894,6 +916,27 @@ export default function WorkoutDetailPage() {
                           </Badge>
                         )}
                       </div>
+
+                      {/* v14-D7: Prominent notes when showNotesProminently is enabled */}
+                      {workout.showNotesProminently && (ex.notes || ex.trainerNotes) && (
+                        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="flex items-start gap-2">
+                            <FileText className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              {ex.trainerNotes && (
+                                <p className="text-sm text-amber-900 font-medium mb-1">
+                                  Coach note: {ex.trainerNotes}
+                                </p>
+                              )}
+                              {ex.notes && (
+                                <p className="text-sm text-amber-800">
+                                  {ex.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Sets Table */}
                       <div className="rounded-lg overflow-hidden border border-gray-200">
