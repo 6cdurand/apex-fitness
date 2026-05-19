@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { defaultTemplates } from '@/lib/templates';
@@ -95,6 +96,8 @@ function ClientsPageContent() {
   // Assign workout form
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [scheduledDate, setScheduledDate] = useState('');
+  const [showNotesProminently, setShowNotesProminently] = useState(false);
+  const [showProgramWorkoutCount, setShowProgramWorkoutCount] = useState(false);
 
   // Booking form
   const [showBooking, setShowBooking] = useState(false);
@@ -398,11 +401,15 @@ function ClientsPageContent() {
         totalVolume: 0,
         userId: selectedClientId,
         status: 'active',
+        showNotesProminently,
+        showProgramWorkoutCount,
       }, scheduledDate || new Date().toISOString());
       
       setShowAssignWorkout(false);
       setSelectedTemplateId('');
       setScheduledDate('');
+      setShowNotesProminently(false);
+      setShowProgramWorkoutCount(false);
       toast.success('Workout assigned successfully');
     }
   };
@@ -1336,6 +1343,26 @@ function ClientsPageContent() {
                 onChange={(e) => setScheduledDate(e.target.value)}
                 className="bg-gray-50 border-gray-200 text-gray-900"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-gray-600">Display Options</Label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={showNotesProminently} 
+                    onCheckedChange={(v) => setShowNotesProminently(!!v)} 
+                  />
+                  <span className="text-sm text-gray-700">Show important notes on each exercise</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={showProgramWorkoutCount} 
+                    onCheckedChange={(v) => setShowProgramWorkoutCount(!!v)} 
+                  />
+                  <span className="text-sm text-gray-700">Show total workout count (Workout N of M)</span>
+                </label>
+              </div>
             </div>
 
             <Button 

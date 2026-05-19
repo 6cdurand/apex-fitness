@@ -331,6 +331,11 @@ export interface Workout {
     changed: string[];    // exercise names
     savedAt: string;      // ISO timestamp
   };
+  // v14-D7: optional display flags set when trainer sends workout to client.
+  // When TRUE, the client's workout view renders exercise notes prominently
+  // (instead of collapsed) and shows "Workout N of M" derived from the parent program.
+  showNotesProminently?: boolean;
+  showProgramWorkoutCount?: boolean;
 }
 
 // Personal Best / Records
