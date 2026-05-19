@@ -58,6 +58,12 @@ interface AuthState {
   resetPassword: (email: string, newPassword: string) => boolean;
   switchMode: (mode: UserMode) => void;
   /**
+   * v14-D10: flip the trainer's auto_count_sessions_default. Optimistic local update +
+   * Supabase sync. The server-side AFTER trigger on users bulk-rebuckets every "follow default"
+   * trainer_clients row to preserve visible total_sessions across the flip.
+   */
+  updateAutoCountDefault: (newDefault: boolean) => Promise<void>;
+  /**
    * Heal-on-mount identity normalization.
    *
    * Rewrites the in-memory user.id AND the corresponding `apex-users`
@@ -382,6 +388,26 @@ export const useAuthStore = create<AuthState>()(
           
           // Sync mode to Supabase
           updateUserInSupabase(currentUser.id, { mode });
+        }
+      },
+
+      /**
+       * v14-D10: flip the trainer's auto_count_sessions_default. Optimistic local update +
+       * Supabase sync. The server-side AFTER trigger on users bulk-rebuckets every "follow default"
+       * trainer_clients row to preserve visible total_sessions across the flip.
+       */
+      updateAutoCountDefault: async (newDefault: boolean) => {
+        const currentUser = get().user;
+        if (!currentUser) return;
+        // Optimistic local
+        set({ user: { ...currentUser, autoCountSessionsDefault: newDefault } });
+        // Sync
+        const { syncAutoCountDefaultToSupabase } = await import('../supabaseSync');
+        const ok = await syncAutoCountDefaultToSupabase(currentUser.id, newDefault);
+        if (!ok) {
+          // Revert optimistic
+          set({ user: { ...currentUser } });
+          console.error('[v14-D10] Failed to persist auto_count_sessions_default; reverted local state.');
         }
       },
 
