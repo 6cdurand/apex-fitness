@@ -17,7 +17,9 @@ import {
   Calendar,
   CheckCheck,
   Trash2,
-  Pencil
+  Pencil,
+  Plus,
+  Minus
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -194,6 +196,36 @@ export default function NotificationsPage() {
                         <p className="text-sm text-gray-500 mt-0.5">
                           {notification.message}
                         </p>
+                        {/* v14-D12: tap-to-expand diff detail for program_edited notifications */}
+                        {notification.type === 'program_edited' && notification.programEditDetail && (
+                          <details className="mt-2 cursor-pointer">
+                            <summary className="text-xs text-orange-300 hover:text-orange-200">
+                              {notification.programEditDetail.added.length + notification.programEditDetail.removed.length} change{(notification.programEditDetail.added.length + notification.programEditDetail.removed.length) === 1 ? '' : 's'} — tap to view
+                            </summary>
+                            <div className="mt-2 space-y-1 pl-2 border-l-2 border-orange-500/30">
+                              {notification.programEditDetail.added.map(ex => (
+                                <div key={`a-${ex.exerciseId}`} className="flex items-center gap-2 text-xs text-green-400">
+                                  <Plus className="w-3 h-3 flex-shrink-0" />
+                                  <span>{ex.exerciseName}</span>
+                                  {ex.blockName && <span className="text-gray-500 text-[10px]">in {ex.blockName}</span>}
+                                </div>
+                              ))}
+                              {notification.programEditDetail.removed.map(ex => (
+                                <div key={`r-${ex.exerciseId}`} className="flex items-center gap-2 text-xs text-red-400">
+                                  <Minus className="w-3 h-3 flex-shrink-0" />
+                                  <span className="line-through">{ex.exerciseName}</span>
+                                  {ex.blockName && <span className="text-gray-500 text-[10px]">in {ex.blockName}</span>}
+                                </div>
+                              ))}
+                              {(notification.programEditDetail.setsAdded ?? 0) > 0 && (
+                                <p className="text-xs text-green-400">+ {notification.programEditDetail.setsAdded} set{notification.programEditDetail.setsAdded === 1 ? '' : 's'}</p>
+                              )}
+                              {(notification.programEditDetail.setsRemoved ?? 0) > 0 && (
+                                <p className="text-xs text-red-400">− {notification.programEditDetail.setsRemoved} set{notification.programEditDetail.setsRemoved === 1 ? '' : 's'}</p>
+                              )}
+                            </div>
+                          </details>
+                        )}
                         <p className="text-xs text-gray-600 mt-1">
                           {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
                         </p>

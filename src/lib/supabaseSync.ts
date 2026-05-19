@@ -3406,13 +3406,15 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
     dbNotification.link = url;
     if (notification.programId) dbNotification.program_id = notification.programId;
     if (notification.senderId) dbNotification.sender_id = notification.senderId;
+    // v14-D12: persist programEditDetail in JSONB metadata column
+    if (notification.programEditDetail) dbNotification.metadata = notification.programEditDetail;
 
     // The notifications table has drifted across environments (some DBs
     // predate the `link`, `program_id`, `sender_id` columns). Rather than
     // failing the whole upsert on a single unknown column, strip any
     // column the server complains about and retry. Bounded to one retry
     // per column we added so we can't loop forever.
-    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id'];
+    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id', 'metadata'];
     let attempt = 0;
     let lastError: any = null;
     // At most (optionalCols.length + 1) attempts: one per drop + the final try.
@@ -3472,6 +3474,8 @@ export async function fetchNotificationsFromSupabase(userId: string): Promise<an
       programId: n?.program_id ?? undefined,
       senderId: n?.sender_id ?? undefined,
       createdAt: n?.created_at,
+      // v14-D12: parse programEditDetail from JSONB metadata column
+      programEditDetail: n?.metadata ?? undefined,
     }));
   } catch (e) {
     console.error('[Notification Fetch] Exception:', e);
