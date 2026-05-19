@@ -113,6 +113,7 @@ interface TrainerState {
   circuitLibrary: CircuitTemplate[]; // Saved circuit templates
   savedBlocks: SavedBlock[]; // Block library
   blockPerformances: BlockPerformance[]; // Client performance records on blocks
+  savedPrograms: any[]; // v14-D3: Trainer-saved programs as reusable templates
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -232,6 +233,12 @@ interface TrainerState {
   renameBlockFolder: (oldName: string, newName: string) => Promise<{ ok: boolean; count: number }>;
   deleteBlockFolder: (folderName: string, targetFolder: string | null) => Promise<{ ok: boolean; count: number }>;
   
+  // v14-D3: Saved Programs
+  saveProgramAsTemplate: (program: any) => Promise<any | null>;
+  updateSavedProgram: (id: string, updates: any) => Promise<void>;
+  deleteSavedProgram: (id: string) => Promise<void>;
+  assignSavedProgramToClient: (programId: string, clientId: string) => Promise<void>;
+  
   // Block Performance Tracking
   recordBlockPerformance: (performance: Omit<BlockPerformance, 'id' | 'performedAt'>) => BlockPerformance;
   getBlockPerformances: (blockId: string, clientId?: string) => BlockPerformance[];
@@ -273,6 +280,7 @@ export const useTrainerStore = create<TrainerState>()(
       circuitLibrary: [],
       savedBlocks: [],
       blockPerformances: [],
+      savedPrograms: [], // v14-D3
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -1991,6 +1999,81 @@ export const useTrainerStore = create<TrainerState>()(
         return await deleteBlockFolderInSupabase(trainerId, folderName, targetFolder);
       },
 
+      // v14-D3: Saved Programs
+      saveProgramAsTemplate: async (program) => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return null;
+        const now = new Date().toISOString();
+        const newProgram = {
+          id: uuidv4(),
+          trainerId,
+          ...program,
+          timesAssigned: 0,
+          createdAt: now,
+          updatedAt: now,
+        };
+        set(state => ({
+          savedPrograms: [...state.savedPrograms, newProgram],
+        }));
+        const { syncSavedProgramToSupabase } = await import('../supabaseSync');
+        await syncSavedProgramToSupabase(newProgram);
+        return newProgram;
+      },
+
+      updateSavedProgram: async (id, updates) => {
+        const now = new Date().toISOString();
+        set(state => ({
+          savedPrograms: state.savedPrograms.map(p =>
+            p.id === id ? { ...p, ...updates, updatedAt: now } : p
+          ),
+        }));
+        const updated = get().savedPrograms.find(p => p.id === id);
+        if (updated) {
+          const { syncSavedProgramToSupabase } = await import('../supabaseSync');
+          await syncSavedProgramToSupabase(updated);
+        }
+      },
+
+      deleteSavedProgram: async (id) => {
+        set(state => ({
+          savedPrograms: state.savedPrograms.filter(p => p.id !== id),
+        }));
+        const { deleteSavedProgramFromSupabase } = await import('../supabaseSync');
+        await deleteSavedProgramFromSupabase(id);
+      },
+
+      assignSavedProgramToClient: async (programId, clientId) => {
+        const savedProgram = get().savedPrograms.find(p => p.id === programId);
+        if (!savedProgram) return;
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return;
+        const now = new Date().toISOString();
+        // Clone the program into a ClientProgram
+        const clientProgram: ClientProgram = {
+          id: uuidv4(),
+          clientId,
+          trainerId,
+          templateId: savedProgram.id,
+          templateName: savedProgram.name,
+          phase: (savedProgram.phase as any) || 'none',
+          goal: (savedProgram.goals?.[0] as any) || 'general_fitness',
+          weeklyPlan: savedProgram.days,
+          scheduleMode: 'fixed',
+          trainingDaysPerWeek: savedProgram.daysPerWeek,
+          startDate: now,
+          status: 'active',
+          autoRepeat: savedProgram.autoRepeat ?? false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        get().addClientProgram(clientProgram);
+        // Increment times_assigned
+        await get().updateSavedProgram(programId, {
+          timesAssigned: savedProgram.timesAssigned + 1,
+          lastAssignedAt: now,
+        });
+      },
+
       // Block Performance Tracking
       recordBlockPerformance: (performance) => {
         const newPerformance: BlockPerformance = {
@@ -2076,6 +2159,7 @@ export const useTrainerStore = create<TrainerState>()(
           supabaseSavedBlocks,
           supabaseBlockPerformances,
           supabaseClientProfiles,
+          supabaseSavedPrograms, // v14-D3
         ] = await Promise.all([
           fetchTrainerClientsFromSupabase(trainerId),
           fetchTrainerSessionsFromSupabase(trainerId),
@@ -2090,6 +2174,7 @@ export const useTrainerStore = create<TrainerState>()(
           fetchSavedBlocksFromSupabase(trainerId),
           fetchBlockPerformancesFromSupabase(trainerId),
           fetchClientProfilesFromSupabase(trainerId),
+          (async () => { const { fetchSavedProgramsFromSupabase } = await import('../supabaseSync'); return await fetchSavedProgramsFromSupabase(trainerId); })(), // v14-D3
         ]);
         
         // SUPABASE IS THE ONLY SOURCE OF TRUTH
@@ -2228,6 +2313,7 @@ export const useTrainerStore = create<TrainerState>()(
           savedBlocks: [...savedBlocks, ...localOnlyBlocks],
           blockPerformances,
           clientProfiles: [...supabaseClientProfiles, ...localOnlyProfiles],
+          savedPrograms: supabaseSavedPrograms || [], // v14-D3
         });
         
         console.log(`[Trainer Store] ✅ REPLACED localStorage with Supabase data:`, {
@@ -2243,6 +2329,7 @@ export const useTrainerStore = create<TrainerState>()(
           circuitLibrary: supabaseCircuitLibrary.length,
           savedBlocks: savedBlocks.length + localOnlyBlocks.length,
           clientProfiles: supabaseClientProfiles.length + localOnlyProfiles.length,
+          savedPrograms: (supabaseSavedPrograms || []).length, // v14-D3
         });
         
         // Also load workout history for all clients

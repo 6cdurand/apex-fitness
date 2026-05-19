@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Select, 
   SelectContent, 
@@ -80,7 +81,7 @@ export default function TemplateSelectionPage() {
   const router = useRouter();
   const clientId = params.id as string;
   
-  const { clients, getClientProfile } = useTrainerStore();
+  const { clients, getClientProfile, savedPrograms, assignSavedProgramToClient } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
   const clientProfile = getClientProfile(clientId);
   
@@ -88,9 +89,9 @@ export default function TemplateSelectionPage() {
   const [goalFilter, setGoalFilter] = useState<TrainingGoal | 'all'>('all');
   const [frequencyFilter, setFrequencyFilter] = useState<number>(0);
   const [structureFilter, setStructureFilter] = useState<string>('all');
-  const [classSafeOnly, setClassSafeOnly] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
   const [filtersInitialized, setFiltersInitialized] = useState(false);
+  const [tab, setTab] = useState<'system' | 'mine'>('system'); // v14-D3
 
   // Auto-fill filters from client profile on mount
   useEffect(() => {
@@ -114,25 +115,23 @@ export default function TemplateSelectionPage() {
     return 'foundation';
   }, [clientProfile?.currentPhase, client?.goals]);
 
-  // Filter templates
+  // Filter templates (v14-D3: removed classSafeOnly)
   const filteredTemplates = useMemo(() => {
     return programTemplates.filter(template => {
       if (phaseFilter !== 'all' && !template.phases.includes(phaseFilter)) return false;
       if (goalFilter !== 'all' && !template.goals.includes(goalFilter)) return false;
       if (frequencyFilter > 0 && !template.frequencyOptions.includes(frequencyFilter)) return false;
       if (structureFilter !== 'all' && template.structure !== structureFilter) return false;
-      if (classSafeOnly && !template.classSafe) return false;
       return true;
     });
-  }, [phaseFilter, goalFilter, frequencyFilter, structureFilter, classSafeOnly]);
+  }, [phaseFilter, goalFilter, frequencyFilter, structureFilter]);
 
-  // Count active filters
+  // Count active filters (v14-D3: removed classSafeOnly)
   const activeFilterCount = [
     phaseFilter !== 'all',
     goalFilter !== 'all',
     frequencyFilter > 0,
     structureFilter !== 'all',
-    classSafeOnly,
   ].filter(Boolean).length;
 
   const clearFilters = () => {
@@ -140,7 +139,6 @@ export default function TemplateSelectionPage() {
     setGoalFilter('all');
     setFrequencyFilter(0);
     setStructureFilter('all');
-    setClassSafeOnly(false);
   };
 
   const handleSelectTemplate = (template: ProgramTemplate) => {
@@ -199,6 +197,14 @@ export default function TemplateSelectionPage() {
         </Card>
       )}
 
+      {/* v14-D3: Tabs for System vs My Templates */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'system' | 'mine')} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsTrigger value="system">System Templates ({filteredTemplates.length})</TabsTrigger>
+          <TabsTrigger value="mine">My Templates ({savedPrograms.length})</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="system">
       {/* Filters */}
       <Card className="mb-4">
         <CardHeader className="pb-3">
@@ -285,17 +291,6 @@ export default function TemplateSelectionPage() {
               </Select>
             </div>
           </div>
-          
-          <div className="mt-3 flex items-center gap-2">
-            <Button
-              variant={classSafeOnly ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setClassSafeOnly(!classSafeOnly)}
-            >
-              {classSafeOnly && <Check className="h-3 w-3 mr-1" />}
-              Class Safe Only
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
@@ -340,11 +335,6 @@ export default function TemplateSelectionPage() {
                             {goal.replace('_', ' ')}
                           </Badge>
                         ))}
-                        {template.classSafe && (
-                          <Badge variant="default" className="text-xs bg-green-600">
-                            Class Safe
-                          </Badge>
-                        )}
                       </div>
                     </div>
                     <div className="text-right ml-4">
@@ -374,6 +364,54 @@ export default function TemplateSelectionPage() {
           </div>
         </ScrollArea>
       </div>
+      </TabsContent>
+
+      <TabsContent value="mine">
+        {savedPrograms.length === 0 ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <p>You haven&apos;t saved any programs yet.</p>
+              <p className="text-sm mt-2">Build one in the Program Builder and tap &quot;Save as template&quot;.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <ScrollArea className="h-[400px] pr-4">
+            <div className="space-y-3">
+              {savedPrograms.map(prog => (
+                <Card 
+                  key={prog.id}
+                  className="cursor-pointer hover:border-primary/50"
+                  onClick={async () => {
+                    await assignSavedProgramToClient(prog.id, clientId);
+                    router.push(`/clients/${clientId}`);
+                  }}
+                >
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold">{prog.name}</h3>
+                    {prog.description && (
+                      <p className="text-sm text-muted-foreground mb-2">{prog.description}</p>
+                    )}
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {prog.phase && (
+                        <Badge variant="outline" className="text-xs">{prog.phase}</Badge>
+                      )}
+                      {prog.goals?.slice(0, 3).map((g: string) => (
+                        <Badge key={g} variant="secondary" className="text-xs">
+                          {g.replace('_', ' ')}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {prog.durationWeeks} weeks • {prog.daysPerWeek} days/week • {prog.timesAssigned} assignments
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </TabsContent>
+      </Tabs>
 
       {/* Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
