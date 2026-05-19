@@ -436,6 +436,18 @@ export const useWorkoutStore = create<WorkoutState>()(
             // Mark the existing session as completed
             trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
           }
+
+          // v14-D16: After workout completion, refetch trainer_clients to surface
+          // the trigger-updated total_sessions on /payments (the AFTER trigger on
+          // calendar_events recomputes total_sessions server-side, but the local
+          // trainerStore.clients[] still holds the pre-completion value).
+          setTimeout(() => {
+            if (trainerStore.refetchTrainerClientsFromSupabase) {
+              trainerStore.refetchTrainerClientsFromSupabase(trainerId).catch((err: any) => {
+                console.warn('[v14-D16] post-completion trainer_clients refetch failed:', err?.message);
+              });
+            }
+          }, 800); // 800ms gives Supabase trigger a chance to commit
         }
 
         // deriveAll pipeline: recompute PBs, medals, ratings, volume rollups

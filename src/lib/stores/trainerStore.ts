@@ -246,6 +246,7 @@ interface TrainerState {
   
   // Supabase sync
   loadFromSupabase: (trainerId: string) => Promise<void>;
+  refetchTrainerClientsFromSupabase: (trainerId: string) => Promise<void>;
   
   // Update package (for editing)
   updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => void;
@@ -2365,6 +2366,43 @@ export const useTrainerStore = create<TrainerState>()(
             notifications: [...supabaseNotifications, ...localOnlyNotifications] 
           });
           console.log(`[Trainer Store] ✅ Notifications loaded: ${supabaseNotifications.length} from Supabase, ${localOnlyNotifications.length} local-only`);
+        }
+      },
+
+      // v14-D16: Public refetch method called from workoutStore.endWorkout
+      // to surface trigger-updated total_sessions immediately (instead of
+      // waiting for next page load).
+      refetchTrainerClientsFromSupabase: async (trainerId: string) => {
+        try {
+          const fresh = await fetchTrainerClientsFromSupabase(trainerId);
+          if (fresh && Array.isArray(fresh)) {
+            const currentClients = get().clients;
+            const clients: TrainerClient[] = fresh.map((sb: any) => {
+              const localClient = currentClients.find(c => c.clientId === sb.clientId);
+              return {
+                id: sb.id,
+                trainerId: sb.trainerId,
+                clientId: sb.clientId,
+                status: sb.status || 'active',
+                startDate: sb.startDate,
+                onboardingComplete: sb.onboardingComplete,
+                notes: sb.notes,
+                goals: sb.goals,
+                // Stored counters: use Supabase value if it exists, otherwise preserve local value
+                totalSessions: sb.totalSessions ?? localClient?.totalSessions ?? 0, // ← trigger updates this
+                totalPaid: sb.totalPaid ?? localClient?.totalPaid ?? 0,
+                totalSessionsOffset: sb.totalSessionsOffset,
+                totalPaidOffset: sb.totalPaidOffset,
+                // v14-D10 per-client auto-count override
+                autoCountSessions: sb.autoCountSessions ?? localClient?.autoCountSessions ?? null,
+                // Nested client user info for name resolution
+                client: sb.client || localClient?.client,
+              };
+            });
+            set({ clients });
+          }
+        } catch (err) {
+          console.warn('[v14-D16] refetchTrainerClientsFromSupabase error:', err);
         }
       },
 
