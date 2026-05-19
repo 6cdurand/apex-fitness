@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -324,6 +325,13 @@ export default function ActiveWorkoutPage() {
   const [saveCircuitName, setSaveCircuitName] = useState('');
   const [saveCircuitDescription, setSaveCircuitDescription] = useState('');
   const [circuitToSave, setCircuitToSave] = useState<any>(null);
+  
+  // v14-D12: confirmation dialog state for mid-workout remove actions on program workouts
+  const [confirmRemoveTarget, setConfirmRemoveTarget] = useState<
+    | { kind: 'exercise'; exerciseId: string }
+    | { kind: 'set'; exerciseId: string; setId: string }
+    | null
+  >(null);
   
   // Per-set rest timers (setId -> { remaining seconds, total seconds })
   const [setRestTimers, setSetRestTimers] = useState<Record<string, { remaining: number; total: number }>>({});
@@ -849,6 +857,46 @@ export default function ActiveWorkoutPage() {
     setShowExerciseModal(false);
     setExerciseSearch('');
     toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
+  };
+  
+  // v14-D12: confirm before removing an exercise or set if this is a trainer-assigned program workout.
+  // Without the guard, mid-workout slips can silently dilute the trainer's program design.
+  const handleRemoveExerciseWithGuard = (exerciseId: string) => {
+    // Detect program workout using same logic as handleFinishWorkout
+    const trainerStoreSnap = useTrainerStore.getState();
+    const isProgramWorkout = activeWorkout ? detectIsProgramWorkout({
+      sourceProgramId: activeWorkout.sourceProgramId,
+      sourceDayIndex: activeWorkout.sourceDayIndex,
+      templateId: activeWorkout.templateId,
+      workoutName: activeWorkout.name,
+      workoutUserId: activeWorkout.userId,
+      clientPrograms: trainerStoreSnap.clientPrograms,
+    }) : false;
+    
+    if (!isProgramWorkout) {
+      removeExercise(exerciseId);
+      return;
+    }
+    setConfirmRemoveTarget({ kind: 'exercise', exerciseId });
+  };
+
+  const handleRemoveSetWithGuard = (exerciseId: string, setId: string) => {
+    // Detect program workout using same logic as handleFinishWorkout
+    const trainerStoreSnap = useTrainerStore.getState();
+    const isProgramWorkout = activeWorkout ? detectIsProgramWorkout({
+      sourceProgramId: activeWorkout.sourceProgramId,
+      sourceDayIndex: activeWorkout.sourceDayIndex,
+      templateId: activeWorkout.templateId,
+      workoutName: activeWorkout.name,
+      workoutUserId: activeWorkout.userId,
+      clientPrograms: trainerStoreSnap.clientPrograms,
+    }) : false;
+    
+    if (!isProgramWorkout) {
+      removeSet(exerciseId, setId);
+      return;
+    }
+    setConfirmRemoveTarget({ kind: 'set', exerciseId, setId });
   };
   
   const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
@@ -1837,20 +1885,31 @@ export default function ActiveWorkoutPage() {
                 trainerStore.updateClientProgram(activeProgram.id, { weeklyPlan: updatedPlan });
 
                 // v10-D2: persist diff metadata on the workout record
-                const addedNames = Array.from(newExerciseIds)
+                // v14-D12: also build detail arrays for programEditDetail
+                const addedExerciseDetails: Array<{ exerciseId: string; exerciseName: string; blockName?: string }> = [];
+                const removedExerciseDetails: Array<{ exerciseId: string; exerciseName: string; blockName?: string }> = [];
+                
+                Array.from(newExerciseIds)
                   .filter(id => !originalExerciseIds.has(id))
-                  .map(id => {
-                    const ex = updatedBlocks.flatMap(b => b.exercises).find(e => e.exerciseId === id);
-                    return ex?.exerciseName || ex?.name || 'Exercise';
+                  .forEach(id => {
+                    const block = updatedBlocks.find((b: any) => b.exercises.some((e: any) => e.exerciseId === id));
+                    const ex = block?.exercises.find((e: any) => e.exerciseId === id);
+                    const exerciseName = ex?.exerciseName || 'Exercise';
+                    addedExerciseDetails.push({ exerciseId: id, exerciseName, blockName: block?.name });
                   });
-                const removedNames = Array.from(originalExerciseIds)
+                  
+                Array.from(originalExerciseIds)
                   .filter(id => !newExerciseIds.has(id))
-                  .map(id => {
-                    const ex = (activeProgram.weeklyPlan[dayIdx]?.blocks || [])
-                      .flatMap((b: any) => b.exercises || [])
-                      .find((e: any) => e.exerciseId === id);
-                    return ex?.exerciseName || ex?.name || 'Exercise';
+                  .forEach(id => {
+                    const block = (activeProgram.weeklyPlan[dayIdx]?.blocks || []).find((b: any) => b.exercises?.some((e: any) => e.exerciseId === id));
+                    const ex = block?.exercises?.find((e: any) => e.exerciseId === id);
+                    const exerciseName = ex?.exerciseName || 'Exercise';
+                    removedExerciseDetails.push({ exerciseId: id, exerciseName, blockName: block?.name });
                   });
+                
+                const addedNames = addedExerciseDetails.map(d => d.exerciseName);
+                const removedNames = removedExerciseDetails.map(d => d.exerciseName);
+                
                 // Use changed from programDiffForPrompt if available
                 const changedNames = programDiffForPrompt?.changed || [];
                 const nowIso2 = new Date().toISOString();
@@ -1884,6 +1943,12 @@ export default function ActiveWorkoutPage() {
                     senderId: userId,
                     programId: activeProgram.id,
                     workoutId: completedWorkoutData.id,
+                    programEditDetail: {
+                      added: addedExerciseDetails,
+                      removed: removedExerciseDetails,
+                      setsAdded: 0, // Could compute from set diffs if needed
+                      setsRemoved: 0,
+                    },
                   });
                 }
               }
@@ -3167,7 +3232,7 @@ export default function ActiveWorkoutPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => removeExercise(workoutExercise.id)}
+                              onClick={() => handleRemoveExerciseWithGuard(workoutExercise.id)}
                               className="h-6 w-6 text-gray-500 hover:text-red-400"
                             >
                               <X className="w-3 h-3" />
@@ -3517,7 +3582,7 @@ export default function ActiveWorkoutPage() {
                                   <DropdownMenuSeparator className="bg-gray-700" />
                                   <DropdownMenuItem
                                     className="text-red-400 focus:text-red-300"
-                                    onClick={() => removeExercise(workoutExercise.id)}
+                                    onClick={() => handleRemoveExerciseWithGuard(workoutExercise.id)}
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
                                     Remove Exercise
@@ -3759,7 +3824,7 @@ export default function ActiveWorkoutPage() {
                                       <Button
                                         size="icon"
                                         variant="ghost"
-                                        onClick={() => removeSet(workoutExercise.id, set.id)}
+                                        onClick={() => handleRemoveSetWithGuard(workoutExercise.id, set.id)}
                                         className="h-8 w-8 text-gray-500 hover:text-red-400 hover:bg-red-500/10"
                                         title="Delete set"
                                       >
@@ -3797,7 +3862,7 @@ export default function ActiveWorkoutPage() {
                                         <DropdownMenuSeparator className="bg-gray-700" />
                                         <DropdownMenuItem 
                                           className="text-red-400 focus:text-red-300"
-                                          onClick={() => removeSet(workoutExercise.id, set.id)}
+                                          onClick={() => handleRemoveSetWithGuard(workoutExercise.id, set.id)}
                                         >
                                           <Trash2 className="w-4 h-4 mr-2" />
                                           Delete Set
@@ -4139,7 +4204,7 @@ export default function ActiveWorkoutPage() {
                         <DropdownMenuSeparator className="bg-gray-700" />
                         <DropdownMenuItem 
                           className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
-                          onClick={() => removeExercise(workoutExercise.id)}
+                          onClick={() => handleRemoveExerciseWithGuard(workoutExercise.id)}
                         >
                           <Trash2 className="w-4 h-4 mr-2" />
                           Remove Exercise
@@ -4181,7 +4246,7 @@ export default function ActiveWorkoutPage() {
                         onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
                         onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise?.name || 'Exercise')}
                         onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
-                        onRemove={() => removeSet(workoutExercise.id, set.id)}
+                        onRemove={() => handleRemoveSetWithGuard(workoutExercise.id, set.id)}
                       />
                     ))}
                   </div>
@@ -5486,6 +5551,39 @@ export default function ActiveWorkoutPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* v14-D12: Confirmation dialog for mid-workout remove actions on program workouts */}
+      <AlertDialog open={!!confirmRemoveTarget} onOpenChange={(open) => !open && setConfirmRemoveTarget(null)}>
+        <AlertDialogContent className="bg-gray-900 border-gray-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">
+              {confirmRemoveTarget?.kind === 'exercise' ? 'Remove exercise?' : 'Remove set?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              {confirmRemoveTarget?.kind === 'exercise'
+                ? 'This exercise will be removed from your workout. The change will be logged to your trainer when you finish; you can choose whether to save it back to your program at that point.'
+                : 'This set will be removed. The change will be logged to your trainer when you finish; you can choose whether to save it back to your program at that point.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmRemoveTarget(null)}>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600"
+              onClick={() => {
+                if (!confirmRemoveTarget) return;
+                if (confirmRemoveTarget.kind === 'exercise') {
+                  removeExercise(confirmRemoveTarget.exerciseId);
+                } else {
+                  removeSet(confirmRemoveTarget.exerciseId, confirmRemoveTarget.setId);
+                }
+                setConfirmRemoveTarget(null);
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

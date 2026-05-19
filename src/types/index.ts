@@ -664,6 +664,13 @@ export interface Notification {
   workoutId?: string;
   senderId?: string;
   createdAt: string;
+  /** v14-D12: extended diff detail for `program_edited` notifications. JSONB-safe. */
+  programEditDetail?: {
+    added: Array<{ exerciseId: string; exerciseName: string; blockName?: string }>;
+    removed: Array<{ exerciseId: string; exerciseName: string; blockName?: string }>;
+    setsAdded?: number;
+    setsRemoved?: number;
+  };
 }
 
 // Timer State
