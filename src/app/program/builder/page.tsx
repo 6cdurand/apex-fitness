@@ -1079,9 +1079,10 @@ function ProgramBuilderContent() {
                     i === activeDayIndex ? { ...d, blocks: nextBlocks as any } : d
                   ));
                 }}
-                embedded
                 dayLabel={activeDay.label}
-                enableBlockLibrary={false}
+                /* v14-D23: flipped from false to true so program-day building
+                   gets the same Block Library surface as /workout/builder. */
+                enableBlockLibrary={true}
                 targetUserId={targetUserId}
               />
             )}

@@ -3,6 +3,8 @@
 import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CreateFolderDialog } from '@/components/program/CreateFolderDialog';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,11 +46,18 @@ import {
   TrendingDown,
   ChevronUp,
   Clock,
+  // v14-D23: Block Library icons (ported from /workout/builder)
+  BookmarkPlus,
+  FolderPlus,
+  MoreVertical,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DialogDescription } from '@/components/ui/dialog';
@@ -57,7 +66,7 @@ import { BlockType } from '@/types';
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
-import { useWorkoutStore } from '@/lib/store';
+import { useWorkoutStore, useTrainerStore, useAuthStore } from '@/lib/store';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
 
 // Types matching workout builder
@@ -114,8 +123,15 @@ interface WorkoutBlock {
 export interface WorkoutDayBuilderProps {
   blocks: WorkoutBlock[];
   onBlocksChange: (blocks: WorkoutBlock[]) => void;
-  embedded?: boolean;
   dayLabel?: string;
+  /**
+   * v14-D23: When true (default), the component renders the full Block Library
+   * affordances: "ð Block Library" button in the Add Block row, the
+   * "Save to Block Library" item on each block's kebab menu, and all related
+   * dialogs (Save / Replace / Library list / Folder create / Delete confirm).
+   * Pass false to mount a stripped-down builder (e.g. legacy callers that
+   * don't want the saved-block surface).
+   */
   enableBlockLibrary?: boolean;
   targetUserId?: string;
   /**
@@ -197,13 +213,22 @@ const getBlockStyles = (type: BlockType) => {
 export function WorkoutDayBuilder({
   blocks,
   onBlocksChange,
-  embedded = false,
   dayLabel,
   enableBlockLibrary = true,
   targetUserId,
   emptyStateSlot,
 }: WorkoutDayBuilderProps) {
   const { workoutHistory } = useWorkoutStore();
+  // v14-D23: Block Library data layer is sourced from trainerStore so the
+  // same saved-block list shows up on /workout/builder and /program/builder.
+  const {
+    savedBlocks,
+    saveBlock,
+    deleteBlock,
+    loadFromSupabase,
+    blockPerformances,
+    getBestBlockPerformance,
+  } = useTrainerStore();
   
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
@@ -217,6 +242,25 @@ export function WorkoutDayBuilder({
   }>({ muscleGroup: [], equipment: [] });
   // v14-D6: superset picker state
   const [supersetSource, setSupersetSource] = useState<{ blockId: string; exerciseId: string } | null>(null);
+
+  // v14-D23: Block Library state — ported verbatim from /workout/builder so
+  // both pages share one Block Library surface. All gated by `enableBlockLibrary`
+  // at render time; on /program/builder this prop now flips to true.
+  const [showBlockLibraryDialog, setShowBlockLibraryDialog] = useState(false);
+  const [previewBlockId, setPreviewBlockId] = useState<string | null>(null);
+  const [isSyncingBlocks, setIsSyncingBlocks] = useState(false);
+  const [showSaveBlockDialog, setShowSaveBlockDialog] = useState(false);
+  const [blockLibraryName, setBlockLibraryName] = useState('');
+  const [blockLibraryFolder, setBlockLibraryFolder] = useState('');
+  const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
+  const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
+  const [blockFolderFilter, setBlockFolderFilter] = useState<string>('all');
+  const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
+  const [showReplaceBlockDialog, setShowReplaceBlockDialog] = useState(false);
+  const [blockToDelete, setBlockToDelete] = useState<any>(null);
+  const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [moveTargetBlockId, setMoveTargetBlockId] = useState<string | null>(null);
   
   const exerciseUsageCounts = useMemo(() => {
     if (!targetUserId) return {};
@@ -623,7 +667,6 @@ export function WorkoutDayBuilder({
     });
     
     setEditingExercise(null);
-    setShowSwapPanel(false);
     setSwapSearch('');
     toast.success(`Swapped to ${newExercise.name}`);
   };
@@ -634,7 +677,133 @@ export function WorkoutDayBuilder({
     }
     return [];
   }, [swapSearch]);
-  
+
+  // v14-D23: Block Library handlers (ported from /workout/builder).
+  // These all read/write through the trainerStore destructured at the top of
+  // the component and through `blocks`/`onBlocksChange` props — NO direct
+  // setBlocks calls (the page mounting the component owns the canonical list).
+  const handleSaveBlock = (forceReplace = false) => {
+    if (!blockLibraryName.trim() || !activeBlockId) {
+      toast.error('Please enter a block name');
+      return;
+    }
+    const block = blocks.find(b => b.id === activeBlockId);
+    if (!block) return;
+
+    // Check for an existing block with the same (case-insensitive) name.
+    const existingBlock = savedBlocks.find(
+      (b: any) => b.name.toLowerCase() === blockLibraryName.trim().toLowerCase()
+    );
+    if (existingBlock && !forceReplace) {
+      setExistingBlockToReplace(existingBlock.id);
+      setShowReplaceBlockDialog(true);
+      return;
+    }
+    if (existingBlock && forceReplace) {
+      deleteBlock(existingBlock.id);
+    }
+
+    saveBlock({
+      name: blockLibraryName,
+      type: block.type,
+      folder: blockLibraryFolder.trim() || undefined,
+      exercises: block.exercises.map(ex => ({
+        id: ex.id,
+        exerciseId: ex.exerciseId,
+        exerciseName: ex.exerciseName,
+        sets: ex.sets,
+        reps: ex.reps,
+        repType: ex.repType,
+        rest: ex.rest,
+        tempo: ex.tempo,
+        notes: ex.notes,
+        setStyle: ex.setStyle,
+      })),
+      circuitStyle: block.circuitStyle,
+      circuitRounds: block.rounds,
+      circuitDuration: block.roundDuration ? parseInt(block.roundDuration) * 60 : undefined,
+      circuitRestBetween: block.restBetweenRounds ? parseInt(block.restBetweenRounds) : undefined,
+    });
+
+    toast.success(
+      forceReplace
+        ? `"${blockLibraryName}" replaced in block library!`
+        : `"${blockLibraryName}" saved to block library!`
+    );
+    setShowSaveBlockDialog(false);
+    setShowReplaceBlockDialog(false);
+    setBlockLibraryName('');
+    setBlockLibraryFolder('');
+    setActiveBlockId(null);
+    setExistingBlockToReplace(null);
+  };
+
+  const handleReplaceBlock = () => {
+    handleSaveBlock(true);
+  };
+
+  const handleCancelReplace = () => {
+    setShowReplaceBlockDialog(false);
+    setExistingBlockToReplace(null);
+  };
+
+  const handleSyncBlockLibrary = async () => {
+    setIsSyncingBlocks(true);
+    try {
+      const { syncSavedBlockToSupabase } = await import('@/lib/supabaseSync');
+      const trainerId = useAuthStore.getState().user?.id;
+      if (!trainerId) {
+        toast.error('Please log in to sync blocks');
+        return;
+      }
+      // Push every local saved block, then re-pull canonical list.
+      for (const block of savedBlocks) {
+        await syncSavedBlockToSupabase({
+          id: block.id,
+          name: block.name,
+          type: block.type,
+          trainerId: block.trainerId,
+          exercises: block.exercises,
+          circuitStyle: block.circuitStyle,
+          circuitRounds: block.circuitRounds,
+          circuitDuration: block.circuitDuration,
+          circuitRestBetween: block.circuitRestBetween,
+          createdAt: block.createdAt,
+          updatedAt: block.updatedAt,
+        });
+      }
+      await loadFromSupabase(trainerId);
+      toast.success('Block library synced!');
+    } catch (error) {
+      console.error('Error syncing blocks:', error);
+      toast.error('Failed to sync blocks');
+    } finally {
+      setIsSyncingBlocks(false);
+    }
+  };
+
+  const handleLoadBlock = (savedBlock: typeof savedBlocks[0]) => {
+    const newBlock: WorkoutBlock = {
+      id: `block-${Date.now()}`,
+      type: savedBlock.type,
+      name: savedBlock.name,
+      exercises: savedBlock.exercises.map((ex: any) => ({
+        ...ex,
+        id: `ex-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        movementPattern: ex.movementPattern || 'compound',
+        repType: ex.repType || 'reps',
+        setStyle: ex.setStyle || 'fixed',
+      })),
+      circuitStyle: savedBlock.circuitStyle,
+      rounds: savedBlock.circuitRounds,
+      roundDuration: savedBlock.circuitDuration ? `${Math.floor(savedBlock.circuitDuration / 60)}min` : undefined,
+      restBetweenRounds: savedBlock.circuitRestBetween ? `${savedBlock.circuitRestBetween}s` : undefined,
+    };
+    onBlocksChange(sortBlocks([...blocks, newBlock]));
+    // Keep dialog open so the trainer can stack multiple blocks at once.
+    toast.success(`Added "${savedBlock.name}" block`);
+  };
+
   return (
     <div className="space-y-4">
       {dayLabel && (
@@ -642,6 +811,10 @@ export function WorkoutDayBuilder({
       )}
       
       {/* Add Block row */}
+      {/* v14-D23: This is the SINGLE Add Block row visible on /workout/builder
+          and /program/builder. The Block Library button is appended here when
+          enableBlockLibrary === true so the duplicate page-level row that used
+          to exist on /workout/builder is gone. */}
       <div className="flex gap-1 flex-wrap items-center">
         <span className="text-xs text-gray-400 mr-1">Add Block:</span>
         {BLOCK_TYPES.map(bt => (
@@ -655,6 +828,16 @@ export function WorkoutDayBuilder({
             {bt.icon} {bt.label}
           </Button>
         ))}
+        {enableBlockLibrary && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowBlockLibraryDialog(true)}
+            className="h-8 text-xs gap-1 border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+          >
+            📚 Block Library{savedBlocks.length > 0 && ` (${savedBlocks.length})`}
+          </Button>
+        )}
       </div>
       
       {/* Blocks */}
@@ -691,6 +874,37 @@ export function WorkoutDayBuilder({
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  {/* v14-D23: Per-block kebab — currently hosts the
+                      "Save to Block Library" affordance, gated by
+                      enableBlockLibrary. Future block-level actions can land
+                      in this menu. */}
+                  {enableBlockLibrary && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-gray-500 hover:text-purple-400"
+                          title="Block actions"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setActiveBlockId(block.id);
+                            setBlockLibraryName(block.name);
+                            setBlockLibraryFolder('');
+                            setShowSaveBlockDialog(true);
+                          }}
+                        >
+                          <BookmarkPlus className="w-4 h-4 mr-2 text-purple-400" />
+                          Save to Block Library
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -1472,7 +1686,366 @@ export function WorkoutDayBuilder({
           </div>
         </DialogContent>
       </Dialog>
-      
+
+      {/* v14-D23: Block Library dialogs (Save / Replace / Browse / Delete /
+          New Folder) — all gated by enableBlockLibrary so callers that opt out
+          render zero of this surface. Ported verbatim from /workout/builder. */}
+      {enableBlockLibrary && (
+        <>
+          {/* Save Block Dialog */}
+          <Dialog open={showSaveBlockDialog} onOpenChange={setShowSaveBlockDialog}>
+            <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogHeader>
+                <DialogTitle>💾 Save Block to Library</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Block Name</Label>
+                  <Input
+                    value={blockLibraryName}
+                    onChange={(e) => setBlockLibraryName(e.target.value)}
+                    placeholder="e.g., Upper Body Strength, Leg Day Warmup"
+                    className="mt-2"
+                  />
+                </div>
+                <div>
+                  <Label>Folder <span className="text-gray-500 font-normal">(optional)</span></Label>
+                  <Input
+                    value={blockLibraryFolder}
+                    onChange={(e) => setBlockLibraryFolder(e.target.value)}
+                    placeholder="e.g., Jason's workouts, Push Day"
+                    className="mt-2"
+                    list="folder-suggestions"
+                  />
+                  <datalist id="folder-suggestions">
+                    {[...new Set(savedBlocks.map((b: any) => b.folder).filter(Boolean))].map((f) => (
+                      <option key={f as string} value={f as string} />
+                    ))}
+                  </datalist>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Save this block to reuse it in future workouts. Client performance will be tracked.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowSaveBlockDialog(false);
+                      setActiveBlockId(null);
+                    }}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => handleSaveBlock()}
+                    className="flex-1 bg-purple-500 hover:bg-purple-600"
+                  >
+                    <Save className="h-4 w-4 mr-2" /> Save Block
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Replace Block Confirmation Dialog */}
+          <Dialog open={showReplaceBlockDialog} onOpenChange={setShowReplaceBlockDialog}>
+            <DialogContent className="bg-gray-900 border-gray-800">
+              <DialogHeader>
+                <DialogTitle>⚠️ Block Already Exists</DialogTitle>
+                <DialogDescription>
+                  A block named &quot;{blockLibraryName}&quot; already exists in your library. Would you like to replace it with this new version?
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" onClick={handleCancelReplace} className="flex-1">
+                  Keep Both (Cancel)
+                </Button>
+                <Button
+                  onClick={handleReplaceBlock}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600"
+                >
+                  Replace Existing
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Block Library Dialog */}
+          <Dialog
+            open={showBlockLibraryDialog}
+            onOpenChange={(open) => {
+              setShowBlockLibraryDialog(open);
+              if (!open) {
+                setBlockLibraryFilter('all');
+                setBlockFolderFilter('all');
+                setBlockLibrarySearch('');
+              }
+            }}
+          >
+            <DialogContent className="bg-gray-900 border-gray-800 max-w-lg max-h-[80vh]">
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle>📚 Block Library</DialogTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncBlockLibrary}
+                    disabled={isSyncingBlocks}
+                    className="gap-1"
+                  >
+                    {isSyncingBlocks ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    Sync
+                  </Button>
+                </div>
+              </DialogHeader>
+              {/* Folder filter */}
+              {(() => {
+                const folders = [...new Set(savedBlocks.map((b: any) => b.folder).filter(Boolean))] as string[];
+                return (
+                  <div className="mb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-300">Folders</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5"
+                        onClick={() => { setMoveTargetBlockId(null); setShowCreateFolderDialog(true); }}
+                      >
+                        <FolderPlus className="w-3.5 h-3.5" /> New folder
+                      </Button>
+                    </div>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Button
+                        variant={blockFolderFilter === 'all' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setBlockFolderFilter('all')}
+                        className="h-7 text-xs"
+                      >
+                        All Folders
+                      </Button>
+                      <Button
+                        variant={blockFolderFilter === '' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setBlockFolderFilter('')}
+                        className="h-7 text-xs"
+                      >
+                        Unfiled
+                      </Button>
+                      {folders.map((f) => (
+                        <Button
+                          key={f}
+                          variant={blockFolderFilter === f ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setBlockFolderFilter(f)}
+                          className="h-7 text-xs gap-1"
+                        >
+                          📁 {f}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Type filter */}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                <Button
+                  variant={blockLibraryFilter === 'all' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setBlockLibraryFilter('all')}
+                >
+                  All
+                </Button>
+                {BLOCK_TYPES.map((bt) => (
+                  <Button
+                    key={bt.value}
+                    variant={blockLibraryFilter === bt.value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setBlockLibraryFilter(bt.value)}
+                    className="gap-1"
+                  >
+                    {bt.icon}
+                    {bt.label}
+                  </Button>
+                ))}
+              </div>
+              {/* Search */}
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <Input
+                  value={blockLibrarySearch}
+                  onChange={(e) => setBlockLibrarySearch(e.target.value)}
+                  placeholder="Search blocks or exercises..."
+                  className="bg-gray-800 border-gray-700 text-white pl-10 text-sm"
+                />
+              </div>
+              <ScrollArea className="h-[400px] pr-4">
+                {savedBlocks.filter((b: any) =>
+                  (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
+                  (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter)) &&
+                  (!blockLibrarySearch.trim() || b.name.toLowerCase().includes(blockLibrarySearch.toLowerCase()) || b.exercises.some((e: any) => (e.exerciseName || '').toLowerCase().includes(blockLibrarySearch.toLowerCase())))
+                ).length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No saved blocks yet.</p>
+                    <p className="text-sm mt-2">Save blocks from your workouts to reuse them!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {savedBlocks
+                      .filter((b: any) =>
+                        (blockLibraryFilter === 'all' || b.type === blockLibraryFilter) &&
+                        (blockFolderFilter === 'all' || (blockFolderFilter === '' ? !b.folder : b.folder === blockFolderFilter)) &&
+                        (!blockLibrarySearch.trim() || b.name.toLowerCase().includes(blockLibrarySearch.toLowerCase()) || b.exercises.some((e: any) => (e.exerciseName || '').toLowerCase().includes(blockLibrarySearch.toLowerCase())))
+                      )
+                      .map((block: any) => {
+                        const blockStyle = getBlockStyles(block.type);
+                        // Per-client performance history (only when targetUserId is set).
+                        const clientPerfs = targetUserId
+                          ? blockPerformances.filter((p: any) => p.blockId === block.id && p.clientId === targetUserId)
+                          : [];
+                        const bestPerf = targetUserId ? getBestBlockPerformance(block.id, targetUserId) : undefined;
+                        const lastPerf = clientPerfs.length > 0
+                          ? clientPerfs.sort((a: any, b: any) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime())[0]
+                          : undefined;
+                        return (
+                          <Card
+                            key={block.id}
+                            className={`${blockStyle.bg} ${blockStyle.border} cursor-pointer hover:opacity-80 transition-opacity`}
+                            onClick={() => handleLoadBlock(block)}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    {BLOCK_TYPES.find((t) => t.value === block.type)?.icon}
+                                    <h4 className="font-semibold text-white">{block.name}</h4>
+                                    {block.folder && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">📁 {block.folder}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-muted-foreground mt-1">
+                                    {block.exercises?.length || 0} exercises
+                                    {block.circuitStyle && ` • ${block.circuitStyle}`}
+                                    {block.circuitRounds && ` • ${block.circuitRounds} rounds`}
+                                  </p>
+                                  {targetUserId && block.type === 'circuit' && (lastPerf || bestPerf) && (
+                                    <div className="flex gap-3 mt-2 text-xs">
+                                      {lastPerf?.completionTime && (
+                                        <span className="text-gray-400">
+                                          Last: <span className="text-sky-400 font-medium">{Math.floor(lastPerf.completionTime / 60)}:{String(lastPerf.completionTime % 60).padStart(2, '0')}</span>
+                                        </span>
+                                      )}
+                                      {bestPerf?.completionTime && (
+                                        <span className="text-gray-400">
+                                          Best: <span className="text-green-400 font-medium">{Math.floor(bestPerf.completionTime / 60)}:{String(bestPerf.completionTime % 60).padStart(2, '0')}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className={blockStyle.badge}>
+                                    {block.type}
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPreviewBlockId(previewBlockId === block.id ? null : block.id);
+                                    }}
+                                  >
+                                    {previewBlockId === block.id ? <ChevronUp className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                  </Button>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-700"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                      <DropdownMenuItem onClick={() => { setMoveTargetBlockId(block.id); setShowCreateFolderDialog(true); }}>
+                                        <FolderPlus className="w-4 h-4 mr-2" /> New folder…
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={(e) => { e.stopPropagation(); setBlockToDelete(block); }}
+                                        className="text-red-400 focus:text-red-300"
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" /> Delete block
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+                              </div>
+                              {/* Exercise Preview */}
+                              {previewBlockId === block.id && block.exercises && block.exercises.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-1.5">
+                                  {block.exercises.map((ex: any, idx: number) => (
+                                    <div key={ex.id} className="flex items-center justify-between text-xs py-1 px-1">
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-slate-500 w-4">{idx + 1}.</span>
+                                        <span className="text-slate-300">{ex.exerciseName}</span>
+                                      </div>
+                                      <span className="text-slate-500">
+                                        {ex.sets} × {ex.reps}{ex.repType === 'time' ? '' : ' reps'} • {ex.rest}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                )}
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+
+          {/* Block Delete Confirmation */}
+          <ConfirmDialog
+            open={!!blockToDelete}
+            onOpenChange={(open) => { if (!open) setBlockToDelete(null); }}
+            title="Delete Block"
+            description={`Delete "${blockToDelete?.name}" from your library?`}
+            confirmLabel="Delete"
+            variant="destructive"
+            onConfirm={() => {
+              if (blockToDelete) {
+                deleteBlock(blockToDelete.id);
+                toast.success('Block deleted from library');
+                setBlockToDelete(null);
+              }
+            }}
+            icon={<Trash2 className="w-5 h-5 text-red-400" />}
+          />
+
+          {/* Create Folder Dialog */}
+          <CreateFolderDialog
+            open={showCreateFolderDialog}
+            onOpenChange={(open) => {
+              setShowCreateFolderDialog(open);
+              if (!open) setMoveTargetBlockId(null);
+            }}
+            existingFolders={[...new Set(savedBlocks.map((b: any) => b.folder).filter(Boolean))] as string[]}
+            moveTargetBlockId={moveTargetBlockId}
+            onCreated={(name) => setBlockFolderFilter(name)}
+          />
+        </>
+      )}
+
     </div>
   );
 }
