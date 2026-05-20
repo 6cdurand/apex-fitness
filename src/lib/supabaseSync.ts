@@ -1065,7 +1065,17 @@ export async function syncPBToSupabase(pb: PersonalBest): Promise<boolean> {
       .upsert(toDbPersonalBest(pb), { onConflict: 'user_id,exercise_id' });
     
     if (error) {
-      console.error('Error syncing PB:', error);
+      // v14-D20: demote to warn — Supabase sometimes returns {} for RLS/conflict failures.
+      // The dev overlay was treating every PB sync misfire as a fatal error. PB sync
+      // is best-effort fire-and-forget; failures degrade gracefully (PBs persist in
+      // local store and re-sync on next workout completion).
+      console.warn('[v14-D20] PB sync skipped (Supabase rejected upsert):', {
+        exerciseId: pb.exerciseId,
+        userId: pb.userId,
+        errorCode: (error as any)?.code,
+        errorMessage: (error as any)?.message,
+        errorDetails: (error as any)?.details,
+      });
       return false;
     }
     console.log('PB synced to Supabase:', pb.exerciseId);
@@ -1086,7 +1096,14 @@ export async function syncMedalToSupabase(medal: Medal): Promise<boolean> {
       .upsert(toDbMedal(medal), { onConflict: 'user_id,definition_id' });
     
     if (error) {
-      console.error('Error syncing medal:', error);
+      // v14-D20: same demotion pattern as PB sync (see syncPBToSupabase).
+      console.warn('[v14-D20] Medal sync skipped (Supabase rejected upsert):', {
+        definitionId: medal.definitionId,
+        userId: medal.userId,
+        errorCode: (error as any)?.code,
+        errorMessage: (error as any)?.message,
+        errorDetails: (error as any)?.details,
+      });
       return false;
     }
     console.log('Medal synced to Supabase:', medal.definitionId);
