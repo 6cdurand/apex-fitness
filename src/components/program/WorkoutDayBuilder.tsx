@@ -118,6 +118,12 @@ export interface WorkoutDayBuilderProps {
   dayLabel?: string;
   enableBlockLibrary?: boolean;
   targetUserId?: string;
+  /**
+   * v14-D19: Optional empty-state slot rendered ABOVE the "Add Block" chips when
+   * blocks.length === 0. Used by /workout/builder to surface its template picker;
+   * /program/builder doesn't pass this and gets the bare empty state.
+   */
+  emptyStateSlot?: React.ReactNode;
 }
 
 const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; color: string }[] = [
@@ -195,6 +201,7 @@ export function WorkoutDayBuilder({
   dayLabel,
   enableBlockLibrary = true,
   targetUserId,
+  emptyStateSlot,
 }: WorkoutDayBuilderProps) {
   const { workoutHistory } = useWorkoutStore();
   
@@ -652,12 +659,15 @@ export function WorkoutDayBuilder({
       
       {/* Blocks */}
       {blocks.length === 0 && (
-        <Card className="bg-gray-900/50 border-gray-800 border-dashed">
-          <CardContent className="p-8 text-center">
-            <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-            <p className="text-sm text-gray-300">Add a block to start building this {dayLabel || 'workout'}</p>
-          </CardContent>
-        </Card>
+        <>
+          {emptyStateSlot && <div className="mb-4">{emptyStateSlot}</div>}
+          <Card className="bg-gray-900/50 border-gray-800 border-dashed">
+            <CardContent className="p-8 text-center">
+              <Dumbbell className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+              <p className="text-sm text-gray-300">Add a block to start building this {dayLabel || 'workout'}</p>
+            </CardContent>
+          </Card>
+        </>
       )}
       
       {blocks.map((block) => {
