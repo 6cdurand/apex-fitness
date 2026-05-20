@@ -1359,7 +1359,26 @@ export const useTrainerStore = create<TrainerState>()(
       deleteClientProgram: (programId) => {
         // Find the program before deleting so we can clean up calendar events
         const program = get().clientPrograms.find(p => p.id === programId);
-        
+
+        // v14-D26: notify the client BEFORE removing the program from the
+        // store so program.clientId / program.templateName are still
+        // readable. Mirrors the addClientProgram → program_assigned
+        // notification path; the deletion path was previously silent which
+        // caused clients to lose access with no warning.
+        if (program?.clientId) {
+          const trainerName = useAuthStore.getState().user?.displayName || 'Your trainer';
+          const senderId = useAuthStore.getState().user?.id;
+          getSocialStore().getState().addNotification({
+            userId: program.clientId,
+            type: 'program_removed',
+            title: 'Program Removed',
+            message: `${trainerName} removed "${program.templateName || 'your program'}" from your plan. Reach out if you have questions.`,
+            link: '/program',
+            programId: program.id,
+            senderId,
+          });
+        }
+
         set(state => ({
           clientPrograms: state.clientPrograms.filter(p => p.id !== programId),
         }));
@@ -2059,7 +2078,15 @@ export const useTrainerStore = create<TrainerState>()(
           phase: (savedProgram.phase as any) || 'none',
           goal: (savedProgram.goals?.[0] as any) || 'general_fitness',
           weeklyPlan: savedProgram.days,
-          scheduleMode: 'fixed',
+          // v14-D26: preserve the schedule mode the trainer chose when
+          // saving. Prefer the raw `scheduleMode` field (newly persisted
+          // by saveProgramAsTemplate as of D26); fall back to mapping
+          // `structure` ("Fixed days" / "Flexible") for older saved
+          // programs that pre-date the raw field. Hardcoded 'fixed' was
+          // silently breaking flexible programs flowing through the
+          // template/save → assign path opened up by D25.
+          scheduleMode: (savedProgram.scheduleMode as any) ||
+            (savedProgram.structure === 'Flexible' ? 'flexible' : 'fixed'),
           trainingDaysPerWeek: savedProgram.daysPerWeek,
           startDate: now,
           status: 'active',

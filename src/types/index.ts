@@ -668,7 +668,8 @@ export type NotificationType =
   | 'weekly_report' | 'workout_assigned' | 'friend_request' 
   | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system'
   | 'program_assigned' | 'session_booked' | 'workout_completed_summary'
-  | 'program_edited';  // v10-D2
+  | 'program_edited'   // v10-D2
+  | 'program_removed'; // v14-D26: fired when trainer deletes a client program
 
 export interface Notification {
   id: string;
