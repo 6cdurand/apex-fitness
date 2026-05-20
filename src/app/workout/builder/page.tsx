@@ -1267,85 +1267,66 @@ function WorkoutBuilderContent() {
         </div>
       </div>
 
-      {/* Template Selection - Only when no blocks */}
-      {blocks.length === 0 && (
-        <Card className="mb-4">
-          <CardHeader>
-            <CardTitle className="text-lg">Start from Template</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-48">
-              <div className="space-y-2">
-                {defaultTemplates.map((t) => (
-                  <Button
-                    key={t.id}
-                    variant="outline"
-                    className="w-full justify-start h-auto py-3"
-                    onClick={() => {
-                      setWorkoutName(t.name);
-                      const workBlock: WorkoutBlock = {
-                        id: 'main-block',
-                        type: 'work',
-                        name: 'Main Workout',
-                        exercises: t.exercises.map((ex, idx) => ({
-                          id: `ex-${idx}`,
-                          exerciseId: ex.exerciseId,
-                          exerciseName: ex.exercise?.name || 'Exercise',
-                          movementPattern: 'push' as MovementPattern,
-                          sets: ex.sets?.length || 3,
-                          reps: ex.sets?.[0]?.reps?.toString() || '8-12',
-                          repType: 'reps' as const,
-                          rest: `${ex.restTimerSeconds || 60}s`,
-                          setStyle: 'fixed' as const,
-                        })),
-                      };
-                      setBlocks([workBlock]);
-                    }}
-                  >
-                    <div className="text-left">
-                      <p className="font-medium">{t.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {t.exercises.length} exercises • {t.category}
-                      </p>
-                    </div>
-                  </Button>
-                ))}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Workout Blocks */}
-      {blocks.length > 0 && (
-        <div className="space-y-4 mb-4">
-          <WorkoutDayBuilder
-            blocks={blocks}
-            onBlocksChange={(newBlocks) => setBlocks(newBlocks as WorkoutBlock[])}
-            embedded={false}
-            dayLabel={undefined}
-            enableBlockLibrary={true}
-            targetUserId={clientId || undefined}
-          />
-
-          {/* Add Block Buttons */}
-          <div className="flex gap-2 flex-wrap">
-            {BLOCK_TYPES.map((blockType) => (
-              <Button
-                key={blockType.value}
-                variant="outline"
-                size="sm"
-                onClick={() => addBlock(blockType.value)}
-                className="gap-1"
-              >
-                <Plus className="h-3 w-3" />
-                {blockType.icon}
-                {blockType.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div className="space-y-4 mb-4">
+        <WorkoutDayBuilder
+          blocks={blocks}
+          onBlocksChange={(newBlocks) => setBlocks(newBlocks as WorkoutBlock[])}
+          embedded={false}
+          dayLabel={undefined}
+          enableBlockLibrary={true}
+          targetUserId={clientId || undefined}
+          emptyStateSlot={
+            blocks.length === 0 && defaultTemplates.length > 0 ? (
+              <Card className="border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-base">Start from a template</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-48">
+                    <div className="space-y-2">
+                      {defaultTemplates.map((t) => (
+                        <Button
+                          key={t.id}
+                          variant="outline"
+                          className="w-full justify-start h-auto py-3"
+                          onClick={() => {
+                            setWorkoutName(t.name);
+                            const workBlock: WorkoutBlock = {
+                              id: 'main-block',
+                              type: 'work',
+                              name: 'Main Workout',
+                              exercises: t.exercises.map((ex, idx) => ({
+                                id: `ex-${idx}`,
+                                exerciseId: ex.exerciseId,
+                                exerciseName: ex.exercise?.name || 'Exercise',
+                                movementPattern: 'push' as MovementPattern,
+                                sets: ex.sets?.length || 3,
+                                reps: ex.sets?.[0]?.reps?.toString() || '8-12',
+                                repType: 'reps' as const,
+                                rest: `${ex.restTimerSeconds || 60}s`,
+                                setStyle: 'fixed' as const,
+                              })),
+                            };
+                            setBlocks([workBlock]);
+                          }}
+                        >
+                          <div className="text-left">
+                            <p className="font-medium">{t.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {t.exercises.length} exercises • {t.category}
+                            </p>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            ) : undefined
+          }
+        />
+      </div>
 
       {/* Action Bar */}
       {/*
