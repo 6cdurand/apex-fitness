@@ -52,6 +52,7 @@ import {
   Edit,
   ArrowLeftRight,
   TrendingUp,
+  TrendingDown,
   Dumbbell,
   Flame,
   Zap,
@@ -184,6 +185,37 @@ export async function hydrateClientHistoryIfPTSession(
   if (!data) return 'fetched-empty';
   deps.applyToStore(data);
   return 'applied';
+}
+
+// Helper: group consecutive exercises by groupId for superset rendering
+type ExerciseGroup =
+  | { kind: 'single'; ex: any }
+  | { kind: 'superset'; members: any[] };
+
+function groupExercisesBySuperset(exercises: any[]): ExerciseGroup[] {
+  const out: ExerciseGroup[] = [];
+  let currentGroup: any[] | null = null;
+  let currentGroupId: string | null = null;
+  for (const ex of exercises) {
+    if (ex.groupId) {
+      if (currentGroupId === ex.groupId) {
+        currentGroup!.push(ex);
+      } else {
+        if (currentGroup) out.push({ kind: 'superset', members: currentGroup });
+        currentGroup = [ex];
+        currentGroupId = ex.groupId;
+      }
+    } else {
+      if (currentGroup) {
+        out.push({ kind: 'superset', members: currentGroup });
+        currentGroup = null;
+        currentGroupId = null;
+      }
+      out.push({ kind: 'single', ex });
+    }
+  }
+  if (currentGroup) out.push({ kind: 'superset', members: currentGroup });
+  return out;
 }
 
 export default function ActiveWorkoutPage() {
@@ -4004,7 +4036,10 @@ export default function ActiveWorkoutPage() {
           })}
           
           {/* Exercises without blocks */}
-          {workout.exercises.filter((e: any) => !e.blockId).map((workoutExercise, index) => {
+          {groupExercisesBySuperset(workout.exercises.filter((e: any) => !e.blockId)).map((group, gIdx) => {
+            if (group.kind === 'single') {
+              const workoutExercise = group.ex;
+              const index = workout.exercises.findIndex(e => e.id === workoutExercise.id);
             // v12-D4: PB lookup scoped to workout owner (client in PT mode).
             const pb = getPBForExerciseForUser(workoutExercise.exerciseId, workout.userId);
             
@@ -4118,7 +4153,7 @@ export default function ActiveWorkoutPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {workoutExercise.exercise?.primaryMuscles?.map(m => getMuscleDisplayName(m)).join(', ') || 'General'}
+                        {workoutExercise.exercise?.primaryMuscles?.map((m: any) => getMuscleDisplayName(m)).join(', ') || 'General'}
                       </p>
                     </div>
                     
@@ -4140,7 +4175,7 @@ export default function ActiveWorkoutPage() {
                           className="text-gray-300 focus:text-white focus:bg-gray-700"
                           onClick={() => {
                             // Copy previous sets
-                            (workoutExercise.sets || []).forEach((s, idx) => {
+                            (workoutExercise.sets || []).forEach((s: any, idx: number) => {
                               if (s.previousWeight && s.previousReps) {
                                 updateSet(workoutExercise.id, s.id, {
                                   weight: s.previousWeight,
@@ -4236,13 +4271,14 @@ export default function ActiveWorkoutPage() {
 
                   {/* Sets */}
                   <div className="divide-y divide-gray-800/50">
-                    {(workoutExercise.sets || []).map((set) => (
+                    {(workoutExercise.sets || []).map((set: any) => (
                       <SetRow
                         key={set.id}
                         set={set}
                         exerciseId={workoutExercise.id}
                         exerciseName={workoutExercise.exercise?.name || 'Exercise'}
                         blockType={workoutExercise.blockType}
+                        dropSetSteps={(workoutExercise as any).dropSetSteps}
                         onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
                         onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise?.name || 'Exercise')}
                         onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
@@ -4264,8 +4300,211 @@ export default function ActiveWorkoutPage() {
                 </Card>
               </React.Fragment>
             );
-          })}
+            }
+            
+            // Superset group
+            return (
+              <div key={`superset-${gIdx}`} className="border-2 border-purple-500/40 rounded-xl p-3 mb-4 bg-purple-500/5">
+                <div className="flex items-center gap-2 px-2 py-1.5 mb-3">
+                  <Link2 className="w-4 h-4 text-purple-400" />
+                  <span className="text-xs font-semibold text-purple-300 uppercase tracking-wide">
+                    Superset · {group.members.length} exercises
+                  </span>
+                </div>
+                {group.members.map((workoutExercise, mIdx) => {
+                  const index = workout.exercises.findIndex(e => e.id === workoutExercise.id);
+                  const pb = getPBForExerciseForUser(workoutExercise.exerciseId, workout.userId);
+                  const isPairingTarget = supersetPairingId && supersetPairingId !== workoutExercise.id;
+                  
+                  return (
+                    <div key={workoutExercise.id} className="relative mb-3 last:mb-0">
+                      <div className="absolute -left-1 top-3 z-10">
+                        <span className="bg-purple-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
+                          A{mIdx + 1}
+                        </span>
+                      </div>
+                      <Card 
+                        className={cn(
+                          "bg-white border-gray-200 shadow-sm overflow-hidden transition-all",
+                          supersetPairingId === workoutExercise.id && "ring-2 ring-blue-500",
+                          isPairingTarget && "cursor-pointer hover:ring-2 hover:ring-sky-500"
+                        )}
+                        onClick={() => {
+                          if (isPairingTarget) {
+                            const groupId = `superset-${Date.now()}`;
+                            updateExercise(supersetPairingId, { groupId, groupOrder: 'A1' });
+                            updateExercise(workoutExercise.id, { groupId, groupOrder: 'A2' });
+                            setSupersetPairingId(null);
+                            toast.success('Superset created!', {
+                              description: 'Exercises are now linked together',
+                            });
+                          }
+                        }}
+                      >
+                        <CardContent className="p-0">
+                          {/* Exercise Header */}
+                          <div className="flex items-center justify-between p-4 border-b border-gray-800">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <ExerciseImage exerciseId={workoutExercise.exerciseId} size="sm" className="!w-7 !h-7 !rounded-full flex-shrink-0" />
+                                <h3 className="font-semibold text-white">
+                                  {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name)
+                                    ? formatAssistedName(workoutExercise.exercise?.name || 'Exercise')
+                                    : (workoutExercise.exercise?.name || 'Exercise')}
+                                </h3>
+                                <ExerciseHowTo exerciseId={workoutExercise.exerciseId} exerciseName={workoutExercise.exercise?.name} />
+                                {isAssistedExercise(workoutExercise.exerciseId, workoutExercise.exercise?.name) && (
+                                  <Badge className="bg-purple-500/20 text-purple-400 text-[9px] border-0 px-1.5 py-0">−KG</Badge>
+                                )}
+                                {workoutExercise.isUnilateral && (
+                                  <Badge className="bg-emerald-500/20 text-emerald-400 text-[9px] border-0 px-1.5 py-0">L/R</Badge>
+                                )}
+                                {pb && (
+                                  <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-400">
+                                    <Trophy className="w-3 h-3 mr-1" />
+                                    {Math.round(pb.oneRepMax)}kg 1RM
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                {workoutExercise.exercise?.primaryMuscles?.map((m: any) => getMuscleDisplayName(m)).join(', ') || 'General'}
+                              </p>
+                            </div>
+                            
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
+                                  <MoreVertical className="w-5 h-5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="bg-white border-gray-200 shadow-lg">
+                                <DropdownMenuItem
+                                  className={workoutExercise.isUnilateral ? "text-emerald-500 focus:text-emerald-600" : "text-gray-600 focus:text-gray-800"}
+                                  onClick={() => updateExercise(workoutExercise.id, { isUnilateral: !workoutExercise.isUnilateral })}
+                                >
+                                  <ArrowLeftRight className="w-4 h-4 mr-2" />
+                                  {workoutExercise.isUnilateral ? '✓ Alternating Sides' : 'Alternating Sides'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-gray-300 focus:text-white focus:bg-gray-700"
+                                  onClick={() => {
+                                    (workoutExercise.sets || []).forEach((s: any, idx: number) => {
+                                      if (s.previousWeight && s.previousReps) {
+                                        updateSet(workoutExercise.id, s.id, {
+                                          weight: s.previousWeight,
+                                          reps: s.previousReps,
+                                        });
+                                      }
+                                    });
+                                    toast.success('Copied previous values');
+                                  }}
+                                >
+                                  <Copy className="w-4 h-4 mr-2" />
+                                  Copy Previous
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-gray-300 focus:text-white focus:bg-gray-700">
+                                  <Timer className="w-4 h-4 mr-2" />
+                                  Set Rest Timer ({workoutExercise.restTimerSeconds}s)
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-gray-700" />
+                                <DropdownMenuItem 
+                                  className="text-gray-300 focus:text-white focus:bg-gray-700"
+                                  onClick={() => {
+                                    const sets = workoutExercise.sets || [];
+                                    const lastSet = sets[sets.length - 1];
+                                    if (lastSet) {
+                                      const currentDrops = lastSet.drops || [];
+                                      const newDrop = {
+                                        id: `drop-${Date.now()}`,
+                                        weight: lastSet.weight ? Math.round(lastSet.weight * 0.8) : 0,
+                                        reps: 0,
+                                      };
+                                      updateSet(workoutExercise.id, lastSet.id, {
+                                        drops: [...currentDrops, newDrop],
+                                      });
+                                      toast.success('Drop set added');
+                                    }
+                                  }}
+                                >
+                                  <ChevronDown className="w-4 h-4 mr-2" />
+                                  + Drop Set
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  className="text-gray-300 focus:text-white focus:bg-gray-700"
+                                  onClick={() => {
+                                    updateExercise(workoutExercise.id, { groupId: undefined, groupOrder: undefined });
+                                    toast.success('Removed from superset');
+                                  }}
+                                >
+                                  <Users className="w-4 h-4 mr-2" />
+                                  Remove from Superset
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator className="bg-gray-700" />
+                                <DropdownMenuItem 
+                                  className="text-red-400 focus:text-red-300 focus:bg-red-500/10"
+                                  onClick={() => handleRemoveExerciseWithGuard(workoutExercise.id)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Remove Exercise
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
 
+                          {/* Sets Header */}
+                          <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-gray-50 text-xs text-gray-500 font-medium">
+                            <div className="col-span-2">SET</div>
+                            <div className="col-span-3">PREVIOUS</div>
+                            <div className="col-span-3 text-center">KG</div>
+                            <div className="col-span-3 text-center">
+                              {(workoutExercise as any).repType === 'time' ? (
+                                <span className="text-blue-400">DURATION</span>
+                              ) : 'REPS'}
+                            </div>
+                            <div className="col-span-1"></div>
+                          </div>
+                          
+                          {(workoutExercise as any).repType === 'time' && (
+                            <div className="px-4 py-1 bg-blue-500/10 text-xs text-blue-400 flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Timed exercise - enter duration in seconds
+                            </div>
+                          )}
+
+                          {/* Sets */}
+                          <div className="divide-y divide-gray-800/50">
+                            {(workoutExercise.sets || []).map((set: any) => (
+                              <SetRow
+                                key={set.id}
+                                set={set}
+                                exerciseId={workoutExercise.id}
+                                exerciseName={workoutExercise.exercise?.name || 'Exercise'}
+                                blockType={workoutExercise.blockType}
+                                dropSetSteps={(workoutExercise as any).dropSetSteps}
+                                onUpdate={(updates) => updateSet(workoutExercise.id, set.id, updates)}
+                                onComplete={(weight, reps) => handleCompleteSet(workoutExercise.id, set.id, weight, reps, workoutExercise.exercise?.name || 'Exercise')}
+                                onUncomplete={() => uncompleteSet(workoutExercise.id, set.id)}
+                                onRemove={() => handleRemoveSetWithGuard(workoutExercise.id, set.id)}
+                              />
+                            ))}
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            onClick={() => addSet(workoutExercise.id)}
+                            className="w-full rounded-none border-t border-gray-800 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add Set
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -5594,6 +5833,7 @@ function SetRow({
   exerciseId,
   exerciseName,
   blockType,
+  dropSetSteps,
   onUpdate,
   onComplete,
   onUncomplete,
@@ -5603,6 +5843,7 @@ function SetRow({
   exerciseId: string;
   exerciseName: string;
   blockType?: string;
+  dropSetSteps?: Array<{ id: string; dropType: 'weight' | 'reps'; amount: string; notes?: string }>;
   onUpdate: (updates: Partial<WorkoutSet>) => void;
   onComplete: (weight: number, reps: number) => void;
   onUncomplete: () => void;
@@ -5812,6 +6053,28 @@ function SetRow({
                 />
               </div>
               <div className="col-span-1"></div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      {/* Planned Drop Set Steps ("pots") */}
+      {dropSetSteps && dropSetSteps.length > 0 && (
+        <div className="ml-12 mt-1.5 mb-2 space-y-1.5">
+          {dropSetSteps.map((step, stepIdx) => (
+            <div
+              key={step.id}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs"
+            >
+              <TrendingDown className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+              <span className="text-amber-400 font-semibold uppercase tracking-wide min-w-[50px]">DROP {stepIdx + 1}</span>
+              <span className="text-gray-400">→</span>
+              <span className="text-gray-700">
+                {step.dropType === 'weight' ? step.amount : `${step.amount} reps`}
+              </span>
+              {step.notes && (
+                <span className="text-gray-500 text-[10px] ml-auto">{step.notes}</span>
+              )}
             </div>
           ))}
         </div>
