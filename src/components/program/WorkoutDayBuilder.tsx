@@ -1200,17 +1200,17 @@ export function WorkoutDayBuilder({
                   <div>
                     <Label className="text-xs text-gray-400 mb-1 block">Tempo (optional)</Label>
                     <Select
-                      value={editingExercise.exercise.tempo || ''}
+                      value={editingExercise.exercise.tempo || '__none__'}
                       onValueChange={v => setEditingExercise({
                         ...editingExercise,
-                        exercise: { ...editingExercise.exercise, tempo: v || undefined }
+                        exercise: { ...editingExercise.exercise, tempo: v === '__none__' ? undefined : v }
                       })}
                     >
                       <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
                         <SelectValue placeholder="No tempo" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">No tempo</SelectItem>
+                        <SelectItem value="__none__">No tempo</SelectItem>
                         {Object.entries(TEMPO_PRESETS).map(([key, p]: [string, any]) => (
                           <SelectItem key={key} value={p.label}>{p.label}</SelectItem>
                         ))}
