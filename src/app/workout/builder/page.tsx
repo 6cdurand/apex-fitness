@@ -96,15 +96,7 @@ interface WorkoutExercise {
   setDetails?: string[]; // For pyramid/custom rep schemes per set
 }
 
-// Training phases with suggested rep/set configurations
-const TRAINING_PHASES = [
-  { id: 'none', name: 'No Phase', sets: 3, reps: '8-12', rest: '60s', description: 'Custom configuration' },
-  { id: 'strength', name: 'Strength', sets: 5, reps: '3-5', rest: '180s', description: 'Heavy weight, low reps, long rest' },
-  { id: 'hypertrophy', name: 'Hypertrophy', sets: 4, reps: '8-12', rest: '90s', description: 'Moderate weight, muscle growth focus' },
-  { id: 'power', name: 'Power', sets: 5, reps: '1-3', rest: '180s', description: 'Explosive movements, very heavy' },
-  { id: 'endurance', name: 'Endurance', sets: 3, reps: '15-20', rest: '45s', description: 'Light weight, high reps, short rest' },
-  { id: 'deload', name: 'Deload', sets: 2, reps: '10-12', rest: '60s', description: 'Recovery week, reduced volume' },
-];
+// v14-D24: TRAINING_PHASES constant moved into <WorkoutDayBuilder>.
 
 // Set style options
 const SET_STYLES = [
@@ -495,63 +487,18 @@ function WorkoutBuilderContent() {
   
   // New state for enhanced builder
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId);
-  const [selectedPhaseId, setSelectedPhaseId] = useState<string>('none');
-  const [previousPhaseConfig, setPreviousPhaseConfig] = useState<{ sets: number; reps: string; rest: string } | null>(null);
+  // v14-D24: selectedPhaseId + previousPhaseConfig moved into <WorkoutDayBuilder>.
   const [assignmentType, setAssignmentType] = useState<'once' | 'weekly' | 'program'>('once');
   const [assignmentWeeks, setAssignmentWeeks] = useState<number>(4);
   const [assignmentDate, setAssignmentDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
-  const selectedPhase = TRAINING_PHASES.find(p => p.id === selectedPhaseId);
+  // v14-D24: selectedPhase derived inside <WorkoutDayBuilder>.
   const selectedClient = clients.find(c => c.clientId === selectedClientId);
   const selectedClientName = getClientNameUtil(selectedClientId);
   
-  // Apply phase configuration to all exercises
-  const applyPhaseToExercises = (phaseId: string) => {
-    const phase = TRAINING_PHASES.find(p => p.id === phaseId);
-    if (!phase || phaseId === 'none') return;
-    
-    // Save current config before changing
-    if (blocks.length > 0 && blocks[0].exercises.length > 0) {
-      const firstEx = blocks[0].exercises[0];
-      setPreviousPhaseConfig({ sets: firstEx.sets, reps: firstEx.reps, rest: firstEx.rest });
-    }
-    
-    // Apply phase config to all exercises
-    setBlocks(blocks.map(block => ({
-      ...block,
-      exercises: block.exercises.map(ex => ({
-        ...ex,
-        sets: phase.sets,
-        reps: phase.reps,
-        rest: phase.rest,
-      })),
-    })));
-  };
-  
-  // Restore previous config when going back to no phase
-  const restorePreviousConfig = () => {
-    if (!previousPhaseConfig) return;
-    setBlocks(blocks.map(block => ({
-      ...block,
-      exercises: block.exercises.map(ex => ({
-        ...ex,
-        sets: previousPhaseConfig.sets,
-        reps: previousPhaseConfig.reps,
-        rest: previousPhaseConfig.rest,
-      })),
-    })));
-    setPreviousPhaseConfig(null);
-  };
-  
-  // Handle phase change
-  const handlePhaseChange = (newPhaseId: string) => {
-    if (newPhaseId === 'none' && selectedPhaseId !== 'none') {
-      restorePreviousConfig();
-    } else if (newPhaseId !== 'none') {
-      applyPhaseToExercises(newPhaseId);
-    }
-    setSelectedPhaseId(newPhaseId);
-  };
+  // v14-D24: applyPhaseToExercises + restorePreviousConfig + handlePhaseChange
+  // moved into <WorkoutDayBuilder>. The shared component reads/writes through
+  // the same blocks/onBlocksChange contract.
 
   // Parse tempo string to Tempo array
   const parseTempo = (tempoStr?: string): Tempo | undefined => {
@@ -1019,42 +966,8 @@ function WorkoutBuilderContent() {
             )}
           </div>
           
-          {/* Training Phase Selection */}
-          <div>
-            <Label className="mb-2 block">Training Phase</Label>
-            <p className="text-xs text-muted-foreground mb-2">
-              Selecting a phase will auto-configure sets, reps, and rest for all exercises
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {TRAINING_PHASES.map((phase) => (
-                <Button
-                  key={phase.id}
-                  variant={selectedPhaseId === phase.id ? "default" : "outline"}
-                  className={`h-auto py-2 px-3 flex-col items-start ${
-                    selectedPhaseId === phase.id 
-                      ? phase.id === 'strength' ? 'bg-red-500 hover:bg-red-600'
-                      : phase.id === 'hypertrophy' ? 'bg-blue-500 hover:bg-blue-600'
-                      : phase.id === 'power' ? 'bg-purple-500 hover:bg-purple-600'
-                      : phase.id === 'endurance' ? 'bg-orange-500 hover:bg-orange-600'
-                      : phase.id === 'deload' ? 'bg-green-500 hover:bg-green-600'
-                      : 'bg-gray-500 hover:bg-gray-600'
-                      : ''
-                  }`}
-                  onClick={() => handlePhaseChange(phase.id)}
-                >
-                  <span className="font-medium">{phase.name}</span>
-                  {phase.id !== 'none' && (
-                    <span className="text-xs opacity-80">{phase.sets}×{phase.reps} • {phase.rest}</span>
-                  )}
-                </Button>
-              ))}
-            </div>
-            {selectedPhaseId !== 'none' && (
-              <p className="text-xs text-sky-400 mt-2">
-                ✓ {selectedPhase?.description}
-              </p>
-            )}
-          </div>
+          {/* v14-D24: Training Phase selector moved into <WorkoutDayBuilder>
+              and now renders at the top of the workout-blocks section. */}
 
           {/* Assignment Options */}
           <div>

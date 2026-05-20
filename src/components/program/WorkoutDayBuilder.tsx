@@ -133,6 +133,15 @@ export interface WorkoutDayBuilderProps {
    * don't want the saved-block surface).
    */
   enableBlockLibrary?: boolean;
+  /**
+   * v14-D24: When true (default), the component renders the Training Phase
+   * selector above the Add Block row. The selector lets the trainer mass-apply
+   * sets/reps/rest across all exercises in the day (Strength / Hypertrophy /
+   * Power / Endurance / Deload). Switching back to "No Phase" restores the
+   * config that was active before any phase was applied. /program/builder
+   * mounts one builder per day, so each day gets its own independent selector.
+   */
+  enablePhaseSelector?: boolean;
   targetUserId?: string;
   /**
    * v14-D19: Optional empty-state slot rendered ABOVE the "Add Block" chips when
@@ -148,6 +157,17 @@ const BLOCK_TYPES: { value: BlockType; label: string; icon: React.ReactNode; col
   { value: 'circuit', label: 'Circuit', icon: <Target className="h-4 w-4 text-orange-400" />, color: 'orange' },
   { value: 'cardio', label: 'Cardio', icon: <Heart className="h-4 w-4 text-green-500" />, color: 'green' },
   { value: 'cooldown', label: 'Cool-down', icon: <RotateCcw className="h-4 w-4 text-purple-500" />, color: 'purple' },
+];
+
+// v14-D24: Training phases ported from /workout/builder. Used by the optional
+// Training Phase selector to mass-apply sets/reps/rest to all exercises.
+const TRAINING_PHASES = [
+  { id: 'none', name: 'No Phase', sets: 3, reps: '8-12', rest: '60s', description: 'Custom configuration' },
+  { id: 'strength', name: 'Strength', sets: 5, reps: '3-5', rest: '180s', description: 'Heavy weight, low reps, long rest' },
+  { id: 'hypertrophy', name: 'Hypertrophy', sets: 4, reps: '8-12', rest: '90s', description: 'Moderate weight, muscle growth focus' },
+  { id: 'power', name: 'Power', sets: 5, reps: '1-3', rest: '180s', description: 'Explosive movements, very heavy' },
+  { id: 'endurance', name: 'Endurance', sets: 3, reps: '15-20', rest: '45s', description: 'Light weight, high reps, short rest' },
+  { id: 'deload', name: 'Deload', sets: 2, reps: '10-12', rest: '60s', description: 'Recovery week, reduced volume' },
 ];
 
 const SET_STYLES = [
@@ -215,6 +235,7 @@ export function WorkoutDayBuilder({
   onBlocksChange,
   dayLabel,
   enableBlockLibrary = true,
+  enablePhaseSelector = true,
   targetUserId,
   emptyStateSlot,
 }: WorkoutDayBuilderProps) {
@@ -261,7 +282,59 @@ export function WorkoutDayBuilder({
   const [existingBlockToReplace, setExistingBlockToReplace] = useState<string | null>(null);
   const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
   const [moveTargetBlockId, setMoveTargetBlockId] = useState<string | null>(null);
-  
+
+  // v14-D24: Training Phase state — ported from /workout/builder.
+  // `previousPhaseConfig` snapshots the (sets, reps, rest) of the first
+  // exercise in the first block right before a phase is applied, so toggling
+  // back to "No Phase" can restore that single source-of-truth config across
+  // all exercises. (The page-level original applied the same restore.)
+  const [selectedPhaseId, setSelectedPhaseId] = useState<string>('none');
+  const [previousPhaseConfig, setPreviousPhaseConfig] = useState<{ sets: number; reps: string; rest: string } | null>(null);
+  const selectedPhase = TRAINING_PHASES.find(p => p.id === selectedPhaseId);
+
+  const applyPhaseToExercises = (phaseId: string) => {
+    const phase = TRAINING_PHASES.find(p => p.id === phaseId);
+    if (!phase || phaseId === 'none') return;
+
+    if (blocks.length > 0 && blocks[0].exercises.length > 0) {
+      const firstEx = blocks[0].exercises[0];
+      setPreviousPhaseConfig({ sets: firstEx.sets, reps: firstEx.reps, rest: firstEx.rest });
+    }
+
+    onBlocksChange(blocks.map(block => ({
+      ...block,
+      exercises: block.exercises.map(ex => ({
+        ...ex,
+        sets: phase.sets,
+        reps: phase.reps,
+        rest: phase.rest,
+      })),
+    })));
+  };
+
+  const restorePreviousConfig = () => {
+    if (!previousPhaseConfig) return;
+    onBlocksChange(blocks.map(block => ({
+      ...block,
+      exercises: block.exercises.map(ex => ({
+        ...ex,
+        sets: previousPhaseConfig.sets,
+        reps: previousPhaseConfig.reps,
+        rest: previousPhaseConfig.rest,
+      })),
+    })));
+    setPreviousPhaseConfig(null);
+  };
+
+  const handlePhaseChange = (newPhaseId: string) => {
+    if (newPhaseId === 'none' && selectedPhaseId !== 'none') {
+      restorePreviousConfig();
+    } else if (newPhaseId !== 'none') {
+      applyPhaseToExercises(newPhaseId);
+    }
+    setSelectedPhaseId(newPhaseId);
+  };
+
   const exerciseUsageCounts = useMemo(() => {
     if (!targetUserId) return {};
     return getExerciseUsageCounts(workoutHistory, targetUserId);
@@ -518,30 +591,30 @@ export function WorkoutDayBuilder({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 text-gray-500 hover:text-gray-200 disabled:opacity-30"
+                className="h-7 w-7 text-gray-300 hover:text-white disabled:opacity-30"
                 title="Move up"
                 disabled={isFirstExerciseInBlock(ex, block)}
                 onClick={() => handleMoveExercise(block.id, ex.id, 'up')}
               >
-                <ChevronUp className="w-3.5 h-3.5" />
+                <ChevronUp className="w-4 h-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5 text-gray-500 hover:text-gray-200 disabled:opacity-30"
+                className="h-7 w-7 text-gray-300 hover:text-white disabled:opacity-30"
                 title="Move down"
                 disabled={isLastExerciseInBlock(ex, block)}
                 onClick={() => handleMoveExercise(block.id, ex.id, 'down')}
               >
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-4 h-4" />
               </Button>
             </div>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-amber-400"
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-amber-400"
                         title="Link to another exercise">
-                  <Link className="w-3 h-3" />
+                  <Link className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -565,21 +638,21 @@ export function WorkoutDayBuilder({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-gray-500 hover:text-sky-400"
+              className="h-8 w-8 text-gray-300 hover:text-sky-400"
               onClick={() => {
                 setEditingExercise({ blockId: block.id, exercise: { ...ex } });
                 setShowSwapPanel(false);
               }}
             >
-              <Edit2 className="w-3 h-3" />
+              <Edit2 className="w-4 h-4" />
             </Button>
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 text-gray-500 hover:text-red-400"
+              className="h-8 w-8 text-gray-300 hover:text-red-400"
               onClick={() => removeExercise(block.id, ex.id)}
             >
-              <X className="w-3 h-3" />
+              <X className="w-4 h-4" />
             </Button>
           </div>
         </div>
@@ -809,7 +882,52 @@ export function WorkoutDayBuilder({
       {dayLabel && (
         <div className="text-sm text-gray-400 font-medium">{dayLabel}</div>
       )}
-      
+
+      {/* v14-D24: Training Phase selector — ported from /workout/builder.
+          Default-on. Lives at the very top of the day's builder so it acts as
+          a header-level switch. Each <WorkoutDayBuilder> mount has its own
+          phase state, which means /program/builder Build Days gets one
+          independent selector per day. */}
+      {enablePhaseSelector && (
+        <Card className="bg-gray-900/50 border-gray-800">
+          <CardContent className="p-4">
+            <Label className="mb-2 block">Training Phase</Label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Selecting a phase will auto-configure sets, reps, and rest for all exercises
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {TRAINING_PHASES.map((phase) => (
+                <Button
+                  key={phase.id}
+                  variant={selectedPhaseId === phase.id ? 'default' : 'outline'}
+                  className={`h-auto py-2 px-3 flex-col items-start ${
+                    selectedPhaseId === phase.id
+                      ? phase.id === 'strength' ? 'bg-red-500 hover:bg-red-600'
+                      : phase.id === 'hypertrophy' ? 'bg-blue-500 hover:bg-blue-600'
+                      : phase.id === 'power' ? 'bg-purple-500 hover:bg-purple-600'
+                      : phase.id === 'endurance' ? 'bg-orange-500 hover:bg-orange-600'
+                      : phase.id === 'deload' ? 'bg-green-500 hover:bg-green-600'
+                      : 'bg-gray-500 hover:bg-gray-600'
+                      : ''
+                  }`}
+                  onClick={() => handlePhaseChange(phase.id)}
+                >
+                  <span className="font-medium">{phase.name}</span>
+                  {phase.id !== 'none' && (
+                    <span className="text-xs opacity-80">{phase.sets}×{phase.reps} • {phase.rest}</span>
+                  )}
+                </Button>
+              ))}
+            </div>
+            {selectedPhaseId !== 'none' && (
+              <p className="text-xs text-sky-400 mt-2">
+                ✓ {selectedPhase?.description}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Add Block row */}
       {/* v14-D23: This is the SINGLE Add Block row visible on /workout/builder
           and /program/builder. The Block Library button is appended here when
