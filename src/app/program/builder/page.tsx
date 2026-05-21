@@ -665,7 +665,7 @@ function ProgramBuilderContent() {
   const allDaysTotalEx = days.reduce((s, d) => s + d.blocks.reduce((s2, b) => s2 + b.exercises.length, 0), 0);
   
   // ── Save program ──
-  const handleSaveProgram = () => {
+  const handleSaveProgram = async () => {
     if (!user) return;
 
     // v14-D28: hard guard against orphaning programs (empty clientId) when
@@ -856,22 +856,45 @@ function ProgramBuilderContent() {
       toast.info(`Replaced ${conflictsReplaced} conflicting event${conflictsReplaced > 1 ? 's' : ''} on the calendar`);
     }
     
-    // Save to library if requested — only for programs targeting the user themselves (not trainer→client)
-    if (saveToLibrary && libraryName.trim() && targetClientId === user.id) {
-      const savedPrograms = JSON.parse(localStorage.getItem(`apex-program-library-${user.id}`) || '[]');
-      savedPrograms.push({
-        id: uuidv4(),
+    // v14-D31: route the Save-to-Library toggle through saveProgramAsTemplate
+    // so it lands in Supabase `saved_programs` (the table that powers the
+    // My Saved tab on /program/select). The previous implementation wrote
+    // to localStorage `apex-program-library-${user.id}` AND was gated on
+    // `targetClientId === user.id`, which meant:
+    //   1. Trainer→client activations silently ignored the toggle (no-op).
+    //   2. Self-target saves went to a client-side localStorage cache
+    //      that the trainer's "My Saved" tab never reads from.
+    // Result: nothing the toggle saved ever appeared in My Saved. Users
+    // had to use the separate "Save as template" button on the builder
+    // page to get a program into their library. Now the toggle does what
+    // its label says — and works for trainer→client flows too.
+    if (saveToLibrary && libraryName.trim()) {
+      const templateResult = await saveProgramAsTemplate({
         name: libraryName.trim(),
         description: `${daysPerWeek}×/wk • ${actualWeeks} weeks • ${goal}`,
-        goal,
         phase,
+        goals: [goal],
+        durationWeeks: actualWeeks,
         daysPerWeek,
-        weeks: actualWeeks,
+        structure: scheduleMode === 'fixed' ? 'Fixed days' : 'Flexible',
+        scheduleMode,
         autoRepeat,
-        days: days.map(d => ({ label: d.label, scheduledDay: d.scheduledDay, blocks: d.blocks })),
-        createdAt: new Date().toISOString(),
+        days: weeklyPlan,
+        // The Activate dialog only runs for new programs (the isEditMode
+        // path early-returns above), so existingProgram is always null
+        // here. Use the URL templateId param instead to track lineage
+        // when the trainer started from a system or saved template.
+        sourceTemplateId: templateIdParam || undefined,
       });
-      localStorage.setItem(`apex-program-library-${user.id}`, JSON.stringify(savedPrograms));
+      if (!templateResult) {
+        // Don't block the activation flow — the program is already
+        // assigned to the client at this point. Just surface that the
+        // library save failed so the trainer knows to retry from the
+        // builder's explicit "Save as template" button.
+        toast.error(`Saved program for client but couldn't add "${libraryName.trim()}" to My Templates. Apply migrations 20260522 + 20260525 to Supabase and try the "Save as template" button.`);
+      } else {
+        toast.success(`Added "${libraryName.trim()}" to My Templates.`);
+      }
     }
     
     // NOTE: no direct addNotification call here — D12 (Part A) consolidated
