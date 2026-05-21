@@ -73,9 +73,14 @@ export default function BuilderPage() {
             </CardContent>
           </Card>
 
+          {/* v14-D25: Create Program now routes through /program/select so the
+              trainer can pick "Start from Scratch" or "Use a Template"
+              (system templates + saved programs). Previously this dropped
+              straight into an empty /program/builder which left saved
+              programs with no visible home. */}
           <Card
             className="bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border-emerald-500/30 cursor-pointer hover:border-emerald-500/50 transition-all"
-            onClick={() => router.push('/program/builder')}
+            onClick={() => router.push('/program/select')}
           >
             <CardContent className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -84,7 +89,7 @@ export default function BuilderPage() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Create Program</h3>
-                  <p className="text-sm text-gray-500">Multi-day plan with weekly schedule for a client</p>
+                  <p className="text-sm text-gray-500">Multi-day plan — start fresh or use a template</p>
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-400" />

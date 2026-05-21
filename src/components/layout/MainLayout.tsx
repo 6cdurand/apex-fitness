@@ -150,11 +150,20 @@ export function PageHeader({
   subtitle,
   action,
   showBack = false,
+  onBack,
 }: {
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
   showBack?: boolean;
+  /**
+   * v14-D25: Optional override for the back button. If omitted, the back
+   * arrow falls through to `router.back()` (history-driven behavior, what
+   * every existing caller expects). If provided, the arrow runs `onBack`
+   * instead — used by /program/select to swap between the mode chooser
+   * and the template picker without leaving the page.
+   */
+  onBack?: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -188,7 +197,7 @@ export function PageHeader({
         <div className="flex items-center gap-3">
           {showBack && (
             <button
-              onClick={() => router.back()}
+              onClick={() => (onBack ? onBack() : router.back())}
               className="p-2.5 -ml-2 rounded-xl bg-white/10 hover:bg-white/20 transition-all duration-200 backdrop-blur-sm"
             >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

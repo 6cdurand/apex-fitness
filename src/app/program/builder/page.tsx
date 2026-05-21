@@ -61,6 +61,7 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, ClientProgramExercise, TrainingGoal, TrainingPhase, CalendarEvent } from '@/types';
+import { programTemplates } from '@/lib/programTemplates'; // v14-D25: template prefill source
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
@@ -243,9 +244,12 @@ function ProgramBuilderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const clientIdParam = searchParams.get('clientId');
+  // v14-D25: templateId routes through /program/select. May reference
+  // either a built-in programTemplate or a trainer-saved program.
+  const templateIdParam = searchParams.get('templateId');
   
   const { user, updateBlockFolderOrder } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder, saveProgramAsTemplate } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder, saveProgramAsTemplate, savedPrograms } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -253,19 +257,63 @@ function ProgramBuilderContent() {
   // Check for existing program to edit
   const existingProgram = clientIdParam ? getActiveProgram(clientIdParam) : null;
   const isEditMode = !!existingProgram;
+
+  // v14-D25: Resolve templateId to either a built-in programTemplate or a
+  // trainer-saved program. Returns null if the id matches nothing (e.g.
+  // stale link, deleted saved program). Shape varies between sources:
+  //   - system template: { phases[], goals[], frequencyOptions[], days:[{dayLabel,dayNumber,blocks:[{exercises:[{defaultExerciseId,defaultExerciseName,...}]}]}] }
+  //   - saved program:   { phase, goals[], daysPerWeek, durationWeeks, days:[{dayLabel,scheduledDay,blocks:[{exercises:[{exerciseId,exerciseName,...}]}]}] }
+  // The prefill code below normalises both shapes into ProgramDay[].
+  const sourceTemplate = useMemo(() => {
+    if (!templateIdParam) return null;
+    const systemTpl = programTemplates.find(t => t.id === templateIdParam);
+    if (systemTpl) return { source: 'system' as const, data: systemTpl as any };
+    const savedTpl = savedPrograms.find((p: any) => p.id === templateIdParam);
+    if (savedTpl) return { source: 'saved' as const, data: savedTpl as any };
+    return null;
+  }, [templateIdParam, savedPrograms]);
   
   // ── Setup state ──
-  const [builderStep, setBuilderStep] = useState<BuilderStep>(isEditMode ? 'days' : 'setup');
-  const [programName, setProgramName] = useState(existingProgram?.templateName || '');
-  const [goal, setGoal] = useState<TrainingGoal>(existingProgram?.goal as TrainingGoal || 'hypertrophy');
-  const [phase, setPhase] = useState<TrainingPhase>(existingProgram?.phase as TrainingPhase || 'strength');
-  const [durationWeeks, setDurationWeeks] = useState(4);
+  // v14-D25: precedence is editMode > sourceTemplate > fresh. If a
+  // template is loaded we also jump straight to Build Days because the
+  // Setup step would only re-overwrite the prefilled fields.
+  const [builderStep, setBuilderStep] = useState<BuilderStep>(
+    isEditMode || sourceTemplate ? 'days' : 'setup'
+  );
+  const [programName, setProgramName] = useState(
+    existingProgram?.templateName ||
+    sourceTemplate?.data?.name ||
+    ''
+  );
+  const [goal, setGoal] = useState<TrainingGoal>(
+    (existingProgram?.goal as TrainingGoal) ||
+    (sourceTemplate?.data?.goals?.[0] as TrainingGoal) ||
+    'hypertrophy'
+  );
+  const [phase, setPhase] = useState<TrainingPhase>(
+    (existingProgram?.phase as TrainingPhase) ||
+    // saved programs store `phase` (single), system templates store `phases[]` (array)
+    (sourceTemplate?.data?.phase as TrainingPhase) ||
+    (sourceTemplate?.data?.phases?.[0] as TrainingPhase) ||
+    'strength'
+  );
+  const [durationWeeks, setDurationWeeks] = useState(
+    sourceTemplate?.data?.durationWeeks || 4
+  );
   const [customWeeks, setCustomWeeks] = useState('');
-  const [daysPerWeek, setDaysPerWeek] = useState(existingProgram?.weeklyPlan?.length || 3);
-  const [autoRepeat, setAutoRepeat] = useState(false);
+  const [daysPerWeek, setDaysPerWeek] = useState(
+    existingProgram?.weeklyPlan?.length ||
+    sourceTemplate?.data?.daysPerWeek ||
+    sourceTemplate?.data?.frequencyOptions?.[0] ||
+    sourceTemplate?.data?.days?.length ||
+    3
+  );
+  const [autoRepeat, setAutoRepeat] = useState(
+    sourceTemplate?.data?.autoRepeat ?? false
+  );
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientIdParam);
   
-  // ── Days state — load from existing program if editing ──
+  // ── Days state — load from existing program if editing, then sourceTemplate, then empty ──
   const [days, setDays] = useState<ProgramDay[]>(() => {
     if (existingProgram?.weeklyPlan) {
       return existingProgram.weeklyPlan.map((day: any, i: number) => ({
@@ -284,6 +332,35 @@ function ProgramBuilderContent() {
             sets: ex.sets || 3,
             reps: ex.reps || '8-12',
             rest: ex.rest || '60s',
+            repType: ex.repType,
+            setStyle: ex.setStyle,
+            tempo: ex.tempo,
+            notes: ex.notes,
+          })),
+        })),
+      }));
+    }
+    // v14-D25: Template prefill. Normalises both system-template and
+    // saved-program day shapes into ProgramDay. System templates use
+    // `defaultExerciseId/defaultExerciseName`; saved programs use
+    // `exerciseId/exerciseName`. We fall back across both.
+    if (sourceTemplate?.data?.days) {
+      return (sourceTemplate.data.days as any[]).map((day: any, i: number) => ({
+        id: day.id || uuidv4(),
+        label: day.dayLabel || day.label || `Day ${String.fromCharCode(65 + i)}`,
+        scheduledDay: day.scheduledDay as Weekday | undefined,
+        blocks: (day.blocks || []).map((block: any) => ({
+          id: block.id || uuidv4(),
+          type: (block.type as BlockType) || 'work',
+          name: block.name || 'Main Lifts',
+          exercises: (block.exercises || []).map((ex: any) => ({
+            id: ex.id || uuidv4(),
+            exerciseId: ex.exerciseId || ex.defaultExerciseId,
+            exerciseName: ex.exerciseName || ex.defaultExerciseName,
+            movementPattern: (ex.movementPattern as MovementPattern) || 'compound',
+            sets: ex.sets ?? 3,
+            reps: ex.reps ?? '8-12',
+            rest: ex.rest ?? '60s',
             repType: ex.repType,
             setStyle: ex.setStyle,
             tempo: ex.tempo,

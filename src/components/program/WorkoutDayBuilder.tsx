@@ -219,13 +219,15 @@ const COMMON_EXERCISES = [
   { id: 'rowing-machine', name: 'Rowing Machine', pattern: 'cardio' },
 ];
 
+// v14-D25: Block tint opacity bumped (10→20, 30→50, badge text 400→300, badge
+// border 50→60) so block cards stay legible against MainLayout's bg-white parent.
 const getBlockStyles = (type: BlockType) => {
   const styles: Record<BlockType, { bg: string; border: string; badge: string }> = {
-    warmup: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', badge: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50' },
-    work: { bg: 'bg-blue-500/10', border: 'border-blue-500/30', badge: 'bg-blue-500/20 text-blue-400 border-blue-500/50' },
-    circuit: { bg: 'bg-orange-500/10', border: 'border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400 border-orange-500/50' },
-    cardio: { bg: 'bg-green-500/10', border: 'border-green-500/30', badge: 'bg-green-500/20 text-green-400 border-green-500/50' },
-    cooldown: { bg: 'bg-purple-500/10', border: 'border-purple-500/30', badge: 'bg-purple-500/20 text-purple-400 border-purple-500/50' },
+    warmup:   { bg: 'bg-yellow-500/20', border: 'border-yellow-500/50', badge: 'bg-yellow-500/30 text-yellow-300 border-yellow-500/60' },
+    work:     { bg: 'bg-blue-500/20',   border: 'border-blue-500/50',   badge: 'bg-blue-500/30 text-blue-300 border-blue-500/60' },
+    circuit:  { bg: 'bg-orange-500/20', border: 'border-orange-500/50', badge: 'bg-orange-500/30 text-orange-300 border-orange-500/60' },
+    cardio:   { bg: 'bg-green-500/20',  border: 'border-green-500/50',  badge: 'bg-green-500/30 text-green-300 border-green-500/60' },
+    cooldown: { bg: 'bg-purple-500/20', border: 'border-purple-500/50', badge: 'bg-purple-500/30 text-purple-300 border-purple-500/60' },
   };
   return styles[type] || styles.work;
 };
@@ -663,7 +665,8 @@ export function WorkoutDayBuilder({
             {ex.dropSetSteps!.map((step, idx) => (
               <div
                 key={step.id}
-                className="flex items-center gap-2 px-3 py-2 rounded-md bg-orange-500/15 border border-orange-500/40 shadow-inner"
+                // v14-D25: bumped /15 → /25 to match the new block tint strength.
+                className="flex items-center gap-2 px-3 py-2 rounded-md bg-orange-500/25 border border-orange-500/40 shadow-inner"
               >
                 <TrendingDown className="w-4 h-4 text-orange-300 flex-shrink-0" />
                 <span className="text-[10px] font-bold text-orange-200 uppercase tracking-wider min-w-[44px]">
@@ -889,7 +892,9 @@ export function WorkoutDayBuilder({
           phase state, which means /program/builder Build Days gets one
           independent selector per day. */}
       {enablePhaseSelector && (
-        <Card className="bg-gray-900/50 border-gray-800">
+        // v14-D25: solid bg-slate-900 + border-slate-700 so the card renders dark
+        // against MainLayout's bg-white parent (was bg-gray-900/50 which washed out).
+        <Card className="bg-slate-900 border-slate-700">
           <CardContent className="p-4">
             <Label className="mb-2 block">Training Phase</Label>
             <p className="text-xs text-muted-foreground mb-2">
@@ -914,7 +919,8 @@ export function WorkoutDayBuilder({
                 >
                   <span className="font-medium">{phase.name}</span>
                   {phase.id !== 'none' && (
-                    <span className="text-xs opacity-80">{phase.sets}×{phase.reps} • {phase.rest}</span>
+                    // v14-D25: explicit text-gray-300 (was opacity-80, muddy on lighter card).
+                    <span className="text-xs text-gray-300">{phase.sets}×{phase.reps} • {phase.rest}</span>
                   )}
                 </Button>
               ))}
@@ -976,7 +982,10 @@ export function WorkoutDayBuilder({
         const blockIcon = BLOCK_TYPES.find(bt => bt.value === block.type)?.icon;
         
         return (
-          <Card key={block.id} className={`${styles.bg} ${styles.border} border overflow-hidden`}>
+          // v14-D25: bg-slate-900 lays down a solid dark base; ${styles.bg} (now /20
+          // opacity) tints it. Result: dark card with subtle block-type color hint
+          // that survives MainLayout's bg-white parent.
+          <Card key={block.id} className={`bg-slate-900 ${styles.bg} ${styles.border} border overflow-hidden`}>
             <CardContent className="p-0">
               {/* Block header */}
               <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
