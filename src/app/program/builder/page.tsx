@@ -907,6 +907,10 @@ function ProgramBuilderContent() {
       durationWeeks: actualWeeks,
       daysPerWeek,
       structure: scheduleMode === 'fixed' ? 'Fixed days' : 'Flexible',
+      // v14-D26: persist the raw scheduleMode value alongside the
+      // human-readable `structure` string so assignSavedProgramToClient
+      // can round-trip it cleanly without parsing the structure label.
+      scheduleMode,
       autoRepeat,
       days: weeklyPlan,
       sourceTemplateId: existingProgram?.templateId,
