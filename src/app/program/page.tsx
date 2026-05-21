@@ -131,7 +131,11 @@ export default function ProgramPage() {
   const [trainerName, setTrainerName] = useState<string>('');
   const [showSwapDialog, setShowSwapDialog] = useState(false);
   const [repeatDayConfirm, setRepeatDayConfirm] = useState<{ idx: number; day: any } | null>(null);
-  const [showWorkoutDays, setShowWorkoutDays] = useState(false);
+  // v14-D29: default-expand the per-day exercise preview for the active
+  // program so the client can read what's planned without having to find
+  // the "View all" toggle. Toggle still works as before — just starts
+  // expanded.
+  const [showWorkoutDays, setShowWorkoutDays] = useState(true);
   
   // Load client programs from Supabase, and re-fetch on foreground so a
   // freshly-assigned program shows up without a manual reload.
@@ -636,6 +640,13 @@ export default function ProgramPage() {
                       {showWorkoutDays ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                     </div>
                   </button>
+                  {/* v14-D29: empty-state when the program has no weekly plan
+                      yet — previously the expanded section rendered nothing. */}
+                  {showWorkoutDays && activeProgram.weeklyPlan?.length === 0 && (
+                    <p className="text-xs text-gray-500 italic px-2 py-3">
+                      No workout days configured yet. Your trainer is still building this program.
+                    </p>
+                  )}
                   {showWorkoutDays && activeProgram.weeklyPlan?.map((day: any, idx: number) => {
                     const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                     const isExpanded = expandedDay === idx;

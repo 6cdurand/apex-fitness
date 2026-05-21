@@ -333,6 +333,15 @@ export default function ActiveWorkoutPage() {
   // untouched — fail-safe. D15/D16's default-true was fail-unsafe and
   // caused silent overwrites in prod.
   const [saveProgramChanges, setSaveProgramChanges] = useState<boolean | null>(null);
+  // v14-D29: per-workout program-edit mode. Set by the three-way
+  // confirmation dialog when the user adds/removes exercises on a program
+  // workout. Drives the finish-time path: if the user picked "Save to
+  // program" on ANY edit, auto-save at finish without showing the modal;
+  // if they picked "Just this session" on ANY edit (and never picked
+  // save-to-program), auto-discard. If the field is still null (no
+  // structural edits, or pre-D29 finish path), the existing
+  // showSaveProgramPrompt modal fires as before.
+  const [programEditMode, setProgramEditMode] = useState<'session-only' | 'save-to-program' | null>(null);
   // D15 Part B: blocking Yes/No modal that replaces the old inline checkbox.
   // Appears between Finish and the summary for program workouts, so the
   // user has to explicitly opt in to overwriting the program template
@@ -976,7 +985,69 @@ export default function ActiveWorkoutPage() {
     }
     setConfirmEditTarget({ kind: 'remove-set', exerciseId, setId });
   };
-  
+
+  // v14-D29: stickiness rule for the three-way decision. 'save-to-program'
+  // is sticky once chosen (because the user explicitly said "yes, update
+  // my template"); the only way to downgrade is to explicitly pick
+  // session-only on a later edit, which is a deliberate "no, I changed my
+  // mind, don't touch the template" signal. This avoids silently losing
+  // template updates if the user makes 4 save-to-program edits then 1
+  // session-only edit without realizing it overrode the rest.
+  const recordProgramEditDecision = (next: 'session-only' | 'save-to-program') => {
+    setProgramEditMode(prev => {
+      if (prev === null) return next;
+      if (prev === 'save-to-program' && next === 'session-only') {
+        // explicit downgrade — user is changing their mind
+        return 'session-only';
+      }
+      // any other transition: keep the stronger commitment
+      return prev === 'save-to-program' || next === 'save-to-program' ? 'save-to-program' : 'session-only';
+    });
+  };
+
+  // v14-D29: extracted from the D27 onClick switch so both "Just this
+  // session" and "Add to program" / "Remove from program" buttons share
+  // the same mutation path. The only difference between them is the
+  // programEditMode decision, recorded separately above.
+  const applyConfirmedEdit = useCallback((target: NonNullable<typeof confirmEditTarget>) => {
+    switch (target.kind) {
+      case 'remove-exercise':
+        removeExercise(target.exerciseId);
+        break;
+      case 'remove-set':
+        removeSet(target.exerciseId, target.setId);
+        break;
+      case 'add-exercise': {
+        const { exercise, metadata } = target;
+        addExercise({ ...exercise, ...metadata } as any);
+        setShowExerciseModal(false);
+        setExerciseSearch('');
+        toast.success(`Added ${exercise.name}${metadata.blockName ? ` to ${metadata.blockName}` : ''}`);
+        break;
+      }
+      case 'add-set':
+        addSet(target.exerciseId);
+        break;
+      case 'add-circuit-bulk': {
+        const { exercises, block } = target;
+        exercises.forEach(exercise => {
+          addExercise({
+            ...exercise,
+            blockName: block.name,
+            blockType: block.type,
+            blockId: block.id,
+            circuitRounds: block.circuitRounds,
+          } as any);
+        });
+        setCircuitExerciseSelection([]);
+        setShowExerciseModal(false);
+        setExerciseSearch('');
+        toast.success(`Added ${exercises.length} exercise${exercises.length > 1 ? 's' : ''} to ${block.name}`);
+        break;
+      }
+    }
+  }, [removeExercise, removeSet, addExercise, addSet]);
+
   const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
     if (type === 'warmup' && hasWarmup) return;
     if (type === 'strength' && hasStrength) return;
@@ -1598,9 +1669,29 @@ export default function ActiveWorkoutPage() {
       // are REAL structural changes (added/removed exercises). Identical
       // runs go straight to the summary with saveProgramChanges staying
       // null — no silent overwrite risk, no phantom prompt.
+      //
+      // v14-D29: branch on the running programEditMode decision. If the user
+      // has already picked save-to-program on any edit, skip the modal and
+      // auto-save (and notify trainer). If they picked session-only on any
+      // edit (and never escalated to save-to-program), skip the modal and
+      // auto-discard. Pre-D29 path (mode === null, no edits or legacy workout)
+      // keeps the existing modal for backward compat.
       if (isProgramWorkout && programDiff.hasChanges) {
-        setProgramDiffForPrompt(programDiff);
-        setShowSaveProgramPrompt(true);
+        if (programEditMode === 'save-to-program') {
+          setSaveProgramChanges(true);
+          setProgramDiffForPrompt(programDiff);  // preserve for trainer notification text
+          setShowSummary(true);
+          toast.success('Saving changes to your program…');
+        } else if (programEditMode === 'session-only') {
+          setSaveProgramChanges(false);
+          setProgramDiffForPrompt(null);
+          setShowSummary(true);
+        } else {
+          // Legacy fallback: no per-edit decision recorded (workout had no
+          // structural edits or user joined this workout pre-D29). Show modal.
+          setProgramDiffForPrompt(programDiff);
+          setShowSaveProgramPrompt(true);
+        }
       } else {
         setProgramDiffForPrompt(null);
         setShowSummary(true);
@@ -1850,6 +1941,10 @@ export default function ActiveWorkoutPage() {
             parsedProgramId = programMatch[1];
             parsedDayIndex = parseInt(programMatch[2]);
           }
+          // v14-D29: diagnostic — surface parse failure so we know whether the
+          // templateId format is wrong (clients/[id]/program/preview uses a
+          // different shape: `program-${Date.now()}` with no dayIndex).
+          console.log('[D29 save] templateId parse:', { tplId, parsedProgramId, parsedDayIndex, matched: !!programMatch });
 
           // Get the completed workout from history to extract current exercises
           const completedWk = useWorkoutStore.getState().workoutHistory.find(w => w.id === completedWorkoutData.id);
@@ -1934,11 +2029,35 @@ export default function ActiveWorkoutPage() {
               ? trainerStore.clientPrograms.find((p: any) => p.id === parsedProgramId)
                 || trainerStore.clientPrograms.find((p: any) => p.clientId === userId && p.status === 'active')
               : trainerStore.clientPrograms.find((p: any) => p.clientId === userId && p.status === 'active');
+            // v14-D29: diagnostic — distinguish exact match from active-fallback,
+            // and surface a user-visible toast on lookup failure so silent
+            // no-ops become diagnosable.
+            console.log('[D29 save] activeProgram lookup:', {
+              parsedProgramId,
+              found: !!activeProgram,
+              matchType: activeProgram?.id === parsedProgramId ? 'exact' : (activeProgram ? 'active-fallback' : 'none'),
+              programId: activeProgram?.id,
+              weeklyPlanLength: activeProgram?.weeklyPlan?.length,
+            });
+            if (!activeProgram) {
+              toast.error('Could not match this workout to a program — changes saved locally only.');
+            }
             if (activeProgram?.weeklyPlan) {
               // Prefer exact dayIndex from templateId, fallback to label match
               const dayIdx = (parsedDayIndex !== null && parsedDayIndex < activeProgram.weeklyPlan.length)
                 ? parsedDayIndex
                 : activeProgram.weeklyPlan.findIndex((d: any) => d.dayLabel === completedWorkoutData.programDayLabel);
+              // v14-D29: diagnostic — pin down whether parsed-index or label-fallback
+              // was used, and whether either succeeded.
+              console.log('[D29 save] dayIdx resolution:', {
+                parsedDayIndex,
+                programDayLabel: completedWorkoutData.programDayLabel,
+                resolvedDayIdx: dayIdx,
+                matchType: dayIdx === parsedDayIndex ? 'parsed-index' : (dayIdx >= 0 ? 'label-fallback' : 'none'),
+              });
+              if (dayIdx < 0) {
+                toast.error('Could not match the workout day to your program — changes saved locally only.');
+              }
               if (dayIdx >= 0) {
                 // Compute diff (added/removed) vs original program day's exercises
                 const originalExerciseIds = new Set<string>(
@@ -1961,6 +2080,13 @@ export default function ActiveWorkoutPage() {
                   lastEditedBy: 'client',
                 };
                 trainerStore.updateClientProgram(activeProgram.id, { weeklyPlan: updatedPlan });
+                // v14-D29: diagnostic — confirm the store mutation landed.
+                console.log('[D29 save] updateClientProgram called:', {
+                  programId: activeProgram.id,
+                  dayIdx,
+                  blockCount: updatedBlocks.length,
+                  exerciseCount: updatedBlocks.reduce((s, b) => s + b.exercises.length, 0),
+                });
 
                 // v10-D2: persist diff metadata on the workout record
                 // v14-D12: also build detail arrays for programEditDetail
@@ -2028,6 +2154,15 @@ export default function ActiveWorkoutPage() {
                       setsRemoved: 0,
                     },
                   });
+                  // v14-D29: diagnostic — confirm notification dispatched. If trainer
+                  // doesn't see it after this log fires, the issue is in the
+                  // notification store / display, not the workout finish path.
+                  console.log('[D29 save] trainer notification dispatched:', {
+                    trainerId,
+                    programId: activeProgram.id,
+                    added: addedNames.length,
+                    removed: removedNames.length,
+                  });
                 }
               }
             }
@@ -2035,6 +2170,12 @@ export default function ActiveWorkoutPage() {
         } catch (e) {
           console.error('[SaveProgramChanges] Error saving edits back to program:', e);
         }
+      }
+      // v14-D29: surface success to the client. If they see this toast, the
+      // save and notification both fired. If they don't, one of the diagnostic
+      // toasts above will tell us where it failed.
+      if (programEditDiff && (programEditDiff.added + programEditDiff.removed) > 0) {
+        toast.success(`Program updated — trainer notified of ${programEditDiff.added + programEditDiff.removed} change${(programEditDiff.added + programEditDiff.removed) > 1 ? 's' : ''}.`);
       }
     }
 
@@ -2099,6 +2240,9 @@ export default function ActiveWorkoutPage() {
     setShareToFeed(false);
     // D17: reset to null so the next workout's gate starts fail-safe.
     setSaveProgramChanges(null);
+    // v14-D29: reset the per-edit decision so the next program workout
+    // starts fresh (no stickiness leak from a prior workout).
+    setProgramEditMode(null);
     setAiFeedback(null);
     setAiFeedbackLoading(false);
     // Clear derive result so medals don't persist to next workout
@@ -5837,23 +5981,23 @@ export default function ActiveWorkoutPage() {
         </DialogContent>
       </Dialog>
 
-      {/* v14-D12 + v14-D27: confirmation dialog for in-workout edits on
-          program workouts. D12 covered removes; D27 widens to adds. The
-          dialog branches on confirmEditTarget.kind for title / body /
-          button colour / action label, then dispatches to the underlying
-          add* / remove* mutators on confirm. Save-back to the program
-          template still happens at finish time via the existing
-          computeProgramDayDiff path — this dialog is just the warning. */}
+      {/* v14-D29: three-way edit decision dialog. Replaces D27's two-button
+          Cancel/Apply with explicit per-edit choice: session-only vs save-to-
+          program. The decision is recorded into programEditMode via the
+          recordProgramEditDecision reducer, and the finish-time path branches
+          on it to skip the now-redundant "Save changes to program?" modal.
+          Pre-D29 workouts (programEditMode === null at finish) still see the
+          modal as a backward-compat fallback. */}
       <AlertDialog open={!!confirmEditTarget} onOpenChange={(open) => !open && setConfirmEditTarget(null)}>
         <AlertDialogContent className="bg-gray-900 border-gray-700">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">
               {(() => {
                 switch (confirmEditTarget?.kind) {
-                  case 'remove-exercise': return 'Remove exercise?';
-                  case 'remove-set':      return 'Remove set?';
-                  case 'add-exercise':    return 'Add exercise?';
-                  case 'add-set':         return 'Add set?';
+                  case 'remove-exercise': return 'Remove this exercise?';
+                  case 'remove-set':      return 'Remove this set?';
+                  case 'add-exercise':    return 'Add this exercise?';
+                  case 'add-set':         return 'Add another set?';
                   case 'add-circuit-bulk':
                     return `Add ${confirmEditTarget.exercises.length} exercise${confirmEditTarget.exercises.length > 1 ? 's' : ''}?`;
                   default: return '';
@@ -5862,77 +6006,54 @@ export default function ActiveWorkoutPage() {
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
               {(() => {
-                // Same disclosure copy for every kind — the actual
-                // save-back decision is made at finish time via the
-                // existing "Save changes to program?" modal.
                 const isRemove = confirmEditTarget?.kind?.startsWith('remove') ?? false;
-                const verb = isRemove ? 'removal' : 'addition';
-                const action = isRemove ? 'Remove' : 'Add';
-                return `This ${verb} will be logged to your trainer when you finish your workout. You'll be asked at that point whether to save the change back to your program. Tap "${action}" to apply it to this workout.`;
+                return isRemove
+                  ? `Pick "Just this session" to drop it from today's workout without changing your program. Pick "Remove from program" if you want this exercise gone from the template going forward — your trainer will be notified.`
+                  : `Pick "Just this session" to add it to today's workout without changing your program. Pick "Add to program" if you want this exercise to stay in the template going forward — your trainer will be notified.`;
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmEditTarget(null)}>
-              {confirmEditTarget?.kind?.startsWith('remove') ? 'Keep it' : 'Cancel'}
+          <AlertDialogFooter className="gap-2">
+            {/* Cancel — abort entirely. */}
+            <AlertDialogCancel
+              className="border-gray-700 text-gray-300 mt-0"
+              onClick={() => setConfirmEditTarget(null)}
+            >
+              Cancel
             </AlertDialogCancel>
+
+            {/* Session-only — apply the edit, record session-only decision. */}
             <AlertDialogAction
               className={
                 confirmEditTarget?.kind?.startsWith('remove')
-                  ? 'bg-red-500 hover:bg-red-600'
-                  : 'bg-sky-500 hover:bg-sky-600'
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                  : 'bg-sky-500 hover:bg-sky-600 text-white'
               }
               onClick={() => {
                 if (!confirmEditTarget) return;
-                switch (confirmEditTarget.kind) {
-                  case 'remove-exercise':
-                    removeExercise(confirmEditTarget.exerciseId);
-                    break;
-                  case 'remove-set':
-                    removeSet(confirmEditTarget.exerciseId, confirmEditTarget.setId);
-                    break;
-                  case 'add-exercise': {
-                    const { exercise, metadata } = confirmEditTarget;
-                    addExercise({ ...exercise, ...metadata } as any);
-                    setShowExerciseModal(false);
-                    setExerciseSearch('');
-                    toast.success(`Added ${exercise.name}${metadata.blockName ? ` to ${metadata.blockName}` : ''}`);
-                    break;
-                  }
-                  case 'add-set':
-                    addSet(confirmEditTarget.exerciseId);
-                    break;
-                  case 'add-circuit-bulk': {
-                    const { exercises, block } = confirmEditTarget;
-                    exercises.forEach(exercise => {
-                      addExercise({
-                        ...exercise,
-                        blockName: block.name,
-                        blockType: block.type,
-                        blockId: block.id,
-                        circuitRounds: block.circuitRounds,
-                      } as any);
-                    });
-                    setCircuitExerciseSelection([]);
-                    setShowExerciseModal(false);
-                    setExerciseSearch('');
-                    toast.success(`Added ${exercises.length} exercise${exercises.length > 1 ? 's' : ''} to ${block.name}`);
-                    break;
-                  }
-                }
+                recordProgramEditDecision('session-only');
+                applyConfirmedEdit(confirmEditTarget);
                 setConfirmEditTarget(null);
               }}
             >
-              {(() => {
-                switch (confirmEditTarget?.kind) {
-                  case 'remove-exercise':
-                  case 'remove-set':       return 'Remove';
-                  case 'add-exercise':
-                  case 'add-set':
-                  case 'add-circuit-bulk': return 'Add';
-                  default: return 'Confirm';
-                }
-              })()}
+              Just this session
+            </AlertDialogAction>
+
+            {/* Save to program — apply the edit, record save-to-program decision. */}
+            <AlertDialogAction
+              className={
+                confirmEditTarget?.kind?.startsWith('remove')
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+              }
+              onClick={() => {
+                if (!confirmEditTarget) return;
+                recordProgramEditDecision('save-to-program');
+                applyConfirmedEdit(confirmEditTarget);
+                setConfirmEditTarget(null);
+              }}
+            >
+              {confirmEditTarget?.kind?.startsWith('remove') ? 'Remove from program' : 'Add to program'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
