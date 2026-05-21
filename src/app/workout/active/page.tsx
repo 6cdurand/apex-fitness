@@ -358,10 +358,19 @@ export default function ActiveWorkoutPage() {
   const [saveCircuitDescription, setSaveCircuitDescription] = useState('');
   const [circuitToSave, setCircuitToSave] = useState<any>(null);
   
-  // v14-D12: confirmation dialog state for mid-workout remove actions on program workouts
-  const [confirmRemoveTarget, setConfirmRemoveTarget] = useState<
-    | { kind: 'exercise'; exerciseId: string }
-    | { kind: 'set'; exerciseId: string; setId: string }
+  // v14-D12 + v14-D27: confirmation dialog state for mid-workout edits on
+  // program workouts. D12 covered removes (exercise / set). D27 widens the
+  // union to also gate adds (exercise / set / circuit-bulk) so the user
+  // gets the same "this will be logged to your trainer; you can choose at
+  // finish whether to save it back to your program" warning that removes
+  // already had. Save-back is still handled at finish time by the existing
+  // computeProgramDayDiff path — D27 is purely the in-workout warning step.
+  const [confirmEditTarget, setConfirmEditTarget] = useState<
+    | { kind: 'remove-exercise'; exerciseId: string }
+    | { kind: 'remove-set'; exerciseId: string; setId: string }
+    | { kind: 'add-exercise'; exercise: Exercise; metadata: Record<string, any> }
+    | { kind: 'add-set'; exerciseId: string }
+    | { kind: 'add-circuit-bulk'; exercises: Exercise[]; block: { id: string; name: string; type: string; circuitRounds?: number } }
     | null
   >(null);
   
@@ -842,10 +851,37 @@ export default function ActiveWorkoutPage() {
   const isMultiSelectBlock = (blockType?: string) =>
     blockType === 'circuit' || blockType === 'warmup' || blockType === 'cooldown';
 
+  // v14-D27: shared program-workout detection used by every guard helper
+  // below. Mirrors the logic at handleFinishWorkout. Returns false when no
+  // active workout (defensive — guards still allow the underlying op).
+  const detectActiveIsProgramWorkout = () => {
+    if (!activeWorkout) return false;
+    const trainerStoreSnap = useTrainerStore.getState();
+    return detectIsProgramWorkout({
+      sourceProgramId: activeWorkout.sourceProgramId,
+      sourceDayIndex: activeWorkout.sourceDayIndex,
+      templateId: activeWorkout.templateId,
+      workoutName: activeWorkout.name,
+      workoutUserId: activeWorkout.userId,
+      clientPrograms: trainerStoreSnap.clientPrograms,
+    });
+  };
+
+  // v14-D27: gate adding a set the same way the v14-D12 guard gates set
+  // removal. Wired into the three inline addSet callsites further down.
+  const handleAddSetWithGuard = (exerciseId: string) => {
+    if (!detectActiveIsProgramWorkout()) {
+      addSet(exerciseId);
+      return;
+    }
+    setConfirmEditTarget({ kind: 'add-set', exerciseId });
+  };
+
   const handleAddExercise = (exercise: Exercise) => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
 
-    // Multi-select for circuits + warmups
+    // Multi-select for circuits + warmups — user is just toggling selection,
+    // no add fires here. Confirmation lands later in handleSaveCircuitExercises.
     if (block && isMultiSelectBlock(block.type)) {
       const isSelected = circuitExerciseSelection.some(e => e.id === exercise.id);
       if (isSelected) {
@@ -863,10 +899,22 @@ export default function ActiveWorkoutPage() {
       ...(block.type === 'circuit' && { circuitRounds: block.circuitRounds || 3 }),
     } : {};
 
-    addExercise({ ...exercise, ...blockMetadata } as any);
-    setShowExerciseModal(false);
-    setExerciseSearch('');
-    toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
+    // v14-D27: gate single-add on program workouts.
+    if (!detectActiveIsProgramWorkout()) {
+      addExercise({ ...exercise, ...blockMetadata } as any);
+      setShowExerciseModal(false);
+      setExerciseSearch('');
+      toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
+      return;
+    }
+
+    // Program workout — defer the add until the user confirms. The dialog's
+    // Add handler closes the exercise picker + clears the search itself.
+    setConfirmEditTarget({
+      kind: 'add-exercise',
+      exercise,
+      metadata: blockMetadata,
+    });
   };
 
   // Renamed mentally: works for any multi-select block. Function name
@@ -875,60 +923,58 @@ export default function ActiveWorkoutPage() {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
     if (!block) return;
 
-    circuitExerciseSelection.forEach(exercise => {
-      addExercise({
-        ...exercise,
-        blockName: block.name,
-        blockType: block.type,
-        blockId: block.id,
-        circuitRounds: block.circuitRounds || 3,
-      } as any);
-    });
+    // v14-D27: gate bulk-add on program workouts.
+    if (!detectActiveIsProgramWorkout()) {
+      circuitExerciseSelection.forEach(exercise => {
+        addExercise({
+          ...exercise,
+          blockName: block.name,
+          blockType: block.type,
+          blockId: block.id,
+          circuitRounds: block.circuitRounds || 3,
+        } as any);
+      });
+      setCircuitExerciseSelection([]);
+      setShowExerciseModal(false);
+      setExerciseSearch('');
+      toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
+      return;
+    }
 
-    setCircuitExerciseSelection([]);
-    setShowExerciseModal(false);
-    setExerciseSearch('');
-    toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
+    // Program workout — confirm before applying the bulk add. Snapshot the
+    // selection array so subsequent toggles don't mutate what we'll add.
+    setConfirmEditTarget({
+      kind: 'add-circuit-bulk',
+      exercises: [...circuitExerciseSelection],
+      block: {
+        id: block.id,
+        name: block.name,
+        type: block.type,
+        circuitRounds: block.circuitRounds || 3,
+      },
+    });
   };
   
-  // v14-D12: confirm before removing an exercise or set if this is a trainer-assigned program workout.
-  // Without the guard, mid-workout slips can silently dilute the trainer's program design.
+  // v14-D12 (renamed for D27): confirm before removing an exercise or set
+  // if this is a trainer-assigned program workout. Without the guard,
+  // mid-workout slips can silently dilute the trainer's program design.
+  // D27 keeps the bodies but updates the kind values to the new prefixed
+  // form ('remove-exercise' / 'remove-set') and switches to the shared
+  // detectActiveIsProgramWorkout helper.
   const handleRemoveExerciseWithGuard = (exerciseId: string) => {
-    // Detect program workout using same logic as handleFinishWorkout
-    const trainerStoreSnap = useTrainerStore.getState();
-    const isProgramWorkout = activeWorkout ? detectIsProgramWorkout({
-      sourceProgramId: activeWorkout.sourceProgramId,
-      sourceDayIndex: activeWorkout.sourceDayIndex,
-      templateId: activeWorkout.templateId,
-      workoutName: activeWorkout.name,
-      workoutUserId: activeWorkout.userId,
-      clientPrograms: trainerStoreSnap.clientPrograms,
-    }) : false;
-    
-    if (!isProgramWorkout) {
+    if (!detectActiveIsProgramWorkout()) {
       removeExercise(exerciseId);
       return;
     }
-    setConfirmRemoveTarget({ kind: 'exercise', exerciseId });
+    setConfirmEditTarget({ kind: 'remove-exercise', exerciseId });
   };
 
   const handleRemoveSetWithGuard = (exerciseId: string, setId: string) => {
-    // Detect program workout using same logic as handleFinishWorkout
-    const trainerStoreSnap = useTrainerStore.getState();
-    const isProgramWorkout = activeWorkout ? detectIsProgramWorkout({
-      sourceProgramId: activeWorkout.sourceProgramId,
-      sourceDayIndex: activeWorkout.sourceDayIndex,
-      templateId: activeWorkout.templateId,
-      workoutName: activeWorkout.name,
-      workoutUserId: activeWorkout.userId,
-      clientPrograms: trainerStoreSnap.clientPrograms,
-    }) : false;
-    
-    if (!isProgramWorkout) {
+    if (!detectActiveIsProgramWorkout()) {
       removeSet(exerciseId, setId);
       return;
     }
-    setConfirmRemoveTarget({ kind: 'set', exerciseId, setId });
+    setConfirmEditTarget({ kind: 'remove-set', exerciseId, setId });
   };
   
   const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
@@ -4001,7 +4047,7 @@ export default function ActiveWorkoutPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => addSet(workoutExercise.id)}
+                            onClick={() => handleAddSetWithGuard(workoutExercise.id)}
                             className="w-full text-xs text-gray-500 hover:text-white h-8"
                           >
                             <Plus className="w-3 h-3 mr-1" /> Add Set
@@ -4290,7 +4336,7 @@ export default function ActiveWorkoutPage() {
                   {/* Add Set Button */}
                   <Button
                     variant="ghost"
-                    onClick={() => addSet(workoutExercise.id)}
+                    onClick={() => handleAddSetWithGuard(workoutExercise.id)}
                     className="w-full rounded-none border-t border-gray-800 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -4491,7 +4537,7 @@ export default function ActiveWorkoutPage() {
 
                           <Button
                             variant="ghost"
-                            onClick={() => addSet(workoutExercise.id)}
+                            onClick={() => handleAddSetWithGuard(workoutExercise.id)}
                             className="w-full rounded-none border-t border-gray-800 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
                           >
                             <Plus className="w-4 h-4 mr-1" />
@@ -5791,34 +5837,102 @@ export default function ActiveWorkoutPage() {
         </DialogContent>
       </Dialog>
 
-      {/* v14-D12: Confirmation dialog for mid-workout remove actions on program workouts */}
-      <AlertDialog open={!!confirmRemoveTarget} onOpenChange={(open) => !open && setConfirmRemoveTarget(null)}>
+      {/* v14-D12 + v14-D27: confirmation dialog for in-workout edits on
+          program workouts. D12 covered removes; D27 widens to adds. The
+          dialog branches on confirmEditTarget.kind for title / body /
+          button colour / action label, then dispatches to the underlying
+          add* / remove* mutators on confirm. Save-back to the program
+          template still happens at finish time via the existing
+          computeProgramDayDiff path — this dialog is just the warning. */}
+      <AlertDialog open={!!confirmEditTarget} onOpenChange={(open) => !open && setConfirmEditTarget(null)}>
         <AlertDialogContent className="bg-gray-900 border-gray-700">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">
-              {confirmRemoveTarget?.kind === 'exercise' ? 'Remove exercise?' : 'Remove set?'}
+              {(() => {
+                switch (confirmEditTarget?.kind) {
+                  case 'remove-exercise': return 'Remove exercise?';
+                  case 'remove-set':      return 'Remove set?';
+                  case 'add-exercise':    return 'Add exercise?';
+                  case 'add-set':         return 'Add set?';
+                  case 'add-circuit-bulk':
+                    return `Add ${confirmEditTarget.exercises.length} exercise${confirmEditTarget.exercises.length > 1 ? 's' : ''}?`;
+                  default: return '';
+                }
+              })()}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              {confirmRemoveTarget?.kind === 'exercise'
-                ? 'This exercise will be removed from your workout. The change will be logged to your trainer when you finish; you can choose whether to save it back to your program at that point.'
-                : 'This set will be removed. The change will be logged to your trainer when you finish; you can choose whether to save it back to your program at that point.'}
+              {(() => {
+                // Same disclosure copy for every kind — the actual
+                // save-back decision is made at finish time via the
+                // existing "Save changes to program?" modal.
+                const isRemove = confirmEditTarget?.kind?.startsWith('remove') ?? false;
+                const verb = isRemove ? 'removal' : 'addition';
+                const action = isRemove ? 'Remove' : 'Add';
+                return `This ${verb} will be logged to your trainer when you finish your workout. You'll be asked at that point whether to save the change back to your program. Tap "${action}" to apply it to this workout.`;
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmRemoveTarget(null)}>Keep it</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setConfirmEditTarget(null)}>
+              {confirmEditTarget?.kind?.startsWith('remove') ? 'Keep it' : 'Cancel'}
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-500 hover:bg-red-600"
+              className={
+                confirmEditTarget?.kind?.startsWith('remove')
+                  ? 'bg-red-500 hover:bg-red-600'
+                  : 'bg-sky-500 hover:bg-sky-600'
+              }
               onClick={() => {
-                if (!confirmRemoveTarget) return;
-                if (confirmRemoveTarget.kind === 'exercise') {
-                  removeExercise(confirmRemoveTarget.exerciseId);
-                } else {
-                  removeSet(confirmRemoveTarget.exerciseId, confirmRemoveTarget.setId);
+                if (!confirmEditTarget) return;
+                switch (confirmEditTarget.kind) {
+                  case 'remove-exercise':
+                    removeExercise(confirmEditTarget.exerciseId);
+                    break;
+                  case 'remove-set':
+                    removeSet(confirmEditTarget.exerciseId, confirmEditTarget.setId);
+                    break;
+                  case 'add-exercise': {
+                    const { exercise, metadata } = confirmEditTarget;
+                    addExercise({ ...exercise, ...metadata } as any);
+                    setShowExerciseModal(false);
+                    setExerciseSearch('');
+                    toast.success(`Added ${exercise.name}${metadata.blockName ? ` to ${metadata.blockName}` : ''}`);
+                    break;
+                  }
+                  case 'add-set':
+                    addSet(confirmEditTarget.exerciseId);
+                    break;
+                  case 'add-circuit-bulk': {
+                    const { exercises, block } = confirmEditTarget;
+                    exercises.forEach(exercise => {
+                      addExercise({
+                        ...exercise,
+                        blockName: block.name,
+                        blockType: block.type,
+                        blockId: block.id,
+                        circuitRounds: block.circuitRounds,
+                      } as any);
+                    });
+                    setCircuitExerciseSelection([]);
+                    setShowExerciseModal(false);
+                    setExerciseSearch('');
+                    toast.success(`Added ${exercises.length} exercise${exercises.length > 1 ? 's' : ''} to ${block.name}`);
+                    break;
+                  }
                 }
-                setConfirmRemoveTarget(null);
+                setConfirmEditTarget(null);
               }}
             >
-              Remove
+              {(() => {
+                switch (confirmEditTarget?.kind) {
+                  case 'remove-exercise':
+                  case 'remove-set':       return 'Remove';
+                  case 'add-exercise':
+                  case 'add-set':
+                  case 'add-circuit-bulk': return 'Add';
+                  default: return 'Confirm';
+                }
+              })()}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
