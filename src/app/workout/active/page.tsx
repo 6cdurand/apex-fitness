@@ -333,15 +333,13 @@ export default function ActiveWorkoutPage() {
   // untouched — fail-safe. D15/D16's default-true was fail-unsafe and
   // caused silent overwrites in prod.
   const [saveProgramChanges, setSaveProgramChanges] = useState<boolean | null>(null);
-  // v14-D29: per-workout program-edit mode. Set by the three-way
-  // confirmation dialog when the user adds/removes exercises on a program
-  // workout. Drives the finish-time path: if the user picked "Save to
-  // program" on ANY edit, auto-save at finish without showing the modal;
-  // if they picked "Just this session" on ANY edit (and never picked
-  // save-to-program), auto-discard. If the field is still null (no
-  // structural edits, or pre-D29 finish path), the existing
-  // showSaveProgramPrompt modal fires as before.
-  const [programEditMode, setProgramEditMode] = useState<'session-only' | 'save-to-program' | null>(null);
+  // v14-D30: simplified flow — adds are silent, removes go through a
+  // simple Cancel/Remove confirmation dialog (no program-talk), and the
+  // single decision point for save-back-to-program is the existing
+  // showSaveProgramPrompt modal at finish time. The three-way per-edit
+  // decision from D27/D29 is gone: it confused users by surfacing the
+  // template-update choice mid-workout when they were just trying to
+  // make their session work.
   // D15 Part B: blocking Yes/No modal that replaces the old inline checkbox.
   // Appears between Finish and the summary for program workouts, so the
   // user has to explicitly opt in to overwriting the program template
@@ -367,19 +365,14 @@ export default function ActiveWorkoutPage() {
   const [saveCircuitDescription, setSaveCircuitDescription] = useState('');
   const [circuitToSave, setCircuitToSave] = useState<any>(null);
   
-  // v14-D12 + v14-D27: confirmation dialog state for mid-workout edits on
-  // program workouts. D12 covered removes (exercise / set). D27 widens the
-  // union to also gate adds (exercise / set / circuit-bulk) so the user
-  // gets the same "this will be logged to your trainer; you can choose at
-  // finish whether to save it back to your program" warning that removes
-  // already had. Save-back is still handled at finish time by the existing
-  // computeProgramDayDiff path — D27 is purely the in-workout warning step.
+  // v14-D12 / v14-D30: confirmation dialog state for mid-workout removes
+  // on program workouts. Adds bypass this dialog entirely — the save-back-
+  // to-program decision is the single Yes/No at finish time via
+  // showSaveProgramPrompt. (D27 had widened this to also gate adds; D29
+  // converted to a three-way; D30 reverted both.)
   const [confirmEditTarget, setConfirmEditTarget] = useState<
     | { kind: 'remove-exercise'; exerciseId: string }
     | { kind: 'remove-set'; exerciseId: string; setId: string }
-    | { kind: 'add-exercise'; exercise: Exercise; metadata: Record<string, any> }
-    | { kind: 'add-set'; exerciseId: string }
-    | { kind: 'add-circuit-bulk'; exercises: Exercise[]; block: { id: string; name: string; type: string; circuitRounds?: number } }
     | null
   >(null);
   
@@ -876,14 +869,11 @@ export default function ActiveWorkoutPage() {
     });
   };
 
-  // v14-D27: gate adding a set the same way the v14-D12 guard gates set
-  // removal. Wired into the three inline addSet callsites further down.
+  // v14-D30: adds are silent on program workouts too. Wrapper kept so
+  // callsites don't have to change; passthrough to addSet. The save-back
+  // decision happens once at finish time via showSaveProgramPrompt.
   const handleAddSetWithGuard = (exerciseId: string) => {
-    if (!detectActiveIsProgramWorkout()) {
-      addSet(exerciseId);
-      return;
-    }
-    setConfirmEditTarget({ kind: 'add-set', exerciseId });
+    addSet(exerciseId);
   };
 
   const handleAddExercise = (exercise: Exercise) => {
@@ -908,60 +898,34 @@ export default function ActiveWorkoutPage() {
       ...(block.type === 'circuit' && { circuitRounds: block.circuitRounds || 3 }),
     } : {};
 
-    // v14-D27: gate single-add on program workouts.
-    if (!detectActiveIsProgramWorkout()) {
-      addExercise({ ...exercise, ...blockMetadata } as any);
-      setShowExerciseModal(false);
-      setExerciseSearch('');
-      toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
-      return;
-    }
-
-    // Program workout — defer the add until the user confirms. The dialog's
-    // Add handler closes the exercise picker + clears the search itself.
-    setConfirmEditTarget({
-      kind: 'add-exercise',
-      exercise,
-      metadata: blockMetadata,
-    });
+    // v14-D30: silent add for both quickstart AND program workouts. The
+    // save-back-to-program decision is deferred to the single finish-time
+    // modal so users aren't pestered with template-update prompts mid-set.
+    addExercise({ ...exercise, ...blockMetadata } as any);
+    setShowExerciseModal(false);
+    setExerciseSearch('');
+    toast.success(`Added ${exercise.name}${block ? ` to ${block.name}` : ''}`);
   };
 
-  // Renamed mentally: works for any multi-select block. Function name
-  // stays handleSaveCircuitExercises to keep diff small in commit history.
+  // v14-D30: silent bulk-add for circuits + warmups on program workouts.
+  // No confirmation dialog mid-workout; save-back is the finish-time call.
   const handleSaveCircuitExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
     if (!block) return;
 
-    // v14-D27: gate bulk-add on program workouts.
-    if (!detectActiveIsProgramWorkout()) {
-      circuitExerciseSelection.forEach(exercise => {
-        addExercise({
-          ...exercise,
-          blockName: block.name,
-          blockType: block.type,
-          blockId: block.id,
-          circuitRounds: block.circuitRounds || 3,
-        } as any);
-      });
-      setCircuitExerciseSelection([]);
-      setShowExerciseModal(false);
-      setExerciseSearch('');
-      toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
-      return;
-    }
-
-    // Program workout — confirm before applying the bulk add. Snapshot the
-    // selection array so subsequent toggles don't mutate what we'll add.
-    setConfirmEditTarget({
-      kind: 'add-circuit-bulk',
-      exercises: [...circuitExerciseSelection],
-      block: {
-        id: block.id,
-        name: block.name,
-        type: block.type,
+    circuitExerciseSelection.forEach(exercise => {
+      addExercise({
+        ...exercise,
+        blockName: block.name,
+        blockType: block.type,
+        blockId: block.id,
         circuitRounds: block.circuitRounds || 3,
-      },
+      } as any);
     });
+    setCircuitExerciseSelection([]);
+    setShowExerciseModal(false);
+    setExerciseSearch('');
+    toast.success(`Added ${circuitExerciseSelection.length} exercise${circuitExerciseSelection.length > 1 ? 's' : ''} to ${block.name}`);
   };
   
   // v14-D12 (renamed for D27): confirm before removing an exercise or set
@@ -986,29 +950,9 @@ export default function ActiveWorkoutPage() {
     setConfirmEditTarget({ kind: 'remove-set', exerciseId, setId });
   };
 
-  // v14-D29: stickiness rule for the three-way decision. 'save-to-program'
-  // is sticky once chosen (because the user explicitly said "yes, update
-  // my template"); the only way to downgrade is to explicitly pick
-  // session-only on a later edit, which is a deliberate "no, I changed my
-  // mind, don't touch the template" signal. This avoids silently losing
-  // template updates if the user makes 4 save-to-program edits then 1
-  // session-only edit without realizing it overrode the rest.
-  const recordProgramEditDecision = (next: 'session-only' | 'save-to-program') => {
-    setProgramEditMode(prev => {
-      if (prev === null) return next;
-      if (prev === 'save-to-program' && next === 'session-only') {
-        // explicit downgrade — user is changing their mind
-        return 'session-only';
-      }
-      // any other transition: keep the stronger commitment
-      return prev === 'save-to-program' || next === 'save-to-program' ? 'save-to-program' : 'session-only';
-    });
-  };
-
-  // v14-D29: extracted from the D27 onClick switch so both "Just this
-  // session" and "Add to program" / "Remove from program" buttons share
-  // the same mutation path. The only difference between them is the
-  // programEditMode decision, recorded separately above.
+  // v14-D30: applyConfirmedEdit collapsed to remove-only since adds no
+  // longer route through the dialog. The finish-time save-back-to-program
+  // path runs separately when the user clicks Yes on showSaveProgramPrompt.
   const applyConfirmedEdit = useCallback((target: NonNullable<typeof confirmEditTarget>) => {
     switch (target.kind) {
       case 'remove-exercise':
@@ -1017,36 +961,8 @@ export default function ActiveWorkoutPage() {
       case 'remove-set':
         removeSet(target.exerciseId, target.setId);
         break;
-      case 'add-exercise': {
-        const { exercise, metadata } = target;
-        addExercise({ ...exercise, ...metadata } as any);
-        setShowExerciseModal(false);
-        setExerciseSearch('');
-        toast.success(`Added ${exercise.name}${metadata.blockName ? ` to ${metadata.blockName}` : ''}`);
-        break;
-      }
-      case 'add-set':
-        addSet(target.exerciseId);
-        break;
-      case 'add-circuit-bulk': {
-        const { exercises, block } = target;
-        exercises.forEach(exercise => {
-          addExercise({
-            ...exercise,
-            blockName: block.name,
-            blockType: block.type,
-            blockId: block.id,
-            circuitRounds: block.circuitRounds,
-          } as any);
-        });
-        setCircuitExerciseSelection([]);
-        setShowExerciseModal(false);
-        setExerciseSearch('');
-        toast.success(`Added ${exercises.length} exercise${exercises.length > 1 ? 's' : ''} to ${block.name}`);
-        break;
-      }
     }
-  }, [removeExercise, removeSet, addExercise, addSet]);
+  }, [removeExercise, removeSet]);
 
   const addBlock = (type: 'warmup' | 'strength' | 'circuit' | 'cardio') => {
     if (type === 'warmup' && hasWarmup) return;
@@ -1665,33 +1581,15 @@ export default function ActiveWorkoutPage() {
       setEditStartTime(new Date(completed.startTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setEditEndTime(new Date(endTimeStr).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }));
       setShowFinishDialog(false);
-      // D17 Part 4: only show the Save-changes-to-program modal when there
-      // are REAL structural changes (added/removed exercises). Identical
-      // runs go straight to the summary with saveProgramChanges staying
-      // null — no silent overwrite risk, no phantom prompt.
-      //
-      // v14-D29: branch on the running programEditMode decision. If the user
-      // has already picked save-to-program on any edit, skip the modal and
-      // auto-save (and notify trainer). If they picked session-only on any
-      // edit (and never escalated to save-to-program), skip the modal and
-      // auto-discard. Pre-D29 path (mode === null, no edits or legacy workout)
-      // keeps the existing modal for backward compat.
+      // v14-D30: single decision point — show the Save-changes-to-program
+      // modal whenever a program workout has structural changes (added or
+      // removed exercises). The user picks Yes/No once, the YES path saves
+      // weeklyPlan back + notifies the trainer (D17 + D29 wiring intact),
+      // the NO path discards. Identical-to-template runs skip the modal
+      // entirely and go straight to summary.
       if (isProgramWorkout && programDiff.hasChanges) {
-        if (programEditMode === 'save-to-program') {
-          setSaveProgramChanges(true);
-          setProgramDiffForPrompt(programDiff);  // preserve for trainer notification text
-          setShowSummary(true);
-          toast.success('Saving changes to your program…');
-        } else if (programEditMode === 'session-only') {
-          setSaveProgramChanges(false);
-          setProgramDiffForPrompt(null);
-          setShowSummary(true);
-        } else {
-          // Legacy fallback: no per-edit decision recorded (workout had no
-          // structural edits or user joined this workout pre-D29). Show modal.
-          setProgramDiffForPrompt(programDiff);
-          setShowSaveProgramPrompt(true);
-        }
+        setProgramDiffForPrompt(programDiff);
+        setShowSaveProgramPrompt(true);
       } else {
         setProgramDiffForPrompt(null);
         setShowSummary(true);
@@ -2242,7 +2140,7 @@ export default function ActiveWorkoutPage() {
     setSaveProgramChanges(null);
     // v14-D29: reset the per-edit decision so the next program workout
     // starts fresh (no stickiness leak from a prior workout).
-    setProgramEditMode(null);
+    // v14-D30: programEditMode removed; nothing to reset here.
     setAiFeedback(null);
     setAiFeedbackLoading(false);
     // Clear derive result so medals don't persist to next workout
@@ -5981,79 +5879,38 @@ export default function ActiveWorkoutPage() {
         </DialogContent>
       </Dialog>
 
-      {/* v14-D29: three-way edit decision dialog. Replaces D27's two-button
-          Cancel/Apply with explicit per-edit choice: session-only vs save-to-
-          program. The decision is recorded into programEditMode via the
-          recordProgramEditDecision reducer, and the finish-time path branches
-          on it to skip the now-redundant "Save changes to program?" modal.
-          Pre-D29 workouts (programEditMode === null at finish) still see the
-          modal as a backward-compat fallback. */}
+      {/* v14-D30: simple Cancel/Remove confirmation dialog for removes only.
+          Adds bypass this dialog entirely (silent on program workouts and
+          quickstart alike). The save-back-to-program decision happens once
+          at finish time via the showSaveProgramPrompt modal. */}
       <AlertDialog open={!!confirmEditTarget} onOpenChange={(open) => !open && setConfirmEditTarget(null)}>
         <AlertDialogContent className="bg-gray-900 border-gray-700">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">
-              {(() => {
-                switch (confirmEditTarget?.kind) {
-                  case 'remove-exercise': return 'Remove this exercise?';
-                  case 'remove-set':      return 'Remove this set?';
-                  case 'add-exercise':    return 'Add this exercise?';
-                  case 'add-set':         return 'Add another set?';
-                  case 'add-circuit-bulk':
-                    return `Add ${confirmEditTarget.exercises.length} exercise${confirmEditTarget.exercises.length > 1 ? 's' : ''}?`;
-                  default: return '';
-                }
-              })()}
+              {confirmEditTarget?.kind === 'remove-set' ? 'Remove this set?' : 'Remove this exercise?'}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-gray-400">
-              {(() => {
-                const isRemove = confirmEditTarget?.kind?.startsWith('remove') ?? false;
-                return isRemove
-                  ? `Pick "Just this session" to drop it from today's workout without changing your program. Pick "Remove from program" if you want this exercise gone from the template going forward — your trainer will be notified.`
-                  : `Pick "Just this session" to add it to today's workout without changing your program. Pick "Add to program" if you want this exercise to stay in the template going forward — your trainer will be notified.`;
-              })()}
+              {confirmEditTarget?.kind === 'remove-set'
+                ? "This set will be removed from today's workout. You can add it back any time before you finish."
+                : "This exercise will be removed from today's workout. You can add it back any time before you finish."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            {/* Cancel — abort entirely. */}
             <AlertDialogCancel
               className="border-gray-700 text-gray-300 mt-0"
               onClick={() => setConfirmEditTarget(null)}
             >
               Cancel
             </AlertDialogCancel>
-
-            {/* Session-only — apply the edit, record session-only decision. */}
             <AlertDialogAction
-              className={
-                confirmEditTarget?.kind?.startsWith('remove')
-                  ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                  : 'bg-sky-500 hover:bg-sky-600 text-white'
-              }
+              className="bg-red-500 hover:bg-red-600 text-white"
               onClick={() => {
                 if (!confirmEditTarget) return;
-                recordProgramEditDecision('session-only');
                 applyConfirmedEdit(confirmEditTarget);
                 setConfirmEditTarget(null);
               }}
             >
-              Just this session
-            </AlertDialogAction>
-
-            {/* Save to program — apply the edit, record save-to-program decision. */}
-            <AlertDialogAction
-              className={
-                confirmEditTarget?.kind?.startsWith('remove')
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-              }
-              onClick={() => {
-                if (!confirmEditTarget) return;
-                recordProgramEditDecision('save-to-program');
-                applyConfirmedEdit(confirmEditTarget);
-                setConfirmEditTarget(null);
-              }}
-            >
-              {confirmEditTarget?.kind?.startsWith('remove') ? 'Remove from program' : 'Add to program'}
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

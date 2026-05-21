@@ -41,7 +41,8 @@ import {
   User,
   Trophy,
   MessageCircle,
-  Edit2
+  Edit2,
+  Eye
 } from 'lucide-react';
 import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
@@ -136,6 +137,10 @@ export default function ProgramPage() {
   // the "View all" toggle. Toggle still works as before — just starts
   // expanded.
   const [showWorkoutDays, setShowWorkoutDays] = useState(true);
+  // v14-D30: read-only preview modal for each workout day in the active
+  // program list. Lets the client peek at exercises without committing to
+  // start the timer.
+  const [previewDay, setPreviewDay] = useState<{ day: any; programName: string } | null>(null);
   
   // Load client programs from Supabase, and re-fetch on foreground so a
   // freshly-assigned program shows up without a manual reload.
@@ -654,24 +659,26 @@ export default function ProgramPage() {
                     const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
                     return (
                       <div key={day.id || idx}>
-                        <button
-                          className={`w-full flex items-center justify-between p-2.5 rounded-lg text-left transition-colors ${
+                        <div
+                          className={`w-full flex items-center justify-between p-2.5 rounded-lg transition-colors ${
                             isDoneThisWeek ? 'bg-emerald-50 border border-emerald-200' : isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
                           }`}
-                          onClick={() => setExpandedDay(isExpanded ? null : idx)}
                         >
-                          <div className="flex items-center gap-2">
+                          <button
+                            className="flex items-center gap-2 flex-1 text-left min-w-0"
+                            onClick={() => setExpandedDay(isExpanded ? null : idx)}
+                          >
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
                               isDoneThisWeek ? 'bg-emerald-500 text-white' : isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
                             }`}>
                               {isDoneThisWeek ? <Check className="w-4 h-4" /> : String.fromCharCode(65 + idx)}
                             </div>
-                            <div>
-                              <p className={`font-medium text-sm ${isDoneThisWeek ? 'text-emerald-700' : 'text-gray-900'}`}>{day.dayLabel}</p>
+                            <div className="min-w-0">
+                              <p className={`font-medium text-sm truncate ${isDoneThisWeek ? 'text-emerald-700' : 'text-gray-900'}`}>{day.dayLabel}</p>
                               <p className="text-[10px] text-gray-500">{totalEx} exercises • {day.blocks?.length || 0} blocks</p>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-1">
+                          </button>
+                          <div className="flex items-center gap-1 flex-shrink-0">
                             {isDoneThisWeek && (
                               <Badge className="bg-emerald-100 text-emerald-700 text-[10px] border-0 flex items-center gap-0.5">
                                 <Check className="w-3 h-3" /> Done
@@ -682,9 +689,30 @@ export default function ProgramPage() {
                                 <Target className="w-3 h-3" /> Today
                               </Badge>
                             )}
-                            {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                            {/* v14-D30: per-day Preview button — opens a
+                                read-only modal showing the day's blocks +
+                                exercises without starting the workout. */}
+                            {totalEx > 0 && (
+                              <button
+                                aria-label={`Preview ${day.dayLabel}`}
+                                className="p-1 rounded hover:bg-gray-100 text-gray-500"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPreviewDay({ day, programName: activeProgram.templateName });
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                              className="p-1 rounded hover:bg-gray-100 text-gray-400"
+                              onClick={() => setExpandedDay(isExpanded ? null : idx)}
+                            >
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
                           </div>
-                        </button>
+                        </div>
                         {isExpanded && (
                           <div className="mt-1 ml-9 space-y-1">
                             {day.blocks?.map((block: any, bi: number) => (
@@ -2166,6 +2194,56 @@ export default function ProgramPage() {
               </div>
             </>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* v14-D30: per-day read-only preview modal. Same component pattern
+          as the /today Up Next preview added in D29. Lets the client peek
+          at any day's blocks + exercises without committing to start. */}
+      <Dialog open={!!previewDay} onOpenChange={(open) => !open && setPreviewDay(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] bg-white">
+          <DialogHeader>
+            <DialogTitle>{previewDay?.day?.dayLabel || 'Workout'}</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              {previewDay?.programName}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <div className="space-y-3">
+              {(previewDay?.day?.blocks || []).map((block: any, bi: number) => (
+                <div key={block.id || bi} className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                    {block.name || block.type}
+                  </p>
+                  <div className="space-y-1">
+                    {(block.exercises || []).map((ex: any, ei: number) => (
+                      <div key={ex.id || ei} className="flex items-start justify-between py-1">
+                        <p className="text-sm text-gray-900 flex-1">
+                          {ei + 1}. {ex.exerciseName || ex.name}
+                        </p>
+                        <p className="text-xs text-gray-500 ml-2 whitespace-nowrap">
+                          {ex.sets}×{ex.reps} · {ex.rest}
+                        </p>
+                      </div>
+                    ))}
+                    {(!block.exercises || block.exercises.length === 0) && (
+                      <p className="text-xs text-gray-500 italic">No exercises in this block.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {(!previewDay?.day?.blocks || previewDay.day.blocks.length === 0) && (
+                <p className="text-sm text-gray-500 italic text-center py-6">
+                  No blocks configured for this day yet.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPreviewDay(null)}>
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </MainLayout>
