@@ -2032,11 +2032,26 @@ export const useTrainerStore = create<TrainerState>()(
           createdAt: now,
           updatedAt: now,
         };
+        // Optimistic local insert so the UI updates immediately.
         set(state => ({
           savedPrograms: [...state.savedPrograms, newProgram],
         }));
         const { syncSavedProgramToSupabase } = await import('../supabaseSync');
-        await syncSavedProgramToSupabase(newProgram);
+        // v14-D28: capture the sync result so callers can surface a clear
+        // error if the saved_programs table isn't applied yet (or RLS is
+        // blocking the trainer). Without rollback, the local Zustand state
+        // shows the row until the next reload, then it silently disappears
+        // because `partialize: () => ({})` means nothing persists locally
+        // and `fetchSavedProgramsFromSupabase` returns [] for the
+        // table-missing path. Roll back the optimistic insert + return
+        // null so SaveProgramDialog's try/catch fires the failure toast.
+        const ok = await syncSavedProgramToSupabase(newProgram);
+        if (!ok) {
+          set(state => ({
+            savedPrograms: state.savedPrograms.filter(p => p.id !== newProgram.id),
+          }));
+          return null;
+        }
         return newProgram;
       },
 
