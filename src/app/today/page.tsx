@@ -42,6 +42,7 @@ import {
   Heart,
   ArrowLeftRight,
   Bell,
+  Eye,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -85,6 +86,10 @@ export default function TodayPage() {
   const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
   const [showSwapWorkout, setShowSwapWorkout] = useState(false);
   const [repeatDayConfirm, setRepeatDayConfirm] = useState<{ idx: number; day: any } | null>(null);
+  // v14-D29: preview dialog for the Up Next card. Lets the client peek at
+  // the day's exercises (block by block) before tapping Start, without
+  // committing to the active workout timer.
+  const [previewDay, setPreviewDay] = useState<{ day: any; programName: string } | null>(null);
   const { updateCalendarEvent } = useTrainerStore();
   const startingSessionRef = useRef<string | null>(null);
   const [startingEventId, setStartingEventId] = useState<string | null>(null);
@@ -639,6 +644,9 @@ export default function TodayPage() {
                       </div>
                     </div>
                     <p className="text-xs text-gray-500 mb-3">{totalEx} exercises</p>
+                    {/* v14-D29: Preview button beside Start so the client can
+                        peek at the day's exercises before committing to the
+                        active workout timer. Sits next to Swap when present. */}
                     <div className="flex gap-2">
                       <Button
                         className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
@@ -646,6 +654,14 @@ export default function TodayPage() {
                       >
                         <Play className="w-4 h-4 mr-2" />
                         Start {day?.dayLabel || 'Workout'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="border-gray-200 text-gray-600"
+                        onClick={() => setPreviewDay({ day, programName: program.templateName })}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Preview
                       </Button>
                       {availableSwaps.length > 0 && (
                         <Button
@@ -788,6 +804,17 @@ export default function TodayPage() {
                         <Play className="w-4 h-4 mr-2" />
                         Skip to {nextScheduledDay || 'next'} ({day?.dayLabel})
                       </Button>
+                      {/* v14-D29: Preview button on rest-day branch lets the
+                          client peek at the upcoming workout they'd be
+                          skipping to. */}
+                      <Button
+                        variant="outline"
+                        className="border-gray-200 text-gray-600"
+                        onClick={() => setPreviewDay({ day, programName: program.templateName })}
+                      >
+                        <Eye className="w-4 h-4 mr-1" />
+                        Preview
+                      </Button>
                       <Button
                         variant="outline"
                         className="border-gray-200 text-gray-600"
@@ -827,13 +854,25 @@ export default function TodayPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs text-gray-500">{totalEx} exercises • {program.templateName}</p>
                 </div>
-                <Button
-                  className="w-full bg-sky-500 hover:bg-sky-600 text-white"
-                  onClick={() => startDay(dayIndex, day)}
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Start {day?.dayLabel || 'Workout'}
-                </Button>
+                {/* v14-D29: Preview + Start side-by-side for fixed-schedule
+                    scheduled-today branch — mirrors the flexible branch above. */}
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
+                    onClick={() => startDay(dayIndex, day)}
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Start {day?.dayLabel || 'Workout'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-gray-200 text-gray-600"
+                    onClick={() => setPreviewDay({ day, programName: program.templateName })}
+                  >
+                    <Eye className="w-4 h-4 mr-1" />
+                    Preview
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           );
@@ -1799,6 +1838,57 @@ export default function TodayPage() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* v14-D29: read-only preview dialog for the Up Next card. Triggered
+          from any of the three Up Next branches (flexible, rest-day,
+          scheduled-today) to let the client peek at the day's blocks +
+          exercises before tapping Start. */}
+      <Dialog open={!!previewDay} onOpenChange={(open) => !open && setPreviewDay(null)}>
+        <DialogContent className="max-w-md max-h-[80vh] bg-white">
+          <DialogHeader>
+            <DialogTitle>{previewDay?.day?.dayLabel || 'Workout'}</DialogTitle>
+            <DialogDescription className="text-gray-500">
+              {previewDay?.programName}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-2">
+            <div className="space-y-3">
+              {(previewDay?.day?.blocks || []).map((block: any, bi: number) => (
+                <div key={block.id || bi} className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs font-semibold text-gray-600 uppercase mb-2">
+                    {block.name || block.type}
+                  </p>
+                  <div className="space-y-1">
+                    {(block.exercises || []).map((ex: any, ei: number) => (
+                      <div key={ex.id || ei} className="flex items-start justify-between py-1">
+                        <p className="text-sm text-gray-900 flex-1">
+                          {ei + 1}. {ex.exerciseName || ex.name}
+                        </p>
+                        <p className="text-xs text-gray-500 ml-2 whitespace-nowrap">
+                          {ex.sets}×{ex.reps} · {ex.rest}
+                        </p>
+                      </div>
+                    ))}
+                    {(!block.exercises || block.exercises.length === 0) && (
+                      <p className="text-xs text-gray-500 italic">No exercises in this block.</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {(!previewDay?.day?.blocks || previewDay.day.blocks.length === 0) && (
+                <p className="text-sm text-gray-500 italic text-center py-6">
+                  No blocks configured for this day yet.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setPreviewDay(null)}>
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </MainLayout>
