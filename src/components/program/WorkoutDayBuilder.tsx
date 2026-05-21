@@ -219,15 +219,20 @@ const COMMON_EXERCISES = [
   { id: 'rowing-machine', name: 'Rowing Machine', pattern: 'cardio' },
 ];
 
-// v14-D25: Block tint opacity bumped (10→20, 30→50, badge text 400→300, badge
-// border 50→60) so block cards stay legible against MainLayout's bg-white parent.
+// v14-D28: solid dark base + colored border/badge + 1px left accent strip
+// for block-type affordance, replacing the v14-D25 translucent `bg` tint
+// that Tailwind class-merged against the sibling `bg-slate-900` (later
+// `bg-*` class wins, leaving cards washed-out against MainLayout's
+// bg-white parent). `bg` key removed; `accent` solid colour added for the
+// left strip rendered as a separate absolutely-positioned div on the
+// Card. Border opacity bumped /50 → /70 to pop against the dark base.
 const getBlockStyles = (type: BlockType) => {
-  const styles: Record<BlockType, { bg: string; border: string; badge: string }> = {
-    warmup:   { bg: 'bg-yellow-500/20', border: 'border-yellow-500/50', badge: 'bg-yellow-500/30 text-yellow-300 border-yellow-500/60' },
-    work:     { bg: 'bg-blue-500/20',   border: 'border-blue-500/50',   badge: 'bg-blue-500/30 text-blue-300 border-blue-500/60' },
-    circuit:  { bg: 'bg-orange-500/20', border: 'border-orange-500/50', badge: 'bg-orange-500/30 text-orange-300 border-orange-500/60' },
-    cardio:   { bg: 'bg-green-500/20',  border: 'border-green-500/50',  badge: 'bg-green-500/30 text-green-300 border-green-500/60' },
-    cooldown: { bg: 'bg-purple-500/20', border: 'border-purple-500/50', badge: 'bg-purple-500/30 text-purple-300 border-purple-500/60' },
+  const styles: Record<BlockType, { border: string; badge: string; accent: string }> = {
+    warmup:   { border: 'border-yellow-500/70', badge: 'bg-yellow-500/30 text-yellow-300 border-yellow-500/60', accent: 'bg-yellow-500' },
+    work:     { border: 'border-blue-500/70',   badge: 'bg-blue-500/30 text-blue-300 border-blue-500/60',     accent: 'bg-blue-500'   },
+    circuit:  { border: 'border-orange-500/70', badge: 'bg-orange-500/30 text-orange-300 border-orange-500/60', accent: 'bg-orange-500' },
+    cardio:   { border: 'border-green-500/70',  badge: 'bg-green-500/30 text-green-300 border-green-500/60',  accent: 'bg-green-500'  },
+    cooldown: { border: 'border-purple-500/70', badge: 'bg-purple-500/30 text-purple-300 border-purple-500/60', accent: 'bg-purple-500' },
   };
   return styles[type] || styles.work;
 };
@@ -982,11 +987,20 @@ export function WorkoutDayBuilder({
         const blockIcon = BLOCK_TYPES.find(bt => bt.value === block.type)?.icon;
         
         return (
-          // v14-D25: bg-slate-900 lays down a solid dark base; ${styles.bg} (now /20
-          // opacity) tints it. Result: dark card with subtle block-type color hint
-          // that survives MainLayout's bg-white parent.
-          <Card key={block.id} className={`bg-slate-900 ${styles.bg} ${styles.border} border overflow-hidden`}>
-            <CardContent className="p-0">
+          // v14-D28: solid bg-slate-900 card with thick colored border + a
+          // 4px-wide left accent strip for block-type affordance. No more
+          // translucent overlay that Tailwind would class-merge into
+          // washed-out grey. CardContent gets pl-1 so the inner header /
+          // exercises sit clear of the accent strip.
+          <Card
+            key={block.id}
+            className={`bg-slate-900 ${styles.border} border-2 overflow-hidden relative`}
+          >
+            <div
+              className={`absolute left-0 top-0 bottom-0 w-1 ${styles.accent}`}
+              aria-hidden="true"
+            />
+            <CardContent className="p-0 pl-1">
               {/* Block header */}
               <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -2041,7 +2055,12 @@ export function WorkoutDayBuilder({
                         return (
                           <Card
                             key={block.id}
-                            className={`${blockStyle.bg} ${blockStyle.border} cursor-pointer hover:opacity-80 transition-opacity`}
+                            // v14-D28: Block Library dialog cards share the
+                            // same `getBlockStyles` helper as the main
+                            // builder block cards. With `bg` removed from
+                            // the helper, fall back to the same solid
+                            // bg-slate-900 + colored border pattern.
+                            className={`bg-slate-900 ${blockStyle.border} border-2 cursor-pointer hover:opacity-80 transition-opacity`}
                             onClick={() => handleLoadBlock(block)}
                           >
                             <CardContent className="p-4">

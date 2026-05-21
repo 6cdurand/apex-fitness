@@ -3902,6 +3902,11 @@ export async function syncSavedProgramToSupabase(program: any): Promise<boolean>
         duration_weeks: program.durationWeeks,
         days_per_week: program.daysPerWeek,
         structure: program.structure || null,
+        // v14-D28: persist raw scheduleMode alongside `structure` (added
+        // by migration 20260525_saved_programs_schedule_mode.sql). NULL
+        // is allowed and is the fallback for older rows; check constraint
+        // restricts non-null values to 'fixed' | 'flexible'.
+        schedule_mode: program.scheduleMode || null,
         class_safe: program.classSafe ?? false,
         auto_repeat: program.autoRepeat ?? false,
         days: program.days,
@@ -3956,6 +3961,11 @@ export async function fetchSavedProgramsFromSupabase(trainerId: string): Promise
       durationWeeks: row.duration_weeks,
       daysPerWeek: row.days_per_week,
       structure: row.structure,
+      // v14-D28: read back schedule_mode column added in migration 20260525.
+      // Null-coalesces for older rows that pre-date the column; the
+      // assign-path fallback in trainerStore picks those up via the
+      // legacy structure-string parse.
+      scheduleMode: row.schedule_mode || null,
       classSafe: row.class_safe,
       autoRepeat: row.auto_repeat,
       days: row.days || [],

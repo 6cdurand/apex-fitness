@@ -667,7 +667,20 @@ function ProgramBuilderContent() {
   // ── Save program ──
   const handleSaveProgram = () => {
     if (!user) return;
-    
+
+    // v14-D28: hard guard against orphaning programs (empty clientId) when
+    // arriving via the /program/select template flow which doesn't carry a
+    // clientId query param. The Activate dialog button is also disabled
+    // for this case but a defensive guard prevents future regressions if
+    // the disabled state ever loses sync. Without this, addClientProgram
+    // creates a row with clientId='' which short-circuits the
+    // program_assigned notification gate in trainerStore and orphans the
+    // program.
+    if (isTrainerMode && !selectedClientId) {
+      toast.error('Pick a client to assign this program to.');
+      return;
+    }
+
     const targetClientId = isTrainerMode ? (selectedClientId || '') : user.id;
     
     const weeklyPlan = days.map(d => ({
@@ -899,7 +912,12 @@ function ProgramBuilderContent() {
       })),
     }));
     
-    await saveProgramAsTemplate({
+    // v14-D28: capture the result. trainerStore.saveProgramAsTemplate now
+    // rolls back the optimistic local insert and returns null when the
+    // Supabase upsert fails (e.g. table missing). Surface that as a clear
+    // toast + throw so SaveProgramDialog's try/catch keeps the dialog
+    // open instead of firing the misleading "Program saved" success toast.
+    const result = await saveProgramAsTemplate({
       name,
       description,
       phase,
@@ -915,6 +933,11 @@ function ProgramBuilderContent() {
       days: weeklyPlan,
       sourceTemplateId: existingProgram?.templateId,
     });
+
+    if (!result) {
+      toast.error('Could not save program. Make sure migrations 20260522 + 20260525 are applied to Supabase.');
+      throw new Error('saveProgramAsTemplate returned null');
+    }
   };
 
   // ── Render ───────────────────────────────────────────────
@@ -1442,6 +1465,42 @@ function ProgramBuilderContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            {/* v14-D28: Client picker — required for trainer mode when no
+                clientId query param is set (e.g. arriving via the
+                /program/select template flow). Without this, Activate
+                creates an orphaned ClientProgram with empty clientId. */}
+            {isTrainerMode && (
+              <div className="space-y-2">
+                <Label className="text-gray-300">Assign to client</Label>
+                <Select
+                  value={selectedClientId || ''}
+                  onValueChange={(v) => setSelectedClientId(v || null)}
+                >
+                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="Select a client..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-900 border-gray-700">
+                    {clients
+                      .filter(c => c.status === 'active')
+                      .map(c => (
+                        <SelectItem
+                          key={c.clientId}
+                          value={c.clientId}
+                          className="text-white focus:bg-gray-800"
+                        >
+                          {c.client?.displayName || c.client?.username || c.clientId.slice(0, 8)}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {!selectedClientId && (
+                  <p className="text-xs text-amber-400">
+                    Pick a client to activate this program for them.
+                  </p>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
               <div>
                 <p className="font-medium text-white text-sm">Save to Program Library</p>
@@ -1473,8 +1532,9 @@ function ProgramBuilderContent() {
                 Cancel
               </Button>
               <Button
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600"
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-700 disabled:text-gray-400"
                 onClick={handleSaveProgram}
+                disabled={isTrainerMode && !selectedClientId}
               >
                 <Calendar className="w-4 h-4 mr-2" /> Activate
               </Button>
