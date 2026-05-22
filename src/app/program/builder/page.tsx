@@ -887,11 +887,22 @@ function ProgramBuilderContent() {
         sourceTemplateId: templateIdParam || undefined,
       });
       if (!templateResult) {
+        // v14-D32: pull the precise reason off the store and render a
+        // toast that points at the actual failure (RLS / FK / NOT-NULL /
+        // table-missing) instead of the canned "apply migrations" copy
+        // that masked the real RLS denial for weeks post-D28.
+        const lastError = useTrainerStore.getState().lastSavedProgramError;
+        const detail =
+          lastError?.reason === 'rls_denied'        ? 'Supabase rejected the save (RLS). Apply migration 20260526 to heal the policy for your account.' :
+          lastError?.reason === 'table_missing'     ? 'The saved_programs table is missing. Apply migration 20260522 in Supabase.' :
+          lastError?.reason === 'fk_violation'      ? "Your trainer profile isn't linked to a public.users row. Contact support — your account needs a one-time repair." :
+          lastError?.reason === 'not_null_violation' ? 'Missing a required field on the program. Try again with name, duration, and at least one day filled in.' :
+          lastError?.reason === 'invalid_uuid'      ? 'Internal: a UUID field was malformed. Please reload and try again.' :
+          (lastError?.message || 'Unknown error');
         // Don't block the activation flow — the program is already
-        // assigned to the client at this point. Just surface that the
-        // library save failed so the trainer knows to retry from the
-        // builder's explicit "Save as template" button.
-        toast.error(`Saved program for client but couldn't add "${libraryName.trim()}" to My Templates. Apply migrations 20260522 + 20260525 to Supabase and try the "Save as template" button.`);
+        // assigned to the client at this point. Surface the precise
+        // reason so the trainer can act on it.
+        toast.error(`Saved program for client but couldn't add "${libraryName.trim()}" to My Templates. ${detail}`, { duration: 10000 });
       } else {
         toast.success(`Added "${libraryName.trim()}" to My Templates.`);
       }
@@ -958,7 +969,11 @@ function ProgramBuilderContent() {
     });
 
     if (!result) {
-      toast.error('Could not save program. Make sure migrations 20260522 + 20260525 are applied to Supabase.');
+      // v14-D32: SaveProgramDialog's catch block reads
+      // useTrainerStore.lastSavedProgramError and renders a precise toast
+      // for each reason — just throw so the dialog stays open and runs
+      // its handler. We deliberately do NOT toast here to avoid a
+      // double-toast (generic + precise) racing.
       throw new Error('saveProgramAsTemplate returned null');
     }
   };
@@ -1428,7 +1443,10 @@ function ProgramBuilderContent() {
                   disabled={!programName || days.length === 0}
                 >
                   <Save className="w-4 h-4 mr-2" />
-                  Save as template
+                  {/* v14-D32: relabel to disambiguate from the Activate-dialog
+                     "Also save to library" toggle. Same store action, different
+                     user intent: library-only vs activate-and-save. */}
+                  Save to library only (don&apos;t activate yet)
                 </Button>
               )}
             </div>
@@ -1526,8 +1544,11 @@ function ProgramBuilderContent() {
 
             <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
               <div>
-                <p className="font-medium text-white text-sm">Save to Program Library</p>
-                <p className="text-xs text-gray-500">Reuse this program later</p>
+                {/* v14-D32: relabel to clarify this is the activate-AND-save
+                   path. The other save button on the builder page is
+                   library-only. Both call saveProgramAsTemplate. */}
+                <p className="font-medium text-white text-sm">Also save to library</p>
+                <p className="text-xs text-gray-500">So you can reuse it for other clients without rebuilding</p>
               </div>
               <Switch
                 checked={saveToLibrary}

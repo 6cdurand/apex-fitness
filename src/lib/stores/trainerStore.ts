@@ -114,6 +114,10 @@ interface TrainerState {
   savedBlocks: SavedBlock[]; // Block library
   blockPerformances: BlockPerformance[]; // Client performance records on blocks
   savedPrograms: any[]; // v14-D3: Trainer-saved programs as reusable templates
+  // v14-D32: last failure reason from syncSavedProgramToSupabase so dialogs
+  // can surface a precise toast (RLS vs FK vs NOT-NULL vs table-missing)
+  // rather than the canned "apply migrations" message. Cleared on success.
+  lastSavedProgramError: { ok: false; reason: 'table_missing' | 'rls_denied' | 'fk_violation' | 'not_null_violation' | 'invalid_uuid' | 'unknown'; message: string } | null;
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -235,6 +239,7 @@ interface TrainerState {
   
   // v14-D3: Saved Programs
   saveProgramAsTemplate: (program: any) => Promise<any | null>;
+  clearSavedProgramError: () => void; // v14-D32
   updateSavedProgram: (id: string, updates: any) => Promise<void>;
   deleteSavedProgram: (id: string) => Promise<void>;
   assignSavedProgramToClient: (programId: string, clientId: string) => Promise<void>;
@@ -282,6 +287,7 @@ export const useTrainerStore = create<TrainerState>()(
       savedBlocks: [],
       blockPerformances: [],
       savedPrograms: [], // v14-D3
+      lastSavedProgramError: null, // v14-D32
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -2045,15 +2051,26 @@ export const useTrainerStore = create<TrainerState>()(
         // and `fetchSavedProgramsFromSupabase` returns [] for the
         // table-missing path. Roll back the optimistic insert + return
         // null so SaveProgramDialog's try/catch fires the failure toast.
-        const ok = await syncSavedProgramToSupabase(newProgram);
-        if (!ok) {
+        // v14-D32: stash the rich failure reason on the store so the
+        // calling dialog can render a precise toast (RLS vs FK vs
+        // NOT-NULL vs table-missing) rather than the canned message.
+        const result = await syncSavedProgramToSupabase(newProgram);
+        if (!result.ok) {
           set(state => ({
             savedPrograms: state.savedPrograms.filter(p => p.id !== newProgram.id),
+            lastSavedProgramError: result,
           }));
           return null;
         }
+        set({ lastSavedProgramError: null });
         return newProgram;
       },
+
+      // v14-D32: explicit reset so dialogs can clear a stale error before
+      // re-attempting a save (otherwise the previous reason would persist
+      // and a successful save followed by a failed unrelated one would
+      // briefly render the wrong toast on race).
+      clearSavedProgramError: () => set({ lastSavedProgramError: null }),
 
       updateSavedProgram: async (id, updates) => {
         const now = new Date().toISOString();

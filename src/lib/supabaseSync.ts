@@ -3885,10 +3885,52 @@ export async function deleteBlockFolderInSupabase(
 }
 
 /**
- * v14-D3: Persist a trainer-saved program to Supabase.
+ * v14-D32: Structured sync result so callers can render a precise toast
+ * (RLS vs FK vs NOT-NULL vs table-missing) instead of the canned
+ * "apply migrations" warning the D28 catch always returned. See
+ * briefs/sprint-v14-2026-05-18/v14-fix-32-brief.md for the failure-mode
+ * catalogue and the toast wording each `reason` should map to in the UI.
+ *
+ * Postgres error code references:
+ *   - 42P01 → undefined_table
+ *   - 42501 → insufficient_privilege (this is the RLS denial 403)
+ *   - 23503 → foreign_key_violation
+ *   - 23502 → not_null_violation
+ *   - 22P02 → invalid_text_representation (e.g. bad UUID literal)
  */
-export async function syncSavedProgramToSupabase(program: any): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
+export type SaveProgramSyncReason =
+  | 'table_missing'
+  | 'rls_denied'
+  | 'fk_violation'
+  | 'not_null_violation'
+  | 'invalid_uuid'
+  | 'unknown';
+
+export type SaveProgramSyncResult =
+  | { ok: true }
+  | { ok: false; reason: SaveProgramSyncReason; message: string };
+
+function mapPgErrorToReason(code: string | undefined): SaveProgramSyncReason {
+  switch (code) {
+    case '42P01': return 'table_missing';
+    case '42501': return 'rls_denied';
+    case '23503': return 'fk_violation';
+    case '23502': return 'not_null_violation';
+    case '22P02': return 'invalid_uuid';
+    default: return 'unknown';
+  }
+}
+
+/**
+ * v14-D3: Persist a trainer-saved program to Supabase.
+ * v14-D32: returns SaveProgramSyncResult so callers can render a precise
+ * toast for the actual failure mode. Drops the misleading
+ * `error.message?.includes('saved_programs')` sentinel — the request URL
+ * always contains that string, so every 403 was being reported as
+ * "table missing" (masking the real RLS denial since D28).
+ */
+export async function syncSavedProgramToSupabase(program: any): Promise<SaveProgramSyncResult> {
+  if (!isSupabaseConfigured()) return { ok: false, reason: 'unknown', message: 'Supabase not configured' };
   try {
     const { error } = await supabase
       .from('saved_programs')
@@ -3917,17 +3959,21 @@ export async function syncSavedProgramToSupabase(program: any): Promise<boolean>
         updated_at: program.updatedAt,
       }, { onConflict: 'id' });
     if (error) {
-      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
-        console.warn('[v14-D3] saved_programs table missing — apply migration 20260522.');
-        return false;
-      }
-      console.error('[v14-D3] syncSavedProgramToSupabase failed:', error);
-      return false;
+      const code = (error as any).code as string | undefined;
+      const reason = mapPgErrorToReason(code);
+      console.error('[v14-D3] syncSavedProgramToSupabase failed', {
+        reason,
+        code,
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+      });
+      return { ok: false, reason, message: error.message || 'Unknown error' };
     }
-    return true;
-  } catch (e) {
+    return { ok: true };
+  } catch (e: any) {
     console.error('[v14-D3] syncSavedProgramToSupabase exception:', e);
-    return false;
+    return { ok: false, reason: 'unknown', message: e?.message || String(e) };
   }
 }
 
@@ -3943,11 +3989,20 @@ export async function fetchSavedProgramsFromSupabase(trainerId: string): Promise
       .eq('trainer_id', trainerId)
       .order('updated_at', { ascending: false });
     if (error) {
-      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
+      const code = (error as any).code as string | undefined;
+      if (code === '42P01') {
         console.warn('[v14-D3] saved_programs table missing — returning empty list.');
         return [];
       }
-      console.error('[v14-D3] fetchSavedProgramsFromSupabase failed:', error);
+      // v14-D32: drop the over-broad `message.includes('saved_programs')`
+      // sentinel — that string is in every error URL — so RLS / FK
+      // failures surface to DevTools instead of being silently masked.
+      console.error('[v14-D3] fetchSavedProgramsFromSupabase failed', {
+        code,
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+      });
       return [];
     }
     // Map snake_case to camelCase
@@ -3992,11 +4047,19 @@ export async function deleteSavedProgramFromSupabase(programId: string): Promise
       .delete()
       .eq('id', programId);
     if (error) {
-      if (error.code === '42P01' || error.message?.includes('saved_programs')) {
+      const code = (error as any).code as string | undefined;
+      if (code === '42P01') {
         console.warn('[v14-D3] saved_programs table missing — returning false.');
         return false;
       }
-      console.error('[v14-D3] deleteSavedProgramFromSupabase failed:', error);
+      // v14-D32: precise mapping — see syncSavedProgramToSupabase for the
+      // rationale on why message-based sniffing was masking real errors.
+      console.error('[v14-D3] deleteSavedProgramFromSupabase failed', {
+        code,
+        message: error.message,
+        details: (error as any).details,
+        hint: (error as any).hint,
+      });
       return false;
     }
     return true;
