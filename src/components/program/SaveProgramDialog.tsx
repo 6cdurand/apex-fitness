@@ -8,6 +8,28 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Save } from 'lucide-react';
+import { useTrainerStore } from '@/lib/stores/trainerStore';
+
+// v14-D32: friendly toast wording for each Postgres failure mode that
+// syncSavedProgramToSupabase can return. Stays in lockstep with the
+// SaveProgramSyncReason enum in @/lib/supabaseSync.ts.
+function friendlySaveError(err: { reason: string; message: string } | null | undefined): string {
+  if (!err) return 'Failed to save program';
+  switch (err.reason) {
+    case 'table_missing':
+      return 'The saved_programs table is missing. Apply migration 20260522 in Supabase.';
+    case 'rls_denied':
+      return 'Supabase rejected the save (RLS). Apply migration 20260526 to heal the policy for your account.';
+    case 'fk_violation':
+      return "Your trainer profile isn't linked to a public.users row. Contact support — your account needs a one-time repair.";
+    case 'not_null_violation':
+      return 'Missing a required field on the program. Try again with name, duration, and at least one day filled in.';
+    case 'invalid_uuid':
+      return 'Internal: a UUID field was malformed. Please reload and try again.';
+    default:
+      return `Save failed: ${err.message}`;
+  }
+}
 
 interface SaveProgramDialogProps {
   open: boolean;
@@ -42,6 +64,10 @@ export function SaveProgramDialog({
       return;
     }
     setSaving(true);
+    // v14-D32: clear any stale error before attempting; the store reads
+    // lastSavedProgramError synchronously after the rejected promise so
+    // we want a clean slate per attempt.
+    useTrainerStore.getState().clearSavedProgramError();
     try {
       await onSave(name.trim(), description.trim());
       toast.success('Program saved to My Templates');
@@ -50,7 +76,12 @@ export function SaveProgramDialog({
       setDescription('');
     } catch (err) {
       console.error('[SaveProgramDialog] Save failed:', err);
-      toast.error('Failed to save program');
+      // v14-D32: render the precise reason from the store rather than
+      // the canned "Failed to save" toast. trainerStore.saveProgramAsTemplate
+      // populates lastSavedProgramError before returning null (which is
+      // what triggers the thrown error in handleSaveProgramAsTemplate).
+      const lastError = useTrainerStore.getState().lastSavedProgramError;
+      toast.error(friendlySaveError(lastError), { duration: 8000 });
     } finally {
       setSaving(false);
     }
