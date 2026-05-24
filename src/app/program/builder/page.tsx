@@ -1432,7 +1432,11 @@ function ProgramBuilderContent() {
                   className="flex-1 bg-emerald-500 hover:bg-emerald-600"
                   onClick={() => setShowSaveDialog(true)}
                 >
-                  <Save className="w-4 h-4 mr-2" /> Activate Program
+                  <Save className="w-4 h-4 mr-2" />
+                  {/* v15-D1: trainer-mode entry button surfaces the assign-to-client
+                     step so trainers don't expect immediate activation. Athlete-mode
+                     keeps "Activate Program" because there's no client to assign to. */}
+                  {isTrainerMode ? 'Assign to Client' : 'Activate Program'}
                 </Button>
               </div>
               {isTrainerMode && (
@@ -1500,7 +1504,11 @@ function ProgramBuilderContent() {
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
         <DialogContent className="bg-gray-900 border-gray-800 max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-white">Activate Program</DialogTitle>
+            {/* v15-D1: dialog title matches the entry button so trainers
+               understand they're in the assign-to-client step. */}
+            <DialogTitle className="text-white">
+              {isTrainerMode ? 'Assign Program to Client' : 'Activate Program'}
+            </DialogTitle>
             <DialogDescription className="text-gray-400">
               This will create {actualWeeks * (scheduleMode === 'flexible' ? trainingFrequency : (fixedDays.length || days.length))} calendar events over {actualWeeks} weeks.
             </DialogDescription>
