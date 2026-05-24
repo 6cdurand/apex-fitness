@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History, DollarSign, Edit2, Package, Check, X, Play, Plus, ChevronDown, ChevronUp, Trash2, ClipboardList } from 'lucide-react';
+import { Calendar, MessageCircle, ArrowLeft, Dumbbell, TrendingUp, Clock, Target, History, DollarSign, Edit2, Package, Check, X, Play, Plus, ChevronDown, ChevronUp, Trash2, ClipboardList, FileText } from 'lucide-react';
 import { startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isSameMonth, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { getClientExerciseHistory } from '@/lib/supabaseSync';
 import { Input } from '@/components/ui/input';
@@ -412,17 +412,38 @@ export default function TrainerClientDetailPage() {
                   ) : (
                     <div className="space-y-2">
                       {clientWorkouts.slice(0, 8).map((w: any) => (
-                        <div key={w.id} className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl">
-                          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center">
+                        <div
+                          key={w.id}
+                          className="flex items-center gap-3 p-3 bg-gray-800/60 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors"
+                          onClick={() => router.push(`/workout/${w.id}`)}
+                        >
+                          <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center flex-shrink-0">
                             <TrendingUp className="w-5 h-5 text-gray-300" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-white truncate">{w.name}</p>
                             <p className="text-xs text-gray-500">{format(new Date(w.startTime), 'MMM d, yyyy')}</p>
                           </div>
-                          <Badge variant="outline" className="border-gray-700 text-gray-300">
-                            {Math.round((w.totalVolume || 0) / 1000)}k
-                          </Badge>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Badge variant="outline" className="border-gray-700 text-gray-300">
+                              {Math.round((w.totalVolume || 0) / 1000)}k
+                            </Badge>
+                            {/* v15-D3: Summary button parity — trainer-side workout rows
+                                were previously inert info rows with no drill-in affordance.
+                                Now matches the client /today completed-card pattern. */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-[11px] border-gray-700 text-gray-200 hover:bg-gray-700"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/workout/${w.id}`);
+                              }}
+                            >
+                              <FileText className="w-3 h-3 mr-1" />
+                              Summary
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
