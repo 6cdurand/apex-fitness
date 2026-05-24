@@ -937,9 +937,9 @@ export default function TodayPage() {
                     }`}
                     onClick={() => router.push(`/workout/${workout.id}`)}
                   >
-                    <CardContent className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    <CardContent className="p-3 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                           isReleased ? 'bg-sky-100' : isPending ? 'bg-amber-100' : 'bg-green-500/20'
                         }`}>
                           {isReleased ? (
@@ -950,11 +950,11 @@ export default function TodayPage() {
                             <Dumbbell className="w-4 h-4 text-green-400" />
                           )}
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{workout.name}</p>
-                          <p className="text-xs text-gray-500">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 text-sm truncate">{workout.name}</p>
+                          <p className="text-xs text-gray-500 truncate">
                             {isReleased
-                              ? 'New summary from your coach — tap to view'
+                              ? 'New summary from your coach'
                               : isPending
                                 ? 'Awaiting coach review'
                                 : `${workout.exercises.length} exercises • ${workout.duration ? `${Math.floor(workout.duration / 60)}m` : '--'}`
@@ -962,13 +962,34 @@ export default function TodayPage() {
                           </p>
                         </div>
                       </div>
-                      {isReleased ? (
-                        <Badge className="bg-sky-500 text-white text-[10px]">New Summary</Badge>
-                      ) : isPending ? (
-                        <Badge className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px]">Pending</Badge>
-                      ) : (
-                        <Badge className="bg-green-500/20 text-green-400 text-xs">Done</Badge>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {isReleased ? (
+                          <Badge className="bg-sky-500 text-white text-[10px]">New</Badge>
+                        ) : isPending ? (
+                          <Badge className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px]">Pending</Badge>
+                        ) : (
+                          <Badge className="bg-green-500/20 text-green-700 text-xs">Done</Badge>
+                        )}
+                        {/* v15-D3: explicit Summary button — parity with trainer post-workout
+                            summary discoverability. The whole Card stays clickable too (kept
+                            for muscle-memory) but this button is the visible affordance the
+                            user expects. Stops propagation so the Card onClick doesn't
+                            double-fire. Pending cards omit it — no summary to view yet. */}
+                        {!isPending && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2.5 text-[11px] border-gray-200 text-gray-700 hover:bg-gray-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              router.push(`/workout/${workout.id}`);
+                            }}
+                          >
+                            <FileText className="w-3 h-3 mr-1" />
+                            Summary
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 );
