@@ -15,7 +15,7 @@ import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedN
 import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase, getClientExerciseHistory } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
-import { getLastWorkoutWithExercise } from '@/lib/getLastSetForExercise';
+import { getLastWorkoutWithExercise, getMostRecentExerciseData } from '@/lib/getLastSetForExercise';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -3601,19 +3601,26 @@ export default function ActiveWorkoutPage() {
                     {blockExercises.map((workoutExercise: any) => {
                       // v12-D4: PB lookup scoped to workout owner (client in PT mode).
                       const exercisePB = getPBForExerciseForUser(workoutExercise.exerciseId, workout.userId);
-                      // v12-D4: most-recent COMPLETED workout for this exercise,
-                      // properly sorted by endTime (not array-order which surfaced
-                      // workouts from a month ago as "previous").
-                      const lastWorkout = getLastWorkoutWithExercise(
+                      // v15-D2: single source of truth for both the "Last: ..."
+                      // header strip AND the per-set PREVIOUS column. Previously
+                      // the header read getLastWorkoutWithExercise while the
+                      // per-set column read set.previousWeight (baked in at
+                      // set-creation time) — those two paths could diverge
+                      // (reproduction R3: Leg Press header showed May 11 3-set
+                      // shape, column showed May 11 4-set different values).
+                      const mostRecent = getMostRecentExerciseData(
                         workoutHistory,
                         workoutExercise.exerciseId,
                         workout.userId,
                       );
-                      const normalizedExId = normalizeExerciseId(workoutExercise.exerciseId || '');
-                      const lastExerciseData = lastWorkout?.exercises?.find((e: any) => 
-                        normalizeExerciseId(e.exerciseId || '') === normalizedExId
-                      );
-                      const lastSets = lastExerciseData?.sets?.filter((s: any) => s.completed);
+                      const lastWorkout = mostRecent
+                        ? getLastWorkoutWithExercise(
+                            workoutHistory,
+                            workoutExercise.exerciseId,
+                            workout.userId,
+                          )
+                        : undefined;
+                      const lastSets = mostRecent?.sets;
                       // Volume comparison
                       const lastVolume = lastSets?.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
                       const currentCompletedSets = (workoutExercise.sets || []).filter((s: any) => s.completed);

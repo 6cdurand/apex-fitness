@@ -15,6 +15,7 @@ import {
   getLastSetForExercise,
   getLastSetForExerciseAtIndex,
   getLastWorkoutWithExercise,
+  getMostRecentExerciseData,
 } from '../getLastSetForExercise';
 import type { Workout } from '@/types';
 
@@ -214,7 +215,11 @@ console.log('\n--- Bug 6: getLastSetForExerciseAtIndex returns set at the right 
 }
 
 {
-  // Newer workout doesn't have a set at index 3, older one does — should return undefined (we don't reach back further to old workouts; matches the original behavior of taking the most-recent matching workout).
+  // v15-D2: NO FALLTHROUGH. Newer workout has 2 sets, older workout has 4.
+  // The helper MUST NOT reach back to the older workout when newSetIndex
+  // exceeds the most-recent workout's set count — that fallthrough was
+  // the H1 bug behind reproduction R2 (Ab Crunch: 5 PREVIOUS rows shown
+  // for a Mar 17 workout that only had 2 sets).
   const history: Workout[] = [
     mkWorkout({
       id: 'old',
@@ -235,11 +240,10 @@ console.log('\n--- Bug 6: getLastSetForExerciseAtIndex returns set at the right 
       ],
     }),
   ];
-  // Index 3 doesn't exist on the newer workout; helper SKIPS the workout and tries the next one (the older one which does have index 3).
   const result = getLastSetForExerciseAtIndex(history, 'bench-press', USER_A, 3);
-  assert('falls back to next-recent workout that has the requested set index',
-    result?.weight === 70 && result?.workoutId === 'old',
-    `got weight=${result?.weight}, id=${result?.workoutId}`);
+  assert('v15-D2 NO-FALLTHROUGH: returns undefined when index >= most-recent length',
+    result === undefined,
+    `expected undefined, got weight=${result?.weight}, id=${result?.workoutId}`);
 }
 
 // ============ Bug 7: getLastWorkoutWithExercise (used by active page) ============
@@ -256,6 +260,139 @@ console.log('\n--- Bug 7: getLastWorkoutWithExercise returns most-recent complet
   assert('returns most-recent COMPLETED workout, ignoring drafts and deleted',
     result?.id === 'recent-complete',
     `got id=${result?.id}`);
+}
+
+// ============ v15-D2: getMostRecentExerciseData (single source of truth) ============
+console.log('\n--- v15-D2: getMostRecentExerciseData returns full set array from most-recent workout ---');
+
+{
+  // Reproduction R2 fixture: most-recent has 2 sets, older has 5.
+  // Result.sets MUST be exactly length 2; .sets[3] MUST be undefined.
+  // It must NOT pull D/E from the older workout.
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'five-set-older',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: true, weight: 100, reps: 5 }, // A
+        { completed: true, weight: 105, reps: 5 }, // B
+        { completed: true, weight: 110, reps: 5 }, // C
+        { completed: true, weight: 115, reps: 5 }, // D
+        { completed: true, weight: 120, reps: 5 }, // E
+      ],
+    }),
+    mkWorkout({
+      id: 'two-set-newest',
+      endTime: '2026-05-10T10:00:00Z',
+      sets: [
+        { completed: true, weight: 80, reps: 8 }, // a
+        { completed: true, weight: 85, reps: 6 }, // b
+      ],
+    }),
+  ];
+  const result = getMostRecentExerciseData(history, 'bench-press', USER_A);
+  assert('returns most-recent workout sets only (length 2)',
+    result?.sets.length === 2 && result?.workoutId === 'two-set-newest',
+    `got length=${result?.sets.length}, id=${result?.workoutId}`);
+  assert('sets[0] is the most-recent first set (a)',
+    result?.sets[0]?.weight === 80 && result?.sets[0]?.reps === 8,
+    `got ${JSON.stringify(result?.sets[0])}`);
+  assert('sets[1] is the most-recent second set (b)',
+    result?.sets[1]?.weight === 85 && result?.sets[1]?.reps === 6,
+    `got ${JSON.stringify(result?.sets[1])}`);
+  assert('sets[3] is undefined — no fallthrough to older workout (must not return D)',
+    (result?.sets[3] as any) === undefined,
+    `expected undefined, got ${JSON.stringify(result?.sets[3])}`);
+}
+
+{
+  // Skip drafts + deleted + other-user workouts when picking "most recent".
+  const history: Workout[] = [
+    mkWorkout({ id: 'bobs', userId: USER_B, endTime: '2026-05-15T10:00:00Z', sets: [{ completed: true, weight: 999, reps: 5 }] }),
+    mkWorkout({ id: 'draft', status: 'active', endTime: '2026-05-14T10:00:00Z', sets: [{ completed: true, weight: 888, reps: 5 }] }),
+    mkWorkout({ id: 'deleted', deletedAt: '2026-05-13T01:00:00Z', endTime: '2026-05-13T00:00:00Z', sets: [{ completed: true, weight: 777, reps: 5 }] }),
+    mkWorkout({ id: 'good',  endTime: '2026-05-10T10:00:00Z', sets: [{ completed: true, weight: 70, reps: 8 }, { completed: true, weight: 75, reps: 6 }] }),
+  ];
+  const result = getMostRecentExerciseData(history, 'bench-press', USER_A);
+  assert('skips other-user / draft / deleted; returns the correct workout',
+    result?.workoutId === 'good' && result?.sets.length === 2,
+    `got id=${result?.workoutId}, length=${result?.sets.length}`);
+}
+
+{
+  // setIndex on the returned sets reflects original position in the
+  // historical workout's sets[] (some sets may be uncompleted and skipped).
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'mixed',
+      endTime: '2026-05-10T10:00:00Z',
+      sets: [
+        { completed: true, weight: 80, reps: 8 },
+        { completed: false, weight: 0, reps: 0 }, // skipped
+        { completed: true, weight: 85, reps: 6 },
+      ],
+    }),
+  ];
+  const result = getMostRecentExerciseData(history, 'bench-press', USER_A);
+  assert('skips uncompleted intermediate sets and reports original setIndex',
+    result?.sets.length === 2 && result?.sets[0].setIndex === 0 && result?.sets[1].setIndex === 2,
+    `got ${JSON.stringify(result?.sets.map(s => s.setIndex))}`);
+}
+
+{
+  // Header strip + per-set column read the SAME workout (reproduction R3 fix).
+  // Build a fixture where most-recent has [A, B, C] and an older workout has
+  // [X, Y, Z, W, T]. Both header and column must source from [A, B, C].
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'older',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: true, weight: 200, reps: 10 }, // X
+        { completed: true, weight: 210, reps: 10 }, // Y
+        { completed: true, weight: 220, reps: 10 }, // Z
+        { completed: true, weight: 230, reps: 10 }, // W
+        { completed: true, weight: 240, reps: 10 }, // T
+      ],
+    }),
+    mkWorkout({
+      id: 'newest',
+      endTime: '2026-05-15T10:00:00Z',
+      sets: [
+        { completed: true, weight: 85, reps: 15 }, // A
+        { completed: true, weight: 85, reps: 16 }, // B
+        { completed: true, weight: 95, reps: 15 }, // C
+      ],
+    }),
+  ];
+  const result = getMostRecentExerciseData(history, 'bench-press', USER_A);
+  // Both consumers (header strip + per-set column) destructure from this same
+  // object, so they CANNOT diverge.
+  assert('header strip + per-set column converge on same workout (R3 regression guard)',
+    result?.workoutId === 'newest' && result?.sets.length === 3,
+    `got id=${result?.workoutId}, length=${result?.sets.length}`);
+  assert('sets[3] is undefined — older workout sets W/T must NOT leak in',
+    (result?.sets[3] as any) === undefined);
+  assert('first three sets match the [A, B, C] shape exactly',
+    result?.sets[0]?.weight === 85 && result?.sets[0]?.reps === 15 &&
+    result?.sets[1]?.weight === 85 && result?.sets[1]?.reps === 16 &&
+    result?.sets[2]?.weight === 95 && result?.sets[2]?.reps === 15,
+    `got ${JSON.stringify(result?.sets)}`);
+}
+
+{
+  // Trainer-mode user scoping: workoutHistory contains both trainer + client
+  // workouts; calling with client-uid must only consider client's.
+  const TRAINER = 'trainer-uid';
+  const CLIENT = 'client-uid';
+  const history: Workout[] = [
+    mkWorkout({ id: 'trainer-self', userId: TRAINER, endTime: '2026-05-20T10:00:00Z', sets: [{ completed: true, weight: 200, reps: 5 }] }),
+    mkWorkout({ id: 'client-pt',   userId: CLIENT,  endTime: '2026-05-18T10:00:00Z', sets: [{ completed: true, weight: 40, reps: 12 }] }),
+  ];
+  const result = getMostRecentExerciseData(history, 'bench-press', CLIENT);
+  assert('trainer-mode: ignores trainer-self workouts when called for client',
+    result?.workoutId === 'client-pt' && result?.sets[0]?.weight === 40,
+    `got id=${result?.workoutId}, weight=${result?.sets[0]?.weight}`);
 }
 
 // ============ Summary ============

@@ -93,18 +93,48 @@ export function getLastSetForExercise(
   return undefined;
 }
 
+export interface MostRecentExerciseData {
+  /**
+   * All COMPLETED sets from the most-recent workout that contains this
+   * exercise, in the same order they were performed. Each `setIndex` is
+   * the source position inside the original workout's `sets[]` array,
+   * so callers can map a historical set to its current counterpart 1:1.
+   */
+  sets: Array<{
+    weight?: number;
+    reps?: number;
+    duration?: number;
+    isAssisted?: boolean;
+    completed: true;
+    setIndex: number;
+  }>;
+  workoutId: string;
+  workoutDate: string;
+}
+
 /**
- * Like getLastSetForExercise but returns the historical set at a SPECIFIC
- * set INDEX from the most-recent completed workout. Used when the user
- * presses "Add set" mid-workout so the new set carries forward the
- * previous workout's values at that same set position.
+ * v15-D2 — single source of truth for both the "Last: ..." header strip
+ * AND the per-set "PREVIOUS" column on the active-workout page.
+ *
+ * Returns ALL completed sets from the most-recent completed workout that
+ * contains this exercise. If no historical workout matches, returns
+ * undefined.
+ *
+ * Filters: status='completed', !deletedAt, userId match.
+ * Sort: endTime DESC (falls back to startTime).
+ *
+ * Replaces the legacy `getLastSetForExerciseAtIndex` which fell through to
+ * older workouts when the requested setIndex >= most-recent length. That
+ * fallthrough caused reproduction R2 (Ab Crunch: 5 PREVIOUS rows shown for
+ * a Mar 17 workout that only had 2 sets — sets 3-5 were pulling from
+ * older workouts also dated Mar 17) and R3 (Leg Press: header strip and
+ * per-set column disagreeing on what May 11 looked like).
  */
-export function getLastSetForExerciseAtIndex(
+export function getMostRecentExerciseData(
   workoutHistory: Workout[],
   exerciseId: string,
   userId: string,
-  setIndex: number,
-): LastSetData | undefined {
+): MostRecentExerciseData | undefined {
   const normalizedId = normalizeExerciseId(exerciseId || '');
   const candidates = getRecentCompletedWorkouts(workoutHistory, userId);
 
@@ -112,18 +142,54 @@ export function getLastSetForExerciseAtIndex(
     const matchingEx = workout.exercises?.find(e =>
       normalizeExerciseId(e.exerciseId || '') === normalizedId
     );
-    if (!matchingEx?.sets?.length || matchingEx.sets.length <= setIndex) continue;
-    const historicalSet = matchingEx.sets[setIndex];
-    if (historicalSet?.completed && historicalSet.weight && historicalSet.reps) {
-      return {
-        weight: historicalSet.weight,
-        reps: historicalSet.reps,
-        workoutId: workout.id,
-        workoutDate: workout.endTime || workout.startTime || '',
-      };
-    }
+    if (!matchingEx?.sets?.length) continue;
+    const completedSets = matchingEx.sets
+      .map((s: any, i: number) => ({ s, i }))
+      .filter(({ s }) => s.completed && (s.weight || s.duration))
+      .map(({ s, i }) => ({
+        weight: s.weight,
+        reps: s.reps,
+        duration: s.duration,
+        isAssisted: s.isAssisted,
+        completed: true as const,
+        setIndex: i,
+      }));
+    if (completedSets.length === 0) continue;
+    return {
+      sets: completedSets,
+      workoutId: workout.id,
+      workoutDate: workout.endTime || workout.startTime || '',
+    };
   }
   return undefined;
+}
+
+/**
+ * @deprecated v15-D2 — use `getMostRecentExerciseData` and index into
+ * `.sets[]`. This wrapper preserves the call-site signature but NO LONGER
+ * falls through to older workouts when the requested index is past the
+ * most-recent workout's set count — that was the H1 bug behind R2/R3.
+ *
+ * Returns undefined when:
+ *   - no historical workout contains the exercise, OR
+ *   - the most-recent workout's completed-set count <= setIndex.
+ */
+export function getLastSetForExerciseAtIndex(
+  workoutHistory: Workout[],
+  exerciseId: string,
+  userId: string,
+  setIndex: number,
+): LastSetData | undefined {
+  const mostRecent = getMostRecentExerciseData(workoutHistory, exerciseId, userId);
+  if (!mostRecent || setIndex >= mostRecent.sets.length) return undefined;
+  const s = mostRecent.sets[setIndex];
+  if (!s.weight || !s.reps) return undefined;
+  return {
+    weight: s.weight,
+    reps: s.reps,
+    workoutId: mostRecent.workoutId,
+    workoutDate: mostRecent.workoutDate,
+  };
 }
 
 /**
