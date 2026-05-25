@@ -16,6 +16,8 @@ import {
   getLastSetForExerciseAtIndex,
   getLastWorkoutWithExercise,
   getMostRecentExerciseData,
+  getBestExerciseRecord,
+  getBestVolumeForExercise,
 } from '../getLastSetForExercise';
 import type { Workout } from '@/types';
 
@@ -393,6 +395,183 @@ console.log('\n--- v15-D2: getMostRecentExerciseData returns full set array from
   assert('trainer-mode: ignores trainer-self workouts when called for client',
     result?.workoutId === 'client-pt' && result?.sets[0]?.weight === 40,
     `got id=${result?.workoutId}, weight=${result?.sets[0]?.weight}`);
+}
+
+// ============ v15-D7: getBestExerciseRecord ============
+console.log('\n--- v15-D7: getBestExerciseRecord returns all-time-best single-set record ---');
+
+{
+  // Returns the highest-weight set across all workouts for the exercise.
+  const history: Workout[] = [
+    mkWorkout({ id: 'w1', endTime: '2026-04-01T10:00:00Z', sets: [{ completed: true, weight: 100, reps: 10 }] }),
+    mkWorkout({ id: 'w2', endTime: '2026-04-15T10:00:00Z', sets: [{ completed: true, weight: 120, reps: 8 }] }),
+    mkWorkout({ id: 'w3', endTime: '2026-05-01T10:00:00Z', sets: [{ completed: true, weight: 110, reps: 12 }] }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('returns the highest-weight set across all workouts (120kg x 8)',
+    result?.bestWeight === 120 && result?.bestReps === 8,
+    `got weight=${result?.bestWeight}, reps=${result?.bestReps}`);
+  assert('workoutId points to the workout containing the best set',
+    result?.workoutId === 'w2',
+    `got id=${result?.workoutId}`);
+}
+
+{
+  // Ties on weight broken by higher reps.
+  const history: Workout[] = [
+    mkWorkout({ id: 'w1', endTime: '2026-04-01T10:00:00Z', sets: [{ completed: true, weight: 100, reps: 8 }] }),
+    mkWorkout({ id: 'w2', endTime: '2026-04-15T10:00:00Z', sets: [{ completed: true, weight: 100, reps: 12 }] }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('ties broken by higher reps (100kg x 12 beats 100kg x 8)',
+    result?.bestWeight === 100 && result?.bestReps === 12,
+    `got weight=${result?.bestWeight}, reps=${result?.bestReps}`);
+}
+
+{
+  // Uncompleted sets ignored even when heavier.
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'w1',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: false, weight: 200, reps: 5 },  // uncompleted — ignored
+        { completed: true,  weight: 100, reps: 10 },
+      ],
+    }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('skips uncompleted sets (returns 100kg, not 200kg)',
+    result?.bestWeight === 100,
+    `got weight=${result?.bestWeight}`);
+}
+
+{
+  // Returns undefined when no completed workout contains the exercise.
+  const history: Workout[] = [
+    mkWorkout({ id: 'w1', exerciseId: 'squat', sets: [{ completed: true, weight: 100, reps: 10 }] }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('returns undefined when exercise not in any workout',
+    result === undefined,
+    `got ${JSON.stringify(result)}`);
+}
+
+{
+  // Duration-only sets (cardio) skipped — PB concept = weight x reps.
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'w1',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: true, duration: 600 },               // no weight — ignored
+        { completed: true, weight: 50, reps: 0 },          // zero reps — ignored
+        { completed: true, weight: 80, reps: 6 },
+      ],
+    }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('skips duration-only and zero-reps sets',
+    result?.bestWeight === 80 && result?.bestReps === 6,
+    `got weight=${result?.bestWeight}, reps=${result?.bestReps}`);
+}
+
+{
+  // userId scoping: other user's heavier set ignored.
+  const history: Workout[] = [
+    mkWorkout({ id: 'bobs',   userId: USER_B, endTime: '2026-04-15T10:00:00Z', sets: [{ completed: true, weight: 999, reps: 5 }] }),
+    mkWorkout({ id: 'alices', userId: USER_A, endTime: '2026-04-01T10:00:00Z', sets: [{ completed: true, weight: 80, reps: 8 }] }),
+  ];
+  const result = getBestExerciseRecord(history, 'bench-press', USER_A);
+  assert('userId scoping: ignores other users\' workouts',
+    result?.bestWeight === 80,
+    `got weight=${result?.bestWeight}`);
+}
+
+// ============ v15-D7: getBestVolumeForExercise ============
+console.log('\n--- v15-D7: getBestVolumeForExercise returns max single-workout total volume ---');
+
+{
+  // Returns the max single-workout total volume for the exercise.
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'w1',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: true, weight: 100, reps: 10 },  // 1000
+        { completed: true, weight: 100, reps: 10 },  // 1000 = 2000 total
+      ],
+    }),
+    mkWorkout({
+      id: 'w2',
+      endTime: '2026-04-15T10:00:00Z',
+      sets: [
+        { completed: true, weight: 110, reps: 10 },  // 1100
+        { completed: true, weight: 110, reps: 10 },  // 1100 = 2200 total <- max
+      ],
+    }),
+    mkWorkout({
+      id: 'w3',
+      endTime: '2026-05-01T10:00:00Z',
+      sets: [
+        { completed: true, weight: 80, reps: 5 },    // 400 total
+      ],
+    }),
+  ];
+  const result = getBestVolumeForExercise(history, 'bench-press', USER_A);
+  assert('returns max workout-level volume (2200)',
+    result === 2200,
+    `got ${result}`);
+}
+
+{
+  // Uncompleted sets excluded from the per-workout volume sum.
+  const history: Workout[] = [
+    mkWorkout({
+      id: 'w1',
+      endTime: '2026-04-01T10:00:00Z',
+      sets: [
+        { completed: true,  weight: 100, reps: 10 }, // 1000 counted
+        { completed: false, weight: 200, reps: 10 }, // 2000 — IGNORED
+      ],
+    }),
+  ];
+  const result = getBestVolumeForExercise(history, 'bench-press', USER_A);
+  assert('skips uncompleted sets in volume sum (returns 1000)',
+    result === 1000,
+    `got ${result}`);
+}
+
+{
+  // Returns 0 when no completed workout contains the exercise.
+  const result = getBestVolumeForExercise([], 'bench-press', USER_A);
+  assert('returns 0 on empty history',
+    result === 0,
+    `got ${result}`);
+}
+
+{
+  // Returns 0 when only other users have the exercise.
+  const history: Workout[] = [
+    mkWorkout({ id: 'bobs', userId: USER_B, endTime: '2026-04-15T10:00:00Z', sets: [{ completed: true, weight: 100, reps: 10 }] }),
+  ];
+  const result = getBestVolumeForExercise(history, 'bench-press', USER_A);
+  assert('userId scoping: returns 0 when only other users have the exercise',
+    result === 0,
+    `got ${result}`);
+}
+
+{
+  // Skips drafts and soft-deleted workouts.
+  const history: Workout[] = [
+    mkWorkout({ id: 'draft',   status: 'active',                endTime: '2026-04-20T10:00:00Z', sets: [{ completed: true, weight: 200, reps: 10 }] }), // 2000 — ignored
+    mkWorkout({ id: 'deleted', deletedAt: '2026-04-19T00:00:00Z', endTime: '2026-04-18T10:00:00Z', sets: [{ completed: true, weight: 300, reps: 10 }] }), // 3000 — ignored
+    mkWorkout({ id: 'good',    endTime: '2026-04-01T10:00:00Z', sets: [{ completed: true, weight: 50, reps: 10 }] }),  // 500
+  ];
+  const result = getBestVolumeForExercise(history, 'bench-press', USER_A);
+  assert('skips draft + soft-deleted workouts (returns 500)',
+    result === 500,
+    `got ${result}`);
 }
 
 // ============ Summary ============

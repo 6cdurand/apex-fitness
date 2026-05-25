@@ -211,3 +211,84 @@ export function getLastWorkoutWithExercise(
     w.exercises?.some(e => normalizeExerciseId(e.exerciseId || '') === normalizedId)
   );
 }
+
+/**
+ * v15-D7 — all-time-best single-set record across the user's workout history
+ * for a given exercise. Used as a fallback for the Trophy "PB:" badge on
+ * the active-workout exercise card when the dedicated `personal_bests`
+ * lookup returns undefined.
+ *
+ * "Best set" = the completed set with the highest `weight`. Ties broken by
+ * higher reps. `duration` sets (cardio / time-only) are skipped — the PB
+ * concept only applies to weight × reps.
+ *
+ * Returns undefined when no completed workout contains this exercise with a
+ * weight-bearing set.
+ */
+export function getBestExerciseRecord(
+  workoutHistory: Workout[],
+  exerciseId: string,
+  userId: string,
+): { bestWeight: number; bestReps: number; workoutId: string; workoutDate: string } | undefined {
+  const normalizedId = normalizeExerciseId(exerciseId || '');
+  const candidates = getRecentCompletedWorkouts(workoutHistory, userId);
+
+  let best: { bestWeight: number; bestReps: number; workoutId: string; workoutDate: string } | undefined;
+  for (const workout of candidates) {
+    const matchingEx = workout.exercises?.find(e =>
+      normalizeExerciseId(e.exerciseId || '') === normalizedId,
+    );
+    if (!matchingEx?.sets?.length) continue;
+    for (const s of matchingEx.sets) {
+      if (!s.completed) continue;
+      if (!s.weight || !s.reps) continue; // skip duration-only / empty
+      if (
+        !best ||
+        s.weight > best.bestWeight ||
+        (s.weight === best.bestWeight && s.reps > best.bestReps)
+      ) {
+        best = {
+          bestWeight: s.weight,
+          bestReps: s.reps,
+          workoutId: workout.id,
+          workoutDate: workout.endTime || workout.startTime || '',
+        };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * v15-D7 — all-time-best workout-level volume for this exercise across the
+ * user's workout history. Per-workout volume = sum(weight × reps) over all
+ * completed weight-bearing sets of the exercise in that workout. Returns the
+ * MAX across all matching workouts.
+ *
+ * Used to label the volume comparison bar as `Best: <max>kg` instead of the
+ * pre-D7 `Last: <most-recent>kg` which leaked the wrong number.
+ *
+ * Returns 0 when no completed workout contains the exercise.
+ */
+export function getBestVolumeForExercise(
+  workoutHistory: Workout[],
+  exerciseId: string,
+  userId: string,
+): number {
+  const normalizedId = normalizeExerciseId(exerciseId || '');
+  const candidates = getRecentCompletedWorkouts(workoutHistory, userId);
+
+  let maxVolume = 0;
+  for (const workout of candidates) {
+    const matchingEx = workout.exercises?.find(e =>
+      normalizeExerciseId(e.exerciseId || '') === normalizedId,
+    );
+    if (!matchingEx?.sets?.length) continue;
+    const volume = matchingEx.sets.reduce((sum: number, s: any) => {
+      if (!s.completed || !s.weight || !s.reps) return sum;
+      return sum + s.weight * s.reps;
+    }, 0);
+    if (volume > maxVolume) maxVolume = volume;
+  }
+  return maxVolume;
+}
