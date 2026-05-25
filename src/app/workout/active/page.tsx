@@ -15,7 +15,12 @@ import { calculate1RM, getMuscleDisplayName, isAssistedExercise, formatAssistedN
 import { searchExercises } from '@/lib/exerciseSearch';
 import { syncExerciseHistoryToSupabase, fetchUserDataFromSupabase, getClientExerciseHistory } from '@/lib/supabaseSync';
 import { normalizeExerciseId } from '@/lib/exerciseStats';
-import { getLastWorkoutWithExercise, getMostRecentExerciseData } from '@/lib/getLastSetForExercise';
+import {
+  getLastWorkoutWithExercise,
+  getMostRecentExerciseData,
+  getBestExerciseRecord,
+  getBestVolumeForExercise,
+} from '@/lib/getLastSetForExercise';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { computeProgramDayDiff, type ProgramDayDiff } from '@/lib/programDiff';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -3705,10 +3710,24 @@ export default function ActiveWorkoutPage() {
                           )
                         : undefined;
                       const lastSets = mostRecent?.sets;
-                      // Volume comparison
-                      const lastVolume = lastSets?.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0) || 0;
                       const currentCompletedSets = (workoutExercise.sets || []).filter((s: any) => s.completed);
                       const currentVolume = currentCompletedSets.reduce((sum: number, s: any) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
+                      // v15-D7: fallback PB compute from workoutHistory when the dedicated
+                      // personal_bests lookup returns undefined. Some clients (esp. bulk-imported)
+                      // have sparse personal_bests rows; the visible Trophy badge had been
+                      // silently disappearing for those exercises. The fallback ensures parity
+                      // with the in-history data the user can actually see.
+                      const fallbackPB = !exercisePB
+                        ? getBestExerciseRecord(workoutHistory, workoutExercise.exerciseId, workout.userId)
+                        : undefined;
+                      // v15-D7: all-time-best volume for this exercise. Prefer the dedicated
+                      // personal_bests.bestVolume when populated; fall back to a workoutHistory
+                      // scan. Pre-D7 the volume strip displayed the most-recent workout's
+                      // volume mislabeled as `Last:` / `PB:` — now it shows the true best.
+                      const bestVolumeEver =
+                        exercisePB?.bestVolume && exercisePB.bestVolume > 0
+                          ? exercisePB.bestVolume
+                          : getBestVolumeForExercise(workoutHistory, workoutExercise.exerciseId, workout.userId);
                       
                       return (
                       <div key={workoutExercise.id} className="bg-white border-b border-gray-100">
@@ -3804,10 +3823,13 @@ export default function ActiveWorkoutPage() {
                           </div>
                           {/* PB and Previous Results */}
                           <div className="flex flex-wrap items-center gap-2 text-xs">
-                            {exercisePB && (
+                            {/* v15-D7: prefer authoritative exercisePB, fall back to workoutHistory-derived PB. */}
+                            {(exercisePB || fallbackPB) && (
                               <div className="flex items-center gap-1 px-2 py-1 bg-amber-500/10 rounded">
                                 <Trophy className="w-3 h-3 text-amber-400" />
-                                <span className="text-amber-400">PB: {exercisePB.bestWeight}kg × {exercisePB.bestReps}</span>
+                                <span className="text-amber-400">
+                                  PB: {(exercisePB?.bestWeight ?? fallbackPB!.bestWeight)}kg × {(exercisePB?.bestReps ?? fallbackPB!.bestReps)}
+                                </span>
                               </div>
                             )}
                             {lastSets && lastSets.length > 0 && lastWorkout && (
@@ -3821,19 +3843,21 @@ export default function ActiveWorkoutPage() {
                           </div>
                         </div>
                         {/* Volume Comparison Bar */}
-                        {lastVolume > 0 && (
+                        {/* v15-D7: show all-time-best volume on the left (was: most-recent
+                            volume mislabeled as PB:). Delta math compares Today vs Best. */}
+                        {(bestVolumeEver > 0 || currentVolume > 0) && (
                           <div className="px-4 py-1.5 bg-gray-50 flex items-center justify-between text-[11px]">
-                            <span className={exercisePB ? "text-amber-500" : "text-gray-500"}>
-                              {exercisePB ? 'PB:' : 'Last:'} {lastVolume.toLocaleString()}kg
+                            <span className={bestVolumeEver > 0 ? "text-amber-500" : "text-gray-500"}>
+                              {bestVolumeEver > 0 ? `Best: ${bestVolumeEver.toLocaleString()}kg` : 'First time'}
                             </span>
                             <span className={cn(
                               "font-medium",
-                              currentVolume > lastVolume ? "text-green-400" : currentVolume < lastVolume ? "text-orange-400" : "text-gray-400"
+                              currentVolume > bestVolumeEver ? "text-green-400" : currentVolume < bestVolumeEver ? "text-orange-400" : "text-gray-400"
                             )}>
                               Today: {currentVolume.toLocaleString()}kg
-                              {currentVolume > 0 && lastVolume > 0 && (
+                              {currentVolume > 0 && bestVolumeEver > 0 && (
                                 <span className="ml-1">
-                                  ({currentVolume >= lastVolume ? '+' : ''}{Math.round(((currentVolume - lastVolume) / lastVolume) * 100)}%)
+                                  ({currentVolume >= bestVolumeEver ? '+' : ''}{Math.round(((currentVolume - bestVolumeEver) / bestVolumeEver) * 100)}%)
                                 </span>
                               )}
                             </span>
