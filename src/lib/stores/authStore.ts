@@ -3,7 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
-import { registerUserToSupabase, loginFromSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
+import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
+import { supabase } from '../supabase';
 
 // Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
 export function hashPassword(password: string): string {
@@ -54,7 +55,7 @@ interface AuthState {
   logout: () => void;
   deleteAccount: () => void;
   updateUser: (updates: Partial<User>) => void;
-  updatePassword: (email: string, oldPassword: string, newPassword: string) => boolean;
+  updatePassword: (email: string, oldPassword: string, newPassword: string) => Promise<boolean>;
   resetPassword: (email: string, newPassword: string) => boolean;
   switchMode: (mode: UserMode) => void;
   /**
@@ -106,59 +107,108 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (email: string, password: string) => {
         set({ isLoading: true, loginError: null });
-        
-        console.log('[Auth] Login attempt for:', email);
-        
-        // First try localStorage (for quick local login)
+
+        console.log('[Auth] Login attempt for:', email, '| method: password');
+
+        // localStorage fast-path (offline / demo / cached). We KEEP the legacy
+        // hashPassword comparison here ONLY for cached local logins;
+        // localStorage never leaves the device, so the weak hash is not a
+        // network concern. v15-D6: Supabase Auth is the source of truth for
+        // new logins; localStorage cache is best-effort secondary.
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        console.log('[Auth] Found', storedUsers.length, 'users in localStorage');
-        
         const hashed = hashPassword(password);
-        // Repair: fix users with missing/undefined passwords (from Supabase merge stripping them)
-        storedUsers.forEach((u: any) => {
-          if (!u.password && u.email && !u.isTrainer) {
-            u.password = hashPassword('client123');
-          }
-        });
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-        
-        const localUser = storedUsers.find((u: User & { password: string }) => {
+        const localUser = storedUsers.find((u: User & { password?: string }) => {
           if (u.email?.toLowerCase() !== email.toLowerCase()) return false;
-          // Match hashed or legacy plaintext passwords
+          if (!u.password) return false; // OAuth-cached rows have no password
           return u.password === hashed || u.password === password;
         });
-        // Migrate legacy plaintext password to hash
-        if (localUser && localUser.password === password) {
-          localUser.password = hashed;
-          localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-        }
-        
         if (localUser) {
-          console.log('[Auth] ✅ Found user in localStorage');
-          const { password: _, ...userData } = localUser;
+          console.log('[Auth] ✅ localStorage fast-path matched');
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { password: _pw, ...userData } = localUser as any;
           set({ user: userData, isAuthenticated: true, isLoading: false, loginError: null });
           return true;
         }
-        
-        console.log('[Auth] User not in localStorage, trying Supabase...');
-        
-        // Try Supabase for cross-device login. The discriminated result lets us
-        // surface 'oauth_only' (account registered via Google, no password set)
-        // distinctly from 'wrong_password' / 'no_user' so the auth UI can guide
-        // the user to the correct sign-in path.
-        const result = await loginFromSupabase(email, password);
-        if (result.kind === 'success') {
-          console.log('[Auth] ✅ Found user in Supabase:', result.user.email);
-          // Save to localStorage for future local logins
-          storedUsers.push({ ...result.user, password: hashPassword(password) });
-          localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-          set({ user: result.user, isAuthenticated: true, isLoading: false, loginError: null });
-          return true;
+
+        console.log('[Auth] localStorage miss, trying Supabase Auth...');
+
+        // v15-D6: replace legacy public.users.password_hash REST query with
+        // Supabase Auth's signInWithPassword. auth.users.encrypted_password
+        // is now the credential source of truth.
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+        if (error) {
+          const msg = (error.message || '').toLowerCase();
+          let reason: LoginErrorReason = 'wrong_password';
+          if (msg.includes('invalid login credentials')) {
+            reason = 'wrong_password';
+          } else if (msg.includes('email not confirmed')) {
+            reason = 'wrong_password';
+          } else if (msg.includes('rate limit') || msg.includes('too many')) {
+            reason = 'network';
+          } else if (msg.includes('user not found')) {
+            reason = 'no_user';
+          }
+          console.log('[Auth] ❌ Supabase Auth error:', error.message, '| reason:', reason);
+          set({ isLoading: false, loginError: reason });
+          return false;
         }
-        
-        console.log('[Auth] ❌ Login failed - reason:', result.kind);
-        set({ isLoading: false, loginError: result.kind });
-        return false;
+
+        if (!data?.user) {
+          console.log('[Auth] ❌ Supabase Auth returned no user');
+          set({ isLoading: false, loginError: 'no_user' });
+          return false;
+        }
+
+        console.log('[Auth] ✅ Supabase Auth success | auth.users.id:', data.user.id);
+
+        // Resolve canonical public.users.id (may differ from auth.users.id
+        // for accounts created via trainer placeholder before client signup
+        // — same posture as loginWithSupabaseUser).
+        const canonical = await resolveCanonicalUserByEmail(email);
+        const canonicalId = canonical?.id || data.user.id;
+
+        const c = canonical as any;
+        const user: User = {
+          id: canonicalId,
+          email: data.user.email!,
+          username: c?.username || data.user.email!.split('@')[0],
+          displayName:
+            c?.display_name ||
+            (data.user.user_metadata?.full_name as string | undefined) ||
+            data.user.email!.split('@')[0],
+          profilePhoto:
+            c?.profile_photo ||
+            (data.user.user_metadata?.picture as string | undefined),
+          gender: (c?.gender as any) || 'other',
+          dateOfBirth: c?.date_of_birth || undefined,
+          height: c?.height ?? undefined,
+          weight: c?.weight ?? undefined,
+          preferredUnit: (c?.preferred_unit as 'kg' | 'lb') || 'kg',
+          isTrainer: c?.is_trainer ?? false,
+          isVerifiedTrainer: c?.is_verified_trainer ?? false,
+          mode: (c?.mode as UserMode) || 'user',
+          membershipTier: 'pro',
+          accountStatus: (c?.account_status as any) || 'active',
+          createdAt: c?.created_at || new Date().toISOString(),
+          followers: [],
+          following: [],
+          trainerId: c?.trainer_id || undefined,
+          autoCountSessionsDefault: c?.auto_count_sessions_default ?? true,
+          blockFolderOrder: c?.block_folder_order ?? undefined,
+        };
+
+        // Cache in localStorage so next launch can use the fast-path.
+        const filtered = storedUsers.filter(
+          (u: User) =>
+            u.id !== canonicalId &&
+            u.email?.toLowerCase() !== email.toLowerCase()
+        );
+        filtered.push({ ...user, password: hashPassword(password) });
+        localStorage.setItem('apex-users', JSON.stringify(filtered));
+
+        set({ user, isAuthenticated: true, isLoading: false, loginError: null });
+        return true;
       },
 
       // Login with Supabase Auth user (from Google OAuth, etc.)
@@ -239,7 +289,7 @@ export const useAuthStore = create<AuthState>()(
         // Only register to Supabase if there's no canonical row yet — don't overwrite
         if (!canonical) {
           try {
-            await registerUserToSupabase(newUser, `oauth_${supabaseUser.id}`);
+            await registerUserToSupabase(newUser);
           } catch (e) {
             console.error('[Auth] Supabase sync error:', e);
           }
@@ -252,25 +302,62 @@ export const useAuthStore = create<AuthState>()(
       register: async (userData) => {
         set({ isLoading: true });
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        
-        // Check if a placeholder account with this email exists — reuse its ID instead of creating a duplicate
-        const existingPlaceholder = storedUsers.find((u: any) => 
+
+        console.log('[Auth] Register attempt for:', userData.email, '| isTrainer:', userData.isTrainer);
+
+        // Placeholder reuse (preserved from legacy): trainer creates a
+        // placeholder for a client email; client later registers and
+        // inherits the placeholder's id so program FKs continue resolving.
+        const existingPlaceholder = storedUsers.find((u: any) =>
           u.email?.toLowerCase() === userData.email?.toLowerCase() &&
           (u.accountStatus === 'placeholder' || u.email?.endsWith('@placeholder.local') || u.email?.endsWith('@client.apex'))
         );
-        
-        // Check if a real (non-placeholder) account with this email exists — block duplicate
-        const existingActive = storedUsers.find((u: any) => 
+        const existingActive = storedUsers.find((u: any) =>
           u.email?.toLowerCase() === userData.email?.toLowerCase() &&
           u.accountStatus !== 'placeholder' && !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex')
         );
         if (existingActive) {
+          console.log('[Auth] ❌ Email already registered (active local user)');
           set({ isLoading: false });
           return false;
         }
 
+        // v15-D6: register with Supabase Auth FIRST. This sets
+        // auth.users.encrypted_password so future signInWithPassword calls
+        // succeed. The handle_new_auth_user trigger creates a public.users
+        // row from auth metadata.
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: userData.email!,
+          password: userData.password,
+          options: {
+            data: {
+              username: userData.username,
+              full_name: userData.displayName || userData.username,
+            },
+          },
+        });
+
+        if (authError) {
+          const msg = (authError.message || '').toLowerCase();
+          if (msg.includes('already registered') || msg.includes('user already exists')) {
+            console.log('[Auth] ❌ Supabase Auth says email already registered');
+          } else {
+            console.error('[Auth] ❌ Supabase Auth signUp error:', authError.message);
+          }
+          set({ isLoading: false });
+          return false;
+        }
+
+        if (!authData?.user) {
+          console.error('[Auth] ❌ Supabase Auth signUp returned no user');
+          set({ isLoading: false });
+          return false;
+        }
+
+        console.log('[Auth] ✅ Supabase Auth signUp succeeded | auth.users.id:', authData.user.id);
+
         const newUser: User = {
-          id: userData.id || existingPlaceholder?.id || uuidv4(),
+          id: userData.id || existingPlaceholder?.id || authData.user.id,
           email: userData.email || '',
           username: userData.username || '',
           displayName: userData.displayName || userData.username || '',
@@ -290,21 +377,23 @@ export const useAuthStore = create<AuthState>()(
           trainerId: existingPlaceholder?.trainerId || undefined,
         };
 
-        // If upgrading a placeholder, replace it; otherwise add new
         const filteredUsers = existingPlaceholder
           ? storedUsers.filter((u: any) => u.id !== existingPlaceholder.id)
           : storedUsers;
         filteredUsers.push({ ...newUser, password: hashPassword(userData.password) });
         localStorage.setItem('apex-users', JSON.stringify(filteredUsers));
-        
-        // Sync to Supabase for cross-device login
+
+        // Sync extended profile fields to public.users. The trigger only
+        // sets the basic fields; this UPDATE populates the rest.
+        // registerUserToSupabase no longer writes password_hash.
         try {
-          const synced = await registerUserToSupabase(newUser, userData.password);
-          console.log('Supabase sync result:', synced);
+          const synced = await registerUserToSupabase(newUser);
+          console.log('[Auth] Supabase profile sync result:', synced);
         } catch (e) {
-          console.error('Supabase sync error:', e);
+          console.error('[Auth] Supabase profile sync exception:', e);
+          // Non-fatal — auth row exists, user can log in.
         }
-        
+
         set({ user: newUser, isAuthenticated: true, isLoading: false });
         return true;
       },
@@ -333,29 +422,52 @@ export const useAuthStore = create<AuthState>()(
         set({ user: null, isAuthenticated: false });
       },
 
-      updatePassword: (email, oldPassword, newPassword) => {
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        const hashedOld = hashPassword(oldPassword);
-        const userIdx = storedUsers.findIndex((u: any) => 
-          u.email?.toLowerCase() === email.toLowerCase() && 
-          (u.password === hashedOld || u.password === oldPassword)
-        );
-        if (userIdx === -1) return false;
-        storedUsers[userIdx].password = hashPassword(newPassword);
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+      updatePassword: async (email, oldPassword, newPassword) => {
+        console.log('[Auth] updatePassword called for:', email);
+
+        // Re-auth check via Supabase Auth so we know the old password matches.
+        const { error: verifyError } = await supabase.auth.signInWithPassword({
+          email,
+          password: oldPassword,
+        });
+        if (verifyError) {
+          console.log('[Auth] ❌ updatePassword: old password verification failed');
+          return false;
+        }
+
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        if (updateError) {
+          console.error('[Auth] ❌ updatePassword: Supabase update failed:', updateError.message);
+          return false;
+        }
+
+        console.log('[Auth] ✅ updatePassword succeeded for:', email);
+
+        // Update localStorage cached password so the local-fast-path continues
+        // to work on this device. Other devices keep their own cache.
+        try {
+          const storedUsers: Array<User & { password?: string }> = JSON.parse(
+            localStorage.getItem('apex-users') || '[]'
+          );
+          const idx = storedUsers.findIndex((u) => u.email?.toLowerCase() === email.toLowerCase());
+          if (idx !== -1) {
+            storedUsers[idx].password = hashPassword(newPassword);
+            localStorage.setItem('apex-users', JSON.stringify(storedUsers));
+          }
+        } catch (e) {
+          console.error('[Auth] localStorage password cache update failed:', e);
+        }
+
         return true;
       },
 
-      resetPassword: (email, newPassword) => {
-        const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
-        const userIdx = storedUsers.findIndex((u: any) => 
-          u.email?.toLowerCase() === email.toLowerCase()
-        );
-        if (userIdx === -1) return false;
-        storedUsers[userIdx].password = hashPassword(newPassword);
-        localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-        return true;
-      },
+      /**
+       * @deprecated v15-D6: in-store password reset removed. Password reset
+       *   now flows through Supabase Auth's built-in recovery email + the
+       *   /auth/update-password landing page. Kept as a no-op for binary
+       *   compatibility with any cached store state — DO NOT call.
+       */
+      resetPassword: () => false,
 
       updateUser: (updates) => {
         const currentUser = get().user;
