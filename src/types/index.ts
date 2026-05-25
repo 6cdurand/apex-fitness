@@ -325,6 +325,7 @@ export interface Workout {
   trainerNotes?: string; // Private notes visible only to the trainer who conducted the session
   status: 'active' | 'completed' | 'cancelled';
   assignedBy?: string; // Trainer ID if assigned
+  sharedWithTrainerId?: string; // v15-D4: client opted in to share non-program workout with their trainer
   scheduledDate?: string;
   blocks?: WorkoutBlockSnapshot[]; // Block-level snapshot at finish (cardio/circuit persistence)
   deletedAt?: string; // Soft delete timestamp — null means active

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
 import { convertProgramDayToTemplate, normalizeSetCount } from '@/lib/programStartUtils';
@@ -42,7 +43,8 @@ import {
   Trophy,
   MessageCircle,
   Edit2,
-  Eye
+  Eye,
+  Lock
 } from 'lucide-react';
 import { MALE_SHAPES, FEMALE_SHAPES } from '@/components/BodyShapeSVGs';
 
@@ -618,6 +620,7 @@ export default function ProgramPage() {
                     <WeeklyProgressStrip
                       program={activeProgram}
                       completedDayIndices={nextWorkout.completedDayIndices}
+                      lockedDayIndices={nextWorkout.lockedDayIndices}
                       nextDayIndex={nextWorkout.dayIndex}
                       nextScheduledDay={nextWorkout.nextScheduledDay}
                       isScheduledToday={nextWorkout.isScheduledToday}
@@ -657,11 +660,16 @@ export default function ProgramPage() {
                     const isExpanded = expandedDay === idx;
                     const isNext = nextWorkout?.dayIndex === idx;
                     const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
+                    // v15-D4: locked = trainer has a PT session booked for this
+                    // day this week. Done > Locked in display precedence.
+                    const isLockedThisWeek = !isDoneThisWeek && (nextWorkout?.lockedDayIndices?.includes(idx) ?? false);
                     return (
                       <div key={day.id || idx}>
                         <div
                           className={`w-full flex items-center justify-between p-2.5 rounded-lg transition-colors ${
-                            isDoneThisWeek ? 'bg-emerald-50 border border-emerald-200' : isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
+                            isDoneThisWeek ? 'bg-emerald-50 border border-emerald-200' :
+                            isLockedThisWeek ? 'bg-purple-50 border border-purple-200' :
+                            isNext ? 'bg-sky-50 border border-sky-200' : 'bg-white border border-gray-200'
                           }`}
                         >
                           <button
@@ -669,12 +677,20 @@ export default function ProgramPage() {
                             onClick={() => setExpandedDay(isExpanded ? null : idx)}
                           >
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                              isDoneThisWeek ? 'bg-emerald-500 text-white' : isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                              isDoneThisWeek ? 'bg-emerald-500 text-white' :
+                              isLockedThisWeek ? 'bg-purple-500 text-white' :
+                              isNext ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
                             }`}>
-                              {isDoneThisWeek ? <Check className="w-4 h-4" /> : String.fromCharCode(65 + idx)}
+                              {isDoneThisWeek ? <Check className="w-4 h-4" /> :
+                               isLockedThisWeek ? <Lock className="w-3.5 h-3.5" /> :
+                               String.fromCharCode(65 + idx)}
                             </div>
                             <div className="min-w-0">
-                              <p className={`font-medium text-sm truncate ${isDoneThisWeek ? 'text-emerald-700' : 'text-gray-900'}`}>{day.dayLabel}</p>
+                              <p className={`font-medium text-sm truncate ${
+                                isDoneThisWeek ? 'text-emerald-700' :
+                                isLockedThisWeek ? 'text-purple-700' :
+                                'text-gray-900'
+                              }`}>{day.dayLabel}</p>
                               <p className="text-[10px] text-gray-500">{totalEx} exercises • {day.blocks?.length || 0} blocks</p>
                             </div>
                           </button>
@@ -684,7 +700,12 @@ export default function ProgramPage() {
                                 <Check className="w-3 h-3" /> Done
                               </Badge>
                             )}
-                            {isNext && !isDoneThisWeek && nextWorkout?.isScheduledToday && (
+                            {isLockedThisWeek && (
+                              <Badge className="bg-purple-100 text-purple-700 text-[10px] border-0 flex items-center gap-0.5">
+                                <Lock className="w-3 h-3" /> Booked
+                              </Badge>
+                            )}
+                            {isNext && !isDoneThisWeek && !isLockedThisWeek && nextWorkout?.isScheduledToday && (
                               <Badge className="bg-sky-100 text-sky-700 text-[10px] border-0 flex items-center gap-0.5">
                                 <Target className="w-3 h-3" /> Today
                               </Badge>
@@ -729,10 +750,17 @@ export default function ProgramPage() {
                             <Button
                               size="sm"
                               className="w-full mt-1 bg-sky-500 hover:bg-sky-600 text-white text-xs h-8"
-                              onClick={() => startProgramDay(idx)}
+                              disabled={isLockedThisWeek}
+                              onClick={() => {
+                                if (isLockedThisWeek) {
+                                  toast.info(`${day.dayLabel} is booked with your trainer this week. Pick another day or log a standalone workout.`);
+                                  return;
+                                }
+                                startProgramDay(idx);
+                              }}
                             >
-                              <Play className="w-3 h-3 mr-1" />
-                              Start {day.dayLabel}
+                              {isLockedThisWeek ? <Lock className="w-3 h-3 mr-1" /> : <Play className="w-3 h-3 mr-1" />}
+                              {isLockedThisWeek ? `Booked: ${day.dayLabel}` : `Start ${day.dayLabel}`}
                             </Button>
                           </div>
                         )}
@@ -914,6 +942,8 @@ export default function ProgramPage() {
               const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
               const isScheduled = nextWorkout?.dayIndex === idx;
               const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
+              // v15-D4: locked = trainer-booked PT for this day this week.
+              const isLockedThisWeek = !isDoneThisWeek && (nextWorkout?.lockedDayIndices?.includes(idx) ?? false);
               if (totalEx === 0) return null;
               return (
                 <button
@@ -921,11 +951,23 @@ export default function ProgramPage() {
                   className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors ${
                     isDoneThisWeek
                       ? 'bg-gray-50 border border-gray-200 opacity-60'
+                      : isLockedThisWeek
+                      ? 'bg-purple-50 border border-purple-200 cursor-not-allowed'
                       : isScheduled ? 'bg-sky-50 border-2 border-sky-300' : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
                   }`}
                   onClick={() => {
                     if (isDoneThisWeek) {
                       setRepeatDayConfirm({ idx, day });
+                    } else if (isLockedThisWeek) {
+                      const lockedEvent = useTrainerStore.getState().calendarEvents.find((e: any) =>
+                        e.clientId === user?.id &&
+                        e.type === 'session' &&
+                        e.status !== 'cancelled' &&
+                        e.programId === activeProgram?.id &&
+                        e.programDayIndex === idx,
+                      );
+                      const whenLabel = lockedEvent?.date ? new Date(lockedEvent.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'this week';
+                      toast.info(`${day.dayLabel} is booked with your trainer (${whenLabel}). Pick another workout or log a standalone session.`);
                     } else {
                       setShowSwapDialog(false);
                       startProgramDay(idx);
@@ -934,9 +976,10 @@ export default function ProgramPage() {
                 >
                   <div className="flex items-center gap-2">
                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
+                      isLockedThisWeek ? 'bg-purple-500 text-white' :
                       isScheduled ? 'bg-sky-500 text-white' : 'bg-gray-200 text-gray-600'
                     }`}>
-                      {String.fromCharCode(65 + idx)}
+                      {isLockedThisWeek ? <Lock className="w-3.5 h-3.5" /> : String.fromCharCode(65 + idx)}
                     </div>
                     <div>
                       <p className="font-medium text-sm text-gray-900">{day.dayLabel}</p>
@@ -945,7 +988,8 @@ export default function ProgramPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {isDoneThisWeek && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
-                    {isScheduled && !isDoneThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
+                    {isLockedThisWeek && <Badge className="text-[9px] bg-purple-100 text-purple-700 border-0">Booked with trainer</Badge>}
+                    {isScheduled && !isDoneThisWeek && !isLockedThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
                     <Play className="w-4 h-4 text-gray-400" />
                   </div>
                 </button>

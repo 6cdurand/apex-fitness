@@ -327,6 +327,11 @@ export default function ActiveWorkoutPage() {
   const [sharedNotes, setSharedNotes] = useState('');
   const [sessionPaid, setSessionPaid] = useState(false);
   const [shareToFeed, setShareToFeed] = useState(false);
+  // v15-D4: opt-in sharing of standalone non-program workouts to the
+  // client's trainer. Only surfaces in the finalize UI for workouts that
+  // are NOT PT sessions and NOT program workouts, AND only when the
+  // client actually has a trainer relationship.
+  const [shareWithTrainer, setShareWithTrainer] = useState(false);
   // D17: explicitly null until the user answers the "Save changes to program?"
   // modal. Save only fires on === true. If the modal never shows (detection
   // edge case, stale bundle, render race), the program template stays
@@ -1727,7 +1732,43 @@ export default function ActiveWorkoutPage() {
         sharedNotes: sharedNotes.trim(),
       });
     }
-    
+
+    // v15-D4: persist sharedWithTrainerId if the client opted in via the
+    // "Share with [trainer]" checkbox. Only fires for non-PT, non-program
+    // workouts (the UI gates which workouts can show the checkbox) and
+    // only when an actual trainer relationship is resolved.
+    if (
+      shareWithTrainer
+      && completedWorkoutData?.id
+      && !completedWorkoutData.isPTSession
+      && !completedWorkoutData.isProgramWorkout
+    ) {
+      try {
+        const trainerStoreSnap = useTrainerStore.getState();
+        const activeProgramSnap = trainerStoreSnap.clientPrograms.find(
+          (p: any) => p.clientId === currentUser?.id && p.status === 'active'
+        );
+        const resolvedTrainerId = activeProgramSnap?.trainerId || (currentUser as any)?.trainerId;
+        if (resolvedTrainerId && resolvedTrainerId !== currentUser?.id) {
+          useWorkoutStore.getState().updateCompletedWorkout(completedWorkoutData.id, {
+            sharedWithTrainerId: resolvedTrainerId,
+          });
+          // Notify the trainer (mirrors the existing program-complete
+          // notification path in this same handler).
+          const clientName = currentUser?.displayName || currentUser?.username || 'Client';
+          useSocialStore.getState().addNotification({
+            userId: resolvedTrainerId,
+            type: 'workout_assigned' as any,
+            title: `${clientName} shared a workout with you`,
+            message: `${clientName} shared "${completedWorkoutData.name}" — ${completedWorkoutData.exercises} exercises, ${Math.round(completedWorkoutData.totalVolume)}kg volume`,
+            link: `/workout/${completedWorkoutData.id}`,
+          });
+        }
+      } catch (e) {
+        console.warn('[v15-D4] share-with-trainer persistence failed:', e);
+      }
+    }
+
     // Share to feed (opt-in only)
     if (shareToFeed && completedWorkoutData) {
       const pbText = completedWorkoutData.pbs.length > 0 
@@ -2136,6 +2177,8 @@ export default function ActiveWorkoutPage() {
     setSharedNotes('');
     setSessionPaid(false);
     setShareToFeed(false);
+    setShareWithTrainer(false); // v15-D4: reset for next workout
+
     // D17: reset to null so the next workout's gate starts fail-safe.
     setSaveProgramChanges(null);
     // v14-D29: reset the per-edit decision so the next program workout
@@ -2680,6 +2723,47 @@ export default function ActiveWorkoutPage() {
                 </label>
               </div>
             )}
+
+            {/* v15-D4: "Share with [trainer]" — opt-in for standalone
+                (non-program, non-PT) workouts so the trainer can see them in
+                /workout/[id] via the access guard expansion. Hidden when:
+                  - workout is a PT session (already shared by nature)
+                  - workout is a program workout (already trainer-visible)
+                  - client has no active trainer relationship */}
+            {completedWorkoutData
+              && !completedWorkoutData.isPTSession
+              && !completedWorkoutData.isProgramWorkout
+              && (() => {
+                  const trainerStoreSnap = useTrainerStore.getState();
+                  const activeProgramSnap = trainerStoreSnap.clientPrograms.find(
+                    (p: any) => p.clientId === currentUser?.id && p.status === 'active'
+                  );
+                  const trainerId = activeProgramSnap?.trainerId || (currentUser as any)?.trainerId;
+                  if (!trainerId || trainerId === currentUser?.id) return null;
+                  // Best-effort trainer label — localStorage cache first, then fall back.
+                  let trainerLabel = 'your trainer';
+                  try {
+                    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+                    const t = stored.find((u: any) => u.id === trainerId);
+                    if (t) trainerLabel = t.displayName || t.username || trainerLabel;
+                  } catch {}
+                  return (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={shareWithTrainer}
+                          onChange={(e) => setShareWithTrainer(e.target.checked)}
+                          className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500"
+                        />
+                        <div className="text-left">
+                          <span className="text-gray-900 font-medium text-sm">Share with {trainerLabel}</span>
+                          <p className="text-[11px] text-gray-500">Opt in to let your trainer see this workout in your recent activity</p>
+                        </div>
+                      </label>
+                    </div>
+                  );
+                })()}
 
             {/* D15 Part B: the "Save changes to program" choice moved out
                 of the summary into a blocking Yes/No modal rendered BEFORE
@@ -5503,6 +5587,43 @@ export default function ActiveWorkoutPage() {
                 </label>
               </div>
             )}
+
+            {/* v15-D4: "Share with [trainer]" — secondary summary branch
+                mirror of the primary block earlier in this file. See the
+                first {/_ v15-D4 _/} comment for the visibility predicate. */}
+            {completedWorkoutData
+              && !completedWorkoutData.isPTSession
+              && !completedWorkoutData.isProgramWorkout
+              && (() => {
+                  const trainerStoreSnap = useTrainerStore.getState();
+                  const activeProgramSnap = trainerStoreSnap.clientPrograms.find(
+                    (p: any) => p.clientId === currentUser?.id && p.status === 'active'
+                  );
+                  const trainerId = activeProgramSnap?.trainerId || (currentUser as any)?.trainerId;
+                  if (!trainerId || trainerId === currentUser?.id) return null;
+                  let trainerLabel = 'your trainer';
+                  try {
+                    const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
+                    const t = stored.find((u: any) => u.id === trainerId);
+                    if (t) trainerLabel = t.displayName || t.username || trainerLabel;
+                  } catch {}
+                  return (
+                    <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={shareWithTrainer}
+                          onChange={(e) => setShareWithTrainer(e.target.checked)}
+                          className="w-5 h-5 rounded border-gray-300 bg-white text-sky-500 focus:ring-sky-500"
+                        />
+                        <div className="text-left">
+                          <span className="text-gray-900 font-medium text-sm">Share with {trainerLabel}</span>
+                          <p className="text-[11px] text-gray-500">Opt in to let your trainer see this workout in your recent activity</p>
+                        </div>
+                      </label>
+                    </div>
+                  );
+                })()}
 
             {/* D15 Part B: the "Save changes to program" choice moved out
                 of the summary into a blocking Yes/No modal rendered BEFORE
