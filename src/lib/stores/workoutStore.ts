@@ -9,7 +9,10 @@ import { useAuthStore } from './authStore';
 import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
 import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
-import { getLastSetForExercise, getLastSetForExerciseAtIndex } from '../getLastSetForExercise';
+import {
+  getLastSetForExercise,
+  getMostRecentExerciseData,
+} from '../getLastSetForExercise';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
@@ -228,18 +231,22 @@ export const useWorkoutStore = create<WorkoutState>()(
         // Clone template exercises with previous data and block assignment
         const exercises: WorkoutExercise[] = (template.exercises || []).map((ex: any, exIdx: number) => {
           const pb = pbs.find(p => p.exerciseId === ex.exerciseId);
-          
-          // Find the most recent workout that contains this exercise
-          let lastExerciseData: { weight?: number; reps?: number }[] = [];
-          for (const workout of userWorkoutHistory) {
-            const matchingEx = workout.exercises?.find((e: any) => e.exerciseId === ex.exerciseId);
-            if (matchingEx && matchingEx.sets?.length > 0) {
-              lastExerciseData = matchingEx.sets
-                .filter((s: any) => s.completed && s.weight && s.reps)
-                .map((s: any) => ({ weight: s.weight, reps: s.reps }));
-              break;
-            }
-          }
+
+          // v15-D2: most-recent COMPLETED workout's sets for this exercise,
+          // sorted by endTime DESC and filtered (status='completed',
+          // !deletedAt, userId scoped). Previously this loop iterated
+          // userWorkoutHistory in array order with no status/deletedAt
+          // filter — the same bug family v12-D4 fixed for addExercise/addSet
+          // but never extended to startFromTemplate. Caused R2/R3: per-set
+          // PREVIOUS columns showing rows from a different historical
+          // workout than the header strip's "Last: ..." summary.
+          const mostRecent = getMostRecentExerciseData(
+            get().workoutHistory,
+            ex.exerciseId,
+            targetUserId,
+          );
+          const lastExerciseData: { weight?: number; reps?: number }[] =
+            mostRecent?.sets.map(s => ({ weight: s.weight, reps: s.reps })) ?? [];
 
           // Find which block this exercise belongs to
           const blockMeta = exerciseBlockMap.get(ex.exerciseId) || {
@@ -254,13 +261,21 @@ export const useWorkoutStore = create<WorkoutState>()(
             blockId: blockMeta.blockId,
             blockName: blockMeta.blockName,
             blockType: blockMeta.blockType,
-            sets: (ex.sets || []).map((s: any, idx: number) => ({
-              ...s,
-              id: uuidv4(),
-              completed: false,
-              previousWeight: lastExerciseData[idx]?.weight || pb?.bestWeight,
-              previousReps: lastExerciseData[idx]?.reps || pb?.bestReps,
-            })),
+            sets: (ex.sets || []).map((s: any, idx: number) => {
+              // v15-D2: NO fallthrough. If the most-recent workout had
+              // fewer sets than the template requests, the extra set's
+              // PREVIOUS column stays empty rather than pulling from an
+              // older workout. PB best-set is still offered as a fallback
+              // hint when there's no recent set at that index.
+              const recentAtIdx = lastExerciseData[idx];
+              return {
+                ...s,
+                id: uuidv4(),
+                completed: false,
+                previousWeight: recentAtIdx?.weight ?? (idx === 0 ? pb?.bestWeight : undefined),
+                previousReps: recentAtIdx?.reps ?? (idx === 0 ? pb?.bestReps : undefined),
+              };
+            }),
           };
         });
 
@@ -489,10 +504,16 @@ export const useWorkoutStore = create<WorkoutState>()(
         const targetUserId = getActiveUserId();
         const normalizedId = normalizeExerciseId(exercise.id);
         const pb = personalBests.find(p => p.exerciseId === normalizedId && p.userId === targetUserId);
-        
-        // v12-D4: most-recent completed set, properly sorted by date.
-        // Previously this used `for...break` over unsorted history which
-        // surfaced random old workouts as "previous".
+
+        // v15-D2: most-recent COMPLETED workout's full set array, sorted by
+        // endTime DESC. Per-set PREVIOUS column now indexes into
+        // mostRecent.sets[idx] — NO fallthrough to older workouts when the
+        // template requests more sets than the previous session had.
+        // (Single source of truth; same helper used by addSet + header strip.)
+        const mostRecent = getMostRecentExerciseData(workoutHistory, exercise.id, targetUserId);
+        // Kept for backwards-compat with the single-set fallback used as the
+        // pre-fill suggestion in the weight/reps inputs (different from the
+        // per-set PREVIOUS column).
         const lastSetData = getLastSetForExercise(workoutHistory, exercise.id, targetUserId);
         
         // Extract block metadata if present
@@ -583,25 +604,30 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       addSet: (exerciseId) => {
-        const { activeWorkout, personalBests, workoutHistory, getActiveUserId } = get();
+        const { activeWorkout, workoutHistory, getActiveUserId } = get();
         if (!activeWorkout) return;
 
         const exercise = activeWorkout.exercises.find(e => e.id === exerciseId);
         if (!exercise) return;
 
         const targetUserId = getActiveUserId();
-        const normalizedExId = normalizeExerciseId(exercise.exerciseId || '');
-        const pb = personalBests.find(p => p.exerciseId === normalizedExId && p.userId === targetUserId);
         const lastSet = exercise.sets[exercise.sets.length - 1];
         const newSetIndex = exercise.sets.length;
-        
-        // v12-D4: most-recent completed set at this index, properly sorted.
-        const lastSetData = getLastSetForExerciseAtIndex(
+
+        // v15-D2: NO fallthrough to older workouts. Read the most-recent
+        // COMPLETED workout's sets via a single source-of-truth helper.
+        // If newSetIndex >= mostRecent.sets.length, the PREVIOUS column
+        // for this new set stays empty (was previously pulling from a
+        // workout 3+ sessions back — reproduction R2).
+        const mostRecent = getMostRecentExerciseData(
           workoutHistory,
           exercise.exerciseId,
           targetUserId,
-          newSetIndex,
         );
+        const lastSetData =
+          mostRecent && newSetIndex < mostRecent.sets.length
+            ? mostRecent.sets[newSetIndex]
+            : undefined;
 
         // Auto-detect assisted exercises by name
         const exerciseName = exercise.exercise?.name || '';
@@ -614,8 +640,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           weight: lastSet?.weight,
           reps: lastSet?.reps,
           completed: false,
-          previousWeight: lastSetData?.weight || pb?.bestWeight,
-          previousReps: lastSetData?.reps || pb?.bestReps,
+          previousWeight: lastSetData?.weight,
+          previousReps: lastSetData?.reps,
           ...(autoAssisted && { isAssisted: true }),
         };
 
