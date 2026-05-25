@@ -1,56 +1,35 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore, useTrainerStore, useWorkoutStore, useSocialStore } from '@/lib/store';
+import { useAuthStore, useTrainerStore, useSocialStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
+import {
   Plus,
   Dumbbell,
   Users,
-  Clock,
-  Calendar as CalendarIcon,
-  Edit,
   Trash2,
-  LayoutGrid,
-  List,
   FileText,
   Sparkles,
-  Loader2
+  Loader2,
+  Edit,
 } from 'lucide-react';
 import { defaultTemplates } from '@/lib/templates';
 import { toast } from 'sonner';
-import { getClientDisplayInfo, getClientName as getClientNameUtil } from '@/lib/clientUtils';
+import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  eachDayOfInterval, 
-  isSameDay, 
-  isSameMonth,
-  addMonths,
-  subMonths,
-  addWeeks,
-  subWeeks,
-  startOfWeek,
-  endOfWeek,
-  isToday,
-  addDays,
-  setHours,
-  setMinutes,
-  getHours
-} from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { syncEventToGoogleCalendar } from '@/lib/calendarSync';
+import { UnifiedCalendar } from '@/components/calendar/UnifiedCalendar';
+import { getVisibleCalendarEvents, type CalendarViewer } from '@/lib/calendarScope';
+import type { CalendarEvent } from '@/types';
 
 export default function CalendarPage() {
   const router = useRouter();
@@ -102,40 +81,14 @@ export default function CalendarPage() {
 
   if (!isAuthenticated || !user) return null;
 
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart);
-  const calendarEnd = endOfWeek(monthEnd);
-  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-
-  // Show events for the day — trainers see their bookings, users see their own events
-  // Trainers: only see PT sessions (type=session) and events they created — NOT client program workouts
-  const getEventsForDay = (date: Date) => {
-    return calendarEvents.filter(event => {
-      if (event.status === 'cancelled') return false;
-      if (!isSameDay(new Date(event.date), date)) return false;
-      if (isTrainer) {
-        if (event.trainerId !== user?.id) return false;
-        // Hide program workouts assigned to clients (type=workout with a different clientId)
-        if (event.type === 'workout' && event.clientId && event.clientId !== user?.id) return false;
-        return true;
-      }
-      return event.clientId === user?.id || event.trainerId === user?.id;
-    });
-  };
-
-  const selectedDateEvents = getEventsForDay(selectedDate);
-
-  const getEventColor = (type: string) => {
-    switch (type) {
-      case 'session': return 'bg-rose-500';
-      case 'workout': return 'bg-orange-500';
-      case 'consultation': return 'bg-emerald-500';
-      case 'assessment': return 'bg-purple-500';
-      case 'rest': return 'bg-gray-500';
-      default: return 'bg-gray-500';
-    }
-  };
+  // v15-D5: scope filtering centralised in `src/lib/calendarScope.ts`.
+  // Single source of truth — same fn powers the future booking surface.
+  const viewer: CalendarViewer = { userId: user.id, mode: isTrainer ? 'trainer' : 'user' };
+  const visibleEvents = useMemo<CalendarEvent[]>(
+    () => getVisibleCalendarEvents(calendarEvents, viewer),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [calendarEvents, user?.id, isTrainer],
+  );
 
   // Centralized client name resolution
   const getClientName = (clientId?: string) => {
@@ -148,6 +101,20 @@ export default function CalendarPage() {
     setEditTime(event.startTime || '09:00');
     setEditEndTime(event.endTime || '10:00');
     setEditDate(event.date || format(selectedDate, 'yyyy-MM-dd'));
+  };
+
+  // Empty-slot click in <UnifiedCalendar> week/day view — prefill Add Event.
+  const handleSlotClick = (date: Date, hour: number) => {
+    setSelectedDate(date);
+    setNewEventDate(format(date, 'yyyy-MM-dd'));
+    setNewEventStartTime(`${hour.toString().padStart(2, '0')}:00`);
+    setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
+    setShowAddEvent(true);
+  };
+
+  // Client-name chip in selected-day list → navigate to client detail.
+  const handleClientClick = (clientId: string) => {
+    router.push(`/clients/${clientId}`);
   };
 
   const handleSaveEdit = () => {
@@ -344,372 +311,21 @@ export default function CalendarPage() {
       />
 
       <div className="px-4 py-4 space-y-4">
-        {/* View Toggle & Navigation */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
-            <Button
-              size="sm"
-              variant={viewMode === 'month' ? 'default' : 'ghost'}
-              onClick={() => setViewMode('month')}
-              className={cn("h-8 px-3", viewMode === 'month' ? 'bg-rose-500' : 'text-gray-400')}
-            >
-              Month
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === 'week' ? 'default' : 'ghost'}
-              onClick={() => setViewMode('week')}
-              className={cn("h-8 px-3", viewMode === 'week' ? 'bg-rose-500' : 'text-gray-400')}
-            >
-              Week
-            </Button>
-            <Button
-              size="sm"
-              variant={viewMode === 'day' ? 'default' : 'ghost'}
-              onClick={() => setViewMode('day')}
-              className={cn("h-8 px-3", viewMode === 'day' ? 'bg-rose-500' : 'text-gray-400')}
-            >
-              Day
-            </Button>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (viewMode === 'month') setCurrentMonth(subMonths(currentMonth, 1));
-                else if (viewMode === 'week') setSelectedDate(subWeeks(selectedDate, 1));
-                else setSelectedDate(addDays(selectedDate, -1));
-              }}
-              className="text-gray-400 hover:text-gray-900"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <h2 className="text-lg font-semibold text-gray-900 min-w-[140px] text-center">
-              {viewMode === 'month' && format(currentMonth, 'MMMM yyyy')}
-              {viewMode === 'week' && `${format(startOfWeek(selectedDate), 'MMM d')} - ${format(endOfWeek(selectedDate), 'MMM d')}`}
-              {viewMode === 'day' && format(selectedDate, 'EEE, MMM d')}
-            </h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                if (viewMode === 'month') setCurrentMonth(addMonths(currentMonth, 1));
-                else if (viewMode === 'week') setSelectedDate(addWeeks(selectedDate, 1));
-                else setSelectedDate(addDays(selectedDate, 1));
-              }}
-              className="text-gray-400 hover:text-gray-900"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Month View */}
-        {viewMode === 'month' && (
-          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
-            <CardContent className="p-0">
-              {/* Day Headers */}
-              <div className="grid grid-cols-7 border-b border-gray-200">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div key={day} className="py-3 text-center text-xs font-medium text-gray-500">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar Days */}
-              <div className="grid grid-cols-7">
-                {calendarDays.map((day, idx) => {
-                  const dayEvents = getEventsForDay(day);
-                  const isSelected = isSameDay(day, selectedDate);
-                  const isCurrentMonth = isSameMonth(day, currentMonth);
-                  const isDayToday = isToday(day);
-
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() => setSelectedDate(day)}
-                      className={cn(
-                        "relative h-14 p-1 border-b border-r border-gray-200 transition-colors",
-                        "hover:bg-gray-50",
-                        isSelected && "bg-rose-500/20",
-                        !isCurrentMonth && "opacity-40"
-                      )}
-                    >
-                      <span className={cn(
-                        "absolute top-1 left-1/2 -translate-x-1/2 w-7 h-7 flex items-center justify-center rounded-full text-sm",
-                        isDayToday && "bg-rose-500 text-white font-semibold",
-                        isSelected && !isDayToday && "bg-gray-200 text-gray-900",
-                        !isDayToday && !isSelected && "text-gray-700"
-                      )}>
-                        {format(day, 'd')}
-                      </span>
-                      
-                      {/* Event Indicators */}
-                      {dayEvents.length > 0 && (
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
-                          {dayEvents.slice(0, 3).map((event, i) => {
-                            const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
-                            return (
-                              <div
-                                key={i}
-                                className={cn(
-                                  "w-1.5 h-1.5 rounded-full", 
-                                  hasWorkout ? "bg-sky-400 ring-1 ring-sky-400/50" : getEventColor(event.type)
-                                )}
-                              />
-                            );
-                          })}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Week View */}
-        {viewMode === 'week' && (
-          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
-            <CardContent className="p-0">
-              {/* Week Day Headers */}
-              <div className="grid grid-cols-7 border-b border-gray-200">
-                {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) }).map((day) => (
-                  <button
-                    key={day.toISOString()}
-                    onClick={() => setSelectedDate(day)}
-                    className={cn(
-                      "py-3 text-center transition-colors hover:bg-gray-50",
-                      isSameDay(day, selectedDate) && "bg-rose-500/20"
-                    )}
-                  >
-                    <p className="text-xs text-gray-500">{format(day, 'EEE')}</p>
-                    <p className={cn(
-                      "text-lg font-semibold",
-                      isToday(day) ? "text-rose-500" : "text-gray-900"
-                    )}>
-                      {format(day, 'd')}
-                    </p>
-                  </button>
-                ))}
-              </div>
-
-              {/* Time slots */}
-              <ScrollArea className="h-[400px]">
-                <div className="relative">
-                  {/* Hour lines */}
-                  {Array.from({ length: 14 }, (_, i) => i + 6).map((hour) => (
-                    <div key={hour} className="flex border-b border-gray-200 h-12">
-                      <div className="w-12 text-xs text-gray-500 py-1 px-2 border-r border-gray-200">
-                        {hour}:00
-                      </div>
-                      <div className="flex-1 grid grid-cols-7">
-                        {eachDayOfInterval({ start: startOfWeek(selectedDate), end: endOfWeek(selectedDate) }).map((day) => {
-                          const dayEvents = getEventsForDay(day).filter(e => {
-                            const eventHour = parseInt(e.startTime?.split(':')[0] || '0');
-                            return eventHour === hour;
-                          });
-                          return (
-                            <button
-                              key={`${day.toISOString()}-${hour}`}
-                              onClick={() => {
-                                setSelectedDate(day);
-                                setNewEventDate(format(day, 'yyyy-MM-dd'));
-                                setNewEventStartTime(`${hour.toString().padStart(2, '0')}:00`);
-                                setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
-                                setShowAddEvent(true);
-                              }}
-                              className="border-r border-gray-100 hover:bg-gray-50 relative"
-                            >
-                              {dayEvents.map((event, i) => {
-                                const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
-                                // Calculate position and height based on time
-                                const startMin = parseInt(event.startTime?.split(':')[1] || '0');
-                                const endHour = parseInt(event.endTime?.split(':')[0] || String(hour + 1));
-                                const endMin = parseInt(event.endTime?.split(':')[1] || '0');
-                                const durationMins = (endHour - hour) * 60 + endMin - startMin;
-                                const topPercent = (startMin / 60) * 100;
-                                // Allow height to extend beyond current hour (overflow into next hours)
-                                const heightPercent = (durationMins / 60) * 100;
-                                return (
-                                <div
-                                  key={event.id}
-                                  className={cn(
-                                    "absolute inset-x-0.5 rounded text-xs p-0.5 truncate flex items-center gap-1 z-10 overflow-hidden",
-                                    getEventColor(event.type), "text-white"
-                                  )}
-                                  style={{
-                                    top: `${topPercent}%`,
-                                    height: `${Math.max(heightPercent, 25)}%`,
-                                    minHeight: '12px'
-                                  }}
-                                  onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                                >
-                                  {hasWorkout && <Dumbbell className="w-3 h-3 flex-shrink-0" />}
-                                  <span className="truncate">{getClientName(event.clientId)}</span>
-                                </div>
-                              );})}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Day View */}
-        {viewMode === 'day' && (
-          <Card className="bg-white border-gray-200 shadow-sm overflow-hidden">
-            <CardContent className="p-0">
-              <ScrollArea className="h-[450px]">
-                <div className="relative">
-                  {/* Hour slots */}
-                  {Array.from({ length: 14 }, (_, i) => i + 6).map((hour) => {
-                    const hourEvents = selectedDateEvents.filter(e => {
-                      const eventHour = parseInt(e.startTime?.split(':')[0] || '0');
-                      return eventHour === hour;
-                    });
-                    return (
-                      <button
-                        key={hour}
-                        onClick={() => {
-                          setNewEventDate(format(selectedDate, 'yyyy-MM-dd'));
-                          setNewEventStartTime(`${hour.toString().padStart(2, '0')}:00`);
-                          setNewEventEndTime(`${(hour + 1).toString().padStart(2, '0')}:00`);
-                          setShowAddEvent(true);
-                        }}
-                        className="flex w-full border-b border-gray-200 min-h-[60px] hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="w-16 text-sm text-gray-500 py-2 px-3 border-r border-gray-200 flex-shrink-0">
-                          {hour.toString().padStart(2, '0')}:00
-                        </div>
-                        <div className="flex-1 p-1 space-y-1">
-                          {hourEvents.map((event) => {
-                            const hasWorkout = event.workoutId || sessionWorkouts.find(w => w.eventId === event.id);
-                            return (
-                            <div
-                              key={event.id}
-                              onClick={(e) => { e.stopPropagation(); handleEditEvent(event); }}
-                              className={cn(
-                                "rounded-lg p-2 cursor-pointer",
-                                getEventColor(event.type)
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                <p className="font-medium text-gray-900 text-sm">{event.title}</p>
-                                {hasWorkout && (
-                                  <Badge className="text-xs bg-sky-500/20 text-sky-400 px-1 py-0">
-                                    <Dumbbell className="w-3 h-3" />
-                                  </Badge>
-                                )}
-                              </div>
-                              <p className="text-xs text-gray-600">
-                                {event.startTime} - {event.endTime} • {getClientName(event.clientId)}
-                              </p>
-                            </div>
-                          );})}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Selected Day Events */}
-        <div>
-          <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-            <CalendarIcon className="w-4 h-4" />
-            {format(selectedDate, 'EEEE, MMMM d, yyyy')}
-          </h3>
-
-          {selectedDateEvents.length === 0 ? (
-            <Card className="bg-white border-gray-200 shadow-sm">
-              <CardContent className="py-8 text-center">
-                <CalendarIcon className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500 mb-1">No events scheduled</p>
-                <p className="text-sm text-gray-500">
-                  Click the + button to add an event
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <ScrollArea className="max-h-64">
-              <div className="space-y-2">
-                {selectedDateEvents.map((event) => (
-                  <Card key={event.id} className="bg-white border-gray-200 shadow-sm hover:border-gray-300 transition-colors">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className={cn(
-                          "w-1 h-full rounded-full self-stretch min-h-[40px]",
-                          getEventColor(event.type)
-                        )} />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium text-gray-900">{event.title}</h4>
-                            <Badge variant="outline" className="text-xs border-gray-200 text-gray-500 capitalize">
-                              {event.type}
-                            </Badge>
-                            {event.workoutId || sessionWorkouts.find(w => w.eventId === event.id) ? (
-                              <Badge className="text-xs bg-sky-500/20 text-sky-400">
-                                <Dumbbell className="w-3 h-3 mr-1" />
-                                Planned
-                              </Badge>
-                            ) : event.type === 'session' && (
-                              <Badge className="text-xs bg-amber-500/20 text-amber-400">
-                                No Workout
-                              </Badge>
-                            )}
-                            {(event as any).recurrence && (
-                              <Badge className="text-xs bg-blue-500/20 text-blue-400">
-                                {(event as any).recurrence}
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-500">
-                            {event.clientId && (
-                              <button 
-                                className="flex items-center gap-1 hover:text-sky-400 transition-colors"
-                                onClick={(e) => { e.stopPropagation(); router.push(`/clients/${event.clientId}`); }}
-                              >
-                                <Users className="w-3 h-3" />
-                                {getClientName(event.clientId)}
-                              </button>
-                            )}
-                            {event.startTime && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {event.startTime} - {event.endTime || ''}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-gray-400 hover:text-gray-900"
-                          onClick={() => handleEditEvent(event)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
+        <UnifiedCalendar
+          events={visibleEvents}
+          viewer={viewer}
+          selectedDate={selectedDate}
+          currentMonth={currentMonth}
+          viewMode={viewMode}
+          onSelectDate={setSelectedDate}
+          onEventClick={handleEditEvent}
+          onChangeMonth={setCurrentMonth}
+          onChangeWeek={setSelectedDate}
+          onChangeViewMode={setViewMode}
+          onSlotClick={handleSlotClick}
+          onClientClick={handleClientClick}
+          sessionWorkouts={sessionWorkouts}
+        />
 
         {/* Quick Stats */}
         <div className="grid grid-cols-2 gap-3">

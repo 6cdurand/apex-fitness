@@ -629,6 +629,28 @@ export interface CalendarEvent {
   eventScope?: 'trainer_personal' | 'client_assigned' | 'shared_session';
 }
 
+/**
+ * Trainer-published availability slot (v15-D5 type-only foundation).
+ *
+ * Reserved for the future booking-system feature: trainers publish open
+ * slots; clients view them via the same `<UnifiedCalendar>` component with
+ * an `availabilitySlots` overlay; clients tap a slot to request a booking.
+ *
+ * Not consumed anywhere yet — locked here so subsequent dispatches can
+ * build against a stable shape without re-litigating field names.
+ */
+export interface TrainerAvailabilitySlot {
+  id: string;
+  trainerId: string;
+  date: string;          // 'YYYY-MM-DD'
+  startTime: string;     // 'HH:mm'
+  endTime: string;       // 'HH:mm'
+  status: 'open' | 'booked' | 'closed';
+  bookedBy?: string;     // clientId once booked
+  recurrenceGroup?: string;
+  notes?: string;
+}
+
 // Booking Request (for trainer-client scheduling)
 export interface BookingRequest {
   id: string;
