@@ -25,6 +25,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { defaultTemplates } from '@/lib/templates';
+import { toast } from 'sonner';
 import { getClientDisplayInfo, getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -54,7 +55,7 @@ import { syncEventToGoogleCalendar } from '@/lib/calendarSync';
 export default function CalendarPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { calendarEvents, clients, clientPrograms, getActiveProgram, updateCalendarEvent, deleteCalendarEvent, addCalendarEvent, sessionWorkouts } = useTrainerStore();
+  const { calendarEvents, clients, clientPrograms, getActiveProgram, getNextProgramWorkout, updateCalendarEvent, deleteCalendarEvent, addCalendarEvent, sessionWorkouts } = useTrainerStore();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week');
@@ -1025,6 +1026,39 @@ export default function CalendarPage() {
             {newEventType === 'session' && newEventClient && (() => {
               const prog = getActiveProgram(newEventClient);
               if (!prog || !prog.weeklyPlan?.length) return null;
+              // v15-D4: surface the client's current weekly state for each day:
+              //   • · Done   — client already did this day this week (warn-on-pick)
+              //   • · Booked <Day> — trainer (or anyone) already booked this day
+              //     this week (block-on-pick)
+              // Read from getNextProgramWorkout to reuse the same week-boundary
+              // calculation the client side uses.
+              const nextForClient = getNextProgramWorkout(newEventClient);
+              const completedDayIndicesForClient = nextForClient?.completedDayIndices || [];
+              // Compute Mon-Sun week window for booking-conflict scan.
+              const _nowCal = new Date();
+              const _dowCal = _nowCal.getDay();
+              const _monOffCal = _dowCal === 0 ? -6 : 1 - _dowCal;
+              const _weekStartCal = new Date(_nowCal);
+              _weekStartCal.setHours(0, 0, 0, 0);
+              _weekStartCal.setDate(_weekStartCal.getDate() + _monOffCal);
+              const _weekEndCal = new Date(_weekStartCal);
+              _weekEndCal.setDate(_weekEndCal.getDate() + 7);
+              const bookedDayIndexToDate = new Map<number, string>();
+              calendarEvents.forEach((e: any) => {
+                if (e.clientId !== newEventClient) return;
+                if (e.type !== 'session') return;
+                if (e.status === 'cancelled') return;
+                if (e.programId !== prog.id) return;
+                if (typeof e.programDayIndex !== 'number') return;
+                const ed = new Date(e.date);
+                if (ed < _weekStartCal || ed >= _weekEndCal) return;
+                // Don't double-block the option that this dialog is currently
+                // editing (if any) — but addEvent is always create, so no
+                // edit-id check needed here.
+                if (!bookedDayIndexToDate.has(e.programDayIndex)) {
+                  bookedDayIndexToDate.set(e.programDayIndex, e.date);
+                }
+              });
               return (
                 <div className="p-3 bg-sky-50 border border-sky-200 rounded-lg space-y-2">
                   <div className="flex items-center justify-between">
@@ -1033,20 +1067,51 @@ export default function CalendarPage() {
                   </div>
                   <select
                     value={selectedProgramDay}
-                    onChange={(e) => setSelectedProgramDay(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const newIdx = parseInt(e.target.value);
+                      if (newIdx >= 0) {
+                        // Block already-booked days entirely.
+                        if (bookedDayIndexToDate.has(newIdx)) {
+                          const dayLabel = prog.weeklyPlan[newIdx]?.dayLabel || `Day ${newIdx + 1}`;
+                          const whenIso = bookedDayIndexToDate.get(newIdx)!;
+                          const whenLabel = new Date(whenIso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                          toast.error(`${dayLabel} is already booked with this client (${whenLabel}). Cancel that booking first or pick a different day.`);
+                          return; // keep prior selectedProgramDay value
+                        }
+                        // Warn (but allow) for days the client already did this week.
+                        if (completedDayIndicesForClient.includes(newIdx)) {
+                          const dayLabel = prog.weeklyPlan[newIdx]?.dayLabel || `Day ${newIdx + 1}`;
+                          toast.warning(`${dayLabel} — client already completed this day this week. Booking anyway counts as extra volume.`);
+                        }
+                      }
+                      setSelectedProgramDay(newIdx);
+                    }}
                     className="w-full p-2 bg-white border border-sky-200 rounded-md text-gray-900 text-sm"
                   >
                     <option value={-1}>Custom session (no program)</option>
                     {prog.weeklyPlan.map((day: any, idx: number) => {
                       const exCount = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                      const isDoneThisWeek = completedDayIndicesForClient.includes(idx);
+                      const bookedIso = bookedDayIndexToDate.get(idx);
+                      let suffix = '';
+                      if (bookedIso) {
+                        const wd = new Date(bookedIso).toLocaleDateString(undefined, { weekday: 'short' });
+                        suffix = ` · Booked ${wd}`;
+                      } else if (isDoneThisWeek) {
+                        suffix = ' · Done';
+                      }
                       return (
-                        <option key={idx} value={idx}>
-                          {day.dayLabel} — {exCount} exercises
+                        <option
+                          key={idx}
+                          value={idx}
+                          disabled={!!bookedIso}
+                        >
+                          {day.dayLabel} — {exCount} exercises{suffix}
                         </option>
                       );
                     })}
                   </select>
-                  <p className="text-[10px] text-gray-500">Select a workout day to use for this PT session. This counts toward the client's package.</p>
+                  <p className="text-[10px] text-gray-500">Select a workout day to use for this PT session. This counts toward the client's package. Days already booked this week are disabled; days the client already completed are warned.</p>
                 </div>
               );
             })()}

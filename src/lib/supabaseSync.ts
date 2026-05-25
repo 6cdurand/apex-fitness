@@ -592,6 +592,13 @@ function toDbWorkout(workout: Workout): any {
   if (workout.programEdit !== undefined) {
     dbWorkout.program_edit = workout.programEdit || null;
   }
+  // v15-D4: opt-in trainer share (column added in
+  // 20260524_workouts_shared_with_trainer.sql). Only include when set so the
+  // schema-drift retry still has a clean strip-and-retry path on pre-migration
+  // environments.
+  if (workout.sharedWithTrainerId !== undefined) {
+    dbWorkout.shared_with_trainer_id = workout.sharedWithTrainerId || null;
+  }
   return dbWorkout;
 }
 
@@ -617,6 +624,8 @@ function fromDbWorkout(dbWorkout: any): Workout {
     releasedAt: dbWorkout.released_at || undefined,
     blocks: dbWorkout.blocks || undefined,
     programEdit: dbWorkout.program_edit || undefined,
+    // v15-D4: tolerate the column being missing on pre-migration environments.
+    sharedWithTrainerId: dbWorkout.shared_with_trainer_id || undefined,
   };
 }
 
@@ -1025,6 +1034,7 @@ export async function syncWorkoutToSupabase(workout: Workout): Promise<boolean> 
         delete coreWorkout.released_at;
         delete coreWorkout.deleted_at;
         delete coreWorkout.program_edit;  // v10-D2
+        delete coreWorkout.shared_with_trainer_id;  // v15-D4
         const retry = await getWorkoutClient()
           .from('workouts')
           .upsert(coreWorkout)

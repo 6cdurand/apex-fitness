@@ -84,7 +84,17 @@ export default function WorkoutDetailPage() {
       // Workouts" entries in /clients/[id]. We widen the allow-list to
       // include both program-linked trainers (active client_programs row)
       // and roster-linked trainers (trainer_clients row).
-      if (user && found.userId !== user.id && found.assignedBy !== user.id) {
+      // v15-D4: also allow trainers explicitly named in sharedWithTrainerId
+      // — the "Share with [trainer]" opt-in checkbox at finalize time stamps
+      // this field, making the workout viewable by that trainer even if they
+      // aren't on the client's program or roster. This pairs with the
+      // shared_with_trainer_id column added in 20260524_workouts_shared_with_trainer.sql.
+      if (
+        user
+        && found.userId !== user.id
+        && found.assignedBy !== user.id
+        && found.sharedWithTrainerId !== user.id
+      ) {
         const trainerStore = useTrainerStore.getState();
         const isProgramTrainer = trainerStore.clientPrograms.some(
           (p: any) => p.clientId === found.userId && p.trainerId === user.id

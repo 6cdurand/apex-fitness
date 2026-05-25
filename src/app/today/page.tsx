@@ -43,6 +43,7 @@ import {
   ArrowLeftRight,
   Bell,
   Eye,
+  Lock,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getClientDisplayInfo } from '@/lib/clientUtils';
@@ -572,7 +573,24 @@ export default function TodayPage() {
             } : null,
           });
           if (!next) return null;
-          const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, isScheduledToday, nextScheduledDay } = next;
+          const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, isScheduledToday, nextScheduledDay } = next;
+
+          // v15-D4: helper used by swap-day buttons — when a client taps a
+          // day that's locked because the trainer has it booked, surface a
+          // toast explaining why and do NOT start the workout.
+          const handleLockedDayTap = (lockedIdx: number, wd: any) => {
+            const lockedEvent = useTrainerStore.getState().calendarEvents.find((e: any) =>
+              e.clientId === user.id &&
+              e.type === 'session' &&
+              e.status !== 'cancelled' &&
+              e.programId === program.id &&
+              e.programDayIndex === lockedIdx,
+            );
+            const when = lockedEvent?.date
+              ? format(new Date(lockedEvent.date), 'EEE MMM d')
+              : 'this week';
+            toast.info(`${wd?.dayLabel || 'This day'} is booked with your trainer (${when}). Pick another workout or log a standalone session.`);
+          };
 
           const totalEx = day?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
           
@@ -624,6 +642,26 @@ export default function TodayPage() {
                 return count > 0 && idx !== dayIndex;
               });
             
+            // v15-D4: "all program days either done or booked this week" empty
+            // state. Means there are sessions left in the weekly target but
+            // every remaining day is taken by a trainer booking, so the
+            // client shouldn't be nudged to start anything from the program.
+            const allDaysBlocked = remainingThisWeek > 0
+              && (completedDayIndices.length + lockedDayIndices.length) >= program.weeklyPlan.length;
+            if (allDaysBlocked) {
+              return (
+                <Card className="bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-purple-500/30">
+                  <CardContent className="p-4 text-center">
+                    <Calendar className="w-5 h-5 text-purple-500 mx-auto mb-2" />
+                    <p className="font-semibold text-gray-900 text-sm">All program days booked or done this week.</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Want extra work? Log a standalone workout from /workout.
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            }
+
             return (
               <>
                 <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
@@ -692,6 +730,9 @@ export default function TodayPage() {
                       {program.weeklyPlan.map((wd: any, idx: number) => {
                         const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                         const isDone = completedDayIndices.includes(idx);
+                        // v15-D4: locked = trainer has booked PT for this day
+                        // this week. Done beats locked in display precedence.
+                        const isLocked = !isDone && lockedDayIndices.includes(idx);
                         const isCurrent = idx === dayIndex;
                         if (wdEx === 0) return null;
                         return (
@@ -700,6 +741,8 @@ export default function TodayPage() {
                             className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
                               isDone
                                 ? 'border-gray-200 bg-gray-50 opacity-60'
+                                : isLocked
+                                ? 'border-purple-200 bg-purple-50 cursor-not-allowed'
                                 : isCurrent
                                 ? 'border-sky-300 bg-sky-50'
                                 : 'border-gray-200 hover:border-sky-300 hover:bg-sky-50/50'
@@ -707,6 +750,8 @@ export default function TodayPage() {
                             onClick={() => {
                               if (isDone) {
                                 setRepeatDayConfirm({ idx, day: wd });
+                              } else if (isLocked) {
+                                handleLockedDayTap(idx, wd);
                               } else {
                                 setShowSwapWorkout(false);
                                 startDay(idx, wd);
@@ -715,9 +760,10 @@ export default function TodayPage() {
                           >
                             <div className="flex items-center gap-3">
                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                                isLocked ? 'bg-purple-500 text-white' :
                                 isCurrent ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
                               }`}>
-                                {String.fromCharCode(65 + idx)}
+                                {isLocked ? <Lock className="w-3.5 h-3.5" /> : String.fromCharCode(65 + idx)}
                               </div>
                               <div>
                                 <p className="font-medium text-sm text-gray-900">{wd.dayLabel}</p>
@@ -726,7 +772,8 @@ export default function TodayPage() {
                             </div>
                             <div className="flex items-center gap-1.5">
                               {isDone && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
-                              {isCurrent && !isDone && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
+                              {isLocked && <Badge className="text-[9px] bg-purple-100 text-purple-700 border-0">Booked with trainer</Badge>}
+                              {isCurrent && !isDone && !isLocked && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
                               <Play className="w-4 h-4 text-gray-400" />
                             </div>
                           </button>

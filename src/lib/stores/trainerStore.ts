@@ -190,7 +190,7 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
-  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
@@ -1486,8 +1486,46 @@ export const useTrainerStore = create<TrainerState>()(
           const d = new Date(w.startTime);
           return d >= programStart;
         }).length;
-        
-        const dayIndex = totalCompleted % program.weeklyPlan.length;
+
+        // v15-D4: a program day is "locked" if the trainer has a future-or-current
+        // PT session booked for it this week and that session has not yet been
+        // completed. Past bookings with no completion auto-free (ghost protection).
+        // Cancelled bookings never lock.
+        const lockedDayIndices: number[] = (get().calendarEvents || [])
+          .filter((e: any) => {
+            if (e.clientId !== userId) return false;
+            if (e.type !== 'session') return false;
+            if (e.status === 'cancelled') return false;
+            if (e.programId !== program.id) return false;
+            if (typeof e.programDayIndex !== 'number') return false;
+            // Skip if the trainer already completed it — completedDayIndices
+            // already covers "done this week"; layering a lock on top would
+            // double-state the pill (lock + done). Done wins.
+            if (completedDayIndices.includes(e.programDayIndex)) return false;
+            const eventDate = new Date(e.date);
+            if (eventDate < weekStart || eventDate >= weekEnd) return false;
+            // Future / in-progress booking → locked. Past booking with no
+            // completion → auto-free (do NOT lock; the day is back up for grabs).
+            const eventEndDate = new Date(`${e.date}T${e.endTime || '23:59:00'}`);
+            if (eventEndDate < now) return false;
+            return true;
+          })
+          .map((e: any) => e.programDayIndex as number);
+
+        // v15-D4: pick the next-up suggestion by walking forward from the
+        // cycle position, skipping done and locked days. If every day is
+        // either done or locked, fall back to the cycle position so the
+        // caller can render an appropriate empty state.
+        const baseDayIndex = totalCompleted % program.weeklyPlan.length;
+        let nextDayIndex = baseDayIndex;
+        for (let i = 0; i < program.weeklyPlan.length; i++) {
+          const candidate = (baseDayIndex + i) % program.weeklyPlan.length;
+          if (completedDayIndices.includes(candidate)) continue;
+          if (lockedDayIndices.includes(candidate)) continue;
+          nextDayIndex = candidate;
+          break;
+        }
+        const dayIndex = nextDayIndex;
         const day = program.weeklyPlan[dayIndex];
         
         // Determine session type from PT map
@@ -1516,7 +1554,7 @@ export const useTrainerStore = create<TrainerState>()(
         }
         // Flexible programs: always available (user picks which workout)
         
-        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, isScheduledToday, nextScheduledDay };
+        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, isScheduledToday, nextScheduledDay };
       },
 
       rotateProgramDay: (clientId, dayIndex) => {
