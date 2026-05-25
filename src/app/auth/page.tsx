@@ -15,7 +15,7 @@ import { ChevronRight, ChevronLeft, User, Scale, Ruler, Calendar, Mail, Heart, S
 import { CataliftLogo } from '@/components/CataliftLogo';
 import { Gender } from '@/types';
 import { supabase } from '@/lib/supabase';
-import { acceptInvitation, checkInvitationByToken, updatePasswordInSupabase, updateUserInSupabase } from '@/lib/supabaseSync';
+import { acceptInvitation, checkInvitationByToken, updateUserInSupabase } from '@/lib/supabaseSync';
 import {
   ENABLE_USER_PASSWORD_RESET,
   canOpenSetupPasswordFlow,
@@ -136,11 +136,13 @@ function AuthPageContent() {
     );
     
     if (placeholderIdx !== -1) {
-      // Force-set the password to the new one (placeholder passwords are random/unknown)
+      // Force-set the local cached password (placeholder passwords are random/unknown)
+      // so the localStorage fast-path works post-signup. v15-D6: Supabase Auth
+      // is the source of truth — the subsequent register() call below issues
+      // supabase.auth.signUp which sets auth.users.encrypted_password.
       storedUsers[placeholderIdx].password = hashPassword(setupNewPassword);
       storedUsers[placeholderIdx].accountStatus = 'active';
       localStorage.setItem('apex-users', JSON.stringify(storedUsers));
-      await updatePasswordInSupabase(inviteEmail, setupNewPassword);
     }
     
     // Step 2: Try login with the chosen password
@@ -214,25 +216,30 @@ function AuthPageContent() {
 
     setIsSubmittingForgot(true);
     try {
-      // Fire-and-display-neutral: the Edge Function returns the same 200
-      // JSON for known / unknown / rate-limited / Resend-failed paths so
-      // the UI cannot leak account existence. We only distinguish between
-      // "reached the function" (show confirmation) and "network error"
-      // (show toast error so the user can retry).
-      const { error } = await supabase.functions.invoke('password-recovery', {
-        body: { action: 'request', email },
+      // v15-D6: Supabase Auth's native recovery flow. This emails a
+      // recovery link that lands on /auth/update-password with a recovery
+      // session in the URL hash. The /auth/update-password page handles
+      // `supabase.auth.updateUser({ password })`.
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/update-password`,
       });
+
+      // Supabase Auth returns 200 even for unknown emails (enumeration-safe),
+      // so we always show the neutral confirmation. Network/rate-limit
+      // errors still surface a retry-able toast.
       if (error) {
-        console.error('[auth] password-recovery request failed:', error);
-        toast.error('Could not send recovery email. Please try again in a moment.');
+        console.error('[auth] resetPasswordForEmail failed:', error.message);
+        if ((error.message || '').toLowerCase().includes('rate limit')) {
+          toast.error('Too many requests. Please wait a few minutes and try again.');
+        } else {
+          toast.error('Could not send recovery email. Please try again in a moment.');
+        }
         setIsSubmittingForgot(false);
         return;
       }
-      // Always show the neutral confirmation message regardless of whether
-      // the email exists. Mirrors NEUTRAL_REQUEST_RESPONSE.message.
       setForgotSubmitted(true);
     } catch (err) {
-      console.error('[auth] password-recovery threw:', err);
+      console.error('[auth] resetPasswordForEmail threw:', err);
       toast.error('Network error. Please try again in a moment.');
     } finally {
       setIsSubmittingForgot(false);
@@ -263,22 +270,17 @@ function AuthPageContent() {
       
       router.push('/workout');
     } else {
-      // Surface a specific reason instead of the generic "invalid email or
-      // password" toast. The most important branch is `oauth_only`: accounts
-      // registered through Google have no password_hash, so retrying any
-      // password will always fail. The user needs the Google button.
+      // v15-D6: Supabase Auth has no equivalent of 'oauth_only' — a
+      // Google-only account just returns "Invalid login credentials".
+      // Caller stays on the password form; the "Forgot password?" trigger
+      // lets them set a password on top of a Google-only account.
       const reason = useAuthStore.getState().loginError;
-      if (reason === 'oauth_only') {
-        toast.error('This account uses Google Sign-In. Please use "Continue with Google" below.', {
-          duration: 6000,
-        });
-      } else if (reason === 'no_user') {
+      if (reason === 'no_user') {
         toast.error('No account found with this email. Try "Create Account" instead.');
       } else if (reason === 'network') {
-        toast.error('Could not reach server. Check your connection and try again.');
+        toast.error('Could not reach Supabase. Check your connection or try again in a moment.');
       } else {
-        // wrong_password or local-only failure
-        toast.error('Invalid email or password.');
+        toast.error('Invalid email or password. Did you mean "Forgot password?"');
       }
     }
   };

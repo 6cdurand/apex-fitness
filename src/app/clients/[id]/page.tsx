@@ -374,8 +374,6 @@ export default function ClientDetailPage() {
       return;
     }
     
-    const password = (clientUser as any).password || 'client123';
-    
     try {
       const synced = await registerUserToSupabase({
         id: clientUser.id,
@@ -391,10 +389,10 @@ export default function ClientDetailPage() {
         followers: [],
         following: [],
         trainerId: user?.id,
-      }, password);
-      
+      });
+
       if (synced) {
-        toast.success(`${clientUser.displayName} synced to cloud! They can now log in with: ${clientUser.email} / ${password}`);
+        toast.success(`${clientUser.displayName} synced to cloud! Send them an invitation to set up their password.`);
       } else {
         toast.error('Sync failed - Supabase may not be configured or account may already exist');
       }

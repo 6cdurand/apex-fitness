@@ -6,13 +6,15 @@ import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage 
  * Syncs local data to Supabase for cross-device access
  */
 
-// Simple hash function for password (for demo - use bcrypt in production).
-// Exported so the password-recovery regression test can pin byte-equality
-// against its mirror in `src/lib/passwordRecovery.ts` (and, by extension,
-// the Deno Edge Function's inline copies). Do NOT change the return shape —
-// `register()` writes `public.users.password_hash` with this exact format
-// and `login()` compares against it verbatim; any drift breaks cross-device
-// login for every affected user (root cause of the 2026-05-06 Sev-0).
+/**
+ * @deprecated v15-D6 (2026-05-25): Supabase Auth's encrypted_password is now
+ * the credential source of truth. App code no longer reads or writes
+ * public.users.password_hash. This function remains exported only because
+ * `src/lib/passwordRecovery.ts` still mirrors it for the legacy
+ * password-recovery Edge Function (decommissioned in a follow-up). Do NOT
+ * introduce new callers.
+ */
+// Simple hash function for password (legacy — do not use for new code).
 export function simpleHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -51,7 +53,6 @@ export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
       is_trainer: user.isTrainer || false,
       is_verified_trainer: user.isVerifiedTrainer || false,
       mode: user.mode || 'user',
-      password_hash: 'migrated_user', // Placeholder for migrated users
     });
     
     if (error) {
@@ -67,8 +68,11 @@ export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
   }
 }
 
-// Register user to Supabase for cross-device login
-export async function registerUserToSupabase(user: User, password: string, accountStatus: 'active' | 'placeholder' = 'active'): Promise<boolean> {
+// Register user to Supabase for cross-device login.
+// v15-D6: no longer writes password_hash. Supabase Auth (auth.users) is the
+// credential source of truth; this function only syncs the public.users
+// profile row (display_name, gender, height, etc.).
+export async function registerUserToSupabase(user: User, accountStatus: 'active' | 'placeholder' = 'active'): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
@@ -89,7 +93,6 @@ export async function registerUserToSupabase(user: User, password: string, accou
     id: user.id,
     email: user.email,
     username: user.username,
-    password_hash: simpleHash(password),
     display_name: user.displayName || user.username,
     gender: user.gender,
     date_of_birth: user.dateOfBirth,
@@ -143,32 +146,6 @@ export async function registerUserToSupabase(user: User, password: string, accou
   }
 }
 
-// Update password hash in Supabase (for cross-device login after password change)
-export async function updatePasswordInSupabase(email: string, newPassword: string): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
-  
-  const emailLower = email.toLowerCase().trim();
-  const newHash = simpleHash(newPassword);
-  
-  try {
-    const { error } = await supabase
-      .from('users')
-      .update({ password_hash: newHash })
-      .eq('email', emailLower);
-    
-    if (error) {
-      console.error('[Supabase] ❌ Password update failed:', error.message);
-      return false;
-    }
-    
-    console.log('[Supabase] ✅ Password updated for:', emailLower);
-    return true;
-  } catch (e: any) {
-    console.error('[Supabase] ❌ Password update exception:', e?.message);
-    return false;
-  }
-}
-
 // Resolve the canonical public.users row for an email address.
 // Critical for cross-device program visibility: auth.users and public.users use
 // different IDs, and programs ALWAYS reference public.users.id. When a client
@@ -201,108 +178,9 @@ export async function resolveCanonicalUserByEmail(
   }
 }
 
-/**
- * Discriminated result for {@link loginFromSupabase}.
- *
- * Lets the auth UI surface a specific message instead of the generic
- * "Invalid email or password" — particularly important for accounts
- * created via Google OAuth (`oauth_only`), where the user has no
- * password_hash to compare against and the only path forward is to
- * use the "Continue with Google" button.
- */
-export type SupabaseLoginResult =
-  | { kind: 'success'; user: User }
-  | { kind: 'no_user' }
-  | { kind: 'oauth_only' }
-  | { kind: 'wrong_password' }
-  | { kind: 'network' };
-
-// Login user from Supabase (cross-device)
-export async function loginFromSupabase(email: string, password: string): Promise<SupabaseLoginResult> {
-  if (!isSupabaseConfigured()) {
-    console.log('[Supabase Login] Not configured');
-    return { kind: 'network' };
-  }
-  
-  const emailLower = email.toLowerCase().trim();
-  const passwordHash = simpleHash(password);
-  
-  console.log('[Supabase Login] Attempting login for:', emailLower);
-  
-  try {
-    // First check if user exists by email only (to debug password issues)
-    const { data: userByEmail, error: lookupError } = await supabase
-      .from('users')
-      .select('id, email, password_hash')
-      .eq('email', emailLower)
-      .maybeSingle();
-    
-    if (lookupError) {
-      console.log('[Supabase Login] ❌ Lookup error:', lookupError.message);
-      return { kind: 'network' };
-    }
-    
-    if (!userByEmail) {
-      console.log('[Supabase Login] ❌ No user found with email:', emailLower);
-      return { kind: 'no_user' };
-    }
-    
-    // Distinguish OAuth-only accounts (no password set) from wrong-password
-    // attempts. Without this branch, users who registered via Google get
-    // the same opaque "Invalid email or password" toast as someone who
-    // typo'd a password — and have no idea they should click the Google
-    // button instead.
-    if (!userByEmail.password_hash) {
-      console.log('[Supabase Login] ❌ Account has no password (OAuth-only)');
-      return { kind: 'oauth_only' };
-    }
-    
-    if (userByEmail.password_hash !== passwordHash) {
-      console.log('[Supabase Login] ❌ Password mismatch');
-      return { kind: 'wrong_password' };
-    }
-    
-    // Now get full user data
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', userByEmail.id)
-      .maybeSingle();
-    
-    if (error || !data) {
-      console.log('[Supabase Login] ❌ Error fetching user data:', error?.message);
-      return { kind: 'network' };
-    }
-    
-    // Convert DB user to local User type
-    const user: User = {
-      id: data.id,
-      email: data.email,
-      username: data.username,
-      displayName: data.display_name,
-      gender: data.gender,
-      dateOfBirth: data.date_of_birth,
-      height: data.height,
-      weight: data.weight,
-      preferredUnit: data.preferred_unit || 'kg',
-      isTrainer: data.is_trainer,
-      isVerifiedTrainer: data.is_verified_trainer,
-      mode: data.mode || 'user',
-      createdAt: data.created_at,
-      followers: [],
-      following: [],
-      trainerId: data.trainer_id || undefined, // Link to trainer if this is a client
-      autoCountSessionsDefault: data.auto_count_sessions_default ?? true, // v14-D10: trainer-level default
-      blockFolderOrder: data.block_folder_order ?? undefined, // v14-D11: folder chip ordering
-    };
-    
-    console.log('User logged in from Supabase:', email);
-    return { kind: 'success', user };
-  } catch (e) {
-    console.error('Login from Supabase failed:', e);
-    return { kind: 'network' };
-  }
-}
+// v15-D6 (2026-05-25): loginFromSupabase + updatePasswordInSupabase removed.
+// Supabase Auth (`supabase.auth.signInWithPassword`, `supabase.auth.updateUser`)
+// is now the credential source of truth; see authStore.ts.
 
 // Fetch all real users from Supabase (excludes placeholder/client-file accounts)
 export async function fetchAllUsersFromSupabase(): Promise<any[]> {

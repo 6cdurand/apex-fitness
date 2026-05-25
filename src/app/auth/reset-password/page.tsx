@@ -1,6 +1,13 @@
 'use client';
 
 /**
+ * @deprecated v15-D6 (2026-05-25): this page handles the legacy custom-token
+ *   recovery flow (Edge Function `password-recovery`, Phase 0.5 from
+ *   2026-05-06). New recovery emails route through Supabase Auth and land
+ *   on `/auth/update-password`. This page is retained so emails sent BEFORE
+ *   the v15-D6 merge still verify for ~24h. Delete in a follow-up sprint
+ *   once all in-flight recovery emails have aged out.
+ *
  * Magic-link password recovery — landing page for the Resend email's reset
  * link (Phase 0.5, 2026-05-06). Spec: PLAN_magic_link_recovery.md §Frontend.
  *
