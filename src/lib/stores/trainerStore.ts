@@ -1496,6 +1496,11 @@ export const useTrainerStore = create<TrainerState>()(
             if (e.clientId !== userId) return false;
             if (e.type !== 'session') return false;
             if (e.status === 'cancelled') return false;
+            // v15-D8: completed PT releases the lock regardless of whether
+            // the workout-side completion propagation worked. Defence in
+            // depth — even if the matchesProgram() path regresses, a
+            // status='completed' booking will never wrongfully lock a day.
+            if (e.status === 'completed') return false;
             if (e.programId !== program.id) return false;
             if (typeof e.programDayIndex !== 'number') return false;
             // Skip if the trainer already completed it — completedDayIndices

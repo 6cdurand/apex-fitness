@@ -1492,6 +1492,10 @@ export default function ClientDetailPage() {
                                   trainerId: user?.id,
                                   status: 'scheduled',
                                   programId: activeProgram.id,
+                                  // v15-D8: was missing, broke D4 lock filter for
+                                  // this entry path. Without programDayIndex the
+                                  // lock can never engage for this booking.
+                                  programDayIndex: i,
                                   notes: `Session from ${activeProgram.templateName}`,
                                 } as any);
 
@@ -1500,7 +1504,15 @@ export default function ClientDetailPage() {
                                   ...(template as any),
                                   id: `session-${eventId}`,
                                   name: sessionName,
-                                } as any, clientId);
+                                } as any, clientId, {
+                                  // v15-D8: tag the workout with source. Without
+                                  // this, matchesProgram misses and
+                                  // completedDayIndices never includes this day,
+                                  // so the program page won't reflect the
+                                  // just-finished PT session.
+                                  programId: activeProgram.id,
+                                  dayIndex: i,
+                                });
                                 router.push('/workout/active');
                               }
                             }}

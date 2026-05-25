@@ -184,6 +184,14 @@ export default function TodayPage() {
         ? clientPrograms.find(p => p.clientId === event.clientId && p.status === 'active')
         : null;
 
+      // v15-D8: derive the program-source tag from the calendar event so the
+      // completed workout carries sourceProgramId/sourceDayIndex. Without
+      // this, matchesProgram(w) misses and the day never lands in
+      // completedDayIndices.
+      const programSource = program && typeof event.programDayIndex === 'number'
+        ? { programId: program.id, dayIndex: event.programDayIndex as number }
+        : undefined;
+
       const sw = await getOrCreateSessionWorkoutForEvent(
         event.id,
         user?.id || '',
@@ -234,18 +242,38 @@ export default function TodayPage() {
             isClientSession: true,
             clientId: event.clientId,
             trainerId: user?.id,
-          } as any, event.clientId || undefined);
+          } as any, event.clientId || undefined, programSource);
           router.push('/workout/active');
           return;
         }
       }
 
       // Resolved but empty blocks — start empty session for client
-      startWorkout(
-        sw?.name || `Session - ${displayName}`,
-        undefined,
-        event.clientId || undefined,
-      );
+      // v15-D8: when the event carries a program-day attachment, route the
+      // empty-session fallback through startFromTemplate so the resulting
+      // workout still gets tagged with sourceProgramId/sourceDayIndex.
+      // startWorkout has no source param and we don't want to widen its
+      // signature in this dispatch.
+      if (programSource) {
+        startFromTemplate({
+          id: `session-${event.id}`,
+          name: sw?.name || `Session - ${displayName}`,
+          description: 'PT Session',
+          exercises: [],
+          blocks: sw?.blocks || [],
+          category: 'strength',
+          estimatedDuration: 60,
+          isClientSession: true,
+          clientId: event.clientId,
+          trainerId: user?.id,
+        } as any, event.clientId || undefined, programSource);
+      } else {
+        startWorkout(
+          sw?.name || `Session - ${displayName}`,
+          undefined,
+          event.clientId || undefined,
+        );
+      }
       router.push('/workout/active');
     } finally {
       setStartingEventId(null);
@@ -1272,11 +1300,21 @@ export default function TodayPage() {
                         !w.deletedAt &&
                         format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
                       ) : null;
-                      // Check if a workout has been assigned/created for this session
+                      // Check if a workout has been assigned/created for this session.
+                      // v15-D8: a session is "assigned" when either:
+                      //   (a) a sessionWorkouts row exists (materialised by the start flow), OR
+                      //   (b) the calendar event carries a program-day attachment, in
+                      //       which case the workout will be reconstructed on Start.
+                      // Recognise the program attachment immediately so the trainer's
+                      // Today card doesn't show "No workout assigned" between booking
+                      // and first Start.
                       const matchedWorkout = eventType === 'session' ? sessionWorkouts.find(
                         (sw: any) => sw.eventId === event.id
                       ) : null;
-                      const hasWorkout = !!matchedWorkout;
+                      const hasProgramAttachment = eventType === 'session'
+                        && !!(event as any).programId
+                        && typeof (event as any).programDayIndex === 'number';
+                      const hasWorkout = !!matchedWorkout || hasProgramAttachment;
                       // Calculate duration in minutes
                       const durationMins = (() => {
                         if (!event.startTime || !event.endTime) return null;
@@ -1431,9 +1469,13 @@ export default function TodayPage() {
                                   <div className="flex items-center justify-between mt-2 pt-2 border-t border-gray-200">
                                     <p className="text-xs text-gray-500 flex items-center gap-1">
                                       <Dumbbell className="w-3 h-3" />
-                                      {hasWorkout ? 'Workout assigned' : 'No workout assigned'}
+                                      {matchedWorkout
+                                        ? 'Workout assigned'
+                                        : hasProgramAttachment
+                                          ? 'Workout assigned (from program)'
+                                          : 'No workout assigned'}
                                     </p>
-                                    {hasWorkout ? (
+                                    {matchedWorkout ? (
                                       <Button
                                         size="sm"
                                         variant="outline"
@@ -1444,6 +1486,26 @@ export default function TodayPage() {
                                         }}
                                       >
                                         <Edit className="w-3 h-3 mr-1" /> Edit Workout
+                                      </Button>
+                                    ) : hasProgramAttachment ? (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 text-[11px] border-sky-500/30 text-sky-500 hover:bg-sky-500/10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // v15-D8: there is no inline Edit Session dialog on this
+                                          // surface yet; the brief's setEditingEvent reference was
+                                          // aspirational. Route to the existing workout builder
+                                          // with the event+client so the trainer can customise the
+                                          // program-attached session workout there. The builder
+                                          // materialises the session_workout row on save.
+                                          if (event.clientId) {
+                                            router.push(`/workout/builder?eventId=${event.id}&clientId=${event.clientId}`);
+                                          }
+                                        }}
+                                      >
+                                        <Edit className="w-3 h-3 mr-1" /> Customize
                                       </Button>
                                     ) : (
                                       <Button
