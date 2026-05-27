@@ -1194,7 +1194,7 @@ export function WorkoutDayBuilder({
       
       {/* Edit Exercise Dialog */}
       <Dialog open={!!editingExercise} onOpenChange={() => { setEditingExercise(null); setShowSwapPanel(false); }}>
-        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[80vh]">
+        <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {showSwapPanel ? 'Swap Exercise' : 'Edit Exercise'}
