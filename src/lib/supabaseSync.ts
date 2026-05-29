@@ -974,6 +974,36 @@ export async function syncPBToSupabase(pb: PersonalBest): Promise<boolean> {
   }
 }
 
+/**
+ * v16-D1: fetch the user's personal_bests rows from Supabase. Used by
+ * {@link useWorkoutStore.hydrateForUser} to surface PBs that may have been
+ * written by the user's trainer in another session (e.g. a PT session
+ * pushed a Squat 100×5 PB → row exists in `personal_bests` with
+ * `user_id = client.id` even though the client's local store never saw it
+ * because the PB was computed on the trainer's device). Filters strictly
+ * by `user_id`, mirroring the read scope of {@link fetchUserDataFromSupabase}.
+ */
+export async function fetchPersonalBestsFromSupabase(userId: string): Promise<PersonalBest[]> {
+  if (!isSupabaseConfigured() || !userId) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('personal_bests')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) {
+      console.warn('[PB Fetch] Error:', error.message);
+      return [];
+    }
+
+    return (data || []).map(fromDbPersonalBest);
+  } catch (e) {
+    console.warn('[PB Fetch] Exception:', e);
+    return [];
+  }
+}
+
 // Sync a medal to Supabase
 export async function syncMedalToSupabase(medal: Medal): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
@@ -1556,6 +1586,28 @@ export async function syncTrainerSessionToSupabase(session: ClientSession): Prom
   }
 }
 
+// v16-D1: shared mapper so the trainer-only and client-or-trainer readers
+// produce identical app-shape rows.
+function fromDbTrainerSession(s: any): ClientSession {
+  return {
+    id: s.id,
+    trainerId: s.trainer_id,
+    clientId: s.client_id,
+    date: s.date,
+    startTime: s.start_time,
+    endTime: s.end_time,
+    duration: s.duration,
+    type: s.type,
+    status: s.status,
+    workoutId: s.workout_id,
+    notes: s.notes,
+    rating: s.rating,
+    feedback: s.feedback,
+    paid: s.paid,
+    paymentId: s.payment_id,
+  };
+}
+
 // Fetch all sessions for a trainer from Supabase
 export async function fetchTrainerSessionsFromSupabase(trainerId: string): Promise<ClientSession[]> {
   if (!isSupabaseConfigured()) return [];
@@ -1572,28 +1624,47 @@ export async function fetchTrainerSessionsFromSupabase(trainerId: string): Promi
       return [];
     }
     
-    const sessions: ClientSession[] = (data || []).map(s => ({
-      id: s.id,
-      trainerId: s.trainer_id,
-      clientId: s.client_id,
-      date: s.date,
-      startTime: s.start_time,
-      endTime: s.end_time,
-      duration: s.duration,
-      type: s.type,
-      status: s.status,
-      workoutId: s.workout_id,
-      notes: s.notes,
-      rating: s.rating,
-      feedback: s.feedback,
-      paid: s.paid,
-      paymentId: s.payment_id,
-    }));
+    const sessions: ClientSession[] = (data || []).map(fromDbTrainerSession);
     
     console.log(`[Session Fetch] Found ${sessions.length} sessions for trainer`);
     return sessions;
   } catch (e) {
     console.error('[Session Fetch] Exception:', e);
+    return [];
+  }
+}
+
+/**
+ * v16-D1: fetch trainer_sessions where the user is EITHER the trainer OR the
+ * client. This is what makes a client see PT sessions logged FOR them on
+ * `/today`, in their workout history, and in their profile. The legacy
+ * {@link fetchTrainerSessionsFromSupabase} only filters by `trainer_id`,
+ * which is the right scope for the trainer dashboard but leaves clients
+ * blind to sessions their trainer logged. Callers that need both sides
+ * (e.g. the auth-login hydrate) use this sibling reader.
+ *
+ * Implements the §5 F3 "OR" predicate via PostgREST `.or('trainer_id.eq.X,client_id.eq.X')`.
+ */
+export async function fetchSessionsForUserFromSupabase(userId: string): Promise<ClientSession[]> {
+  if (!isSupabaseConfigured() || !userId) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('trainer_sessions')
+      .select('*')
+      .or(`trainer_id.eq.${userId},client_id.eq.${userId}`)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.warn('[SessionsForUser Fetch] Error:', error.message);
+      return [];
+    }
+
+    const sessions = (data || []).map(fromDbTrainerSession);
+    console.log(`[SessionsForUser Fetch] Found ${sessions.length} sessions for user (trainer-or-client predicate)`);
+    return sessions;
+  } catch (e) {
+    console.warn('[SessionsForUser Fetch] Exception:', e);
     return [];
   }
 }
