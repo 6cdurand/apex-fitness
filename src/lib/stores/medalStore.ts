@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from '../safeStorage';
+import { scopedStorage } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { Medal, StrengthRating, PersonalBest, Workout } from '@/types';
 import { useAuthStore } from './authStore';
@@ -206,7 +206,8 @@ export const useMedalStore = create<MedalState>()(
     }),
     {
       name: 'apex-medals',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key. Medal earn history is per-user.
+      storage: createJSONStorage(() => scopedStorage('apex-medals')),
     }
   )
 );

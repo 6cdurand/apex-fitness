@@ -84,17 +84,29 @@ export default function PaymentsPage() {
   }, []);
 
   // Load payment settings from localStorage
+  // v16-D2: scope `apex-payment-settings` per trainer so a different
+  // trainer logging into the same browser doesn't inherit this
+  // trainer's per-client payment configuration.
   useEffect(() => {
-    const stored = localStorage.getItem('apex-payment-settings');
-    if (stored) {
-      setPaymentSettings(JSON.parse(stored));
+    if (!user?.id) {
+      setPaymentSettings({});
+      return;
     }
-  }, []);
+    try {
+      const stored = localStorage.getItem(`apex-payment-settings-${user.id}`);
+      if (stored) setPaymentSettings(JSON.parse(stored));
+      else setPaymentSettings({});
+    } catch {
+      setPaymentSettings({});
+    }
+  }, [user?.id]);
 
   // Save payment settings to localStorage
   const savePaymentSettings = (settings: Record<string, ClientPaymentSettings>) => {
+    if (!user?.id) return;
     setPaymentSettings(settings);
-    localStorage.setItem('apex-payment-settings', JSON.stringify(settings));
+    // v16-D2: per-user scoped key
+    localStorage.setItem(`apex-payment-settings-${user.id}`, JSON.stringify(settings));
   };
 
   // Centralized client info helper

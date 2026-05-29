@@ -15,7 +15,7 @@ import {
 } from '../getLastSetForExercise';
 import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
-import { safeLocalStorage } from '../safeStorage';
+import { scopedStorage } from './scopedStorage';
 import { __buildWorkoutCompletedNotification } from '../workoutCompletedNotification';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
@@ -1710,7 +1710,10 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'apex-workout',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key — actual blob lives at
+      // `apex-workout-<userId>` so a different account on the same
+      // browser cannot inherit this user's active workout / history.
+      storage: createJSONStorage(() => scopedStorage('apex-workout')),
       partialize: (state) => ({
         activeWorkout: state.activeWorkout,
         workoutTimer: state.workoutTimer,

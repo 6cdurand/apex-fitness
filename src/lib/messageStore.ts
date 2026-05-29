@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from './safeStorage';
+import { scopedStorage } from './stores/scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import {
   syncMessageToSupabase,
@@ -502,7 +502,10 @@ export const useMessageStore = create<MessageState>()(
     }),
     {
       name: 'apex-messages',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key. Closes the messenger leak where
+      // TrainerB's logged-in browser was inheriting TrainerA's full
+      // conversation list + clients-roster cache from `apex-messages`.
+      storage: createJSONStorage(() => scopedStorage('apex-messages')),
     }
   )
 );

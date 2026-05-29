@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from '../safeStorage';
+import { scopedStorage } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -2632,7 +2632,13 @@ export const useTrainerStore = create<TrainerState>()(
     }),
     {
       name: 'apex-trainer',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key. Even though `partialize` returns
+      // {} (D13: trainer data is authoritative in Supabase, not
+      // persisted to localStorage), Zustand still reads/writes a tiny
+      // envelope at this key on hydrate. Scoping it per-user keeps the
+      // envelope from leaking across accounts and matches the pattern
+      // used by every other user-scoped store.
+      storage: createJSONStorage(() => scopedStorage('apex-trainer')),
       // D13: do not persist trainer data to localStorage — all 15 state arrays
       // (clients, clientPrograms, sessionWorkouts, etc.) are authoritative in
       // Supabase and re-fetched on login via loadAllDataFromSupabase. Persisting

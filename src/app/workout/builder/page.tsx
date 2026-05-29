@@ -429,12 +429,10 @@ function WorkoutBuilderContent() {
   const [showCreateExerciseDialog, setShowCreateExerciseDialog] = useState(false);
   const [customExerciseName, setCustomExerciseName] = useState('');
   const [customExerciseType, setCustomExerciseType] = useState<'normal' | 'cardio' | 'stretch'>('normal');
-  const [customExercises, setCustomExercises] = useState<Array<{ id: string; name: string; type: 'normal' | 'cardio' | 'stretch' }>>(() => {
-    if (typeof window !== 'undefined') {
-      return JSON.parse(localStorage.getItem('apex-custom-exercises') || '[]');
-    }
-    return [];
-  });
+  // v16-D2: scope `apex-custom-exercises` per-user. Initial state is
+  // [] — populated by a userId-keyed effect below so we don't leak
+  // the previous account's custom exercises into this account.
+  const [customExercises, setCustomExercises] = useState<Array<{ id: string; name: string; type: 'normal' | 'cardio' | 'stretch' }>>([]);
   const [pendingBlockId, setPendingBlockId] = useState<string | null>(null);
   
   // Block type selection dialog state
@@ -446,6 +444,21 @@ function WorkoutBuilderContent() {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');
     setAllUsers(stored);
   }, []);
+
+  // v16-D2: load this user's custom exercises (per-user scoped key).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!user?.id) {
+      setCustomExercises([]);
+      return;
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem(`apex-custom-exercises-${user.id}`) || '[]');
+      setCustomExercises(stored);
+    } catch {
+      setCustomExercises([]);
+    }
+  }, [user?.id]);
   
   const clientUser = allUsers.find(u => u.id === clientId);
   const clientDisplayName = getClientNameUtil(clientId);
@@ -623,7 +636,10 @@ function WorkoutBuilderContent() {
     
     const updated = [...customExercises, newExercise];
     setCustomExercises(updated);
-    localStorage.setItem('apex-custom-exercises', JSON.stringify(updated));
+    // v16-D2: per-user scoped key
+    if (user?.id) {
+      localStorage.setItem(`apex-custom-exercises-${user.id}`, JSON.stringify(updated));
+    }
     
     toast.success(`"${customExerciseName}" added to your exercises!`);
     
