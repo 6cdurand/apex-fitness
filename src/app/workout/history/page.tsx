@@ -608,11 +608,21 @@ function WorkoutHistoryPageContent() {
                     <div className="space-y-2">
                       {selectedWorkout.exercises.map((ex) => {
                         const completedSets = ex.sets.filter(s => s.completed).length;
+                        // v16-D6: pick "best set" by estimated 1RM (Brzycki/Epley)
+                        // not raw volume — matches the global PB rule. Example:
+                        // 110×3 (e1RM 116) now beats 100×5 (e1RM 113) here too.
                         const bestSet = ex.sets.reduce((best, set) => {
-                          if (!set.completed) return best;
-                          const volume = (set.weight || 0) * (set.reps || 0);
-                          const bestVolume = (best?.weight || 0) * (best?.reps || 0);
-                          return volume > bestVolume ? set : best;
+                          if (!set.completed || !set.weight || !set.reps) return best;
+                          if (set.reps > 20) return best;
+                          const e1rm = set.weight * (set.reps <= 6
+                            ? (36 / (37 - set.reps))
+                            : (1 + set.reps / 30));
+                          const bestE1rm = (best?.weight && best?.reps && best.reps <= 20)
+                            ? best.weight * (best.reps <= 6
+                              ? (36 / (37 - best.reps))
+                              : (1 + best.reps / 30))
+                            : 0;
+                          return e1rm > bestE1rm ? set : best;
                         }, ex.sets[0]);
                         
                         return (
