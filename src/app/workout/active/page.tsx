@@ -1434,11 +1434,22 @@ export default function ActiveWorkoutPage() {
       const targetUserId = clientId || currentUser?.id;
       if (targetUserId && completed.exercises) {
         completed.exercises.forEach((ex: any) => {
+          // v16-D6: "best set" for the exercise-history sync is now picked by
+          // estimated 1RM (Brzycki/Epley), matching the global PB rule rather
+          // than raw weight×reps volume. Keeps the Supabase exerciseHistory
+          // row aligned with the personal_bests row written by checkAndUpdatePB.
           const bestSet = ex.sets.reduce((best: any, set: any) => {
-            if (!set.completed) return best;
-            const volume = (set.weight || 0) * (set.reps || 0);
-            const bestVolume = (best?.weight || 0) * (best?.reps || 0);
-            return volume > bestVolume ? set : best;
+            if (!set.completed || !set.weight || !set.reps) return best;
+            if (set.reps > 20) return best;
+            const e1rm = set.weight * (set.reps <= 6
+              ? (36 / (37 - set.reps))
+              : (1 + set.reps / 30));
+            const bestE1rm = (best?.weight && best?.reps && best.reps <= 20)
+              ? best.weight * (best.reps <= 6
+                ? (36 / (37 - best.reps))
+                : (1 + best.reps / 30))
+              : 0;
+            return e1rm > bestE1rm ? set : best;
           }, null);
           
           syncExerciseHistoryToSupabase(

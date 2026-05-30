@@ -922,7 +922,13 @@ export default function ProfilePage() {
                 <Trophy className="w-5 h-5 text-amber-400" />
                 Personal Bests
               </CardTitle>
-              <Button variant="ghost" size="sm" className="text-gray-400">
+              {/* v16-D6 (BUG-23): wire "See All" to /pbs detail route */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-400 hover:text-amber-500"
+                onClick={() => router.push('/pbs')}
+              >
                 See All
                 <ChevronRight className="w-4 h-4 ml-1" />
               </Button>

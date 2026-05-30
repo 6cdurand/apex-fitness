@@ -23,6 +23,7 @@
 
 import type { Workout } from '@/types';
 import { normalizeExerciseId } from './exerciseStats';
+import { calculate1RM } from './exercises';
 
 export interface LastSetData {
   weight?: number;
@@ -218,9 +219,13 @@ export function getLastWorkoutWithExercise(
  * the active-workout exercise card when the dedicated `personal_bests`
  * lookup returns undefined.
  *
- * "Best set" = the completed set with the highest `weight`. Ties broken by
- * higher reps. `duration` sets (cardio / time-only) are skipped — the PB
- * concept only applies to weight × reps.
+ * v16-D6: PB rule locked globally to estimated 1RM (Brzycki ≤6 reps, Epley
+ * 7-20 reps, ignored for >20). Previously this fallback used raw `weight` as
+ * the comparison key (with reps as tiebreaker), which would incorrectly
+ * prefer 100×5 over 110×3 in some edge cases and disagreed with
+ * `personal_bests` (which IS e1RM-based via workoutStore.checkAndUpdatePB).
+ * Now the fallback uses `calculate1RM(weight, reps)` as the comparison key,
+ * matching the authoritative store. `duration` sets are still skipped.
  *
  * Returns undefined when no completed workout contains this exercise with a
  * weight-bearing set.
@@ -233,7 +238,7 @@ export function getBestExerciseRecord(
   const normalizedId = normalizeExerciseId(exerciseId || '');
   const candidates = getRecentCompletedWorkouts(workoutHistory, userId);
 
-  let best: { bestWeight: number; bestReps: number; workoutId: string; workoutDate: string } | undefined;
+  let best: { bestWeight: number; bestReps: number; workoutId: string; workoutDate: string; oneRepMax: number } | undefined;
   for (const workout of candidates) {
     const matchingEx = workout.exercises?.find(e =>
       normalizeExerciseId(e.exerciseId || '') === normalizedId,
@@ -242,21 +247,29 @@ export function getBestExerciseRecord(
     for (const s of matchingEx.sets) {
       if (!s.completed) continue;
       if (!s.weight || !s.reps) continue; // skip duration-only / empty
+      // v16-D6: skip >20-rep sets — they don't count toward PB (parity with
+      // strengthRating.calculate1RM null-clamp and personal_bests storage).
+      if (s.reps > 20) continue;
+      const rm = calculate1RM(s.weight, s.reps);
       if (
         !best ||
-        s.weight > best.bestWeight ||
-        (s.weight === best.bestWeight && s.reps > best.bestReps)
+        rm > best.oneRepMax ||
+        (rm === best.oneRepMax && s.weight > best.bestWeight)
       ) {
         best = {
           bestWeight: s.weight,
           bestReps: s.reps,
           workoutId: workout.id,
           workoutDate: workout.endTime || workout.startTime || '',
+          oneRepMax: rm,
         };
       }
     }
   }
-  return best;
+  if (!best) return undefined;
+  // Strip oneRepMax from the return shape to preserve the public API.
+  const { oneRepMax: _omit, ...publicShape } = best;
+  return publicShape;
 }
 
 /**
