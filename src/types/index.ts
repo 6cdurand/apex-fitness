@@ -535,9 +535,17 @@ export interface TrainerClient {
   // but no longer increments it directly. historicalSessionsOffset is the
   // pre-Catalift / off-app session count that gets summed with the
   // trainer_sessions count to produce total_sessions.
-  totalSessions?: number;        // DERIVED — historicalSessionsOffset + count(trainer_sessions completed/no_show)
+  totalSessions?: number;        // LEGACY/fallback — see v16-D3 below. Pre-v16 trigger-derived total.
   totalPaid?: number;            // Stored counter — only changes on explicit user action (deferred derivation to v13)
-  historicalSessionsOffset?: number;  // Sessions with this client BEFORE Catalift / off-app. Editable.
+  historicalSessionsOffset?: number;  // LEGACY (v12-D3 / v14-D10). Kept readable for back-compat with older rows.
+  /**
+   * v16-D3: dedicated manual offset column. Source of truth for the pre-Catalift /
+   * off-app session count. Displayed total = historicalOffsetSessions +
+   * count(trainer_sessions WHERE status='completed' for this trainer/client pair).
+   * Manual edits and the +1 button NEVER write to `totalSessions`; the toggle is a
+   * pure behaviour flag (it does not mutate counts). See trainerStore.getDisplayedSessionCount.
+   */
+  historicalOffsetSessions?: number;
   // DEPRECATED — no longer used, kept for backwards compat
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
@@ -748,6 +756,25 @@ export interface ClientSession {
   feedback?: string;
   paid: boolean;
   paymentId?: string;
+  /**
+   * v16-D3: optional client-side timestamp used by trainerStore.addSession's
+   * dedupe window. Not persisted to Supabase — dropped silently by the sync
+   * function. Safe to omit.
+   */
+  createdAt?: string;
+  /**
+   * v16-D3: when the session is materialised from a specific calendar event
+   * (e.g. PT booking completed via the start-from-event flow), surface the
+   * source event id so addSession can dedupe by event identity instead of
+   * the looser {clientId,date,startTime} fingerprint.
+   */
+  calendarEventId?: string;
+  /**
+   * v16-D3: marker used by the manual "+1" button on /payments so the row
+   * can be visually distinguished from PT-completion-derived rows and so
+   * the history view can label it accordingly.
+   */
+  source?: 'manual_plus_one' | 'pt_completion' | 'booking' | string;
 }
 
 // Payment record

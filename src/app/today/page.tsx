@@ -1235,9 +1235,17 @@ export default function TodayPage() {
 
         {/* Unified Timeline — shows in BOTH user and trainer mode for trainer users */}
         {user.isTrainer && (() => {
-          const trainerEvents = getEventsForDate(selectedDateStr).filter(e => 
-            e.trainerId === user.id && e.status !== 'cancelled' && e.clientId !== user.id && e.type !== 'workout'
-          );
+          // v16-D3 (BUG-4 / F1): each calendar event renders its own card,
+          // regardless of sibling completion state for the same client/day.
+          // The previous filter dropped events whose `trainerId` wasn't set
+          // (e.g. synth events auto-created by workout completion) which
+          // meant a manual booking made AFTER a completed session sometimes
+          // failed to surface. Widen the match to also accept events owned
+          // by this trainer via `ownerUserId` so no booking is hidden.
+          const trainerEvents = getEventsForDate(selectedDateStr).filter(e => {
+            const ownedByTrainer = (e.trainerId === user.id) || ((e as any).ownerUserId === user.id);
+            return ownedByTrainer && e.status !== 'cancelled' && e.clientId !== user.id && e.type !== 'workout';
+          });
           
           // Merge all events: upcoming first, completed below, each sub-sorted by time
           const allEvents = trainerEvents
