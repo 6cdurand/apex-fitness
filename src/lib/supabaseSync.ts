@@ -3414,13 +3414,18 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
     if (notification.senderId) dbNotification.sender_id = notification.senderId;
     // v14-D12: persist programEditDetail in JSONB metadata column
     if (notification.programEditDetail) dbNotification.metadata = notification.programEditDetail;
+    // v17-D2: round-trip `seen_at` (badge-clear timestamp). Only included
+    // when defined so new rows still create cleanly on the
+    // `seen_at IS NULL` default path. Stripped on schema-drift retry below.
+    if (notification.seenAt) dbNotification.seen_at = notification.seenAt;
 
     // The notifications table has drifted across environments (some DBs
-    // predate the `link`, `program_id`, `sender_id`, `deep_link_path`
-    // columns). Rather than failing the whole upsert on a single unknown
-    // column, strip any column the server complains about and retry.
-    // Bounded to one retry per column we added so we can't loop forever.
-    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id', 'metadata', 'deep_link_path'];
+    // predate the `link`, `program_id`, `sender_id`, `deep_link_path`,
+    // `seen_at` columns). Rather than failing the whole upsert on a single
+    // unknown column, strip any column the server complains about and
+    // retry. Bounded to one retry per column we added so we can't loop
+    // forever.
+    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id', 'metadata', 'deep_link_path', 'seen_at'];
     let attempt = 0;
     let lastError: any = null;
     // At most (optionalCols.length + 1) attempts: one per drop + the final try.
@@ -3475,6 +3480,10 @@ export async function fetchNotificationsFromSupabase(userId: string): Promise<an
       title: n?.title ?? '',
       message: n?.message ?? '',
       read: !!n?.read,
+      // v17-D2: hydrate seen_at if the column exists. Older DB snapshots
+      // without the column return undefined → row is treated as unseen,
+      // which is the safe default (it will get stamped on next panel open).
+      seenAt: n?.seen_at ?? undefined,
       link: n?.link ?? n?.action_url ?? undefined,
       actionUrl: n?.action_url ?? n?.link ?? undefined,
       // v16-D7: hydrate the canonical deep-link path. Cascade through
@@ -3504,6 +3513,39 @@ export async function markNotificationReadInSupabase(notificationId: string): Pr
     }
     return true;
   } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * v17-D2: stamp `seen_at = now()` on every currently-unseen notification
+ * for the given user. Idempotent — rows where `seen_at IS NOT NULL` are
+ * not touched, so calling this on every panel mount is cheap after the
+ * first time. Resolves true on success, false on Supabase error (caller
+ * may proceed regardless; the local optimistic update has already cleared
+ * the badge). Schema-drift safe: if the column is missing the update
+ * is a no-op + warning, not a thrown exception.
+ */
+export async function markAllNotificationsSeenInSupabase(userId: string): Promise<boolean> {
+  if (!isSupabaseConfigured()) return false;
+  if (!userId) return false;
+
+  try {
+    const seenAt = new Date().toISOString();
+    const { error } = await supabase
+      .from('notifications')
+      .update({ seen_at: seenAt })
+      .eq('user_id', userId)
+      .is('seen_at', null);
+    if (error) {
+      // Schema drift (column missing) shows up as 42703 / "column ... does
+      // not exist" / "schema cache" — log and bail without crashing.
+      console.warn('[v17-D2] markAllNotificationsSeenInSupabase failed:', error.message);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn('[v17-D2] markAllNotificationsSeenInSupabase exception:', e);
     return false;
   }
 }

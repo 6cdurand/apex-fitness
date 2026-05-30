@@ -34,13 +34,29 @@ import { fetchClientProgramsForUser } from '@/lib/supabaseSync';
 export default function NotificationsPage() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { notifications, markNotificationRead, markAllNotificationsRead, clearAllNotifications } = useSocialStore();
+  const {
+    notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    markAllNotificationsSeen,
+    clearAllNotifications,
+  } = useSocialStore();
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.replace('/auth');
     }
   }, [isAuthenticated, router]);
+
+  // v17-D2: clear the bell-badge by stamping `seen_at` on all currently
+  // unseen notifications for this user. Optimistic local update fires
+  // inside the store action so the badge clears within this render tick;
+  // the Supabase sync rides along in the background. Idempotent —
+  // re-mounting is a cheap no-op once everything is already seen.
+  useEffect(() => {
+    if (!user?.id) return;
+    markAllNotificationsSeen();
+  }, [user?.id, markAllNotificationsSeen]);
 
   if (!isAuthenticated) return null;
 
@@ -174,7 +190,12 @@ export default function NotificationsPage() {
                   key={notification.id}
                   className={cn(
                     "bg-white border-gray-200 shadow-sm cursor-pointer transition-colors",
-                    !notification.read && "bg-sky-50 border-l-2 border-l-sky-500"
+                    // v17-D2: visual cue tracks unseen ("new since last
+                    // panel open"), not unread ("haven't clicked yet").
+                    // The mount-time markAllNotificationsSeen stamps these
+                    // shortly after first paint, so the cue naturally
+                    // fades on the next render — matches the badge.
+                    !notification.seenAt && "bg-sky-50 border-l-2 border-l-sky-500"
                   )}
                   onClick={() => { void handleNotificationClick(notification); }}
                 >
