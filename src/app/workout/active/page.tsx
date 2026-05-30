@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
+import type { ActiveWorkoutBlock } from '@/lib/stores/workoutStore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -97,8 +98,20 @@ export function __shouldRedirectFromActiveWorkout(params: {
   showSummary: boolean;
   completedWorkoutData: unknown;
   isFinishing: boolean;
+  // v17-D1: gate the empty-state → /workout redirect on Zustand persist
+  // rehydration completing. Optional for backwards compatibility with the
+  // existing test suite (page.shouldRedirect.test.ts), which omits the
+  // flag. When omitted we treat it as "already hydrated" so legacy tests
+  // and any non-page caller behave exactly as before. When the caller
+  // (ActiveWorkoutPage) passes hasHydrated=false explicitly, we suppress
+  // the redirect until persisted state lands — prevents the cmd+R-during-
+  // active-workout race that bounced the user to /today.
+  hasHydrated?: boolean;
 }): ActiveWorkoutRedirectTarget {
   if (!params.isAuthenticated) return 'auth';
+  // hasHydrated === false (explicit) → don't make a routing decision yet.
+  // undefined keeps the legacy default of "hydrated".
+  if (params.hasHydrated === false) return null;
   if (
     !params.activeWorkout &&
     !params.showSummary &&
@@ -395,34 +408,16 @@ export default function ActiveWorkoutPage() {
   // Active stretch/timed set timers (setId -> { remaining, total, isRunning })
   const [activeSetTimers, setActiveSetTimers] = useState<Record<string, { remaining: number; total: number; isRunning: boolean }>>({});
   
-  // Block system state
-  const [workoutBlocks, setWorkoutBlocks] = useState<{
-    id: string;
-    type: 'warmup' | 'strength' | 'circuit' | 'cardio';
-    name: string;
-    circuitStyle?: 'amrap' | 'forTime' | 'rounds' | 'emom';
-    circuitDuration?: number; // in seconds
-    circuitRounds?: number;
-    timerRunning?: boolean;
-    timerSeconds?: number;
-    completed?: boolean;
-    circuitComplete?: boolean;
-    // Round tracking for circuits
-    roundsCompleted?: { roundNumber: number; completedAt: number; duration: number }[];
-    currentRoundStart?: number;
-    // Cardio-specific fields
-    cardioType?: 'run' | 'swim' | 'bike' | 'row' | 'other';
-    cardioMode?: 'steady' | 'intervals' | 'distance';
-    targetDistance?: number; // in meters
-    targetPace?: string; // e.g., "5:00/km"
-    intervalWork?: number; // work seconds
-    intervalRest?: number; // rest seconds
-    intervalRounds?: number;
-    currentIntervalPhase?: 'work' | 'rest';
-    currentIntervalRound?: number;
-    distanceCompleted?: number;
-    splits?: { distance: number; time: number }[];
-  }[]>([]);
+  // v17-D1: workoutBlocks hoisted from React useState into the persisted
+  // Zustand store as `activeWorkoutBlocks`. The previous useState was the
+  // root cause of the Sev-1 tab-discard data loss: Chrome killing the tab
+  // tore down React state and circuit rounds / cardio splits / timer
+  // seconds evaporated even though the persisted `activeWorkout` survived.
+  // Setter signature is preserved (functional updates supported) so all
+  // existing call sites compile unchanged.
+  const workoutBlocks = useWorkoutStore((s) => s.activeWorkoutBlocks);
+  const setWorkoutBlocks = useWorkoutStore((s) => s.setActiveWorkoutBlocks);
+  const hasWorkoutStoreHydrated = useWorkoutStore((s) => s.hasHydrated);
   
   // Circuit exercise reps (exerciseId -> reps)
   const [circuitExerciseReps, setCircuitExerciseReps] = useState<Record<string, number>>({});
@@ -476,6 +471,9 @@ export default function ActiveWorkoutPage() {
   // BUT skip redirect if the summary is showing (activeWorkout is null after
   // endWorkout), and skip while a finish flow is in progress (isFinishing is
   // set synchronously before any await — see __shouldRedirectFromActiveWorkout).
+  // v17-D1: also pass hasWorkoutStoreHydrated so the redirect can't fire on a
+  // fresh mount (e.g. cmd+R during an active workout) before Zustand persist
+  // pulls the active workout back from localStorage.
   useEffect(() => {
     const target = __shouldRedirectFromActiveWorkout({
       isAuthenticated,
@@ -483,10 +481,44 @@ export default function ActiveWorkoutPage() {
       showSummary,
       completedWorkoutData,
       isFinishing,
+      hasHydrated: hasWorkoutStoreHydrated,
     });
     if (target === 'auth') router.replace('/auth');
     else if (target === 'workout') router.replace('/workout');
-  }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, isFinishing, router]);
+  }, [isAuthenticated, activeWorkout, showSummary, completedWorkoutData, isFinishing, hasWorkoutStoreHydrated, router]);
+
+  // v17-D1: persist flush on tab hide / unload.
+  //
+  // Zustand `persist` writes on every state change, but a rapidly-typed
+  // input followed by an immediate tab close can race the write — and
+  // Chrome's tab-discard fires `visibilitychange:hidden` without giving
+  // the page a chance to settle. Force a no-op set on both events so the
+  // latest activeWorkoutBlocks (and any other persisted slice) is flushed
+  // through the storage adapter before the browser drops the page.
+  //
+  // We intentionally do not call event.preventDefault() / set returnValue
+  // — the goal is a SILENT flush, not a "are you sure?" prompt. (A confirm
+  // prompt would surface a separate UX decision per AC6 and is out of
+  // scope for this brief.)
+  useEffect(() => {
+    const flush = () => {
+      try {
+        const state = useWorkoutStore.getState();
+        useWorkoutStore.setState({ ...state });
+      } catch (e) {
+        console.warn('[v17-D1] persist flush failed:', e);
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   // A2: hydrate client workout history on PT-session start. Idempotent —
   // dedupes by workout id and PB id so re-runs (e.g. activeWorkout.id
