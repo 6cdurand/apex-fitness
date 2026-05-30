@@ -170,6 +170,20 @@ export const useAuthStore = create<AuthState>()(
 
         console.log('[Auth] localStorage miss, trying Supabase Auth...');
 
+        // v16-D8 BUG-11 mitigation: clear any stale Supabase session before
+        // attempting a fresh email/password login. Chrome was observed to
+        // hold onto a prior account's PKCE/IndexedDB state across logout +
+        // re-login on a different account, causing signInWithPassword to
+        // fail for credentials that worked fine on Safari. This signOut is
+        // a no-op on a clean browser (no active session) and surgical for
+        // the stale-state case. v16-D2's scopedStorage handles the Zustand
+        // side; this handles the Supabase Auth side.
+        try {
+          await supabase.auth.signOut();
+        } catch (e) {
+          console.warn('[Auth] pre-login signOut failed (non-fatal):', e);
+        }
+
         // v15-D6: replace legacy public.users.password_hash REST query with
         // Supabase Auth's signInWithPassword. auth.users.encrypted_password
         // is now the credential source of truth.

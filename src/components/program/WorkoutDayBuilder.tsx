@@ -1015,42 +1015,37 @@ export function WorkoutDayBuilder({
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* v14-D23: Per-block kebab — currently hosts the
-                      "Save to Block Library" affordance, gated by
-                      enableBlockLibrary. Future block-level actions can land
-                      in this menu. */}
+                  {/* v16-D8 BUG-14: Save-to-library promoted from the kebab
+                      to a dedicated icon button next to the block-type
+                      badge. Same emblem (BookmarkPlus), same handler, same
+                      `enableBlockLibrary` gate — just one tap instead of
+                      kebab → menu → click. The kebab previously hosted only
+                      this one action and is now retired (Trash retains its
+                      own dedicated button). Christo dispatch 2026-05-29. */}
                   {enableBlockLibrary && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-gray-500 hover:text-purple-400"
-                          title="Block actions"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => {
-                            setActiveBlockId(block.id);
-                            setBlockLibraryName(block.name);
-                            setBlockLibraryFolder('');
-                            setShowSaveBlockDialog(true);
-                          }}
-                        >
-                          <BookmarkPlus className="w-4 h-4 mr-2 text-purple-400" />
-                          Save to Block Library
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-gray-500 hover:text-purple-400"
+                      onClick={() => {
+                        setActiveBlockId(block.id);
+                        setBlockLibraryName(block.name);
+                        setBlockLibraryFolder('');
+                        setShowSaveBlockDialog(true);
+                      }}
+                      title="Save block to library"
+                      aria-label="Save block to library"
+                    >
+                      <BookmarkPlus className="w-3.5 h-3.5" />
+                    </Button>
                   )}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-7 w-7 text-gray-500 hover:text-red-400"
                     onClick={() => removeBlock(block.id)}
+                    title="Remove block"
+                    aria-label="Remove block"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>

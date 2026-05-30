@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { useMessageStore, Conversation } from '@/lib/messageStore';
@@ -18,6 +18,12 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { 
   MessageCircle, 
   Send, 
@@ -26,7 +32,8 @@ import {
   BadgeCheck,
   Check,
   CheckCheck,
-  Loader2
+  Loader2,
+  Plus,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 
@@ -50,6 +57,12 @@ export default function MessagesPage() {
   const [messageText, setMessageText] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  // v16-D8 BUG-10: "+ New message" picker for starting a conversation with
+  // someone the user hasn't messaged yet. The vertical conversation list
+  // below now strictly filters to convos with at least one sent/received
+  // message, so this picker is the dedicated way in to start a new thread.
+  const [showNewMessagePicker, setShowNewMessagePicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -175,14 +188,31 @@ export default function MessagesPage() {
 
   if (!isAuthenticated || !user) return null;
 
-  const userConversations = getConversationsForUser(user.id).sort((a, b) => {
-    const aUnread = getUnreadCountForConversation(a.id, user.id);
-    const bUnread = getUnreadCountForConversation(b.id, user.id);
-    // Unread conversations first, then by most recent
-    if (aUnread > 0 && bUnread === 0) return -1;
-    if (bUnread > 0 && aUnread === 0) return 1;
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
-  });
+  // v16-D8 BUG-10: filter out conversations that have never had a message
+  // sent or received. `getOrCreateConversation` creates an empty conv
+  // record when a trainer taps a client in the "Your Clients" strip (or
+  // someone is pre-selected via ?with=<userId>), and those empty records
+  // were polluting the vertical list and making it look like the full
+  // client roster. The conversation projection in messageStore.ts already
+  // populates `lastMessage` whenever any message exists in either
+  // direction, so `lastMessage` is the single source of truth for
+  // "this conversation has real content."
+  //
+  // Sort: unread first, then by lastMessage.createdAt (most recent send
+  // OR receive at the top). updatedAt is bumped to message.createdAt on
+  // every send (messageStore.ts:371), so falling back to updatedAt for
+  // safety still yields the correct ordering when lastMessage is set.
+  const userConversations = getConversationsForUser(user.id)
+    .filter(c => !!c.lastMessage)
+    .sort((a, b) => {
+      const aUnread = getUnreadCountForConversation(a.id, user.id);
+      const bUnread = getUnreadCountForConversation(b.id, user.id);
+      if (aUnread > 0 && bUnread === 0) return -1;
+      if (bUnread > 0 && aUnread === 0) return 1;
+      const aTs = a.lastMessage?.createdAt ?? a.updatedAt;
+      const bTs = b.lastMessage?.createdAt ?? b.updatedAt;
+      return new Date(bTs).getTime() - new Date(aTs).getTime();
+    });
   
   const getOtherUser = (conversation: Conversation) => {
     const otherId = conversation.participants.find(p => p !== user.id);
@@ -221,6 +251,28 @@ export default function MessagesPage() {
   const clientUsers = user.isTrainer 
     ? allUsers.filter(u => clients.some(c => c.clientId === u.id))
     : [];
+
+  // v16-D8 BUG-10: picker roster for the "+ New message" dialog. Trainers
+  // see their client roster; non-trainers see any user they could already
+  // search for (i.e. the full hydrated directory minus self). The picker
+  // is the explicit "start a new conversation" path now that the vertical
+  // list only shows convos with real messages.
+  const pickerCandidates = useMemo(() => {
+    const base = user.isTrainer ? clientUsers : allUsers.filter(u => u.id !== user.id);
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return base;
+    return base.filter(u =>
+      u.displayName?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q)
+    );
+  }, [user.isTrainer, user.id, clientUsers, allUsers, pickerSearch]);
+
+  const handlePickRecipient = (otherUser: any) => {
+    const conv = getOrCreateConversation(user.id, otherUser.id);
+    setSelectedConversation(conv);
+    setShowNewMessagePicker(false);
+    setPickerSearch('');
+  };
 
   return (
     <MainLayout>
@@ -347,15 +399,27 @@ export default function MessagesPage() {
             <PageHeader title="Messages" subtitle="Chat with trainers and friends" />
             
             <div className="px-4 py-4">
-              {/* Search */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <Input
-                  placeholder="Search users to message..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
-                />
+              {/* v16-D8 BUG-10: "+ New message" button is the explicit way
+                  to start a conversation with someone the user hasn't
+                  messaged yet. Sits next to the search bar so it's the
+                  primary affordance on this empty/recent state. */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                  <Input
+                    placeholder="Search users to message..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
+                  />
+                </div>
+                <Button
+                  onClick={() => { setPickerSearch(''); setShowNewMessagePicker(true); }}
+                  className="bg-sky-500 hover:bg-sky-600 text-white flex-shrink-0"
+                  title="Start a new conversation"
+                >
+                  <Plus className="w-4 h-4 mr-1" /> New
+                </Button>
               </div>
 
               {/* Search Results */}
@@ -490,6 +554,70 @@ export default function MessagesPage() {
           </>
         )}
       </div>
+
+      {/* v16-D8 BUG-10: "+ New message" picker dialog. Shows full client
+          roster (trainer) or hydrated user directory (member) so users
+          can start a NEW conversation with someone they haven't messaged
+          yet. Tapping a row creates the conversation via
+          getOrCreateConversation and opens the empty thread; once a
+          message is sent the conv joins the vertical list. */}
+      <Dialog open={showNewMessagePicker} onOpenChange={setShowNewMessagePicker}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Start a conversation</DialogTitle>
+          </DialogHeader>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+            <Input
+              placeholder={user.isTrainer ? 'Search clients…' : 'Search users…'}
+              value={pickerSearch}
+              onChange={(e) => setPickerSearch(e.target.value)}
+              className="pl-10 bg-gray-50 border-gray-200 text-gray-900"
+              autoFocus
+            />
+          </div>
+          <ScrollArea className="max-h-80">
+            {pickerCandidates.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-500">
+                {user.isTrainer
+                  ? 'No clients match that search.'
+                  : 'No users match that search.'}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {pickerCandidates.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => handlePickRecipient(u)}
+                    className="w-full flex items-center gap-3 p-2 rounded hover:bg-gray-50 text-left transition-colors"
+                  >
+                    <Avatar className="w-9 h-9">
+                      <AvatarImage src={u.profilePhoto} />
+                      <AvatarFallback className="bg-gray-100 text-gray-900">
+                        {u.displayName?.[0] || u.username?.[0] || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">
+                        {u.displayName || u.username}
+                      </p>
+                      {u.username && (
+                        <p className="text-xs text-gray-500 truncate">@{u.username}</p>
+                      )}
+                    </div>
+                    {u.isTrainer && (
+                      <Badge variant="outline" className="border-sky-500/50 text-sky-500 flex-shrink-0">
+                        Trainer
+                      </Badge>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </MainLayout>
   );
 }
