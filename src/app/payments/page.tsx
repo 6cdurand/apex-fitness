@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
-import { getEffectiveAutoCount } from '@/lib/stores/trainerStore';
+import { getEffectiveAutoCount, getDisplayedSessionCount } from '@/lib/stores/trainerStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -127,8 +127,13 @@ export default function PaymentsPage() {
     // Price per session: user settings > package > default
     const pricePerSession = settings?.pricePerSession || activePackage?.pricePerSession || 0;
     
-    // SESSIONS — stored counter. +1 on workout complete, or manual inline edit.
-    const totalSessionsEver = client?.totalSessions ?? 0;
+    // SESSIONS — v16-D3 (F2): displayed total is now DERIVED at read time as
+    //   historicalOffsetSessions + count(trainer_sessions WHERE status='completed').
+    // Manual edits write to the offset; the +1 button writes a session row; the
+    // auto-count toggle is a pure behaviour flag and never mutates counts.
+    // The legacy `client.totalSessions` value is only used as a fallback when
+    // the row predates the v16-D3 migration (see getDisplayedSessionCount).
+    const totalSessionsEver = getDisplayedSessionCount(client, sessions);
     
     // PAID — stored counter. Only changes on explicit user action.
     const totalPaidSessions = client?.totalPaid ?? 0;
@@ -320,8 +325,33 @@ export default function PaymentsPage() {
     if (!editingField) return;
     const newValue = Math.max(0, parseInt(editValue) || 0);
     if (editingField.field === 'sessions') {
-      // Sessions: direct stored value — set exactly what the user typed
-      updateClient(editingField.clientId, { totalSessions: newValue });
+      // v16-D3 (F2 / BUG-5): inline session-count edits now write the
+      // historicalOffsetSessions column instead of mutating totalSessions.
+      // Computing the offset such that displayed_total === newValue:
+      //   newOffset = newValue - count(completed sessions)
+      // Auto-counted PT completions thereafter ADD to the displayed total
+      // instead of overwriting the manual edit.
+      const target = clients.find(c => c.clientId === editingField.clientId);
+      if (target) {
+        const completedCount = sessions.filter(s =>
+          s.clientId === target.clientId &&
+          s.trainerId === target.trainerId &&
+          s.status === 'completed'
+        ).length;
+        const newOffset = Math.max(0, newValue - completedCount);
+        updateClient(editingField.clientId, {
+          historicalOffsetSessions: newOffset,
+          // Keep the legacy column in sync for back-compat readers that
+          // still consult historicalSessionsOffset (e.g. EditHistoricalOffsetModal).
+          historicalSessionsOffset: newOffset,
+          // Mirror into the legacy `totalSessions` field as well so any
+          // read site that hasn't migrated to getDisplayedSessionCount still
+          // shows the freshly-edited value until next refetch.
+          totalSessions: newValue,
+        });
+      } else {
+        updateClient(editingField.clientId, { totalSessions: newValue });
+      }
     } else {
       // Paid: direct stored value — set exactly what the user typed
       updateClient(editingField.clientId, { totalPaid: newValue });
@@ -642,33 +672,22 @@ export default function PaymentsPage() {
                               value === 'off' ? false :
                               null; // 'default'
 
-                            // Compute effective old + new for visible-total preservation.
-                            const trainerDefault = user?.autoCountSessionsDefault !== false;
-                            const oldEffective = getEffectiveAutoCount(targetClient.autoCountSessions, trainerDefault);
-                            const newEffective = getEffectiveAutoCount(newAutoCount, trainerDefault);
-
-                            // Optimistic local rebucket (same math as v14-D1 + the server BEFORE trigger).
-                            const oldOffset = targetClient.historicalSessionsOffset ?? 0;
-                            const oldTotal = targetClient.totalSessions ?? 0;
-                            const calendarCount = Math.max(0, oldTotal - oldOffset);
-                            let newOffset = oldOffset;
-                            if (oldEffective === true && newEffective === false) {
-                              newOffset = oldOffset + calendarCount;
-                            } else if (oldEffective === false && newEffective === true) {
-                              newOffset = Math.max(0, oldOffset - calendarCount);
-                            }
-                            const newTotal = newEffective ? newOffset + calendarCount : newOffset;
-
+                            // v16-D3 (F5 / BUG-7): the toggle is now a PURE
+                            // behaviour flag. Persist the flag only — do NOT
+                            // touch historicalOffsetSessions or totalSessions.
+                            // Past sessions stay counted; only future PT
+                            // completions are gated by the toggle (see F3 in
+                            // workoutStore.endWorkout). Toggling ON → OFF → ON
+                            // leaves the displayed count unchanged.
                             updateClient(client.clientId, {
                               autoCountSessions: newAutoCount,
-                              historicalSessionsOffset: newOffset,
-                              totalSessions: newTotal,
                             });
 
+                            const trainerDefault = user?.autoCountSessionsDefault !== false;
                             const labelMap: Record<string, string> = {
-                              on: `${client.info.name}: sessions will ALWAYS count.`,
-                              off: `${client.info.name}: sessions will NEVER auto-count. Use the +1 button to count manually.`,
-                              default: `${client.info.name} now follows the trainer default (currently ${trainerDefault ? 'ON' : 'OFF'}).`,
+                              on: `${client.info.name}: future sessions will ALWAYS count.`,
+                              off: `${client.info.name}: future sessions will NEVER auto-count. Use the +1 button to count manually. Past counts are unchanged.`,
+                              default: `${client.info.name} now follows the trainer default (currently ${trainerDefault ? 'ON' : 'OFF'}). Past counts are unchanged.`,
                             };
                             toast.success(labelMap[value], { duration: 3500 });
                           }}
@@ -697,14 +716,34 @@ export default function PaymentsPage() {
                               onClick={() => {
                                 const targetClient = clients.find(c => c.clientId === client.clientId);
                                 if (!targetClient) return;
-                                const newOffset = (targetClient.historicalSessionsOffset ?? 0) + 1;
-                                const newTotal = (targetClient.totalSessions ?? 0) + 1;
-                                updateClient(client.clientId, {
-                                  historicalSessionsOffset: newOffset,
-                                  totalSessions: newTotal,
-                                });
+                                // v16-D3 (F2 / AC6): the manual +1 button now
+                                // writes a real `trainer_sessions` row tagged
+                                // `source: 'manual_plus_one'` so it surfaces in
+                                // /workout/history AND is counted by
+                                // getDisplayedSessionCount alongside auto-counted
+                                // PT completions. Offset is left untouched.
+                                const nowTs = new Date();
+                                const dateStr = format(nowTs, 'yyyy-MM-dd');
+                                const timeStr = format(nowTs, 'HH:mm');
+                                useTrainerStore.getState().addSession({
+                                  clientId: targetClient.clientId,
+                                  trainerId: targetClient.trainerId,
+                                  date: dateStr,
+                                  startTime: timeStr,
+                                  endTime: timeStr,
+                                  duration: 0,
+                                  type: 'pt_session',
+                                  status: 'completed',
+                                  notes: 'Manual +1',
+                                  paid: false,
+                                  source: 'manual_plus_one',
+                                } as any);
+                                const projected = getDisplayedSessionCount(
+                                  { ...targetClient },
+                                  [...useTrainerStore.getState().sessions]
+                                );
                                 toast.success(
-                                  `+1 session counted for ${client.info.name} (lifetime: ${newTotal}).`,
+                                  `+1 session counted for ${client.info.name} (lifetime: ${projected}).`,
                                   { duration: 3500 }
                                 );
                               }}

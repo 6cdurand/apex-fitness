@@ -19,6 +19,43 @@ export function getEffectiveAutoCount(
   if (trainerDefault !== undefined) return trainerDefault;
   return true;
 }
+
+/**
+ * v16-D3: compute the displayed lifetime session count for a (trainer, client) pair.
+ *
+ * Formula:  historicalOffsetSessions  +  COUNT(trainer_sessions WHERE status='completed')
+ *
+ * - `historicalOffsetSessions` (new v16-D3 column) is the *only* writable source for
+ *   manual edits and the +1 button. Toggling auto-count never mutates it.
+ * - The auto-count toggle controls whether `endWorkout` writes a new `trainer_sessions`
+ *   row on PT-workout completion. It does NOT mutate any stored count.
+ * - Legacy fallback order: historicalOffsetSessions → historicalSessionsOffset →
+ *   totalSessions (pre-v16-D3 trigger-derived value). Required so installs without
+ *   the migration still surface a sensible number.
+ */
+export function getDisplayedSessionCount(
+  client: { clientId?: string; trainerId?: string; historicalOffsetSessions?: number; historicalSessionsOffset?: number; totalSessions?: number } | null | undefined,
+  allSessions: Array<{ clientId?: string; trainerId?: string; status?: string }>
+): number {
+  if (!client) return 0;
+  // v16-D3 source of truth. Falls back to the legacy column when the row predates
+  // the migration, then to the pre-v16 trigger-derived total as last resort.
+  const hasNewOffset = typeof client.historicalOffsetSessions === 'number';
+  const hasLegacyOffset = typeof client.historicalSessionsOffset === 'number';
+  if (!hasNewOffset && !hasLegacyOffset) {
+    // No offset metadata at all — trust the legacy stored count as best-effort.
+    return Math.max(0, client.totalSessions ?? 0);
+  }
+  const offset = hasNewOffset
+    ? (client.historicalOffsetSessions || 0)
+    : (client.historicalSessionsOffset || 0);
+  const completed = allSessions.filter(s =>
+    s.clientId === client.clientId &&
+    s.trainerId === client.trainerId &&
+    s.status === 'completed'
+  ).length;
+  return Math.max(0, offset + completed);
+}
 import {
   TrainerClient, ClientGroup, CalendarEvent, ClientSession, ClientPayment,
   SessionPackage, BookingRequest, ClientProgram, ClientProgrammingProfile,
@@ -445,6 +482,9 @@ export const useTrainerStore = create<TrainerState>()(
               totalSessions: updatedClient.totalSessions,
               totalPaid: updatedClient.totalPaid,
               historicalSessionsOffset: updatedClient.historicalSessionsOffset,
+              // v16-D3: dedicated manual offset column (preferred source of truth
+              // for displayed totals). Legacy column kept above for back-compat.
+              historicalOffsetSessions: (updatedClient as any).historicalOffsetSessions,
               totalSessionsOffset: updatedClient.totalSessionsOffset,
               totalPaidOffset: updatedClient.totalPaidOffset,
               autoCountSessions: updatedClient.autoCountSessions,
@@ -850,16 +890,44 @@ export const useTrainerStore = create<TrainerState>()(
 
       // Sessions
       addSession: (session) => {
+        // v16-D3 (BUG-6.a / F4): idempotency guard. The off-by-4 was a combination
+        // of React StrictMode double-fires + endWorkout writers being indirectly
+        // re-invoked by upstream effects. Even after F3 gates the call site, this
+        // dedupe is defence-in-depth so duplicate calls within a short window
+        // collapse to a single row. Match criteria, in priority order:
+        //   1) Same calendarEventId, if provided.
+        //   2) Same {clientId, date, startTime, status} created within 5s.
+        const now = Date.now();
+        const dedupeWindowMs = 5000;
+        const incoming: any = session;
+        const existing = get().sessions.find((s: any) => {
+          if (incoming.calendarEventId && s.calendarEventId && s.calendarEventId === incoming.calendarEventId) return true;
+          if (s.clientId !== incoming.clientId) return false;
+          if (s.trainerId !== incoming.trainerId) return false;
+          if (s.date !== incoming.date) return false;
+          if ((s.startTime || '') !== (incoming.startTime || '')) return false;
+          if ((s.status || '') !== (incoming.status || '')) return false;
+          if (!s.createdAt) return false;
+          return now - new Date(s.createdAt).getTime() < dedupeWindowMs;
+        });
+        if (existing) {
+          console.log('[TrainerStore] v16-D3 addSession dedupe — collapsing duplicate within window:', existing.id);
+          return;
+        }
         const newSession: ClientSession = {
           id: uuidv4(),
           ...session,
-        };
+          // Stamp createdAt so the dedupe window check above has a reference
+          // for future duplicates within the same render commit.
+          createdAt: (session as any).createdAt || new Date().toISOString(),
+        } as any;
         set(state => ({
           sessions: [...state.sessions, newSession],
         }));
         // Sync to Supabase for cross-device access
         syncTrainerSessionToSupabase(newSession);
-        // totalSessions is now DERIVED from session records — no manual increment needed
+        // v16-D3: displayed total is derived live via getDisplayedSessionCount
+        // (offset + count of completed sessions). No manual increment needed.
       },
 
       updateSession: (sessionId, updates) => {
@@ -2312,8 +2380,14 @@ export const useTrainerStore = create<TrainerState>()(
             // Stored counters: use Supabase value if it exists, otherwise preserve local value
             totalSessions: sb.totalSessions ?? localClient?.totalSessions ?? 0,
             totalPaid: sb.totalPaid ?? localClient?.totalPaid ?? 0,
+            // v14-D1 legacy offset (kept for back-compat reads)
+            historicalSessionsOffset: sb.historicalSessionsOffset ?? localClient?.historicalSessionsOffset,
+            // v16-D3 dedicated manual offset column
+            historicalOffsetSessions: sb.historicalOffsetSessions ?? localClient?.historicalOffsetSessions,
             totalSessionsOffset: sb.totalSessionsOffset,
             totalPaidOffset: sb.totalPaidOffset,
+            // v14-D10 per-client auto-count override
+            autoCountSessions: sb.autoCountSessions ?? localClient?.autoCountSessions ?? null,
             // Nested client user info for name resolution
             client: sb.client || localClient?.client,
           };
@@ -2589,8 +2663,12 @@ export const useTrainerStore = create<TrainerState>()(
                 notes: sb.notes,
                 goals: sb.goals,
                 // Stored counters: use Supabase value if it exists, otherwise preserve local value
-                totalSessions: sb.totalSessions ?? localClient?.totalSessions ?? 0, // ← trigger updates this
+                totalSessions: sb.totalSessions ?? localClient?.totalSessions ?? 0, // ← legacy trigger value, used only as fallback by getDisplayedSessionCount
                 totalPaid: sb.totalPaid ?? localClient?.totalPaid ?? 0,
+                // v14-D1 legacy offset (kept for back-compat reads)
+                historicalSessionsOffset: sb.historicalSessionsOffset ?? localClient?.historicalSessionsOffset,
+                // v16-D3 dedicated manual offset column (source of truth post-v16)
+                historicalOffsetSessions: sb.historicalOffsetSessions ?? localClient?.historicalOffsetSessions,
                 totalSessionsOffset: sb.totalSessionsOffset,
                 totalPaidOffset: sb.totalPaidOffset,
                 // v14-D10 per-client auto-count override

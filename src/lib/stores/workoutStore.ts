@@ -19,7 +19,7 @@ import { scopedStorage } from './scopedStorage';
 import { __buildWorkoutCompletedNotification } from '../workoutCompletedNotification';
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
-import { useTrainerStore } from './trainerStore';
+import { useTrainerStore, getEffectiveAutoCount } from './trainerStore';
 import { useMedalStore } from './medalStore';
 import { useSocialStore } from './socialStore';
 const getTrainerStore = () => useTrainerStore;
@@ -411,6 +411,30 @@ export const useWorkoutStore = create<WorkoutState>()(
           const clientId = completedWorkout.userId;
           const todayStr = new Date().toISOString().split('T')[0];
           const trainerStore = getTrainerStore().getState();
+
+          // v16-D3 (BUG-6.b / F3): respect the auto-count toggle. The toggle
+          // gates whether the write happens; it never mutates already-counted
+          // history. Resolution order:
+          //   per-client override (boolean) > trainer account default > true.
+          const trainerClient = trainerStore.clients.find(
+            (c: any) => c.clientId === clientId && c.trainerId === trainerId
+          );
+          const trainerProfile = useAuthStore.getState().user;
+          const effectiveAutoCount = getEffectiveAutoCount(
+            trainerClient?.autoCountSessions,
+            trainerProfile?.autoCountSessionsDefault
+          );
+          if (!effectiveAutoCount) {
+            console.log('[WorkoutStore] v16-D3: auto-count OFF for this trainer/client; skipping addSession + calendar event auto-create.');
+            // Still run the deriveAll pipeline so PBs/medals/volume rollups
+            // update normally. Only the session-count + calendar-event
+            // auto-create is gated by the toggle.
+            const workoutUserIdEarly = completedWorkout.userId;
+            setTimeout(() => {
+              get().runDeriveAll(workoutUserIdEarly, completedWorkout);
+            }, 100);
+            return completedWorkout;
+          }
           
           // Check if a session already exists for this client today to avoid duplicates
           const existingSession = trainerStore.sessions.find(
@@ -431,17 +455,24 @@ export const useWorkoutStore = create<WorkoutState>()(
               notes: completedWorkout.name,
               workoutId: completedWorkout.id,
               paid: false,
-            });
+              // v16-D3: mark the row so /history can distinguish it from manual +1s.
+              source: 'pt_completion',
+            } as any);
             
-            // Also create a calendar event for the day
+            // v16-D3 (F1 defensive): stamp trainerId on the synth event so
+            // /today's `trainerId === user.id` filter doesn't drop it. Without
+            // this the auto-completed event was orphaned (no trainerId, no
+            // ownerUserId) and only the manual booking would render — which is
+            // BUG-4's most likely surface.
             trainerStore.addCalendarEvent({
               title: completedWorkout.name,
               type: 'session',
               date: todayStr,
               clientId,
+              trainerId,
               status: 'completed',
               notes: `Completed PT session`,
-            });
+            } as any);
 
             // Create in-app notification for client
             const socialStore = getSocialStore().getState();

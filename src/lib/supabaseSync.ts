@@ -1765,6 +1765,8 @@ export async function syncTrainerClientToSupabase(client: {
   totalPaid?: number;
   /** v12-D1: pre-Catalift / off-app sessions; trigger derives total_sessions from this. */
   historicalSessionsOffset?: number;
+  /** v16-D3: dedicated manual offset column (split from totalSessions). */
+  historicalOffsetSessions?: number;
   totalSessionsOffset?: number;
   totalPaidOffset?: number;
   /** v14-D1 + v14-D10: per-client override. boolean = explicit override; null = follow trainer default. */
@@ -1799,6 +1801,9 @@ export async function syncTrainerClientToSupabase(client: {
     if (client.totalSessions !== undefined) dbClient.total_sessions = client.totalSessions;
     if (client.totalPaid !== undefined) dbClient.total_paid = client.totalPaid;
     if (client.historicalSessionsOffset !== undefined) dbClient.historical_sessions_offset = client.historicalSessionsOffset;
+    // v16-D3: write the new dedicated offset column. Schema-drift retry below
+    // strips it if the migration hasn't been applied on this environment.
+    if (client.historicalOffsetSessions !== undefined) dbClient.historical_offset_sessions = client.historicalOffsetSessions;
     if (client.totalSessionsOffset !== undefined) dbClient.total_sessions_offset = client.totalSessionsOffset;
     if (client.totalPaidOffset !== undefined) dbClient.total_paid_offset = client.totalPaidOffset;
     // v14-D10: support null ("follow trainer default") in addition to TRUE/FALSE.
@@ -1809,12 +1814,27 @@ export async function syncTrainerClientToSupabase(client: {
     
     console.log('[Client Sync] Inserting data:', JSON.stringify(dbClient));
     
-    const { data, error, status } = await supabase
+    let { data, error, status } = await supabase
       .from('trainer_clients')
       .upsert(dbClient, { onConflict: 'id' })
       .select();
     
     console.log('[Client Sync] Response status:', status);
+    
+    // v16-D3: schema-drift retry. If the new `historical_offset_sessions`
+    // column hasn't been applied yet (legacy environment), strip the
+    // unknown column and retry once so writes keep flowing.
+    if (error && error.message?.includes('historical_offset_sessions')) {
+      console.warn('[Client Sync] v16-D3 column historical_offset_sessions not present yet; retrying without it. Apply migration 20260530_add_historical_offset_sessions.sql via Supabase Dashboard.');
+      const { historical_offset_sessions, ...dbClientLegacy } = dbClient as any;
+      const retry = await supabase
+        .from('trainer_clients')
+        .upsert(dbClientLegacy, { onConflict: 'id' })
+        .select();
+      data = retry.data;
+      error = retry.error;
+      status = retry.status;
+    }
     
     if (error) {
       console.error('[Client Sync] ❌ Error:', error.message);
@@ -1916,6 +1936,10 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       // v12-D1: prefer the new column name; fall back to the legacy one for
       // installs that haven't applied 20260514_add_session_counter_consistency.sql yet.
       historicalSessionsOffset: c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
+      // v16-D3: dedicated manual offset column. Falls back to the v14 column
+      // (historicalSessionsOffset) when the migration hasn't been applied yet so
+      // existing installs keep working through the schema-drift retry pattern.
+      historicalOffsetSessions: c.historical_offset_sessions ?? c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
       // v14-D10: preserve null so the UI can render "Use account default" instead of "Force ON".

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { getDisplayedSessionCount } from '@/lib/stores/trainerStore';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
 import { useMessageStore } from '@/lib/messageStore';
@@ -1137,16 +1138,28 @@ export default function ClientDetailPage() {
                   Session tracking
                 </h3>
                 <div className="grid grid-cols-3 gap-3">
-                  {/* Lifetime sessions — derived: offset + logged */}
+                  {/* Lifetime sessions — v16-D3: derived from offset + count(completed sessions). */}
+                  {(() => {
+                    const allTrainerSessions = useTrainerStore.getState().sessions;
+                    const displayed = getDisplayedSessionCount(clientRelation, allTrainerSessions);
+                    const offsetVal = (clientRelation as any)?.historicalOffsetSessions
+                      ?? clientRelation?.historicalSessionsOffset
+                      ?? 0;
+                    const loggedCount = allTrainerSessions.filter((s: any) =>
+                      s.clientId === clientRelation?.clientId &&
+                      s.trainerId === clientRelation?.trainerId &&
+                      s.status === 'completed'
+                    ).length;
+                    return (
                   <div>
                     <p className="text-2xl font-bold text-gray-900">
-                      {clientRelation?.totalSessions ?? 0}
+                      {displayed}
                     </p>
                     <p className="text-xs text-gray-500">Lifetime</p>
                     <p className="text-[10px] text-gray-400 mt-0.5">
-                      {clientRelation?.historicalSessionsOffset ?? 0} pre-Catalift
+                      {offsetVal} pre-Catalift
                       {' + '}
-                      {Math.max(0, (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0))} logged
+                      {loggedCount} logged
                     </p>
                     <button
                       type="button"
@@ -1156,6 +1169,8 @@ export default function ClientDetailPage() {
                       Edit historical
                     </button>
                   </div>
+                    );
+                  })()}
 
                   {/* Active package usage */}
                   <div>
@@ -3289,24 +3304,34 @@ export default function ClientDetailPage() {
       <EditHistoricalOffsetModal
         open={showHistoricalOffsetModal}
         onOpenChange={setShowHistoricalOffsetModal}
-        currentOffset={clientRelation?.historicalSessionsOffset ?? 0}
-        loggedSessions={Math.max(
-          0,
-          (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0)
-        )}
+        currentOffset={
+          ((clientRelation as any)?.historicalOffsetSessions
+            ?? clientRelation?.historicalSessionsOffset
+            ?? 0) as number
+        }
+        loggedSessions={
+          useTrainerStore.getState().sessions.filter((s: any) =>
+            s.clientId === clientRelation?.clientId &&
+            s.trainerId === clientRelation?.trainerId &&
+            s.status === 'completed'
+          ).length
+        }
         clientName={clientUser?.displayName || getClientNameUtil(clientId)}
         onSave={async (newOffset) => {
-          // Optimistic local update; the BEFORE-UPDATE trigger on
-          // trainer_clients.historical_sessions_offset (see migration
-          // 20260514_add_session_counter_consistency.sql) recomputes
-          // total_sessions = newOffset + count(trainer_sessions) so the
-          // lifetime stat will match on the next fetch.
-          const loggedNow = Math.max(
-            0,
-            (clientRelation?.totalSessions ?? 0) - (clientRelation?.historicalSessionsOffset ?? 0)
-          );
+          // v16-D3 (F2 / AC7): persist the manual offset to the dedicated
+          // `historical_offset_sessions` column. Mirror to the legacy
+          // `historical_sessions_offset` for back-compat reads. The displayed
+          // lifetime stat is recomputed live via getDisplayedSessionCount.
+          const loggedNow = useTrainerStore.getState().sessions.filter((s: any) =>
+            s.clientId === clientRelation?.clientId &&
+            s.trainerId === clientRelation?.trainerId &&
+            s.status === 'completed'
+          ).length;
           updateClient(clientId, {
+            historicalOffsetSessions: newOffset,
             historicalSessionsOffset: newOffset,
+            // Keep legacy column in sync so any unmigrated reader still shows
+            // the same number. The auto-count toggle never mutates this.
             totalSessions: newOffset + loggedNow,
           });
           toast.success('Historical sessions updated');
