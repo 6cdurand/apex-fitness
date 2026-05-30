@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
 import type { ActiveWorkoutBlock } from '@/lib/stores/workoutStore';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CreateCustomExerciseDialog } from '@/components/CreateCustomExerciseDialog';
+import { loadCustomExercises, customExerciseToLibrary, type CustomExerciseRecord } from '@/lib/customExercises';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -285,6 +287,9 @@ export default function ActiveWorkoutPage() {
 
   const [showExerciseSearch, setShowExerciseSearch] = useState(false);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  // v17-D4: custom-exercise empty-state CTA + dialog.
+  const [showCreateCustomExercise, setShowCreateCustomExercise] = useState(false);
+  const [customExercises, setCustomExercises] = useState<CustomExerciseRecord[]>([]);
   const [showFinishDialog, setShowFinishDialog] = useState(false);
   // W1: pending state while syncWorkoutToSupabase resolves. Disables the
   // Finish button to prevent double-submits and gives the user a visual
@@ -878,12 +883,28 @@ export default function ActiveWorkoutPage() {
     return () => clearInterval(interval);
   }, [setRestTimers]);
 
+  // v17-D4: hydrate this user's custom exercises (scoped localStorage)
+  // and re-hydrate after each create so the new exercise appears in the
+  // picker without a page reload.
+  useEffect(() => {
+    setCustomExercises(loadCustomExercises(currentUser?.id));
+  }, [currentUser?.id]);
+
+  const customLibraryExercises = useMemo<Exercise[]>(
+    () => customExercises.map(customExerciseToLibrary),
+    [customExercises],
+  );
+
   // Get exercises for the picker — unified search across all surfaces.
   // Empty query + a block selected → block-filtered library; empty query +
   // no block → full library; non-empty query → Fuse-ranked + block filter.
+  // v17-D4: custom exercises are merged into the pool via `extraExercises`.
   const getFilteredExercises = () => {
     const block = workoutBlocks.find(b => b.id === activeBlockId);
-    return searchExercises(exerciseSearch, { blockType: block?.type ?? null });
+    return searchExercises(exerciseSearch, {
+      blockType: block?.type ?? null,
+      extraExercises: customLibraryExercises,
+    });
   };
 
   // 2026-05-11 user-feedback: warmup blocks now support multi-select too
@@ -2327,7 +2348,7 @@ export default function ActiveWorkoutPage() {
     setCircuitToSave(null);
   };
 
-  const filteredExercises = searchExercises(exerciseSearch);
+  const filteredExercises = searchExercises(exerciseSearch, { extraExercises: customLibraryExercises });
 
   if (!activeWorkout && !completedWorkoutData) return null;
 
@@ -4850,6 +4871,22 @@ export default function ActiveWorkoutPage() {
 
           <ScrollArea className="max-h-[45vh]">
             <div className="space-y-1 pr-4">
+              {/* v17-D4: empty-state CTA — only shows when the user has
+                  typed something but no library OR custom result matches. */}
+              {exerciseSearch.trim() && getFilteredExercises().length === 0 && (
+                <div className="text-center py-8 px-4">
+                  <p className="text-sm text-gray-500 mb-3">
+                    No exercise found for “<span className="font-medium text-gray-700">{exerciseSearch.trim()}</span>”
+                  </p>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCreateCustomExercise(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create “{exerciseSearch.trim()}” exercise
+                  </Button>
+                </div>
+              )}
               {getFilteredExercises().slice(0, 50).map((exercise) => {
                 const block = workoutBlocks.find(b => b.id === activeBlockId);
                 const isSelected = circuitExerciseSelection.some(e => e.id === exercise.id);
@@ -4950,6 +4987,31 @@ export default function ActiveWorkoutPage() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* v17-D4: shared create-custom-exercise dialog. Auto-selects the
+          newly created exercise into the active block (consumes user intent). */}
+      <CreateCustomExerciseDialog
+        open={showCreateCustomExercise}
+        onOpenChange={setShowCreateCustomExercise}
+        initialName={exerciseSearch.trim()}
+        userId={currentUser?.id}
+        onCreated={(exercise) => {
+          setCustomExercises((prev) => [
+            ...prev,
+            {
+              id: exercise.id,
+              name: exercise.name,
+              type: exercise.category === 'cardio' ? 'cardio' : exercise.category === 'stretching' || exercise.category === 'warmup' ? 'stretch' : 'normal',
+              category: undefined,
+              createdByUserId: currentUser?.id,
+              isCustom: true,
+            },
+          ]);
+          // Re-read from localStorage so we pick up the canonical persisted row.
+          setCustomExercises(loadCustomExercises(currentUser?.id));
+          handleAddExercise(exercise);
+        }}
+      />
 
       {/* Circuit Config Dialog */}
       <Dialog open={showCircuitDialog} onOpenChange={setShowCircuitDialog}>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -65,6 +65,8 @@ import { toast } from 'sonner';
 import { BlockType } from '@/types';
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
+import { CreateCustomExerciseDialog } from '@/components/CreateCustomExerciseDialog';
+import { loadCustomExercises, customExerciseToLibrary, type CustomExerciseRecord } from '@/lib/customExercises';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
 import { useWorkoutStore, useTrainerStore, useAuthStore } from '@/lib/store';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
@@ -260,6 +262,19 @@ export function WorkoutDayBuilder({
   
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  // v17-D4: empty-state CTA wiring.
+  const [showCreateCustomExercise, setShowCreateCustomExercise] = useState(false);
+  const [customExercises, setCustomExercises] = useState<CustomExerciseRecord[]>([]);
+  const currentUserId = useAuthStore(s => s.user?.id);
+
+  useEffect(() => {
+    setCustomExercises(loadCustomExercises(currentUserId));
+  }, [currentUserId]);
+
+  const customLibraryExercises = useMemo(
+    () => customExercises.map(customExerciseToLibrary),
+    [customExercises],
+  );
   const [editingExercise, setEditingExercise] = useState<{ blockId: string; exercise: WorkoutExercise } | null>(null);
   const [showSwapPanel, setShowSwapPanel] = useState(false);
   const [swapSearch, setSwapSearch] = useState('');
@@ -714,15 +729,25 @@ export function WorkoutDayBuilder({
   const currentBlock = showAddExercise ? blocks.find(b => b.id === showAddExercise) : null;
   
   const filteredExercises = useMemo(() => {
+    // v17-D4: merge user-created custom exercises into the picker pool.
     if (exerciseSearch.trim()) {
-      return searchExercises(exerciseSearch, { blockType: currentBlock?.type ?? null }).map(ex => ({
+      return searchExercises(exerciseSearch, {
+        blockType: currentBlock?.type ?? null,
+        extraExercises: customLibraryExercises,
+      }).map(ex => ({
         id: ex.id,
         name: ex.name,
         pattern: ex.category as string,
       }));
     }
-    return filterExercisesBySearch(COMMON_EXERCISES, '', currentBlock?.type || null);
-  }, [exerciseSearch, currentBlock]);
+    const base = filterExercisesBySearch(COMMON_EXERCISES, '', currentBlock?.type || null);
+    const customLite = customLibraryExercises.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      pattern: ex.category as string,
+    }));
+    return [...base, ...customLite];
+  }, [exerciseSearch, currentBlock, customLibraryExercises]);
   
   // Swap suggestions
   const swapExercise = editingExercise && !showSwapPanel ? null : editingExercise?.exercise;
@@ -1140,6 +1165,24 @@ export function WorkoutDayBuilder({
         );
       })}
       
+      {/* v17-D4: shared create-custom-exercise dialog. */}
+      <CreateCustomExerciseDialog
+        open={showCreateCustomExercise}
+        onOpenChange={setShowCreateCustomExercise}
+        initialName={exerciseSearch.trim()}
+        userId={currentUserId}
+        onCreated={(exercise) => {
+          setCustomExercises(loadCustomExercises(currentUserId));
+          if (showAddExercise) {
+            addExercise(showAddExercise, {
+              id: exercise.id,
+              name: exercise.name,
+              pattern: exercise.category as string,
+            });
+          }
+        }}
+      />
+
       {/* Add Exercise Dialog */}
       <Dialog open={!!showAddExercise} onOpenChange={() => setShowAddExercise(null)}>
         <DialogContent className="bg-gray-900 border-gray-800 text-white max-w-2xl max-h-[80vh]">
@@ -1159,6 +1202,23 @@ export function WorkoutDayBuilder({
             </div>
             <ScrollArea className="h-[400px]">
               <div className="space-y-1">
+                {/* v17-D4: empty-state CTA. */}
+                {exerciseSearch.trim() && filteredExercises.length === 0 && (
+                  <div className="text-center py-8 px-4">
+                    <p className="text-sm text-gray-400 mb-3">
+                      No exercise found for “<span className="font-medium text-gray-200">{exerciseSearch.trim()}</span>”
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-gray-700 text-gray-200 hover:bg-gray-800"
+                      onClick={() => setShowCreateCustomExercise(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create “{exerciseSearch.trim()}” exercise
+                    </Button>
+                  </div>
+                )}
                 {filteredExercises.map(ex => {
                   const usageCount = exerciseUsageCounts[ex.id] || 0;
                   const safeEx = { id: ex.id, name: ex.name, pattern: ex.pattern || 'compound' };
