@@ -29,6 +29,47 @@ const getSocialStore = () => useSocialStore;
 // Module-level debounce tracking for exercise notes sync (v9-04)
 const exerciseNoteSyncTimeouts: Record<string, NodeJS.Timeout> = {};
 
+// ============================================================================
+// v17-D1: ActiveWorkoutBlock — runtime block shape for /workout/active.
+//
+// Hoisted out of the page's local `useState<{...}[]>(...)` into the persisted
+// Zustand store so that mid-workout state (circuit rounds, cardio splits,
+// timer seconds, weight/reps inputs on circuit exercises) survives tab
+// switches and Chrome's aggressive tab-discard. Mirrors the page's previous
+// inline type verbatim; do not narrow without checking active/page.tsx call
+// sites that read these fields.
+// ============================================================================
+export type ActiveWorkoutBlock = {
+  id: string;
+  type: 'warmup' | 'strength' | 'circuit' | 'cardio';
+  name: string;
+  circuitStyle?: 'amrap' | 'forTime' | 'rounds' | 'emom';
+  circuitDuration?: number; // in seconds
+  circuitRounds?: number;
+  timerRunning?: boolean;
+  timerSeconds?: number;
+  completed?: boolean;
+  circuitComplete?: boolean;
+  // Round tracking for circuits
+  roundsCompleted?: { roundNumber: number; completedAt: number; duration: number }[];
+  currentRoundStart?: number;
+  // Cardio-specific fields
+  cardioType?: 'run' | 'swim' | 'bike' | 'row' | 'other';
+  cardioMode?: 'steady' | 'intervals' | 'distance';
+  targetDistance?: number; // in meters
+  targetPace?: string; // e.g., "5:00/km"
+  intervalWork?: number; // work seconds
+  intervalRest?: number; // rest seconds
+  intervalRounds?: number;
+  currentIntervalPhase?: 'work' | 'rest';
+  currentIntervalRound?: number;
+  distanceCompleted?: number;
+  splits?: { distance: number; time: number }[];
+  // Allow forward-compatible extra fields (e.g. cardioActivity, targetSeconds)
+  // that the renderer derives from the source block via deriveCardioBlockFields.
+  [key: string]: unknown;
+};
+
 interface WorkoutState {
   activeWorkout: Workout | null;
   workoutHistory: Workout[];
@@ -38,6 +79,21 @@ interface WorkoutState {
   restTimer: TimerState;
   currentClientId: string | null; // Track which client we're training (null = training self)
   initialBlockType: 'strength' | 'circuit' | 'cardio' | null; // Auto-create this block type on mount
+
+  // v17-D1: persisted active-workout block runtime + hydration flag.
+  // - `activeWorkoutBlocks` replaces the React-only `useState` in
+  //   /workout/active so mid-workout state survives tab discard.
+  // - `hasHydrated` flips true via onRehydrateStorage; consumers gate
+  //   redirect-on-empty effects on it to avoid the rehydration race that
+  //   bounced freshly-mounted /workout/active to /today before persisted
+  //   state landed.
+  activeWorkoutBlocks: ActiveWorkoutBlock[];
+  setActiveWorkoutBlocks: (
+    blocks: ActiveWorkoutBlock[] | ((prev: ActiveWorkoutBlock[]) => ActiveWorkoutBlock[])
+  ) => void;
+  clearActiveWorkoutBlocks: () => void;
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
 
   // Workout actions
   startWorkout: (name: string, templateId?: string, clientId?: string, initialBlockType?: 'strength' | 'circuit' | 'cardio') => void;
@@ -161,6 +217,20 @@ export const useWorkoutStore = create<WorkoutState>()(
       restTimer: { isRunning: false, seconds: 0, type: 'rest' },
       currentClientId: null,
       initialBlockType: null,
+
+      // v17-D1: see WorkoutState interface for rationale. Initialized
+      // synchronously here; onRehydrateStorage flips hasHydrated=true after
+      // the persist middleware finishes pulling from localStorage.
+      activeWorkoutBlocks: [],
+      setActiveWorkoutBlocks: (blocks) => set((state) => ({
+        activeWorkoutBlocks:
+          typeof blocks === 'function'
+            ? (blocks as (prev: ActiveWorkoutBlock[]) => ActiveWorkoutBlock[])(state.activeWorkoutBlocks)
+            : blocks,
+      })),
+      clearActiveWorkoutBlocks: () => set({ activeWorkoutBlocks: [] }),
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
 
       getActiveUserId: () => {
         // Returns the ID of who we're training: client ID if training a client, otherwise logged-in user
@@ -372,12 +442,16 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         // Sync succeeded — now it is safe to commit the local state
         // transition (clear activeWorkout, push to workoutHistory).
+        // v17-D1: also reset activeWorkoutBlocks so the next workout starts
+        // with a clean block runtime (no carry-over of circuit rounds /
+        // cardio splits from the just-finished session).
         set(state => ({
           activeWorkout: null,
           workoutHistory: [completedWorkout, ...state.workoutHistory],
           workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
           restTimer: { isRunning: false, seconds: 0, type: 'rest' },
           currentClientId: null,
+          activeWorkoutBlocks: [],
         }));
 
         // Patch source calendar event status to 'completed'
@@ -520,12 +594,17 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       cancelWorkout: () => {
+        // v17-D1: clear activeWorkoutBlocks alongside the rest of the
+        // workout runtime so a cancelled session can't leak its blocks
+        // (circuit rounds, cardio splits) into the next /workout/active
+        // mount.
         set({
           activeWorkout: null,
           workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
           restTimer: { isRunning: false, seconds: 0, type: 'rest' },
           currentClientId: null,
           lastDeriveResult: null,
+          activeWorkoutBlocks: [],
         });
       },
 
@@ -1813,7 +1892,33 @@ export const useWorkoutStore = create<WorkoutState>()(
         personalBests: state.personalBests,
         exerciseNotes: state.exerciseNotes,
         volumeRollups: state.volumeRollups,
+        // v17-D1: hoist the active-workout block runtime into persistence
+        // so tab discard / browser close-and-reopen during a workout
+        // doesn't wipe circuit rounds, cardio splits, timer seconds, or
+        // per-set inputs. hasHydrated is intentionally NOT persisted —
+        // it's a per-mount flag that flips via onRehydrateStorage below.
+        activeWorkoutBlocks: state.activeWorkoutBlocks,
       }),
+      // v17-D1: signal consumers (e.g. ActiveWorkoutPage's redirect guard)
+      // that the persisted slice has landed. Without this, a freshly
+      // mounted /workout/active sees activeWorkout=null briefly and the
+      // redirect effect bounces the user to /today before rehydration
+      // completes. Fires AFTER rehydration (success OR failure); both
+      // cases must flip the flag or the page sits on the loading state
+      // forever.
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          console.warn('[WorkoutStore] persist rehydrate failed:', error);
+        }
+        // `state` is the rehydrated store; if rehydration failed it can be
+        // undefined, in which case fall back to the live store ref so the
+        // flag still flips.
+        try {
+          (state ?? useWorkoutStore.getState()).setHasHydrated(true);
+        } catch (e) {
+          console.warn('[WorkoutStore] setHasHydrated after rehydrate failed:', e);
+        }
+      },
     }
   )
 );
