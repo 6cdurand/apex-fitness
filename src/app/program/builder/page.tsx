@@ -575,11 +575,17 @@ function ProgramBuilderContent() {
   // ── Block Library: use savedBlocks from store ──
   // v13-D3: derived folder list, sorted alphabetically, dedup'd via Set.
   // v14-D11: respect user.blockFolderOrder for custom ordering; un-ordered folders sort lexically after.
+  // v17-D3: union with user.blockFolderOrder so an empty folder (created
+  // via the Folders panel before any block has been moved in) still
+  // renders as a chip. Previously the list was derived only from
+  // savedBlocks.map(b => b.folder), so a fresh "+ New folder" silently
+  // dropped on the floor until a block was assigned to it.
   const folderList = useMemo(() => {
     const seen = new Set<string>();
     const raw = (savedBlocks || []).map(b => b.folder).filter(Boolean) as string[];
     raw.forEach(f => seen.add(f));
     const order = user?.blockFolderOrder ?? [];
+    order.forEach(f => seen.add(f));
     const ordered = order.filter(f => seen.has(f));
     const remainder = [...seen].filter(f => !order.includes(f)).sort((a, b) => a.localeCompare(b));
     return [...ordered, ...remainder];

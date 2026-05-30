@@ -315,6 +315,18 @@ interface TrainerState {
   deleteBlock: (blockId: string) => void;
   getBlock: (blockId: string) => SavedBlock | undefined;
   getBlocksByType: (type: BlockType) => SavedBlock[];
+  /**
+   * v17-D3: Canonical block-folder creation. Both the Folders-panel
+   * "+ New folder" button and the per-block "New folder…" dialog must
+   * route through this action so the two paths can't diverge again.
+   *
+   * Folders are stored as free-text on saved_blocks.folder; an empty folder
+   * (no blocks moved in yet) is recorded by appending its name to
+   * user.blockFolderOrder, which already persists via the existing
+   * block_folder_order column. The folderList memo on the builder page
+   * unions both sources so the chip appears immediately.
+   */
+  createBlockFolder: (name: string) => Promise<{ ok: boolean; name: string | null; reason?: 'invalid' | 'duplicate' | 'persist-failed' }>;
   renameBlockFolder: (oldName: string, newName: string) => Promise<{ ok: boolean; count: number }>;
   deleteBlockFolder: (folderName: string, targetFolder: string | null) => Promise<{ ok: boolean; count: number }>;
   
@@ -2226,6 +2238,38 @@ export const useTrainerStore = create<TrainerState>()(
       getBlocksByType: (type) => {
         const trainerId = useAuthStore.getState().user?.id;
         return get().savedBlocks.filter(b => b.type === type && b.trainerId === trainerId);
+      },
+
+      // v17-D3: single source of truth for folder creation. See the
+      // interface comment above for why this lives here instead of
+      // alongside the dialog or as a one-off in the page component.
+      createBlockFolder: async (name: string) => {
+        const trimmed = (name ?? '').trim();
+        if (!trimmed) return { ok: false, name: null, reason: 'invalid' as const };
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return { ok: false, name: null, reason: 'invalid' as const };
+
+        // Compute the set of folder names already considered to "exist"
+        // from BOTH the persisted order array and the derived-from-blocks
+        // set, so we never produce a duplicate chip.
+        const currentOrder = useAuthStore.getState().user?.blockFolderOrder ?? [];
+        const derived = (get().savedBlocks.map(b => b.folder).filter(Boolean) as string[]);
+        const lowerSet = new Set([...currentOrder, ...derived].map(f => f.toLowerCase()));
+        if (lowerSet.has(trimmed.toLowerCase())) {
+          return { ok: false, name: null, reason: 'duplicate' as const };
+        }
+
+        // Persist by appending to user.blockFolderOrder. updateBlockFolderOrder
+        // is optimistic-with-rollback against public.users.block_folder_order,
+        // so a network failure leaves the order array unchanged and we can
+        // detect that by re-reading state immediately after.
+        const nextOrder = [...currentOrder, trimmed];
+        await useAuthStore.getState().updateBlockFolderOrder(nextOrder);
+        const after = useAuthStore.getState().user?.blockFolderOrder ?? [];
+        if (!after.includes(trimmed)) {
+          return { ok: false, name: null, reason: 'persist-failed' as const };
+        }
+        return { ok: true, name: trimmed };
       },
 
       renameBlockFolder: async (oldName: string, newName: string) => {
