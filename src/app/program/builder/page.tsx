@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -64,6 +64,8 @@ import { BlockType, MovementPattern, ClientProgram, ClientWorkoutDay, ClientWork
 import { programTemplates } from '@/lib/programTemplates'; // v14-D25: template prefill source
 import { filterExercisesBySearch, getExerciseUsageCounts, exerciseLibraryMap } from '@/lib/exercises';
 import { searchExercises } from '@/lib/exerciseSearch';
+import { CreateCustomExerciseDialog } from '@/components/CreateCustomExerciseDialog';
+import { loadCustomExercises, customExerciseToLibrary, type CustomExerciseRecord } from '@/lib/customExercises';
 import { TEMPO_PRESETS, REST_PRESETS } from '@/lib/workoutEstimator';
 import { useWorkoutStore } from '@/lib/store';
 import { getSwapSuggestions, getDirectSwaps } from '@/lib/exerciseRelations';
@@ -374,6 +376,18 @@ function ProgramBuilderContent() {
   const [activeDayIndex, setActiveDayIndex] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState<string | null>(null);
   const [exerciseSearch, setExerciseSearch] = useState('');
+  // v17-D4: custom-exercise CTA in the Add Exercise dialog empty state.
+  const [showCreateCustomExercise, setShowCreateCustomExercise] = useState(false);
+  const [customExercises, setCustomExercises] = useState<CustomExerciseRecord[]>([]);
+
+  useEffect(() => {
+    setCustomExercises(loadCustomExercises(user?.id));
+  }, [user?.id]);
+
+  const customLibraryExercises = useMemo(
+    () => customExercises.map(customExerciseToLibrary),
+    [customExercises],
+  );
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
@@ -555,15 +569,26 @@ function ProgramBuilderContent() {
   const filteredExercises = useMemo(() => {
     // Searching → unified Fuse-ranked library (typo-tolerant + alias aware).
     // Idle → curated COMMON_EXERCISES (existing UX preserved per user choice).
+    // v17-D4: custom exercises are merged via `extraExercises` so they
+    // surface in user search results AND show as idle-state options.
     if (exerciseSearch.trim()) {
-      return searchExercises(exerciseSearch, { blockType: currentBlock?.type ?? null }).map(ex => ({
+      return searchExercises(exerciseSearch, {
+        blockType: currentBlock?.type ?? null,
+        extraExercises: customLibraryExercises,
+      }).map(ex => ({
         id: ex.id,
         name: ex.name,
         pattern: ex.category,
       }));
     }
-    return filterExercisesBySearch(COMMON_EXERCISES, '', currentBlock?.type || null);
-  }, [exerciseSearch, currentBlock]);
+    const base = filterExercisesBySearch(COMMON_EXERCISES, '', currentBlock?.type || null);
+    const customLite = customLibraryExercises.map(ex => ({
+      id: ex.id,
+      name: ex.name,
+      pattern: ex.category as string,
+    }));
+    return [...base, ...customLite];
+  }, [exerciseSearch, currentBlock, customLibraryExercises]);
   
   // Exercise usage counts for the target user
   const targetUserId = isTrainerMode ? (selectedClientId || '') : (user?.id || '');
@@ -1498,13 +1523,48 @@ function ProgramBuilderContent() {
                   </button>
                 );
               })}
-              {filteredExercises.length === 0 && (
+              {filteredExercises.length === 0 && exerciseSearch.trim() && (
+                <div className="text-center py-6 px-4">
+                  <p className="text-sm text-gray-500 mb-3">
+                    No exercise found for “<span className="font-medium text-gray-300">{exerciseSearch.trim()}</span>”
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-700 text-gray-200 hover:bg-gray-800"
+                    onClick={() => setShowCreateCustomExercise(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Create “{exerciseSearch.trim()}” exercise
+                  </Button>
+                </div>
+              )}
+              {filteredExercises.length === 0 && !exerciseSearch.trim() && (
                 <p className="text-sm text-gray-500 text-center py-4">No exercises found</p>
               )}
             </div>
           </ScrollArea>
         </DialogContent>
       </Dialog>
+
+      {/* v17-D4: create-custom-exercise dialog. Auto-adds the new exercise
+          to the block that triggered the empty-state CTA. */}
+      <CreateCustomExerciseDialog
+        open={showCreateCustomExercise}
+        onOpenChange={setShowCreateCustomExercise}
+        initialName={exerciseSearch.trim()}
+        userId={user?.id}
+        onCreated={(exercise) => {
+          setCustomExercises(loadCustomExercises(user?.id));
+          if (showAddExercise) {
+            addExerciseToBlock(showAddExercise, {
+              id: exercise.id,
+              name: exercise.name,
+              pattern: exercise.category,
+            });
+          }
+        }}
+      />
 
       {/* ── Save/Activate Dialog ── */}
       <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
