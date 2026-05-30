@@ -69,6 +69,11 @@ export function __buildWorkoutCompletedNotification(
     message,
     link,
     actionUrl: link,
+    // v16-D7: canonical deep-link path so the notifications page click
+    // handler can route to the workout summary (existing detail page at
+    // /workout/[id] doubles as the summary view in this codebase — there
+    // is no separate /summary subroute, see fix/v16-7-notification-deep-links).
+    deepLinkPath: link,
     workoutId: workout.id,
     senderId: trainerId,
   };

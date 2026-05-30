@@ -47,10 +47,16 @@ export function buildProgramUrl(programId?: string | null): string {
 }
 
 /** Pure check: does this notification carry an explicit nav hint we can
- *  follow without any I/O? */
+ *  follow without any I/O?
+ *
+ *  v16-D7: `deepLinkPath` is the canonical post-D7 field for in-app deep
+ *  linking (notifications.deep_link_path). It takes priority over the
+ *  legacy `actionUrl` / `link` so newly-issued session-complete and
+ *  share-with-trainer notifications route to the workout summary. Older
+ *  rows fall back to `actionUrl` then `link` unchanged. */
 export function getExplicitUrl(n: Partial<Notification> | null | undefined): string | null {
   if (!n) return null;
-  const url = (n.actionUrl || n.link || '').toString().trim();
+  const url = (n.deepLinkPath || n.actionUrl || n.link || '').toString().trim();
   return url.length > 0 ? url : null;
 }
 
