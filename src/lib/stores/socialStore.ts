@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from '../safeStorage';
+import { scopedStorage } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { FeedPost, Notification } from '@/types';
 import { useAuthStore } from './authStore';
@@ -247,7 +247,9 @@ export const useSocialStore = create<SocialState>()(
     }),
     {
       name: 'apex-social',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key. posts[] + notifications[] are
+      // per-user data and must not leak across accounts.
+      storage: createJSONStorage(() => scopedStorage('apex-social')),
     }
   )
 );

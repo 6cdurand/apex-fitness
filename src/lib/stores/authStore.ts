@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
+import { clearAllScopedKeysForUser } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
 import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
@@ -449,27 +450,149 @@ export const useAuthStore = create<AuthState>()(
         return true;
       },
 
+      /**
+       * v16-D2: drop the previous user's scoped localStorage AND reset
+       * the in-memory state of every user-scoped Zustand store before
+       * flipping `user` to null. Pre-D2, logout only cleared `user`
+       * from authStore — the persisted blobs at `apex-workout`,
+       * `apex-trainer`, `apex-medals`, `apex-social`, `apex-messages`,
+       * `apex-reports` survived and rehydrated when the next account
+       * logged in on the same browser, leaking saved blocks, client
+       * rosters, active workouts, and message threads across accounts.
+       *
+       * Order of operations
+       * -------------------
+       * 1. Capture `previousUserId` while it's still in memory.
+       * 2. Flip auth to logged-out — this also writes `user:null` into
+       *    the unscoped `apex-auth` blob, so `scopedStorage.getCurrentUserId()`
+       *    immediately starts returning null and any subsequent persist
+       *    writes from the resets below are no-ops (they don't pollute
+       *    localStorage with empty blobs under the previous user's key).
+       * 3. Reset in-memory state of every user-scoped store (dynamic
+       *    imports avoid the circular deps that direct imports would
+       *    cause — workoutStore et al. import from this module).
+       * 4. Explicitly remove the previous user's scoped localStorage
+       *    keys so a subsequent login as the same user starts clean
+       *    and re-hydrates from Supabase via D1's hydrateForUser path.
+       */
       logout: () => {
+        const previousUserId = get().user?.id || null;
+
+        // Step 2 — flip auth state. This persists apex-auth synchronously
+        // so getCurrentUserId() returns null from here on.
         set({ user: null, isAuthenticated: false });
+
+        // Step 3 — reset in-memory state across user-scoped stores.
+        // Dynamic imports avoid circular deps with this file.
+        // Persist writes triggered by these setState calls are
+        // no-ops via scopedStorage (user is already null).
+        // Each block is fault-isolated so a single failure doesn't
+        // leave the rest of the stores stuck on the previous user's data.
+        void (async () => {
+          try {
+            const { useWorkoutStore } = await import('./workoutStore');
+            useWorkoutStore.setState({
+              activeWorkout: null,
+              workoutHistory: [],
+              templates: [],
+              personalBests: [],
+              exerciseNotes: {},
+              volumeRollups: {},
+              lastDeriveResult: null,
+              currentClientId: null,
+              initialBlockType: null,
+              workoutTimer: { isRunning: false, seconds: 0, type: 'workout' },
+              restTimer: { isRunning: false, seconds: 0, type: 'rest' },
+            } as Partial<ReturnType<typeof useWorkoutStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset workoutStore failed:', e);
+          }
+          try {
+            const { useTrainerStore } = await import('./trainerStore');
+            useTrainerStore.setState({
+              clients: [],
+              clientGroups: [],
+              assignedWorkouts: [],
+              calendarEvents: [],
+              sessions: [],
+              payments: [],
+              sessionPackages: [],
+              bookingRequests: [],
+              clientPrograms: [],
+              clientProfiles: [],
+              sessionWorkouts: [],
+              workoutLibrary: [],
+              circuitLibrary: [],
+              savedBlocks: [],
+              blockPerformances: [],
+              savedPrograms: [],
+              lastSavedProgramError: null,
+            } as Partial<ReturnType<typeof useTrainerStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset trainerStore failed:', e);
+          }
+          try {
+            const { useMedalStore } = await import('./medalStore');
+            useMedalStore.setState({
+              medals: [],
+              evolvingMedalProgress: {},
+              strengthRating: null,
+            } as Partial<ReturnType<typeof useMedalStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset medalStore failed:', e);
+          }
+          try {
+            const { useSocialStore } = await import('./socialStore');
+            useSocialStore.setState({
+              posts: [],
+              notifications: [],
+            } as Partial<ReturnType<typeof useSocialStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset socialStore failed:', e);
+          }
+          try {
+            const { useReportStore } = await import('./reportStore');
+            useReportStore.setState({
+              weeklyReports: [],
+            } as Partial<ReturnType<typeof useReportStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset reportStore failed:', e);
+          }
+          try {
+            const { useMessageStore } = await import('../messageStore');
+            useMessageStore.setState({
+              conversations: [],
+              messages: [],
+            } as Partial<ReturnType<typeof useMessageStore.getState>>);
+          } catch (e) {
+            console.warn('[Auth] logout reset messageStore failed:', e);
+          }
+
+          // Step 4 — explicit per-user scoped key cleanup.
+          if (previousUserId) {
+            clearAllScopedKeysForUser(previousUserId);
+          }
+        })();
       },
 
       deleteAccount: () => {
         const currentUser = get().user;
         if (!currentUser) return;
-        
-        // Remove from localStorage
+
+        // Remove from localStorage `apex-users` directory (master user list,
+        // shared across accounts on this device — kept globally keyed by design).
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
         const filtered = storedUsers.filter((u: User) => u.id !== currentUser.id);
         localStorage.setItem('apex-users', JSON.stringify(filtered));
-        
-        // Clear all user data
+
+        // v16-D2: clear every per-user scoped key for this account.
+        // Replaces the legacy fixed-key removeItem calls (which targeted
+        // pre-D2 unscoped keys that no longer exist post-deploy).
+        clearAllScopedKeysForUser(currentUser.id);
+
+        // Drop the unscoped auth envelope so this device forgets the user.
         localStorage.removeItem('apex-auth');
-        localStorage.removeItem('apex-workout');
-        localStorage.removeItem('apex-medals');
-        localStorage.removeItem('apex-trainer');
-        localStorage.removeItem('apex-social');
-        localStorage.removeItem('apex-messages');
-        
+
         set({ user: null, isAuthenticated: false });
       },
 

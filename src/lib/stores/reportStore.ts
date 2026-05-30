@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from '../safeStorage';
+import { scopedStorage } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { WeeklyReport, MuscleGroup, Workout, WorkoutExercise, WorkoutSet, PersonalBest } from '@/types';
 import { useAuthStore } from './authStore';
@@ -122,7 +122,8 @@ export const useReportStore = create<ReportState>()(
     }),
     {
       name: 'apex-reports',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v16-D2: per-user scoped key. weeklyReports[] are per-user.
+      storage: createJSONStorage(() => scopedStorage('apex-reports')),
     }
   )
 );

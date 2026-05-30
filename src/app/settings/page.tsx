@@ -488,10 +488,20 @@ function SettingsPageContent() {
   }, [user]);
 
   // Load gyms list
+  // v16-D2: scope `apex-gyms` per-user so a different account on the
+  // same browser doesn't inherit this user's saved gyms.
   useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('apex-gyms') || '[]');
-    setGyms(stored);
-  }, []);
+    if (!user?.id) {
+      setGyms([]);
+      return;
+    }
+    try {
+      const stored = JSON.parse(localStorage.getItem(`apex-gyms-${user.id}`) || '[]');
+      setGyms(stored);
+    } catch {
+      setGyms([]);
+    }
+  }, [user?.id]);
 
   const handleSaveProfile = () => {
     updateUser({
@@ -522,7 +532,8 @@ function SettingsPageContent() {
     };
     const updated = [...gyms, newGym];
     setGyms(updated);
-    localStorage.setItem('apex-gyms', JSON.stringify(updated));
+    // v16-D2: per-user scoped key
+    localStorage.setItem(`apex-gyms-${user.id}`, JSON.stringify(updated));
     setGymName(name.trim());
     setGymSearch('');
     setShowGymSearch(false);
