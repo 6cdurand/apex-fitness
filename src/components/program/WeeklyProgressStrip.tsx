@@ -24,6 +24,16 @@ interface WeeklyProgressStripProps {
   nextDayIndex: number;
   nextScheduledDay: string | null;
   isScheduledToday: boolean;
+  /** v16-D5 BUG-16: slot expansion so the strip renders N pills (N =
+   * scheduled-days-per-week) instead of just N=weeklyPlan.length. Lets
+   * a 2-unique-workout program on Mon/Wed/Fri render Push/Pull/Push
+   * as three pills. Optional for backwards compat — if omitted, falls
+   * back to the legacy weeklyPlan-anchored behaviour. */
+  weekSlots?: number;
+  slotDayIndices?: number[];
+  slotScheduledDays?: string[];
+  completedSlotCount?: number;
+  nextSlotIndex?: number;
 }
 
 export function WeeklyProgressStrip({
@@ -34,41 +44,90 @@ export function WeeklyProgressStrip({
   nextDayIndex,
   nextScheduledDay,
   isScheduledToday,
+  weekSlots,
+  slotDayIndices,
+  slotScheduledDays,
+  completedSlotCount,
+  nextSlotIndex,
 }: WeeklyProgressStripProps) {
-  const totalSessions = program.trainingDaysPerWeek || program.weeklyPlan.length;
+  const totalSessions = program.trainingDaysPerWeek || weekSlots || program.weeklyPlan.length;
   const completedCount = completedDayIndices.length;
 
-  // For fixed schedule, anchor pills to scheduled days. For flexible, show generic day-letters.
-  const pills = program.weeklyPlan.map((day, idx) => {
-    const isDone = completedDayIndices.includes(idx);
-    // v15-D4: lock pill (purple) when trainer has booked PT for this day this
-    // week and it isn't already done. Done > locked in visual precedence.
-    const isLocked = !isDone && lockedDayIndices.includes(idx);
-    const isToday = !isLocked && idx === nextDayIndex && isScheduledToday;
-    const isNext = !isLocked && idx === nextDayIndex && !isDone && !isScheduledToday;
-    const label = program.scheduleMode === 'fixed' && day.scheduledDay
-      ? day.scheduledDay.slice(0, 3).toUpperCase()
-      : `Day ${String.fromCharCode(65 + idx)}`;
-    
-    // v16-D4: build a human-readable lock tooltip for screen readers + hover.
-    const lockInfo = isLocked ? lockReasons?.[idx] : undefined;
-    const lockTooltip = isLocked
-      ? lockInfo
-        ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
-        : 'Booked with your trainer this week'
-      : undefined;
+  // v16-D5 BUG-16: if the slot-expansion props are present, render N
+  // slot-anchored pills (one per scheduled session this week). Falls back
+  // to the legacy weeklyPlan-anchored pills if the caller hasn't been
+  // updated — keeps trainer view and any other consumer working.
+  const hasSlotExpansion =
+    typeof weekSlots === 'number' &&
+    slotDayIndices &&
+    slotDayIndices.length === weekSlots;
 
-    return {
-      idx,
-      label,
-      dayLabel: day.dayLabel,
-      isDone,
-      isLocked,
-      isToday,
-      isNext,
-      lockTooltip,
-    };
-  });
+  const pills = hasSlotExpansion
+    ? Array.from({ length: weekSlots! }, (_, slotIdx) => {
+        // Resolve which weeklyPlan entry this slot represents (modulo for
+        // cycling: Push/Pull on Mon/Wed/Fri → [0, 1, 0]).
+        const planIdx = slotDayIndices![slotIdx];
+        const day = program.weeklyPlan[planIdx] || { dayLabel: `Day ${String.fromCharCode(65 + planIdx)}` };
+        // Left-anchored progress: slot i is "done" if i < completedSlotCount.
+        // This avoids the previous bug where doing Push twice (Mon + Fri)
+        // would only mark one pill done because completedDayIndices kept
+        // returning [0, 0] and includes-checking treated them as the same.
+        const isDone = (completedSlotCount ?? completedCount) > slotIdx;
+        // Lock: any slot whose underlying workout is locked by a PT booking.
+        const isLocked = !isDone && lockedDayIndices.includes(planIdx);
+        // Today / next: highlight the slot the cycle is currently on.
+        const isToday = !isLocked && slotIdx === (nextSlotIndex ?? 0) && isScheduledToday;
+        const isNext = !isLocked && slotIdx === (nextSlotIndex ?? 0) && !isDone && !isScheduledToday;
+        const scheduledDayName = slotScheduledDays?.[slotIdx];
+        const label = scheduledDayName
+          ? scheduledDayName.slice(0, 3).toUpperCase()
+          : `Day ${String.fromCharCode(65 + slotIdx)}`;
+
+        const lockInfo = isLocked ? lockReasons?.[planIdx] : undefined;
+        const lockTooltip = isLocked
+          ? lockInfo
+            ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
+            : 'Booked with your trainer this week'
+          : undefined;
+
+        return {
+          idx: slotIdx,
+          label,
+          dayLabel: day.dayLabel,
+          isDone,
+          isLocked,
+          isToday,
+          isNext,
+          lockTooltip,
+        };
+      })
+    : program.weeklyPlan.map((day, idx) => {
+        const isDone = completedDayIndices.includes(idx);
+        const isLocked = !isDone && lockedDayIndices.includes(idx);
+        const isToday = !isLocked && idx === nextDayIndex && isScheduledToday;
+        const isNext = !isLocked && idx === nextDayIndex && !isDone && !isScheduledToday;
+        const label = program.scheduleMode === 'fixed' && day.scheduledDay
+          ? day.scheduledDay.slice(0, 3).toUpperCase()
+          : `Day ${String.fromCharCode(65 + idx)}`;
+
+        const lockInfo = isLocked ? lockReasons?.[idx] : undefined;
+        const lockTooltip = isLocked
+          ? lockInfo
+            ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
+            : 'Booked with your trainer this week'
+          : undefined;
+
+        return {
+          idx,
+          label,
+          dayLabel: day.dayLabel,
+          isDone,
+          isLocked,
+          isToday,
+          isNext,
+          lockTooltip,
+        };
+      });
 
   return (
     <Card className="bg-white border-gray-200 shadow-sm">

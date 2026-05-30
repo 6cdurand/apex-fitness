@@ -594,6 +594,18 @@ export default function ProgramPage() {
                         <Play className="w-4 h-4 mr-2" />
                         Start {nextWorkout.day?.dayLabel || 'Workout'}
                       </Button>
+                      {/* v16-D5 BUG-17: Preview eye on the Up Next card so the
+                          client can peek at today's prescribed workout without
+                          starting the timer. Matches the per-day list below. */}
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="border-gray-200 text-gray-600"
+                        aria-label={`Preview ${nextWorkout.day?.dayLabel || 'workout'}`}
+                        onClick={() => setPreviewDay({ day: nextWorkout.day, programName: activeProgram.templateName })}
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
                       {(activeProgram.weeklyPlan?.length || 0) > 1 && (
                         <Button
                           variant="outline"
@@ -627,6 +639,14 @@ export default function ProgramPage() {
                       nextDayIndex={nextWorkout.dayIndex}
                       nextScheduledDay={nextWorkout.nextScheduledDay}
                       isScheduledToday={nextWorkout.isScheduledToday}
+                      /* v16-D5 BUG-16: slot expansion so the strip renders N pills
+                         when N (scheduled days) > weeklyPlan.length. Example:
+                         Push/Pull on Mon/Wed/Fri → 3 pills (Push, Pull, Push). */
+                      weekSlots={nextWorkout.weekSlots}
+                      slotDayIndices={nextWorkout.slotDayIndices}
+                      slotScheduledDays={nextWorkout.slotScheduledDays}
+                      completedSlotCount={nextWorkout.completedSlotCount}
+                      nextSlotIndex={nextWorkout.nextSlotIndex}
                     />
                     <Button
                       variant="ghost"

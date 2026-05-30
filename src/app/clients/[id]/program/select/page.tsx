@@ -81,7 +81,10 @@ export default function TemplateSelectionPage() {
   const router = useRouter();
   const clientId = params.id as string;
   
-  const { clients, getClientProfile, savedPrograms, assignSavedProgramToClient } = useTrainerStore();
+  // v16-D5 BUG-15: assignSavedProgramToClient no longer called from here;
+  // saved-template tap routes through /program/preview?source=saved which
+  // performs the assignment after the trainer confirms.
+  const { clients, getClientProfile, savedPrograms } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
   const clientProfile = getClientProfile(clientId);
   
@@ -381,9 +384,16 @@ export default function TemplateSelectionPage() {
                 <Card 
                   key={prog.id}
                   className="cursor-pointer hover:border-primary/50"
-                  onClick={async () => {
-                    await assignSavedProgramToClient(prog.id, clientId);
-                    router.push(`/clients/${clientId}`);
+                  onClick={() => {
+                    // v16-D5 BUG-15: route saved templates through the same
+                    // Weekly Plan Preview the system templates use, so a
+                    // single tap doesn't immediately assign (and so the
+                    // trainer can confirm/customize first). source=saved
+                    // tells the preview page to load from savedPrograms
+                    // instead of the built-in programTemplates list.
+                    router.push(
+                      `/clients/${clientId}/program/preview?templateId=${prog.id}&source=saved`,
+                    );
                   }}
                 >
                   <CardContent className="p-4">

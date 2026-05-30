@@ -123,10 +123,18 @@ export default function WeeklyPlanPreviewPage() {
   const searchParams = useSearchParams();
   const clientId = params.id as string;
   const templateId = searchParams.get('templateId');
-  
-  const { clients, addClientProgram, addCalendarEvent } = useTrainerStore();
+  // v16-D5 BUG-15: when the trainer enters this page from the saved-template
+  // tab, source=saved tells us to load the program from savedPrograms and
+  // render a confirm-and-assign screen instead of the full system-template
+  // builder (which doesn't know about the saved-program shape).
+  const source = searchParams.get('source');
+
+  const { clients, addClientProgram, addCalendarEvent, savedPrograms, assignSavedProgramToClient } = useTrainerStore();
   const client = clients.find(c => c.clientId === clientId);
   const template = programTemplates.find(t => t.id === templateId);
+  const savedProgram = source === 'saved'
+    ? savedPrograms.find((p: any) => p.id === templateId)
+    : undefined;
   
   const [selectedFrequency, setSelectedFrequency] = useState<number>(
     template?.frequencyOptions[0] || 3
@@ -303,6 +311,137 @@ export default function WeeklyPlanPreviewPage() {
     }
   };
 
+  if (!client) {
+    return (
+      <div className="container mx-auto p-6">
+        <p>Client not found</p>
+      </div>
+    );
+  }
+
+  // v16-D5 BUG-15: saved-template confirm-and-assign branch. Saved
+  // programs already have everything configured (days, schedule mode,
+  // frequency) at save time, so this view is a simple read-only preview
+  // + a Confirm button that calls assignSavedProgramToClient. Avoids
+  // adapting the full system-template builder to the SavedProgram shape.
+  if (source === 'saved') {
+    if (!savedProgram) {
+      return (
+        <div className="container mx-auto p-6">
+          <p>Saved program not found</p>
+          <Button onClick={() => router.back()} className="mt-4">
+            <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
+          </Button>
+        </div>
+      );
+    }
+    const savedDays: any[] = Array.isArray(savedProgram.days) ? savedProgram.days : [];
+    const totalSavedExercises = savedDays.reduce(
+      (sum: number, d: any) => sum + ((d.blocks || []).reduce((s2: number, b: any) => s2 + (b.exercises?.length || 0), 0)),
+      0,
+    );
+    const savedScheduleMode = savedProgram.scheduleMode || (savedProgram.structure === 'Flexible' ? 'flexible' : 'fixed');
+    return (
+      <div className="container mx-auto p-4 max-w-4xl">
+        <div className="mb-6">
+          <Button variant="ghost" onClick={() => router.back()} className="mb-4">
+            <ArrowLeft className="h-4 w-4 mr-2" /> Back
+          </Button>
+          <h1 className="text-2xl font-bold">Confirm Assignment</h1>
+          <p className="text-muted-foreground">{savedProgram.name}</p>
+        </div>
+
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                {savedProgram.description && (
+                  <p className="text-sm text-muted-foreground mb-2">{savedProgram.description}</p>
+                )}
+                <div className="flex flex-wrap gap-1">
+                  {savedProgram.phase && (
+                    <Badge variant="outline">{savedProgram.phase}</Badge>
+                  )}
+                  {(savedProgram.goals || []).slice(0, 3).map((g: string) => (
+                    <Badge key={g} variant="secondary">{String(g).replace('_', ' ')}</Badge>
+                  ))}
+                  <Badge variant="outline" className="capitalize">{savedScheduleMode}</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {savedProgram.daysPerWeek ?? savedDays.length}×/week • {savedDays.length} unique workout{savedDays.length === 1 ? '' : 's'} • {totalSavedExercises} exercises total
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-4">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Calendar className="h-4 w-4" /> Workout Days
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {savedDays.length === 0 ? (
+              <p className="text-sm text-muted-foreground">This saved program has no workout days yet.</p>
+            ) : (
+              savedDays.map((d: any, di: number) => {
+                const dayEx = (d.blocks || []).reduce((s2: number, b: any) => s2 + (b.exercises?.length || 0), 0);
+                return (
+                  <div key={d.id || di} className="rounded-lg border p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-sm">{d.dayLabel || `Day ${di + 1}`}</p>
+                      <Badge variant="outline" className="text-[10px]">{dayEx} exercises</Badge>
+                    </div>
+                    <div className="space-y-1.5">
+                      {(d.blocks || []).map((b: any, bi: number) => (
+                        <div key={b.id || bi} className="rounded bg-muted/40 p-2">
+                          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-1">
+                            {b.name || b.type || 'Block'}
+                          </p>
+                          {(b.exercises || []).map((ex: any, ei: number) => (
+                            <div key={ex.id || ei} className="flex items-center justify-between text-xs py-0.5">
+                              <span>{ei + 1}. {ex.exerciseName || ex.name}</span>
+                              <span className="text-muted-foreground">{ex.sets}×{ex.reps}{ex.rest ? ` • ${ex.rest}` : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </CardContent>
+        </Card>
+
+        <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4">
+          <div className="container mx-auto max-w-4xl flex items-center justify-between gap-3">
+            <Button variant="outline" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Cancel
+            </Button>
+            <Button
+              size="lg"
+              onClick={async () => {
+                try {
+                  await assignSavedProgramToClient(savedProgram.id, clientId);
+                  toast.success(`Assigned ${savedProgram.name} to ${client.client?.displayName || 'client'}`);
+                  router.push(`/clients/${clientId}?tab=program`);
+                } catch (err) {
+                  console.error('[program/preview] assignSavedProgramToClient failed', err);
+                  toast.error('Failed to assign program. Try again.');
+                }
+              }}
+            >
+              Confirm Assignment <Check className="h-4 w-4 ml-2" />
+            </Button>
+          </div>
+        </div>
+        <div className="h-20" />
+      </div>
+    );
+  }
+
   if (!template) {
     return (
       <div className="container mx-auto p-6">
@@ -310,14 +449,6 @@ export default function WeeklyPlanPreviewPage() {
         <Button onClick={() => router.back()} className="mt-4">
           <ArrowLeft className="h-4 w-4 mr-2" /> Go Back
         </Button>
-      </div>
-    );
-  }
-
-  if (!client) {
-    return (
-      <div className="container mx-auto p-6">
-        <p>Client not found</p>
       </div>
     );
   }
