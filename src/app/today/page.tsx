@@ -87,6 +87,11 @@ export default function TodayPage() {
   const [profileCardClientId, setProfileCardClientId] = useState<string | null>(null);
   const [showSwapWorkout, setShowSwapWorkout] = useState(false);
   const [repeatDayConfirm, setRepeatDayConfirm] = useState<{ idx: number; day: any } | null>(null);
+  // v16-D5 BUG-20: confirm dialog for back-to-back workouts on flexible programs.
+  // When the client has already hit their weekly target (or finished a workout
+  // today) and wants to start another one anyway, this dialog explains the
+  // tradeoff and lets them proceed instead of silently blocking.
+  const [showSameDayConfirm, setShowSameDayConfirm] = useState<{ idx: number; day: any } | null>(null);
   // v14-D29: preview dialog for the Up Next card. Lets the client peek at
   // the day's exercises (block by block) before tapping Start, without
   // committing to the active workout timer.
@@ -698,6 +703,16 @@ export default function TodayPage() {
           const badgeClass = sessionType === 'pt' ? 'bg-purple-500/20 text-purple-600' : 'bg-sky-500/20 text-sky-600';
           
           if (remainingThisWeek <= 0) {
+            // v16-D5 BUG-20: on flexible programs, surface a "Do another
+            // workout anyway?" affordance so the client isn't silently
+            // blocked from doing extra work this week. Picks the next
+            // workout in the cycle and routes through a confirm dialog
+            // so the tradeoff (no weekly-goal credit) is explicit.
+            const allowExtraOnFlex = program.scheduleMode === 'flexible';
+            // Choose the next workout in the cycle for the extra session.
+            // dayIndex is already cycle-aware via getNextProgramWorkout.
+            const extraDay = day;
+            const extraDayIdx = dayIndex;
             return (
               <>
                 {lockedSessionsCallout}
@@ -708,8 +723,56 @@ export default function TodayPage() {
                     </div>
                     <p className="font-semibold text-gray-900">All done this week! 🎉</p>
                     <p className="text-xs text-gray-500 mt-1">{program.trainingDaysPerWeek || program.weeklyPlan.length} sessions completed. Rest up for next week.</p>
+                    {allowExtraOnFlex && extraDay && (
+                      <div className="mt-3 flex flex-col gap-2 items-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                          onClick={() => setShowSameDayConfirm({ idx: extraDayIdx, day: extraDay })}
+                        >
+                          <Play className="w-3.5 h-3.5 mr-1.5" />
+                          Do another workout anyway
+                        </Button>
+                        <p className="text-[10px] text-gray-500">
+                          Back-to-back is fine on flexible plans — just won't count toward your weekly goal.
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+                {/* v16-D5 BUG-20: shared same-day confirm dialog. */}
+                <Dialog open={!!showSameDayConfirm} onOpenChange={(open) => !open && setShowSameDayConfirm(null)}>
+                  <DialogContent className="bg-white border-gray-200 max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle className="text-gray-900">Start another workout today?</DialogTitle>
+                      <DialogDescription className="text-gray-500">
+                        You've already hit your weekly target. Doing back-to-back days can work for some training plans, but make sure you're recovered enough. This extra session won't count toward your weekly goal.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setShowSameDayConfirm(null)}
+                      >
+                        Wait until tomorrow
+                      </Button>
+                      <Button
+                        className="flex-1 bg-sky-500 hover:bg-sky-600"
+                        onClick={() => {
+                          if (showSameDayConfirm) {
+                            const target = showSameDayConfirm;
+                            setShowSameDayConfirm(null);
+                            startDay(target.idx, target.day);
+                          }
+                        }}
+                      >
+                        Start anyway
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </>
             );
           }
@@ -989,7 +1052,16 @@ export default function TodayPage() {
             );
           }
           
-          // FIXED schedule — today IS a scheduled day, show start button
+          // FIXED schedule — today IS a scheduled day, show start button.
+          // v16-D5 BUG-18: also surface Swap (pick a different workout)
+          // matching the flexible/rest-day branches — the client view was
+          // previously the only branch missing it.
+          const fixedTodayAvailableSwaps = program.weeklyPlan
+            .map((wd: any, idx: number) => ({ ...wd, idx }))
+            .filter((wd: any, idx: number) => {
+              const count = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+              return count > 0 && idx !== dayIndex;
+            });
           return (
             <>
               {lockedSessionsCallout}
@@ -1013,8 +1085,9 @@ export default function TodayPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <p className="text-xs text-gray-500">{totalEx} exercises • {program.templateName}</p>
                 </div>
-                {/* v14-D29: Preview + Start side-by-side for fixed-schedule
-                    scheduled-today branch — mirrors the flexible branch above. */}
+                {/* v14-D29 + v16-D5 BUG-18: Start + Preview + Swap row.
+                    Previously only had Start + Preview — added Swap so client
+                    parity matches the flexible/rest-day branches and trainer view. */}
                 <div className="flex gap-2">
                   <Button
                     className="flex-1 bg-sky-500 hover:bg-sky-600 text-white"
@@ -1031,9 +1104,131 @@ export default function TodayPage() {
                     <Eye className="w-4 h-4 mr-1" />
                     Preview
                   </Button>
+                  {fixedTodayAvailableSwaps.length > 0 && (
+                    <Button
+                      variant="outline"
+                      className="border-gray-200 text-gray-600"
+                      onClick={() => setShowSwapWorkout(true)}
+                    >
+                      <ArrowLeftRight className="w-4 h-4 mr-1" />
+                      Swap
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
+
+            {/* v16-D5 BUG-18: shared Swap Workout + Repeat dialogs so the
+                fixed-scheduled-today branch's Swap button is wired to a real
+                dialog. Mirrors the dialog markup in the flexible branch. */}
+            <Dialog open={showSwapWorkout} onOpenChange={setShowSwapWorkout}>
+              <DialogContent className="bg-white border-gray-200 max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="text-gray-900">Swap Workout</DialogTitle>
+                  <DialogDescription className="text-gray-500">Pick a different workout for today</DialogDescription>
+                  <div className="text-xs text-gray-500 px-1 pt-1">
+                    You've done {completedDayIndices.length} of {program.trainingDaysPerWeek || program.weeklyPlan.length} workouts this week.
+                    Pick the next one or repeat one you've already done.
+                  </div>
+                </DialogHeader>
+                <div className="space-y-2 pt-1">
+                  {program.weeklyPlan.map((wd: any, idx: number) => {
+                    const wdEx = wd?.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
+                    const isDone = completedDayIndices.includes(idx);
+                    const isLocked = !isDone && lockedDayIndices.includes(idx);
+                    const isCurrent = idx === dayIndex;
+                    if (wdEx === 0) return null;
+                    return (
+                      <button
+                        key={wd.id || idx}
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                          isDone
+                            ? 'border-gray-200 bg-gray-50 opacity-60'
+                            : isLocked
+                            ? 'border-purple-200 bg-purple-50 cursor-not-allowed'
+                            : isCurrent
+                            ? 'border-sky-300 bg-sky-50'
+                            : 'border-gray-200 hover:border-sky-300 hover:bg-sky-50/50'
+                        }`}
+                        onClick={() => {
+                          if (isDone) {
+                            setRepeatDayConfirm({ idx, day: wd });
+                          } else if (isLocked) {
+                            handleLockedDayTap(idx, wd);
+                          } else {
+                            setShowSwapWorkout(false);
+                            startDay(idx, wd);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold ${
+                            isLocked ? 'bg-purple-500 text-white' :
+                            isCurrent ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {isLocked ? <Lock className="w-3.5 h-3.5" /> : String.fromCharCode(65 + idx)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm text-gray-900">{wd.dayLabel}</p>
+                            <p className="text-[10px] text-gray-500">{wdEx} exercises</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {isDone && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
+                          {isLocked && (() => {
+                            const r = lockReasons?.[idx];
+                            const whenLabel = r?.eventDate ? format(new Date(r.eventDate), 'EEE MMM d') : '';
+                            return (
+                              <Badge
+                                className="text-[9px] bg-purple-100 text-purple-700 border-0"
+                                title={r ? `Booked with ${r.trainerName}${whenLabel ? ` — ${whenLabel}` : ''}${r.eventStartTime ? ` ${r.eventStartTime}` : ''}` : undefined}
+                              >
+                                Booked with {r?.trainerName || 'trainer'}
+                              </Badge>
+                            );
+                          })()}
+                          {isCurrent && !isDone && !isLocked && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
+                          <Play className="w-4 h-4 text-gray-400" />
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!repeatDayConfirm} onOpenChange={(open) => !open && setRepeatDayConfirm(null)}>
+              <DialogContent className="bg-white border-gray-200 max-w-sm">
+                <DialogHeader>
+                  <DialogTitle className="text-gray-900">Repeat this workout?</DialogTitle>
+                  <DialogDescription className="text-gray-500">
+                    You've already done {repeatDayConfirm?.day?.dayLabel} this week.
+                    Doing it again is fine — just note it won't count toward your weekly goal of {program.trainingDaysPerWeek || program.weeklyPlan.length} sessions.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setRepeatDayConfirm(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-sky-500 hover:bg-sky-600"
+                    onClick={() => {
+                      if (repeatDayConfirm) {
+                        setRepeatDayConfirm(null);
+                        setShowSwapWorkout(false);
+                        startDay(repeatDayConfirm.idx, repeatDayConfirm.day);
+                      }
+                    }}
+                  >
+                    Repeat anyway
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
             </>
           );
         })()}

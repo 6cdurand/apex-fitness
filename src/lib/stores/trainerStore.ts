@@ -271,7 +271,7 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
-  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null; weekSlots: number; slotDayIndices: number[]; slotScheduledDays: string[]; completedSlotCount: number; nextSlotIndex: number } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
@@ -1683,8 +1683,42 @@ export const useTrainerStore = create<TrainerState>()(
           break;
         }
         const dayIndex = nextDayIndex;
-        const day = program.weeklyPlan[dayIndex];
-        
+        // v16-D5 BUG-16: defensive modulo so a stale dayIndex never reaches
+        // outside weeklyPlan (the loop above already clamps via `% length`
+        // but this keeps every consumer safe if `nextDayIndex` is ever set
+        // by another path).
+        const day = program.weeklyPlan[dayIndex % program.weeklyPlan.length];
+
+        // v16-D5 BUG-16: build the week-slot expansion so consumers can
+        // render N pills / N day-cards when N > weeklyPlan.length
+        // (e.g. Push/Pull on Mon/Wed/Fri → 3 slots → [Push, Pull, Push]).
+        // For fixed-schedule programs the slot list is anchored to
+        // selectedDays (ordered by weekday); for flexible programs it's
+        // just freq generic slots.
+        const WEEKDAY_ORDER = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const;
+        const weekSlots = (program.scheduleMode === 'fixed' && program.selectedDays?.length)
+          ? program.selectedDays.length
+          : freq;
+        const slotScheduledDays: string[] = (program.scheduleMode === 'fixed' && program.selectedDays?.length)
+          ? [...program.selectedDays].sort((a, b) => WEEKDAY_ORDER.indexOf(a as any) - WEEKDAY_ORDER.indexOf(b as any))
+          : [];
+        const slotDayIndices: number[] = Array.from({ length: weekSlots }, (_, i) =>
+          program.weeklyPlan.length > 0 ? i % program.weeklyPlan.length : 0
+        );
+        // Left-anchored progress: completedSlotCount = number of sessions
+        // done this week, clamped to weekSlots so the strip never
+        // overflows even if the client logged extras.
+        const completedSlotCount = Math.min(completedThisWeek, weekSlots);
+        // nextSlotIndex: walk slots forward from completedSlotCount,
+        // skipping any that map to a locked weeklyPlan idx. Falls back to
+        // completedSlotCount if every remaining slot is locked.
+        let nextSlotIndex = Math.min(completedSlotCount, Math.max(0, weekSlots - 1));
+        for (let s = completedSlotCount; s < weekSlots; s++) {
+          if (lockedDayIndices.includes(slotDayIndices[s])) continue;
+          nextSlotIndex = s;
+          break;
+        }
+
         // Determine session type from PT map
         const slotInWeek = completedThisWeek % freq;
         const sessionType = program.sessionPTMap?.[slotInWeek] === 'pt' ? 'pt' : 'personal';
@@ -1711,7 +1745,7 @@ export const useTrainerStore = create<TrainerState>()(
         }
         // Flexible programs: always available (user picks which workout)
         
-        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay };
+        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay, weekSlots, slotDayIndices, slotScheduledDays, completedSlotCount, nextSlotIndex };
       },
 
       rotateProgramDay: (clientId, dayIndex) => {
