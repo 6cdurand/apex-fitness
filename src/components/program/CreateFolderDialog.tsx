@@ -66,13 +66,37 @@ export function CreateFolderDialog({
       ? `Max ${MAX_LEN} characters.`
       : null;
 
-  const handleSave = () => {
+  // v17-D3: both branches now route through the canonical
+  // trainerStore.createBlockFolder action so the empty-folder case actually
+  // persists. Previously the !moveTargetBlockId path only fired a toast,
+  // which is why "+ New folder" from the Folders panel appeared to do
+  // nothing on refresh (the chip was derived from saved_blocks.folder).
+  const handleSave = async () => {
     if (isDisabled) return;
+    const store = useTrainerStore.getState();
+
     if (moveTargetBlockId) {
-      useTrainerStore.getState().updateBlock(moveTargetBlockId, { folder: trimmed });
+      // Ensure the folder name is recorded in the canonical order array
+      // (so future panels see it even after the block is moved out), then
+      // assign it on the block. createBlockFolder is a no-op on duplicates,
+      // which is the right behavior here when the user re-uses an existing
+      // label (the dialog's existingFolders guard prevents that anyway).
+      await store.createBlockFolder(trimmed);
+      store.updateBlock(moveTargetBlockId, { folder: trimmed });
       toast.success(`Block moved to "${trimmed}"`);
     } else {
-      toast.success(`Folder "${trimmed}" is ready. Move blocks into it via the folder icon.`);
+      const res = await store.createBlockFolder(trimmed);
+      if (!res.ok) {
+        if (res.reason === 'duplicate') {
+          toast.error('Folder already exists.');
+        } else if (res.reason === 'persist-failed') {
+          toast.error('Could not create folder. Check your connection and try again.');
+        } else {
+          toast.error('Could not create folder.');
+        }
+        return;
+      }
+      toast.success(`Folder "${trimmed}" created`);
     }
     onCreated(trimmed);
     onOpenChange(false);
