@@ -711,6 +711,15 @@ export interface Notification {
   read: boolean;
   actionUrl?: string;
   link?: string;
+  /**
+   * v16-D7: canonical in-app deep-link path for this notification
+   * (e.g. `/workout/{id}` for session-complete / share-with-trainer rows).
+   * The notifications page click handler routes via `deepLinkPath` first,
+   * then falls back to `actionUrl` / `link` for older rows. Mapped to the
+   * `notifications.deep_link_path` column added by the v16 migration; the
+   * sync layer drops the field on schema-drift error and retries.
+   */
+  deepLinkPath?: string;
   // Optional references that let a notification deep-link into a specific
   // entity. All stay optional so legacy rows (pre-fix) parse cleanly and
   // any consumer must null-check before using them.

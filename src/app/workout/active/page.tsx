@@ -1772,12 +1772,22 @@ export default function ActiveWorkoutPage() {
           // Notify the trainer (mirrors the existing program-complete
           // notification path in this same handler).
           const clientName = currentUser?.displayName || currentUser?.username || 'Client';
+          // v16-D7: include `deepLinkPath` alongside `link` so the
+          // notifications page click handler routes the trainer straight
+          // to the workout summary (/workout/[id]) when they tap the
+          // "shared a workout with you" entry. `actionUrl` is set too so
+          // legacy resolvers and older clients still navigate.
+          const sharedWorkoutPath = `/workout/${completedWorkoutData.id}`;
           useSocialStore.getState().addNotification({
             userId: resolvedTrainerId,
             type: 'workout_assigned' as any,
             title: `${clientName} shared a workout with you`,
             message: `${clientName} shared "${completedWorkoutData.name}" — ${completedWorkoutData.exercises} exercises, ${Math.round(completedWorkoutData.totalVolume)}kg volume`,
-            link: `/workout/${completedWorkoutData.id}`,
+            link: sharedWorkoutPath,
+            actionUrl: sharedWorkoutPath,
+            deepLinkPath: sharedWorkoutPath,
+            workoutId: completedWorkoutData.id,
+            senderId: currentUser?.id,
           });
         }
       } catch (e) {

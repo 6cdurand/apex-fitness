@@ -3404,17 +3404,23 @@ export async function syncNotificationToSupabase(notification: any): Promise<boo
     // Optional deep-link references — only included when present so legacy
     // rows / legacy schema variants don't trip unknown-column errors.
     dbNotification.link = url;
+    // v16-D7: canonical deep-link path column (migration
+    // 20260530_add_deep_link_path_to_notifications.sql). Falls back to the
+    // legacy `action_url` / `link` so tap-routing still works when only
+    // the older URL fields are populated. Schema-drift retry below drops
+    // the column for DBs predating the migration.
+    dbNotification.deep_link_path = notification.deepLinkPath || url;
     if (notification.programId) dbNotification.program_id = notification.programId;
     if (notification.senderId) dbNotification.sender_id = notification.senderId;
     // v14-D12: persist programEditDetail in JSONB metadata column
     if (notification.programEditDetail) dbNotification.metadata = notification.programEditDetail;
 
     // The notifications table has drifted across environments (some DBs
-    // predate the `link`, `program_id`, `sender_id` columns). Rather than
-    // failing the whole upsert on a single unknown column, strip any
-    // column the server complains about and retry. Bounded to one retry
-    // per column we added so we can't loop forever.
-    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id', 'metadata'];
+    // predate the `link`, `program_id`, `sender_id`, `deep_link_path`
+    // columns). Rather than failing the whole upsert on a single unknown
+    // column, strip any column the server complains about and retry.
+    // Bounded to one retry per column we added so we can't loop forever.
+    const optionalCols: Array<keyof typeof dbNotification> = ['link', 'program_id', 'sender_id', 'metadata', 'deep_link_path'];
     let attempt = 0;
     let lastError: any = null;
     // At most (optionalCols.length + 1) attempts: one per drop + the final try.
@@ -3471,6 +3477,10 @@ export async function fetchNotificationsFromSupabase(userId: string): Promise<an
       read: !!n?.read,
       link: n?.link ?? n?.action_url ?? undefined,
       actionUrl: n?.action_url ?? n?.link ?? undefined,
+      // v16-D7: hydrate the canonical deep-link path. Cascade through
+      // legacy URL fields so older rows (pre-deep_link_path column) keep
+      // routing correctly via the notification resolver.
+      deepLinkPath: n?.deep_link_path ?? n?.action_url ?? n?.link ?? undefined,
       programId: n?.program_id ?? undefined,
       senderId: n?.sender_id ?? undefined,
       createdAt: n?.created_at,
