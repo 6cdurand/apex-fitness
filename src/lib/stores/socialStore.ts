@@ -24,6 +24,13 @@ interface SocialState {
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
+  /**
+   * v17-D2: stamp `seenAt` on every currently-unseen notification for the
+   * signed-in user. Distinct from `markAllNotificationsRead` (acted-on).
+   * Fires optimistically against local state so the bell-badge clears
+   * within the same render tick, then syncs to Supabase in the background.
+   */
+  markAllNotificationsSeen: () => void;
   clearAllNotifications: () => void;
   getUnreadCount: () => number;
 }
@@ -227,6 +234,31 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
 
+      markAllNotificationsSeen: () => {
+        // v17-D2: optimistic local stamp + background Supabase sync.
+        // Idempotent — already-seen rows are untouched. Scoped to the
+        // current user so a logged-out / pre-hydration call is a no-op.
+        const userId = useAuthStore.getState().user?.id;
+        if (!userId) return;
+        const seenAt = new Date().toISOString();
+        const hadUnseen = get().notifications.some(
+          n => n.userId === userId && !n.seenAt
+        );
+        if (!hadUnseen) return; // nothing to do — skip the round-trip
+        set(state => ({
+          notifications: state.notifications.map(n =>
+            n.userId === userId && !n.seenAt ? { ...n, seenAt } : n
+          ),
+        }));
+        // Fire-and-forget server sync. Server result is non-blocking; if
+        // it fails the next mount will retry (WHERE seen_at IS NULL).
+        import('../supabaseSync').then(({ markAllNotificationsSeenInSupabase }) => {
+          markAllNotificationsSeenInSupabase(userId).catch(e =>
+            console.warn('[v17-D2] markAllNotificationsSeen sync failed:', e)
+          );
+        });
+      },
+
       clearAllNotifications: () => {
         const userId = useAuthStore.getState().user?.id;
         if (!userId) return;
@@ -241,8 +273,11 @@ export const useSocialStore = create<SocialState>()(
       },
 
       getUnreadCount: () => {
+        // v17-D2: badge reflects "new since last panel open" (seen_at IS
+        // NULL), not "haven't clicked through" (read=false). The two are
+        // intentionally distinct — see Notification.seenAt vs .read.
         const userId = useAuthStore.getState().user?.id;
-        return get().notifications.filter(n => n.userId === userId && !n.read).length;
+        return get().notifications.filter(n => n.userId === userId && !n.seenAt).length;
       },
     }),
     {

@@ -708,7 +708,20 @@ export interface Notification {
   type: NotificationType;
   title: string;
   message: string;
+  /**
+   * Per-row "acted on" flag. Set true when the user clicks the row to
+   * deep-link into the linked entity. Distinct from `seenAt`, which tracks
+   * whether the row has merely appeared in the panel since the last open.
+   */
   read: boolean;
+  /**
+   * v17-D2: timestamp stamped the first time the user opens the
+   * notification panel after this row was created. `undefined` / null =
+   * unseen (counted by the bell-badge). Defined = seen (excluded). Semantic
+   * is intentionally distinct from `read` ("acted on / clicked through").
+   * Round-trips with `notifications.seen_at TIMESTAMPTZ` in Supabase.
+   */
+  seenAt?: string;
   actionUrl?: string;
   link?: string;
   /**
