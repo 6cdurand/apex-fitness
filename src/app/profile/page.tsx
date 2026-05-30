@@ -1078,6 +1078,73 @@ export default function ProfilePage() {
           />
         )}
 
+        {/* v16-D1 BUG-24: trainer-mode "My Own Training" mini-section.
+            Trainer mode otherwise hides own PBs + workouts entirely. This
+            collapsible surfaces the trainer's own progress without forcing
+            them to toggle to athlete mode. */}
+        {isTrainerMode && (
+          <Card className="bg-white border-gray-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-gray-900 flex items-center gap-2">
+                  <Dumbbell className="w-5 h-5 text-sky-400" />
+                  My Own Training
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-gray-400 hover:text-sky-500"
+                  onClick={() => switchMode('user')}
+                >
+                  Switch to athlete mode
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">Quick view of your own progress — switch modes for full charts</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Top 3 own PBs */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                  Top PBs
+                </h4>
+                {userPBs.length > 0 ? (
+                  <div className="space-y-2">
+                    {userPBs.slice(0, 3).map(pb => (
+                      <div key={pb.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                        <span className="capitalize text-gray-900">{pb.exerciseId.replace(/-/g, ' ')}</span>
+                        <span className="font-bold text-amber-500">{Math.round(pb.oneRepMax)}kg 1RM</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">No PBs yet — start logging your own workouts</p>
+                )}
+              </div>
+              {/* Last 3 own workouts */}
+              <div>
+                <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                  Recent Workouts
+                </h4>
+                {userOwnWorkouts.length > 0 ? (
+                  <div className="space-y-2">
+                    {userOwnWorkouts.slice(0, 3).map(w => (
+                      <div key={w.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                        <span className="text-gray-900 truncate flex-1">{w.name}</span>
+                        <span className="text-gray-500 ml-2">{format(new Date(w.startTime), 'MMM d')}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 italic">No own workouts yet</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Workout Stats & Graphs - shown in athlete mode */}
         {!isTrainerMode && (
           <WorkoutStatsCharts 

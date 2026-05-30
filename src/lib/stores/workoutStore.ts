@@ -13,7 +13,7 @@ import {
   getLastSetForExercise,
   getMostRecentExerciseData,
 } from '../getLastSetForExercise';
-import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
+import { syncWorkoutToSupabase, fetchWorkoutHistoryFromSupabase, fetchClientWorkoutsFromSupabase, fetchPersonalBestsFromSupabase, syncPBToSupabase, syncWorkoutTemplateToSupabase, deleteWorkoutTemplateFromSupabase, fetchWorkoutTemplatesFromSupabase, syncSessionPackageToSupabase, syncExerciseNoteToSupabase, fetchExerciseNotesFromSupabase } from '../supabaseSync';
 import { supabase } from '../supabase';
 import { safeLocalStorage } from '../safeStorage';
 import { __buildWorkoutCompletedNotification } from '../workoutCompletedNotification';
@@ -131,6 +131,20 @@ interface WorkoutState {
   
   // Supabase sync for workout history
   loadWorkoutHistoryFromSupabase: (userId: string, isTrainer?: boolean) => Promise<void>;
+
+  /**
+   * v16-D1: refetch workouts + PBs from Supabase for the given userId and
+   * REPLACE the local cache. Called on auth state change so that a user
+   * who logs into a fresh browser sees workouts written to them by their
+   * trainer in another session — and conversely so that a previous user's
+   * stale local cache doesn't leak through (paired with the localStorage-
+   * scoping work in v16-D2).
+   *
+   * Replaces (not merges) the local arrays. The Supabase row set IS the
+   * source of truth. On error / offline, the catch block logs a warning
+   * and the local cache is preserved.
+   */
+  hydrateForUser: (userId: string) => Promise<void>;
 }
 
 export const useWorkoutStore = create<WorkoutState>()(
@@ -1705,6 +1719,51 @@ export const useWorkoutStore = create<WorkoutState>()(
           console.log(`[WorkoutStore] ✅ Loaded ${newWorkouts.length} new workouts from Supabase (${workouts.length} total fetched)`);
         } else {
           console.log('[WorkoutStore] No workouts found in Supabase');
+        }
+      },
+
+      /**
+       * v16-D1 (F2): authoritative replace-on-login hydrate. Fetches the
+       * user's workouts (where `user_id = userId`, which includes
+       * trainer-logged PT sessions) and personal_bests, REPLACES the
+       * local arrays scoped to this user, and re-derives medals/volume
+       * rollups so all downstream UIs (profile, /today, exercise detail)
+       * read from a fresh canonical cache. Failures degrade gracefully
+       * — local cache is preserved, never blanked to undefined.
+       */
+      hydrateForUser: async (userId: string) => {
+        if (!userId) return;
+        console.log('[WorkoutStore] hydrateForUser:', userId);
+        try {
+          // F2.1 — workouts where userId = me (covers self-logged AND trainer-logged-for-me)
+          const workouts = await fetchWorkoutHistoryFromSupabase(userId, false);
+          if (Array.isArray(workouts)) {
+            // Replace; the Supabase row set is canonical for this user.
+            // Other users' workouts already in the local cache (e.g. a trainer
+            // viewing their client's data) are NOT touched here — only rows
+            // authored AS this user are returned by the fetcher.
+            const existing = get().workoutHistory;
+            const sameUserIds = new Set(workouts.map(w => w.id));
+            const otherUserRows = existing.filter(w => w.userId !== userId && !sameUserIds.has(w.id));
+            set({ workoutHistory: [...workouts, ...otherUserRows] });
+          }
+
+          // F2.2 — personal bests for this user
+          const pbs = await fetchPersonalBestsFromSupabase(userId);
+          if (Array.isArray(pbs)) {
+            const existingPBs = get().personalBests;
+            const otherUserPBs = existingPBs.filter(pb => pb.userId !== userId);
+            set({ personalBests: [...pbs, ...otherUserPBs] });
+          }
+
+          // F2.3 — re-derive cached aggregates (volume, medals, etc.) from refreshed data
+          try {
+            get().runDeriveAll(userId);
+          } catch (e) {
+            console.warn('[WorkoutStore] runDeriveAll after hydrate failed (non-fatal):', e);
+          }
+        } catch (e) {
+          console.warn('[WorkoutStore] hydrateForUser failed (non-fatal — local cache preserved):', e);
         }
       },
     }),

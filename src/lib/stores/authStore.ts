@@ -6,6 +6,40 @@ import { User, UserMode } from '@/types';
 import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
 import { supabase } from '../supabase';
 
+/**
+ * v16-D1 (F4): post-login hydrate helper.
+ *
+ * Dispatched on a deferred microtask from every login / register happy
+ * path so the per-user Supabase row sets (workouts, PBs, sessions,
+ * calendar) replace the local cache that may have been seeded by a
+ * different account on the same device. Uses dynamic imports to avoid
+ * the circular module graph (`workoutStore` imports `authStore`).
+ *
+ * Failures here are non-fatal — both stores' `hydrateForUser` actions
+ * already swallow errors and preserve local cache. We only catch the
+ * import / scheduling errors at this layer.
+ */
+function schedulePostLoginHydrate(userId: string) {
+  if (!userId) return;
+  // Defer to the next microtask so that the `set({ user, isAuthenticated: true })`
+  // write has settled and downstream `useAuthStore.getState().user?.id` reads
+  // (used inside the hydrate fns' cross-store calls) see the new user id.
+  Promise.resolve().then(async () => {
+    try {
+      const [{ useWorkoutStore }, { useTrainerStore }] = await Promise.all([
+        import('./workoutStore'),
+        import('./trainerStore'),
+      ]);
+      await Promise.all([
+        useWorkoutStore.getState().hydrateForUser(userId),
+        useTrainerStore.getState().hydrateForUser(userId),
+      ]);
+    } catch (e) {
+      console.warn('[AuthStore] post-login hydrate scheduling failed:', e);
+    }
+  });
+}
+
 // Simple password hash (pre-Supabase Auth — Phase 1 replaces this entirely)
 export function hashPassword(password: string): string {
   let hash = 0;
@@ -127,6 +161,9 @@ export const useAuthStore = create<AuthState>()(
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { password: _pw, ...userData } = localUser as any;
           set({ user: userData, isAuthenticated: true, isLoading: false, loginError: null });
+          // v16-D1: hydrate per-user Supabase data so trainer-logged workouts
+          // and PT sessions are visible immediately after login.
+          schedulePostLoginHydrate(userData.id);
           return true;
         }
 
@@ -208,6 +245,9 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem('apex-users', JSON.stringify(filtered));
 
         set({ user, isAuthenticated: true, isLoading: false, loginError: null });
+        // v16-D1: hydrate per-user Supabase data so trainer-logged workouts
+        // and PT sessions are visible immediately after login.
+        schedulePostLoginHydrate(user.id);
         return true;
       },
 
@@ -259,6 +299,9 @@ export const useAuthStore = create<AuthState>()(
           localStorage.setItem('apex-users', JSON.stringify(updatedUsers));
 
           set({ user: existingUser, isAuthenticated: true, isLoading: false });
+          // v16-D1: hydrate per-user Supabase data so PT sessions and
+          // trainer-logged workouts are visible immediately after OAuth login.
+          schedulePostLoginHydrate(existingUser.id);
           return true;
         }
 
@@ -296,6 +339,10 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ user: newUser, isAuthenticated: true, isLoading: false });
+        // v16-D1: hydrate per-user Supabase data so trainer-linked rows
+        // (e.g. PT sessions logged before this account first signed in via
+        // OAuth, when a trainer placeholder existed) are visible immediately.
+        schedulePostLoginHydrate(newUser.id);
         return true;
       },
 
@@ -395,6 +442,10 @@ export const useAuthStore = create<AuthState>()(
         }
 
         set({ user: newUser, isAuthenticated: true, isLoading: false });
+        // v16-D1: hydrate per-user Supabase data. For a brand-new account
+        // this typically returns empty arrays (which is fine — REPLACE
+        // semantics will wipe any leaked cache from a prior local user).
+        schedulePostLoginHydrate(newUser.id);
         return true;
       },
 

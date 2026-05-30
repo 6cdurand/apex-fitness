@@ -39,8 +39,9 @@ import {
   syncSavedBlockToSupabase, deleteSavedBlockFromSupabase,
   syncClientProfileToSupabase, fetchClientProfilesFromSupabase,
   syncTrainerSessionToSupabase, syncSessionPackageToSupabase,
-  fetchTrainerSessionsFromSupabase, fetchSessionPackagesFromSupabase,
+  fetchTrainerSessionsFromSupabase, fetchSessionsForUserFromSupabase, fetchSessionPackagesFromSupabase,
   syncTrainerClientToSupabase, fetchTrainerClientsFromSupabase,
+  fetchCalendarEventsForUser,
   fetchNotificationsFromSupabase,
 } from '../supabaseSync';
 
@@ -252,6 +253,20 @@ interface TrainerState {
   // Supabase sync
   loadFromSupabase: (trainerId: string) => Promise<void>;
   refetchTrainerClientsFromSupabase: (trainerId: string) => Promise<void>;
+  /**
+   * v16-D1: refetch sessions + calendar events from Supabase for the
+   * given userId, REPLACING the trainer-or-client-scoped slices of the
+   * local cache. Called from the auth-login happy paths so a user (in
+   * either role) sees PT sessions + bookings written from another
+   * device. The trainer-scoped {@link loadFromSupabase} remains the
+   * canonical full-sync entry point for trainer dashboards; this lighter
+   * action targets just the slices needed for client visibility (no
+   * client-list / packages / programs fetch).
+   *
+   * Replaces (not merges) the slices. Failures are non-fatal — local
+   * cache is preserved.
+   */
+  hydrateForUser: (userId: string) => Promise<void>;
   
   // Update package (for editing)
   updateSessionPackage: (packageId: string, updates: Partial<SessionPackage>) => void;
@@ -2468,6 +2483,89 @@ export const useTrainerStore = create<TrainerState>()(
             notifications: [...supabaseNotifications, ...localOnlyNotifications] 
           });
           console.log(`[Trainer Store] ✅ Notifications loaded: ${supabaseNotifications.length} from Supabase, ${localOnlyNotifications.length} local-only`);
+        }
+      },
+
+      /**
+       * v16-D1 (F3): authoritative replace-on-login hydrate for the
+       * sessions + calendar slices that drive the user-facing surfaces:
+       *
+       * - Trainer profile "Recent Client Sessions" → reads `sessions` filtered
+       *   by `trainerId === user.id`. Pre-fix: empty after a fresh login
+       *   because the local array never refetched the trainer's PT sessions.
+       * - Client profile "Workout History" + /today PT-session card → reads
+       *   `sessions` filtered by `clientId === user.id`. Pre-fix: empty.
+       * - Client calendar bookings → reads `calendarEvents` filtered by
+       *   `clientId === user.id`. Pre-fix: empty.
+       *
+       * Both halves come from the new sibling fetcher
+       * {@link fetchSessionsForUserFromSupabase} which OR's
+       * `trainer_id = userId, client_id = userId`. Calendar events are
+       * pulled from BOTH the trainer-scoped and client-scoped readers so
+       * a hybrid user (trainer who is also someone else's client) sees
+       * their full schedule.
+       *
+       * Slices touched: `sessions`, `calendarEvents`. `clients` /
+       * `sessionPackages` / `payments` / `clientPrograms` are NOT
+       * refetched here — those are trainer-only and remain the
+       * responsibility of {@link loadFromSupabase}, which is invoked
+       * separately by the trainer dashboard mount.
+       */
+      hydrateForUser: async (userId: string) => {
+        if (!userId) return;
+        console.log('[TrainerStore] hydrateForUser:', userId);
+        try {
+          // Fetch in parallel; each fetcher catches internally and returns []
+          // on error so a single failure doesn't blank the whole hydrate.
+          const [sessions, trainerCalendar, clientCalendar] = await Promise.all([
+            fetchSessionsForUserFromSupabase(userId),
+            fetchCalendarEventsFromSupabase(userId).catch(() => []),
+            fetchCalendarEventsForUser(userId).catch(() => []),
+          ]);
+
+          // De-dupe calendar events on id; client-scoped takes precedence
+          // over trainer-scoped for shared rows so the client perspective
+          // (e.g. their confirmation flag) wins.
+          const calendarById = new Map<string, any>();
+          (Array.isArray(trainerCalendar) ? trainerCalendar : []).forEach(e => {
+            if (e?.id) calendarById.set(e.id, e);
+          });
+          (Array.isArray(clientCalendar) ? clientCalendar : []).forEach(e => {
+            if (e?.id) calendarById.set(e.id, e);
+          });
+
+          // Preserve calendar events for OTHER users that may already be
+          // in the local cache (e.g. a trainer's other clients' rows). We
+          // only replace the slice that pertains to this user.
+          const existingCalendar = get().calendarEvents;
+          const otherUserCalendar = existingCalendar.filter(e =>
+            e.trainerId !== userId && e.clientId !== userId
+          );
+          const mergedCalendar = [...calendarById.values(), ...otherUserCalendar];
+
+          // Same logic for sessions: keep rows that don't belong to this user.
+          const existingSessions = get().sessions;
+          const otherUserSessions = existingSessions.filter(s =>
+            s.trainerId !== userId && s.clientId !== userId
+          );
+          const mergedSessions = [
+            ...(Array.isArray(sessions) ? sessions : []),
+            ...otherUserSessions,
+          ];
+
+          set({
+            sessions: mergedSessions,
+            calendarEvents: mergedCalendar,
+          });
+
+          console.log('[TrainerStore] ✅ hydrateForUser done', {
+            sessions: Array.isArray(sessions) ? sessions.length : 0,
+            calendarEvents: calendarById.size,
+            preservedOtherUserSessions: otherUserSessions.length,
+            preservedOtherUserCalendar: otherUserCalendar.length,
+          });
+        } catch (e) {
+          console.warn('[TrainerStore] hydrateForUser failed (non-fatal — local cache preserved):', e);
         }
       },
 
