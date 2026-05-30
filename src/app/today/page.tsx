@@ -601,7 +601,59 @@ export default function TodayPage() {
             } : null,
           });
           if (!next) return null;
-          const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, isScheduledToday, nextScheduledDay } = next;
+          const { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay } = next;
+
+          // v16-D4: build a "This week's locked sessions" list so /today always
+          // surfaces an explicit explanation when the trainer has program days
+          // booked — even when the Up Next card itself has skipped past them.
+          // Sort by booking date so the soonest one renders at the top.
+          const lockedSessions = Object.entries(lockReasons || {})
+            .map(([idxStr, reason]) => ({
+              idx: Number(idxStr),
+              reason,
+              dayLabel: program.weeklyPlan[Number(idxStr)]?.dayLabel || `Day ${String.fromCharCode(65 + Number(idxStr))}`,
+            }))
+            .filter(item => !!item.reason)
+            .sort((a, b) => {
+              const ka = `${a.reason.eventDate || ''}T${a.reason.eventStartTime || '23:59'}`;
+              const kb = `${b.reason.eventDate || ''}T${b.reason.eventStartTime || '23:59'}`;
+              return ka.localeCompare(kb);
+            });
+          const lockedSessionsCallout = lockedSessions.length > 0 ? (
+            <Card key="v16d4-locked-callout" className="bg-purple-50 border-purple-200 shadow-sm">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="w-4 h-4 text-purple-600" />
+                  <p className="text-xs font-semibold text-purple-900">
+                    This week’s booked PT sessions
+                  </p>
+                </div>
+                <ul className="space-y-1.5">
+                  {lockedSessions.map(item => {
+                    const whenLabel = item.reason.eventDate
+                      ? format(new Date(item.reason.eventDate), 'EEE MMM d')
+                      : 'this week';
+                    const time = item.reason.eventStartTime
+                      ? ` · ${item.reason.eventStartTime}`
+                      : '';
+                    return (
+                      <li key={`locked-${item.idx}`} className="flex items-start gap-1.5 text-[11px] text-purple-800">
+                        <Lock className="w-3 h-3 mt-0.5 flex-shrink-0 text-purple-500" />
+                        <span>
+                          <span className="font-medium">{item.dayLabel}</span>{' '}
+                          booked with{' '}
+                          <span className="font-medium">{item.reason.trainerName}</span>
+                          {' — '}{whenLabel}{time}
+                          {' · '}
+                          <span className="text-purple-600">locked from self-start</span>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          ) : null;
 
           // v15-D4: helper used by swap-day buttons — when a client taps a
           // day that's locked because the trainer has it booked, surface a
@@ -647,15 +699,18 @@ export default function TodayPage() {
           
           if (remainingThisWeek <= 0) {
             return (
-              <Card className="bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-emerald-500/30">
-                <CardContent className="p-4 text-center">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-2">
-                    <Check className="w-5 h-5 text-emerald-500" />
-                  </div>
-                  <p className="font-semibold text-gray-900">All done this week! 🎉</p>
-                  <p className="text-xs text-gray-500 mt-1">{program.trainingDaysPerWeek || program.weeklyPlan.length} sessions completed. Rest up for next week.</p>
-                </CardContent>
-              </Card>
+              <>
+                {lockedSessionsCallout}
+                <Card className="bg-gradient-to-r from-emerald-500/10 to-green-500/10 border-emerald-500/30">
+                  <CardContent className="p-4 text-center">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-2">
+                      <Check className="w-5 h-5 text-emerald-500" />
+                    </div>
+                    <p className="font-semibold text-gray-900">All done this week! 🎉</p>
+                    <p className="text-xs text-gray-500 mt-1">{program.trainingDaysPerWeek || program.weeklyPlan.length} sessions completed. Rest up for next week.</p>
+                  </CardContent>
+                </Card>
+              </>
             );
           }
           
@@ -678,20 +733,24 @@ export default function TodayPage() {
               && (completedDayIndices.length + lockedDayIndices.length) >= program.weeklyPlan.length;
             if (allDaysBlocked) {
               return (
-                <Card className="bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-purple-500/30">
-                  <CardContent className="p-4 text-center">
-                    <Calendar className="w-5 h-5 text-purple-500 mx-auto mb-2" />
-                    <p className="font-semibold text-gray-900 text-sm">All program days booked or done this week.</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Want extra work? Log a standalone workout from /workout.
-                    </p>
-                  </CardContent>
-                </Card>
+                <>
+                  {lockedSessionsCallout}
+                  <Card className="bg-gradient-to-r from-purple-500/10 to-violet-500/10 border-purple-500/30">
+                    <CardContent className="p-4 text-center">
+                      <Calendar className="w-5 h-5 text-purple-500 mx-auto mb-2" />
+                      <p className="font-semibold text-gray-900 text-sm">All program days booked or done this week.</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Want extra work? Log a standalone workout from /workout.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </>
               );
             }
 
             return (
               <>
+                {lockedSessionsCallout}
                 <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -800,7 +859,19 @@ export default function TodayPage() {
                             </div>
                             <div className="flex items-center gap-1.5">
                               {isDone && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
-                              {isLocked && <Badge className="text-[9px] bg-purple-100 text-purple-700 border-0">Booked with trainer</Badge>}
+                              {isLocked && (() => {
+                                // v16-D4: name the trainer in the swap-dialog badge.
+                                const r = lockReasons?.[idx];
+                                const whenLabel = r?.eventDate ? format(new Date(r.eventDate), 'EEE MMM d') : '';
+                                return (
+                                  <Badge
+                                    className="text-[9px] bg-purple-100 text-purple-700 border-0"
+                                    title={r ? `Booked with ${r.trainerName}${whenLabel ? ` — ${whenLabel}` : ''}${r.eventStartTime ? ` ${r.eventStartTime}` : ''}` : undefined}
+                                  >
+                                    Booked with {r?.trainerName || 'trainer'}
+                                  </Badge>
+                                );
+                              })()}
                               {isCurrent && !isDone && !isLocked && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Suggested</Badge>}
                               <Play className="w-4 h-4 text-gray-400" />
                             </div>
@@ -852,6 +923,7 @@ export default function TodayPage() {
           if (!isScheduledToday && program.scheduleMode === 'fixed') {
             return (
               <>
+                {lockedSessionsCallout}
                 <Card className="bg-gray-50 border-gray-200 shadow-sm">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-3 mb-3">
@@ -865,6 +937,16 @@ export default function TodayPage() {
                           Next workout: <span className="font-medium text-sky-600 capitalize">{nextScheduledDay || 'soon'}</span>
                           {' '}— {day?.dayLabel || 'Workout'} ({totalEx} exercises)
                         </p>
+                        {/* v16-D4 (BUG-19): explicit "Scheduled for [day]" badge so the
+                            client immediately understands the Up Next card is showing
+                            a future-day workout, not today's. Defence in depth for any
+                            program where the cycle surfaces an off-day workout. */}
+                        {nextScheduledDay && (
+                          <Badge variant="outline" className="mt-1.5 text-[10px] text-gray-500 border-gray-300 inline-flex items-center gap-0.5">
+                            <Calendar className="w-3 h-3" />
+                            <span className="capitalize">Scheduled for {nextScheduledDay}</span>
+                          </Badge>
+                        )}
                       </div>
                       <div className="text-right">
                         <Badge className={`text-[10px] border-0 ${badgeClass}`}>{badgeLabel}</Badge>
@@ -909,7 +991,9 @@ export default function TodayPage() {
           
           // FIXED schedule — today IS a scheduled day, show start button
           return (
-            <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
+            <>
+              {lockedSessionsCallout}
+              <Card className="bg-gradient-to-r from-sky-500/10 to-blue-500/10 border-sky-500/30 shadow-sm">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
@@ -950,6 +1034,7 @@ export default function TodayPage() {
                 </div>
               </CardContent>
             </Card>
+            </>
           );
         })()}
 

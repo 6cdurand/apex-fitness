@@ -86,6 +86,49 @@ import { Workout, PersonalBest, WorkoutExercise, User } from '@/types';
 import { calculate1RM } from '../exercises';
 import { hashPassword } from './authStore';
 import { syncWorkoutTemplateToSupabase, fetchWorkoutTemplatesFromSupabase } from '../supabaseSync';
+import { readProfileCache } from '../userFetchUtils';
+
+// v16-D4: shape of the per-day lock explanation surfaced to consumer pages so
+// /today + /program + the swap dialog can render "Booked with [trainer]" UI
+// instead of a silent unstartable day. Keyed by program day index.
+export interface ProgramDayLockReason {
+  type: 'pt_session';
+  trainerId: string;
+  trainerName: string;
+  eventId: string;
+  eventDate: string;        // ISO YYYY-MM-DD
+  eventStartTime: string;   // HH:mm (may be empty)
+  eventEndTime: string;     // HH:mm (may be empty)
+}
+
+// v16-D4: best-effort trainer-name lookup for the locked-day badge. Walks
+// the profile cache, the local apex-users mirror, and finally falls back to
+// the literal string "your trainer" so the UI never crashes / shows a UUID.
+function resolveTrainerNameForLock(trainerId: string | undefined | null): string {
+  if (!trainerId) return 'your trainer';
+  // 1. profile cache (chunked Supabase user fetch result)
+  try {
+    const cache = readProfileCache();
+    const cached = cache[trainerId];
+    if (cached?.displayName && cached.displayName.trim()) return cached.displayName.trim();
+    if (cached?.username && cached.username.trim()) return cached.username.trim();
+  } catch {}
+  // 2. legacy apex-users localStorage mirror
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('apex-users');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          const match = list.find((u: any) => u && u.id === trainerId);
+          if (match?.displayName && String(match.displayName).trim()) return String(match.displayName).trim();
+          if (match?.username && String(match.username).trim()) return String(match.username).trim();
+        }
+      }
+    }
+  } catch {}
+  return 'your trainer';
+}
 
 // Cross-store references (resolved at runtime via .getState() — no circular issues)
 import { useSocialStore } from './socialStore';
@@ -228,7 +271,7 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
-  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
@@ -1574,31 +1617,57 @@ export const useTrainerStore = create<TrainerState>()(
         // PT session booked for it this week and that session has not yet been
         // completed. Past bookings with no completion auto-free (ghost protection).
         // Cancelled bookings never lock.
-        const lockedDayIndices: number[] = (get().calendarEvents || [])
-          .filter((e: any) => {
-            if (e.clientId !== userId) return false;
-            if (e.type !== 'session') return false;
-            if (e.status === 'cancelled') return false;
-            // v15-D8: completed PT releases the lock regardless of whether
-            // the workout-side completion propagation worked. Defence in
-            // depth — even if the matchesProgram() path regresses, a
-            // status='completed' booking will never wrongfully lock a day.
-            if (e.status === 'completed') return false;
-            if (e.programId !== program.id) return false;
-            if (typeof e.programDayIndex !== 'number') return false;
-            // Skip if the trainer already completed it — completedDayIndices
-            // already covers "done this week"; layering a lock on top would
-            // double-state the pill (lock + done). Done wins.
-            if (completedDayIndices.includes(e.programDayIndex)) return false;
-            const eventDate = new Date(e.date);
-            if (eventDate < weekStart || eventDate >= weekEnd) return false;
-            // Future / in-progress booking → locked. Past booking with no
-            // completion → auto-free (do NOT lock; the day is back up for grabs).
-            const eventEndDate = new Date(`${e.date}T${e.endTime || '23:59:00'}`);
-            if (eventEndDate < now) return false;
-            return true;
+        // v16-D4: alongside lockedDayIndices we also build lockReasons keyed
+        // by day index so consumer UI can render "Booked with [trainer] on
+        // [date]" instead of a silent unstartable card. If multiple events
+        // collide on the same dayIndex (shouldn't happen but defence in depth)
+        // the earliest one wins.
+        const lockReasons: Record<number, ProgramDayLockReason> = {};
+        const lockedEvents = (get().calendarEvents || []).filter((e: any) => {
+          if (e.clientId !== userId) return false;
+          if (e.type !== 'session') return false;
+          if (e.status === 'cancelled') return false;
+          // v15-D8: completed PT releases the lock regardless of whether
+          // the workout-side completion propagation worked. Defence in
+          // depth — even if the matchesProgram() path regresses, a
+          // status='completed' booking will never wrongfully lock a day.
+          if (e.status === 'completed') return false;
+          if (e.programId !== program.id) return false;
+          if (typeof e.programDayIndex !== 'number') return false;
+          // Skip if the trainer already completed it — completedDayIndices
+          // already covers "done this week"; layering a lock on top would
+          // double-state the pill (lock + done). Done wins.
+          if (completedDayIndices.includes(e.programDayIndex)) return false;
+          const eventDate = new Date(e.date);
+          if (eventDate < weekStart || eventDate >= weekEnd) return false;
+          // Future / in-progress booking → locked. Past booking with no
+          // completion → auto-free (do NOT lock; the day is back up for grabs).
+          const eventEndDate = new Date(`${e.date}T${e.endTime || '23:59:00'}`);
+          if (eventEndDate < now) return false;
+          return true;
+        });
+        lockedEvents
+          .slice()
+          .sort((a: any, b: any) => {
+            // Earliest date / start time wins so the badge shows the soonest booking.
+            const ka = `${a.date || ''}T${a.startTime || '23:59'}`;
+            const kb = `${b.date || ''}T${b.startTime || '23:59'}`;
+            return ka.localeCompare(kb);
           })
-          .map((e: any) => e.programDayIndex as number);
+          .forEach((e: any) => {
+            const idx = e.programDayIndex as number;
+            if (lockReasons[idx]) return; // earliest wins
+            lockReasons[idx] = {
+              type: 'pt_session',
+              trainerId: e.trainerId || '',
+              trainerName: resolveTrainerNameForLock(e.trainerId),
+              eventId: e.id || '',
+              eventDate: e.date || '',
+              eventStartTime: e.startTime || '',
+              eventEndTime: e.endTime || '',
+            };
+          });
+        const lockedDayIndices: number[] = lockedEvents.map((e: any) => e.programDayIndex as number);
 
         // v15-D4: pick the next-up suggestion by walking forward from the
         // cycle position, skipping done and locked days. If every day is
@@ -1642,7 +1711,7 @@ export const useTrainerStore = create<TrainerState>()(
         }
         // Flexible programs: always available (user picks which workout)
         
-        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, isScheduledToday, nextScheduledDay };
+        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay };
       },
 
       rotateProgramDay: (clientId, dayIndex) => {

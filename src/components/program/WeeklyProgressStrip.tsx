@@ -3,6 +3,7 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Check, Target, Hourglass, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ProgramDayLockReason } from '@/lib/stores/trainerStore';
 
 interface WeeklyProgressStripProps {
   program: {
@@ -16,6 +17,10 @@ interface WeeklyProgressStripProps {
    * future-or-current PT session booked for them this week. Done wins
    * over locked (already filtered upstream). */
   lockedDayIndices?: number[];
+  /** v16-D4: per-day lock explanation — trainer name + event date — so the
+   * pill tooltip / aria-label reads "Booked with [trainer] on [date]"
+   * instead of a generic "booked" string. Optional for safety. */
+  lockReasons?: Record<number, ProgramDayLockReason>;
   nextDayIndex: number;
   nextScheduledDay: string | null;
   isScheduledToday: boolean;
@@ -25,6 +30,7 @@ export function WeeklyProgressStrip({
   program,
   completedDayIndices,
   lockedDayIndices = [],
+  lockReasons,
   nextDayIndex,
   nextScheduledDay,
   isScheduledToday,
@@ -44,6 +50,14 @@ export function WeeklyProgressStrip({
       ? day.scheduledDay.slice(0, 3).toUpperCase()
       : `Day ${String.fromCharCode(65 + idx)}`;
     
+    // v16-D4: build a human-readable lock tooltip for screen readers + hover.
+    const lockInfo = isLocked ? lockReasons?.[idx] : undefined;
+    const lockTooltip = isLocked
+      ? lockInfo
+        ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
+        : 'Booked with your trainer this week'
+      : undefined;
+
     return {
       idx,
       label,
@@ -52,6 +66,7 @@ export function WeeklyProgressStrip({
       isLocked,
       isToday,
       isNext,
+      lockTooltip,
     };
   });
 
@@ -83,7 +98,8 @@ export function WeeklyProgressStrip({
                     ? 'bg-sky-100 text-sky-600'
                     : 'bg-gray-100 text-gray-400'
                 )}
-                title={pill.isLocked ? 'Booked with your trainer this week' : undefined}
+                title={pill.lockTooltip}
+                aria-label={pill.lockTooltip || undefined}
               >
                 {pill.isDone ? <Check className="w-4 h-4" /> :
                  pill.isLocked ? <Lock className="w-3.5 h-3.5" /> :

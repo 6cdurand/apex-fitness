@@ -621,6 +621,9 @@ export default function ProgramPage() {
                       program={activeProgram}
                       completedDayIndices={nextWorkout.completedDayIndices}
                       lockedDayIndices={nextWorkout.lockedDayIndices}
+                      /* v16-D4: pass trainer-name + event-date info so the strip's
+                         lock pill tooltip names who booked the day. */
+                      lockReasons={nextWorkout.lockReasons}
                       nextDayIndex={nextWorkout.dayIndex}
                       nextScheduledDay={nextWorkout.nextScheduledDay}
                       isScheduledToday={nextWorkout.isScheduledToday}
@@ -663,6 +666,12 @@ export default function ProgramPage() {
                     // v15-D4: locked = trainer has a PT session booked for this
                     // day this week. Done > Locked in display precedence.
                     const isLockedThisWeek = !isDoneThisWeek && (nextWorkout?.lockedDayIndices?.includes(idx) ?? false);
+                    // v16-D4: pull trainer-name + event-date so the badge can
+                    // explain WHY the day is locked instead of just saying "Booked".
+                    const lockReason = isLockedThisWeek ? nextWorkout?.lockReasons?.[idx] : undefined;
+                    const lockWhenLabel = lockReason?.eventDate
+                      ? new Date(lockReason.eventDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+                      : '';
                     return (
                       <div key={day.id || idx}>
                         <div
@@ -701,8 +710,12 @@ export default function ProgramPage() {
                               </Badge>
                             )}
                             {isLockedThisWeek && (
-                              <Badge className="bg-purple-100 text-purple-700 text-[10px] border-0 flex items-center gap-0.5">
-                                <Lock className="w-3 h-3" /> Booked
+                              <Badge
+                                className="bg-purple-100 text-purple-700 text-[10px] border-0 flex items-center gap-0.5"
+                                title={lockReason ? `Booked with ${lockReason.trainerName}${lockWhenLabel ? ` — ${lockWhenLabel}` : ''}${lockReason.eventStartTime ? ` ${lockReason.eventStartTime}` : ''}` : undefined}
+                              >
+                                {/* v16-D4: name the trainer so the client knows WHY the day is locked. */}
+                                <Lock className="w-3 h-3" /> Booked: {lockReason?.trainerName || 'trainer'}
                               </Badge>
                             )}
                             {isNext && !isDoneThisWeek && !isLockedThisWeek && nextWorkout?.isScheduledToday && (
@@ -753,14 +766,20 @@ export default function ProgramPage() {
                               disabled={isLockedThisWeek}
                               onClick={() => {
                                 if (isLockedThisWeek) {
-                                  toast.info(`${day.dayLabel} is booked with your trainer this week. Pick another day or log a standalone workout.`);
+                                  // v16-D4: name the trainer + show date so the user has the
+                                  // full context (was a silent unstartable click before).
+                                  const who = lockReason?.trainerName || 'your trainer';
+                                  const when = lockWhenLabel || 'this week';
+                                  toast.info(`${day.dayLabel} is booked with ${who} (${when}). Pick another day or log a standalone workout.`);
                                   return;
                                 }
                                 startProgramDay(idx);
                               }}
                             >
                               {isLockedThisWeek ? <Lock className="w-3 h-3 mr-1" /> : <Play className="w-3 h-3 mr-1" />}
-                              {isLockedThisWeek ? `Booked: ${day.dayLabel}` : `Start ${day.dayLabel}`}
+                              {isLockedThisWeek
+                                ? `Booked with ${lockReason?.trainerName || 'trainer'}`
+                                : `Start ${day.dayLabel}`}
                             </Button>
                           </div>
                         )}
@@ -944,6 +963,9 @@ export default function ProgramPage() {
               const isDoneThisWeek = nextWorkout?.completedDayIndices?.includes(idx);
               // v15-D4: locked = trainer-booked PT for this day this week.
               const isLockedThisWeek = !isDoneThisWeek && (nextWorkout?.lockedDayIndices?.includes(idx) ?? false);
+              // v16-D4: pull lock reason so the swap-dialog badge + click toast
+              // can name the trainer + booking date.
+              const swapLockReason = isLockedThisWeek ? nextWorkout?.lockReasons?.[idx] : undefined;
               if (totalEx === 0) return null;
               return (
                 <button
@@ -959,15 +981,27 @@ export default function ProgramPage() {
                     if (isDoneThisWeek) {
                       setRepeatDayConfirm({ idx, day });
                     } else if (isLockedThisWeek) {
-                      const lockedEvent = useTrainerStore.getState().calendarEvents.find((e: any) =>
-                        e.clientId === user?.id &&
-                        e.type === 'session' &&
-                        e.status !== 'cancelled' &&
-                        e.programId === activeProgram?.id &&
-                        e.programDayIndex === idx,
-                      );
-                      const whenLabel = lockedEvent?.date ? new Date(lockedEvent.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : 'this week';
-                      toast.info(`${day.dayLabel} is booked with your trainer (${whenLabel}). Pick another workout or log a standalone session.`);
+                      // v16-D4: prefer the structured lockReason coming from the store;
+                      // fall back to the calendarEvents scan if it's somehow missing.
+                      let who = swapLockReason?.trainerName || '';
+                      let when = swapLockReason?.eventDate
+                        ? new Date(swapLockReason.eventDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+                        : '';
+                      if (!who || !when) {
+                        const lockedEvent = useTrainerStore.getState().calendarEvents.find((e: any) =>
+                          e.clientId === user?.id &&
+                          e.type === 'session' &&
+                          e.status !== 'cancelled' &&
+                          e.programId === activeProgram?.id &&
+                          e.programDayIndex === idx,
+                        );
+                        if (!when && lockedEvent?.date) {
+                          when = new Date(lockedEvent.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                        }
+                      }
+                      if (!who) who = 'your trainer';
+                      if (!when) when = 'this week';
+                      toast.info(`${day.dayLabel} is booked with ${who} (${when}). Pick another workout or log a standalone session.`);
                     } else {
                       setShowSwapDialog(false);
                       startProgramDay(idx);
@@ -988,7 +1022,15 @@ export default function ProgramPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     {isDoneThisWeek && <Badge className="text-[9px] bg-gray-100 text-gray-500 border-0">Done this week</Badge>}
-                    {isLockedThisWeek && <Badge className="text-[9px] bg-purple-100 text-purple-700 border-0">Booked with trainer</Badge>}
+                    {isLockedThisWeek && (
+                      <Badge
+                        className="text-[9px] bg-purple-100 text-purple-700 border-0"
+                        title={swapLockReason ? `Booked with ${swapLockReason.trainerName}${swapLockReason.eventDate ? ` — ${new Date(swapLockReason.eventDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}` : undefined}
+                      >
+                        {/* v16-D4: trainer name in the badge so the locked day reads as an explanation, not a riddle. */}
+                        Booked with {swapLockReason?.trainerName || 'trainer'}
+                      </Badge>
+                    )}
                     {isScheduled && !isDoneThisWeek && !isLockedThisWeek && <Badge className="text-[9px] bg-sky-500/20 text-sky-600 border-0">Scheduled</Badge>}
                     <Play className="w-4 h-4 text-gray-400" />
                   </div>
