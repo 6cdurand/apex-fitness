@@ -788,6 +788,41 @@ export async function fetchWorkoutHistoryFromSupabase(userId: string, isTrainer:
   }
 }
 
+// v18-D7 (BUG-D): Fetch a single workout by id from Supabase.
+//
+// Used as a fallback by /workout/[id] when the requested workout isn't in
+// the local workoutHistory cache — common for trainer-propagated sessions,
+// cross-device viewing, or pre-hydration timing. Without this, the detail
+// page silently bounced to /workout, which looked like the tap did nothing.
+//
+// Uses the full fromDbWorkout mapper so privacy fields (assignedBy,
+// sharedWithTrainerId), blocks, programEdit, reviewStatus, coachNote,
+// releasedAt, etc. survive — the inline mapper in
+// fetchWorkoutHistoryFromSupabase drops them. RLS already scopes
+// visibility server-side; the caller still applies the privacy gate.
+export async function fetchWorkoutByIdFromSupabase(id: string): Promise<Workout | null> {
+  if (!isSupabaseConfigured() || !id) return null;
+  try {
+    const { data, error } = await supabase
+      .from('workouts')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) {
+      // PGRST116 = no rows; treat as a miss without noise.
+      if ((error as any).code !== 'PGRST116') {
+        console.error('[WorkoutById Fetch] Error:', error.message);
+      }
+      return null;
+    }
+    if (!data) return null;
+    return fromDbWorkout(data);
+  } catch (e) {
+    console.error('[WorkoutById Fetch] Exception:', e);
+    return null;
+  }
+}
+
 // Fetch workout history for all trainer's clients
 export async function fetchClientWorkoutsFromSupabase(trainerId: string): Promise<Workout[]> {
   if (!isSupabaseConfigured()) return [];

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
+import { fetchWorkoutByIdFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,6 +65,9 @@ export default function WorkoutDetailPage() {
   const [isEditingWorkout, setIsEditingWorkout] = useState(false);
   const [editedExercises, setEditedExercises] = useState<Workout['exercises'] | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // v18-D7: loading state while attempting Supabase fetch-by-id fallback,
+  // so a slow remote read doesn't look like a dead tap.
+  const [resolving, setResolving] = useState(true);
   // PT Review flow
   const [coachNoteDraft, setCoachNoteDraft] = useState('');
   const [releasing, setReleasing] = useState(false);
@@ -74,47 +78,72 @@ export default function WorkoutDetailPage() {
       return;
     }
 
-    const found = workoutHistory.find(w => w.id === params.id && !w.deletedAt);
-    if (found) {
-      // Privacy: allow viewing if the user owns the workout, conducted it
-      // as a PT trainer, OR is the program trainer for the workout owner.
-      // D16 Part C: previously only the first two cases were allowed,
-      // which blocked the trainer from clicking the "client completed
-      // workout" notification (D16 Part B link change) and the "Recent
-      // Workouts" entries in /clients/[id]. We widen the allow-list to
-      // include both program-linked trainers (active client_programs row)
-      // and roster-linked trainers (trainer_clients row).
-      // v15-D4: also allow trainers explicitly named in sharedWithTrainerId
-      // — the "Share with [trainer]" opt-in checkbox at finalize time stamps
-      // this field, making the workout viewable by that trainer even if they
-      // aren't on the client's program or roster. This pairs with the
-      // shared_with_trainer_id column added in 20260524_workouts_shared_with_trainer.sql.
-      if (
-        user
-        && found.userId !== user.id
-        && found.assignedBy !== user.id
-        && found.sharedWithTrainerId !== user.id
-      ) {
-        const trainerStore = useTrainerStore.getState();
-        const isProgramTrainer = trainerStore.clientPrograms.some(
-          (p: any) => p.clientId === found.userId && p.trainerId === user.id
-        );
-        const isLinkedTrainer = trainerStore.clients.some(
-          (c: any) => c.clientId === found.userId && c.trainerId === user.id
-        );
-        if (!isProgramTrainer && !isLinkedTrainer) {
-          router.replace('/workout/history');
-          return;
-        }
+    // v18-D7 (BUG-D): tap-through on "Recent Workouts" silently bounced
+    // whenever the target workout wasn't in the local workoutHistory cache
+    // — typical for trainer-propagated sessions, cross-device views, and
+    // pre-hydration timing. We now (1) try the local cache, (2) fall back
+    // to a Supabase fetch-by-id, (3) only bounce when truly inaccessible.
+    // The privacy gate (formerly inline) is extracted so it applies to
+    // both local and remote rows.
+    const passesPrivacy = (w: Workout): boolean => {
+      if (!user) return false;
+      if (w.userId === user.id || w.assignedBy === user.id || w.sharedWithTrainerId === user.id) {
+        return true;
       }
-      setWorkout(found);
-      setNotes(found.privateNotes || found.notes || '');
-      setSharedNotesText(found.sharedNotes || '');
-      setTrainerNotesText(found.trainerNotes || '');
-      setCoachNoteDraft(found.coachNote || '');
-    } else {
-      router.replace('/workout');
+      // Trainer-side allow-list: D16 Part C widened to program-linked
+      // and roster-linked trainers; v15-D4 adds explicit share opt-in.
+      const trainerStore = useTrainerStore.getState();
+      const isProgramTrainer = trainerStore.clientPrograms.some(
+        (p: any) => p.clientId === w.userId && p.trainerId === user.id
+      );
+      const isLinkedTrainer = trainerStore.clients.some(
+        (c: any) => c.clientId === w.userId && c.trainerId === user.id
+      );
+      return isProgramTrainer || isLinkedTrainer;
+    };
+
+    const applyWorkout = (w: Workout) => {
+      setWorkout(w);
+      setNotes((w as any).privateNotes || w.notes || '');
+      setSharedNotesText((w as any).sharedNotes || '');
+      setTrainerNotesText((w as any).trainerNotes || '');
+      setCoachNoteDraft(w.coachNote || '');
+    };
+
+    let cancelled = false;
+    setResolving(true);
+
+    const local = workoutHistory.find(w => w.id === params.id && !w.deletedAt);
+    if (local) {
+      if (!passesPrivacy(local)) {
+        router.replace('/workout/history');
+        return;
+      }
+      applyWorkout(local);
+      setResolving(false);
+      return;
     }
+
+    // Fallback: try Supabase fetch-by-id before redirecting. RLS already
+    // scopes visibility server-side; the privacy gate is still applied to
+    // the returned row in case local trainer state would have blocked it.
+    (async () => {
+      const remote = await fetchWorkoutByIdFromSupabase(String(params.id));
+      if (cancelled) return;
+      if (remote && !remote.deletedAt && passesPrivacy(remote)) {
+        applyWorkout(remote);
+        setResolving(false);
+        return;
+      }
+      // Genuinely inaccessible (not found, deleted, or privacy fail).
+      // Bounce to history (was: '/workout', which dropped users off the
+      // intended surface) so the user lands somewhere coherent.
+      router.replace('/workout/history');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, params.id, workoutHistory, router, user]);
 
   const handleReleaseSummary = async () => {
@@ -256,7 +285,22 @@ export default function WorkoutDetailPage() {
     ));
   };
 
-  if (!isAuthenticated || !workout) return null;
+  if (!isAuthenticated) return null;
+  // v18-D7: show a brief loading state while the fetch-by-id fallback
+  // resolves, so a slow Supabase read doesn't look like a dead tap.
+  if (!workout) {
+    if (resolving) {
+      return (
+        <MainLayout>
+          <PageHeader title="Loading workout…" subtitle="Fetching session" />
+          <div className="px-4 py-12 flex items-center justify-center">
+            <RefreshCw className="w-5 h-5 text-sky-500 animate-spin" />
+          </div>
+        </MainLayout>
+      );
+    }
+    return null;
+  }
 
   const totalSets = workout.exercises.reduce((sum, ex) => sum + ex.sets.filter(s => s.completed).length, 0);
   const totalReps = workout.exercises.reduce((sum, ex) => 

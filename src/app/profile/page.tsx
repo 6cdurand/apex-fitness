@@ -1147,8 +1147,13 @@ export default function ProfilePage() {
                 </h4>
                 {userOwnWorkouts.length > 0 ? (
                   <div className="space-y-2">
+                    {/* v18-D7: rows were unwired — tap now navigates to detail. */}
                     {userOwnWorkouts.slice(0, 3).map(w => (
-                      <div key={w.id} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
+                      <div
+                        key={w.id}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => router.push(`/workout/${w.id}`)}
+                      >
                         <span className="text-gray-900 truncate flex-1">{w.name}</span>
                         <span className="text-gray-500 ml-2">{format(new Date(w.startTime), 'MMM d')}</span>
                       </div>
