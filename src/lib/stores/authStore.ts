@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { safeLocalStorage } from '../safeStorage';
-import { clearAllScopedKeysForUser } from './scopedStorage';
+import { clearAllScopedKeysForUser, USER_SCOPED_STORE_NAMES } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
 import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
@@ -583,8 +583,32 @@ export const useAuthStore = create<AuthState>()(
           }
 
           // Step 4 — explicit per-user scoped key cleanup.
+          // v18-D8: preserve `apex-workout-<userId>` across logout so the SAME
+          // user's in-progress session survives an accidental logout/re-login.
+          // The `activeWorkout` slice is NOT Supabase-synced, so deleting the
+          // blob here was destroying live workouts on every logout.
+          //
+          // Cross-account isolation is NOT weakened: scoped keys are shaped
+          // `${name}-${userId}` (see scopedStorage.ts), so a different account
+          // on the same browser reads a different key. The in-memory reset in
+          // Step 3 still clears the just-logged-out user's `activeWorkout`
+          // from the live store, so nothing flashes into the next session
+          // before its own hydrate. The pre-existing per-user deletion was
+          // redundant defence-in-depth — and the redundancy was destructive.
+          //
+          // NOTE: this preserves the WHOLE `apex-workout-<userId>` persist
+          // blob (also `workoutHistory`, `personalBests`, `templates`). That's
+          // harmless: on the same user's re-login, `hydrateForUser` REPLACES
+          // history/PBs/templates from Supabase. Only `activeWorkout` (the
+          // un-synced slice) is the meaningful survivor.
+          //
+          // deleteAccount (below) deliberately still uses the FULL cleanup
+          // (no filter) so account deletion wipes the workout blob too.
           if (previousUserId) {
-            clearAllScopedKeysForUser(previousUserId);
+            clearAllScopedKeysForUser(
+              previousUserId,
+              USER_SCOPED_STORE_NAMES.filter((n) => n !== 'apex-workout'),
+            );
           }
         })();
       },
