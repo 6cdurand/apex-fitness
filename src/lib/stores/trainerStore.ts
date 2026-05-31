@@ -362,6 +362,14 @@ interface TrainerState {
   loadFromSupabase: (trainerId: string) => Promise<void>;
   refetchTrainerClientsFromSupabase: (trainerId: string) => Promise<void>;
   /**
+   * v18-D2: targeted refetch for the Block Library dialog Sync button.
+   * Re-pulls saved_blocks for the current trainer from Supabase and
+   * re-reads block_folder_order on the user row, so blocks/folders
+   * authored on another device or tab appear without a full reload.
+   * Throws on Supabase failure so the caller can surface an error toast.
+   */
+  refreshBlockLibrary: () => Promise<void>;
+  /**
    * v16-D1: refetch sessions + calendar events from Supabase for the
    * given userId, REPLACING the trainer-or-client-scoped slices of the
    * local cache. Called from the auth-login happy paths so a user (in
@@ -2412,6 +2420,84 @@ export const useTrainerStore = create<TrainerState>()(
         }));
         const { deleteBlockFolderInSupabase } = await import('../supabaseSync');
         return await deleteBlockFolderInSupabase(trainerId, folderName, targetFolder);
+      },
+
+      // v18-D2: targeted refetch for the Block Library Sync button.
+      // Re-pulls saved_blocks for the current trainer + re-reads
+      // block_folder_order on the users row so blocks/folders authored
+      // on another device/tab appear without a full loadFromSupabase().
+      refreshBlockLibrary: async () => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) {
+          throw new Error('refreshBlockLibrary: no authenticated trainer');
+        }
+
+        const { supabase } = await import('../supabase');
+        const [supabaseSavedBlocks, userFolderRow] = await Promise.all([
+          fetchSavedBlocksFromSupabase(trainerId),
+          (async () => {
+            try {
+              const { data, error } = await supabase
+                .from('users')
+                .select('block_folder_order')
+                .eq('id', trainerId)
+                .maybeSingle();
+              if (error) {
+                // block_folder_order column may be absent on legacy schemas
+                // (v14-D11 migration 20260521). In that case fall back to
+                // the locally cached folder order rather than failing the
+                // whole sync.
+                if (error.message?.includes('block_folder_order')) {
+                  console.warn('[v18-D2] block_folder_order column not present; retaining local folder order.');
+                  return null;
+                }
+                throw error;
+              }
+              return data;
+            } catch (e) {
+              throw e;
+            }
+          })(),
+        ]);
+
+        // Map Supabase rows to local SavedBlock shape (matches the
+        // mapping in loadFromSupabase below).
+        const savedBlocks: SavedBlock[] = (supabaseSavedBlocks || []).map((sb: any) => ({
+          id: sb.id,
+          trainerId: sb.trainerId,
+          name: sb.name,
+          type: (sb.type || sb.blockType || 'work') as BlockType,
+          exercises: sb.exercises || [],
+          circuitStyle: sb.circuitStyle,
+          circuitRounds: sb.circuitRounds,
+          circuitDuration: sb.circuitDuration,
+          circuitRestBetween: sb.circuitRestBetween,
+          folder: sb.folder,
+          createdAt: sb.createdAt,
+          updatedAt: sb.updatedAt,
+        }));
+
+        // Preserve local-only blocks not yet synced to Supabase so a
+        // mid-flight save isn't wiped by a sync that races it.
+        const currentSavedBlocks = get().savedBlocks;
+        const localOnlyBlocks = currentSavedBlocks.filter(
+          localBlock => !savedBlocks.find(sbBlock => sbBlock.id === localBlock.id)
+        );
+
+        set({ savedBlocks: [...savedBlocks, ...localOnlyBlocks] });
+
+        // Refresh folder list on the auth user so empty folders (which
+        // only live in block_folder_order, not on any saved_blocks row)
+        // reflect remote state too.
+        if (userFolderRow && Array.isArray((userFolderRow as any).block_folder_order)) {
+          const remoteOrder = (userFolderRow as any).block_folder_order as string[];
+          const currentUser = useAuthStore.getState().user;
+          if (currentUser) {
+            useAuthStore.setState({
+              user: { ...currentUser, blockFolderOrder: remoteOrder },
+            });
+          }
+        }
       },
 
       // v14-D3: Saved Programs
