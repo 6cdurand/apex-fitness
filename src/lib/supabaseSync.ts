@@ -1556,7 +1556,7 @@ export async function syncTrainerSessionToSupabase(session: ClientSession): Prom
   if (!isSupabaseConfigured()) return false;
   
   try {
-    const dbSession = {
+    const dbSession: Record<string, unknown> = {
       id: session.id,
       trainer_id: session.trainerId,
       client_id: session.clientId,
@@ -1580,6 +1580,50 @@ export async function syncTrainerSessionToSupabase(session: ClientSession): Prom
       .upsert(dbSession, { onConflict: 'id' });
     
     if (error) {
+      // v18-D10: schema-drift retry. If the failure is a missing optional
+      // column (e.g. start_time/end_time/workout_id/rating/feedback/paid/
+      // payment_id on environments whose trainer_sessions schema predates
+      // the columns this writer expects), strip the optional columns and
+      // retry once with the core payload. This is the same pattern used by
+      // syncWorkoutToSupabase. Without it, BUG-L would silently drop every
+      // freshly-created session row on environments with schema drift, and
+      // the hydrate merge in F2 could never catch up.
+      const errMsg = (error.message || '').toLowerCase();
+      const errCode = (error as { code?: string }).code;
+      const isMissingColumn =
+        errCode === '42703' ||
+        errMsg.includes('could not find') ||
+        errMsg.includes('does not exist') ||
+        errMsg.includes('schema cache');
+      if (isMissingColumn) {
+        console.warn(
+          '[Session Sync] ⚠️ Schema drift detected on trainer_sessions; retrying with core columns only.',
+          'Apply migration 20260531_add_trainer_sessions_durable_columns.sql to enable optional persistence.',
+          { code: errCode, message: error.message },
+        );
+        const coreSession: Record<string, unknown> = { ...dbSession };
+        delete coreSession.start_time;
+        delete coreSession.end_time;
+        delete coreSession.workout_id;
+        delete coreSession.rating;
+        delete coreSession.feedback;
+        delete coreSession.paid;
+        delete coreSession.payment_id;
+        const retry = await supabase
+          .from('trainer_sessions')
+          .upsert(coreSession, { onConflict: 'id' });
+        if (retry.error) {
+          console.error(
+            '[Session Sync] ❌ Retry without optional columns also failed:',
+            retry.error.message,
+            (retry.error as { details?: string }).details,
+            (retry.error as { hint?: string }).hint,
+          );
+          return false;
+        }
+        console.log('[Session Sync] ✅ Session synced via schema-drift retry:', session.id);
+        return true;
+      }
       console.error('[Session Sync] Error:', error.message);
       return false;
     }
