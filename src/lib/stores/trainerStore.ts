@@ -57,7 +57,7 @@ export function getDisplayedSessionCount(
   return Math.max(0, offset + completed);
 }
 import {
-  TrainerClient, ClientGroup, CalendarEvent, ClientSession, ClientPayment,
+  TrainerClient, ClientGroup, GroupScheduleSlot, CalendarEvent, ClientSession, ClientPayment,
   SessionPackage, BookingRequest, ClientProgram, ClientProgrammingProfile,
   SavedBlock, BlockPerformance, BlockType,
 } from '@/types';
@@ -392,6 +392,8 @@ interface TrainerState {
   updateClientGroup: (groupId: string, updates: Partial<ClientGroup>) => void;
   deleteClientGroup: (groupId: string) => void;
   getClientGroup: (groupId: string) => ClientGroup | undefined;
+  // v18-D4: recurring class-time schedule for a group.
+  updateGroupSchedule: (groupId: string, slots: GroupScheduleSlot[]) => void;
   addMemberToGroup: (groupId: string, clientId: string) => void;
   removeMemberFromGroup: (groupId: string, clientId: string) => void;
   
@@ -3155,6 +3157,17 @@ export const useTrainerStore = create<TrainerState>()(
             g.id === groupId
               ? { ...g, memberIds: g.memberIds.filter(id => id !== clientId) }
               : g
+          ),
+        }));
+      },
+
+      // v18-D4: replace the recurring schedule for a group. Optimistic; persists via
+      // zustand persist (apex-trainer-store in localStorage). Server-side sync is
+      // deferred until groups gain a Supabase mirror (see migration stub).
+      updateGroupSchedule: (groupId, slots) => {
+        set(state => ({
+          clientGroups: state.clientGroups.map(g =>
+            g.id === groupId ? { ...g, schedule: slots } : g
           ),
         }));
       },

@@ -35,6 +35,35 @@ import {
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import type { GroupScheduleSlot } from '@/types';
+
+// v18-D4: weekday labels for display (0=Sun … 6=Sat, matches JS Date.getDay()).
+const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAY_LABELS_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// v18-D4: compute the next `count` recurring occurrences across all slots, sorted ascending.
+function nextOccurrences(
+  slots: GroupScheduleSlot[],
+  count = 6,
+  now: Date = new Date()
+): { date: Date; slot: GroupScheduleSlot }[] {
+  if (!slots || slots.length === 0) return [];
+  const out: { date: Date; slot: GroupScheduleSlot }[] = [];
+  for (let dayOffset = 0; dayOffset < 28 && out.length < count * slots.length; dayOffset++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + dayOffset);
+    slots
+      .filter((s) => s.weekday === d.getDay())
+      .forEach((slot) => {
+        const [h, m] = slot.startTime.split(':').map(Number);
+        if (Number.isNaN(h) || Number.isNaN(m)) return;
+        const occ = new Date(d);
+        occ.setHours(h, m, 0, 0);
+        if (occ.getTime() >= now.getTime()) out.push({ date: occ, slot });
+      });
+  }
+  return out.sort((a, b) => a.date.getTime() - b.date.getTime()).slice(0, count);
+}
 
 export default function GroupDetailPage() {
   const router = useRouter();
@@ -52,7 +81,14 @@ export default function GroupDetailPage() {
     addMemberToGroup,
     removeMemberFromGroup,
     getPackagesForClient,
+    updateGroupSchedule,
   } = useTrainerStore();
+
+  // v18-D4: new-slot form state for the Schedule tab.
+  const [newSlotWeekday, setNewSlotWeekday] = useState<string>('1'); // default Monday
+  const [newSlotTime, setNewSlotTime] = useState<string>('');
+  const [newSlotDuration, setNewSlotDuration] = useState<string>('60');
+  const [newSlotLabel, setNewSlotLabel] = useState<string>('');
   
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState('members');
@@ -410,15 +446,200 @@ export default function GroupDetailPage() {
           </TabsContent>
 
           <TabsContent value="schedule" className="mt-0">
-            <Card className="bg-gray-900 border-gray-800">
-              <CardContent className="py-8 text-center">
-                <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                <p className="text-gray-400">Schedule coming soon</p>
-                <p className="text-sm text-gray-500">
-                  Set recurring class times for this group
-                </p>
-              </CardContent>
-            </Card>
+            {(() => {
+              const slots: GroupScheduleSlot[] = group.schedule || [];
+              const upcoming = nextOccurrences(slots, 6);
+              const canAdd = newSlotTime.trim().length > 0 && parseInt(newSlotDuration, 10) > 0;
+
+              const handleAddSlot = () => {
+                if (!canAdd) {
+                  toast.error('Pick a start time first');
+                  return;
+                }
+                const slot: GroupScheduleSlot = {
+                  id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                    ? crypto.randomUUID()
+                    : `slot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                  weekday: parseInt(newSlotWeekday, 10),
+                  startTime: newSlotTime,
+                  durationMin: parseInt(newSlotDuration, 10),
+                  label: newSlotLabel.trim() || undefined,
+                };
+                updateGroupSchedule(groupId, [...slots, slot]);
+                setNewSlotTime('');
+                setNewSlotLabel('');
+                toast.success('Class time added');
+              };
+
+              const handleDeleteSlot = (slotId: string) => {
+                updateGroupSchedule(groupId, slots.filter((s) => s.id !== slotId));
+                toast.success('Class time removed');
+              };
+
+              return (
+                <div className="space-y-4">
+                  {/* Recurring slots list */}
+                  <Card className="bg-gray-900 border-gray-800">
+                    <CardHeader>
+                      <CardTitle className="text-white text-base flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-blue-400" />
+                        Recurring class times
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {slots.length === 0 ? (
+                        <div className="py-6 text-center">
+                          <p className="text-gray-400">No recurring classes yet</p>
+                          <p className="text-sm text-gray-500">
+                            Add a weekday + time below to schedule this group.
+                          </p>
+                        </div>
+                      ) : (
+                        slots
+                          .slice()
+                          .sort((a, b) =>
+                            a.weekday !== b.weekday
+                              ? a.weekday - b.weekday
+                              : a.startTime.localeCompare(b.startTime)
+                          )
+                          .map((slot) => (
+                            <div
+                              key={slot.id}
+                              className="flex items-center justify-between bg-gray-800 rounded p-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <Badge className="bg-blue-500/20 text-blue-300">
+                                  {WEEKDAY_LABELS_LONG[slot.weekday] || '?'}
+                                </Badge>
+                                <div>
+                                  <p className="text-white text-sm font-medium">
+                                    {slot.startTime} · {slot.durationMin} min
+                                  </p>
+                                  {slot.label && (
+                                    <p className="text-xs text-gray-400">{slot.label}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-gray-400 hover:text-red-400"
+                                onClick={() => handleDeleteSlot(slot.id)}
+                                aria-label="Delete class time"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Add slot form */}
+                  <Card className="bg-gray-900 border-gray-800">
+                    <CardHeader>
+                      <CardTitle className="text-white text-base">Add class time</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-gray-300 text-xs">Weekday</Label>
+                          <Select value={newSlotWeekday} onValueChange={setNewSlotWeekday}>
+                            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                              {WEEKDAY_LABELS_LONG.map((label, idx) => (
+                                <SelectItem key={idx} value={String(idx)}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-gray-300 text-xs">Start time</Label>
+                          <Input
+                            type="time"
+                            value={newSlotTime}
+                            onChange={(e) => setNewSlotTime(e.target.value)}
+                            className="bg-gray-800 border-gray-700 text-white"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-gray-300 text-xs">Duration</Label>
+                          <Select value={newSlotDuration} onValueChange={setNewSlotDuration}>
+                            <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="bg-gray-900 border-gray-700 text-white">
+                              <SelectItem value="30">30 min</SelectItem>
+                              <SelectItem value="45">45 min</SelectItem>
+                              <SelectItem value="60">60 min</SelectItem>
+                              <SelectItem value="90">90 min</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-gray-300 text-xs">Label (optional)</Label>
+                          <Input
+                            type="text"
+                            placeholder="e.g. Evening HIIT"
+                            value={newSlotLabel}
+                            onChange={(e) => setNewSlotLabel(e.target.value)}
+                            className="bg-gray-800 border-gray-700 text-white"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        onClick={handleAddSlot}
+                        disabled={!canAdd}
+                        className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-50"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Add class time
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Upcoming sessions preview */}
+                  <Card className="bg-gray-900 border-gray-800">
+                    <CardHeader>
+                      <CardTitle className="text-white text-base flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-sky-400" />
+                        Upcoming sessions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {upcoming.length === 0 ? (
+                        <p className="text-sm text-gray-500 text-center py-2">
+                          Add a recurring class time to see upcoming sessions.
+                        </p>
+                      ) : (
+                        upcoming.map(({ date, slot }, idx) => (
+                          <div
+                            key={`${slot.id}-${idx}`}
+                            className="flex items-center justify-between bg-gray-800 rounded p-3"
+                          >
+                            <div>
+                              <p className="text-white text-sm font-medium">
+                                {format(date, 'EEE, MMM d')} · {slot.startTime}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {slot.label ? `${slot.label} · ` : ''}{slot.durationMin} min
+                              </p>
+                            </div>
+                            <Badge className="bg-gray-700 text-gray-300 text-xs">
+                              {WEEKDAY_LABELS[date.getDay()]}
+                            </Badge>
+                          </div>
+                        ))
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              );
+            })()}
           </TabsContent>
         </div>
       </Tabs>

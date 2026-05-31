@@ -560,6 +560,15 @@ export interface TrainerClient {
   autoCountSessions?: boolean | null;
 }
 
+// v18-D4: recurring class-time slot for a ClientGroup.
+export interface GroupScheduleSlot {
+  id: string;
+  weekday: number;       // 0=Sun … 6=Sat
+  startTime: string;     // "HH:MM" (24h, device-local)
+  durationMin: number;   // minutes (30/45/60/90)
+  label?: string;        // e.g. "Evening HIIT"
+}
+
 // Client Group (for group fitness classes)
 export interface ClientGroup {
   id: string;
@@ -569,11 +578,10 @@ export interface ClientGroup {
   memberIds: string[];  // Array of client IDs
   color?: string;  // For visual identification
   pricePerSession?: number;  // Group class price per person
-  schedule?: {
-    dayOfWeek: number;  // 0-6 (Sunday-Saturday)
-    time: string;  // e.g., "09:00"
-    duration: number;  // minutes
-  }[];
+  // v18-D4: recurring class times. Persists via zustand persist (apex-trainer-store).
+  // Conditional schema: not yet synced to Supabase; see migration
+  // supabase/migrations/20260531_groups_recurring_schedule.sql for future server-side sync.
+  schedule?: GroupScheduleSlot[];
   createdAt: string;
   status: 'active' | 'paused' | 'archived';
 }
