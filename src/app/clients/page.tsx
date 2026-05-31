@@ -66,7 +66,7 @@ export default function ClientsPage() {
 function ClientsPageContent() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
-  const { clients, clientGroups, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent, addClientGroup, updateClientGroup, deleteClientGroup } = useTrainerStore();
+  const { clients, clientGroups, addClient, updateClient, assignWorkout, getAssignedWorkouts, getSessionsForClient, getPackagesForClient, addCalendarEvent, addClientGroup, updateClientGroup, deleteClientGroup, checkProgramsEndingSoon } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   const { getOrCreateConversation } = useMessageStore();
   const searchParams = useSearchParams();
@@ -137,6 +137,17 @@ function ClientsPageContent() {
       router.replace('/workout');
     }
   }, [isAuthenticated, user?.mode, router]);
+
+  // v18-D3: pragmatic on-load 3-day end-of-cycle check. No global
+  // interval. Idempotent per (programId, endDate) via localStorage so
+  // re-mounting the clients list doesn't spam. Trainer-gated upstream by
+  // the user?.mode === 'trainer' guard above; the action itself is also
+  // a no-op when there's no authenticated user, so re-entering this
+  // effect during auth-redirect is safe.
+  useEffect(() => {
+    if (!isAuthenticated || user?.mode !== 'trainer') return;
+    checkProgramsEndingSoon();
+  }, [isAuthenticated, user?.mode, checkProgramsEndingSoon]);
 
   // Track loading state - set to false once initial data is available
   useEffect(() => {

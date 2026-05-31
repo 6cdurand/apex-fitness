@@ -135,6 +135,11 @@ import { useSocialStore } from './socialStore';
 import { useWorkoutStore } from './workoutStore';
 import { useMedalStore } from './medalStore';
 import { __buildProgramAssignedNotification } from '../programAssignedNotification';
+import {
+  computeProgramProgress,
+  wasEndCycleNotified,
+  markEndCycleNotified,
+} from '../programProgress';
 const getSocialStore = () => useSocialStore;
 const getWorkoutStore = () => useWorkoutStore;
 const getMedalStore = () => useMedalStore;
@@ -271,6 +276,17 @@ interface TrainerState {
   deleteClientProgram: (programId: string) => void;
   getClientPrograms: (clientId: string) => ClientProgram[];
   getActiveProgram: (clientId: string) => ClientProgram | undefined;
+  /**
+   * v18-D3: scan all of the current trainer's active client programs and
+   * fire one in-app `program_ending_soon` notification for each program
+   * whose end date is <=3 days away. Idempotent per (programId, endDate)
+   * via localStorage guard (see src/lib/programProgress.ts). Flexible /
+   * undated programs are skipped — they have no computable end date.
+   *
+   * Pragmatic on-load check: no global interval, no nightly cron. Hook
+   * it onto the trainer dashboard / clients list mount effect.
+   */
+  checkProgramsEndingSoon: () => void;
   getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null; weekSlots: number; slotDayIndices: number[]; slotScheduledDays: string[]; completedSlotCount: number; nextSlotIndex: number } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
@@ -1624,6 +1640,50 @@ export const useTrainerStore = create<TrainerState>()(
           if (pUpd > bUpd) return p;
           if (pUpd < bUpd) return best;
           return p.id < best.id ? p : best;
+        });
+      },
+
+      // v18-D3: trainer-side 3-day end-of-cycle heads-up.
+      // Pragmatic on-load check, no nightly cron. Scoped to the current
+      // trainer's active client programs. Skips flexible / undated
+      // programs (no computable end). Deduped per (programId, endDate)
+      // via localStorage guard so re-loading the dashboard the same day
+      // doesn't spam; if the trainer extends the program the end-date
+      // key changes and the notification may fire once more for the new
+      // end — desired per brief §1.
+      checkProgramsEndingSoon: () => {
+        const trainerId = useAuthStore.getState().user?.id;
+        if (!trainerId) return;
+        const now = new Date();
+        const programs = get().clientPrograms.filter(
+          p => p.trainerId === trainerId && p.status === 'active'
+        );
+        const clients = get().clients;
+        programs.forEach(p => {
+          const prog = computeProgramProgress(p, now);
+          if (!prog) return; // flexible / undated — SKIP per brief §1
+          if (prog.daysRemaining > 3 || prog.daysRemaining < 0) return;
+          if (wasEndCycleNotified(p.id, prog.endDate)) return;
+
+          const client = clients.find(c => c.id === p.clientId);
+          const clientName =
+            (client as any)?.displayName ||
+            (client as any)?.name ||
+            'A client';
+          const dayWord = prog.daysRemaining === 1 ? 'day' : 'days';
+
+          getSocialStore().getState().addNotification({
+            userId: trainerId,
+            type: 'program_ending_soon',
+            title: 'Program ending soon',
+            message: `${clientName}'s "${p.templateName || 'program'}" ends in ${prog.daysRemaining} ${dayWord}. Plan the next block.`,
+            // v16-D7 deep-link pattern: route the trainer straight to the
+            // client's program tab so they can extend / assign next.
+            deepLinkPath: `/trainer/clients/${p.clientId}?tab=program`,
+            programId: p.id,
+            senderId: trainerId,
+          });
+          markEndCycleNotified(p.id, prog.endDate);
         });
       },
 

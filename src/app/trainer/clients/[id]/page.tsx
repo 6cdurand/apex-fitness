@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { format, differenceInWeeks } from 'date-fns';
 import { VolumeChart, MuscleProgressChart } from '@/components/charts/VolumeChart';
+import { computeProgramProgress } from '@/lib/programProgress';
 import { toast } from 'sonner';
 
 export default function TrainerClientDetailPage() {
@@ -477,7 +478,36 @@ export default function TrainerClientDetailPage() {
                         </Button>
                       </div>
                     </div>
-                    
+
+                    {/* v18-D3: trainer-only program progress strip. Null
+                        for flexible / undated programs (no end date) —
+                        the bar is suppressed entirely per brief §1. */}
+                    {(() => {
+                      const progress = computeProgramProgress(activeProgram);
+                      if (!progress) return null;
+                      return (
+                        <div className="p-3 bg-gray-800/60 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-white font-medium">
+                              Week {progress.currentWeek} of {progress.totalWeeks}
+                            </span>
+                            <span className="text-gray-400">{progress.percent}% complete</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-gray-700 overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-sky-500 to-emerald-500 transition-all"
+                              style={{ width: `${progress.percent}%` }}
+                            />
+                          </div>
+                          {progress.daysRemaining <= 3 && progress.daysRemaining >= 0 && (
+                            <p className="text-xs text-amber-400">
+                              Ends in {progress.daysRemaining} day{progress.daysRemaining === 1 ? '' : 's'} — consider assigning the next block.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
                     {activeProgram.weeklyPlan?.map((day: any, idx: number) => {
                       const totalEx = day.blocks?.reduce((s: number, b: any) => s + (b.exercises?.length || 0), 0) || 0;
                       return (

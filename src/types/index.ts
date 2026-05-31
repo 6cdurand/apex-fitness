@@ -700,7 +700,8 @@ export type NotificationType =
   | 'trainer_request' | 'achievement' | 'pb_achieved' | 'comment' | 'like' | 'system'
   | 'program_assigned' | 'session_booked' | 'workout_completed_summary'
   | 'program_edited'   // v10-D2
-  | 'program_removed'; // v14-D26: fired when trainer deletes a client program
+  | 'program_removed'  // v14-D26: fired when trainer deletes a client program
+  | 'program_ending_soon'; // v18-D3: trainer-side 3-day end-of-cycle heads-up (time-bound programs only)
 
 export interface Notification {
   id: string;
