@@ -19,7 +19,8 @@ import {
   Trash2,
   Pencil,
   Plus,
-  Minus
+  Minus,
+  Clock
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
@@ -115,6 +116,8 @@ export default function NotificationsPage() {
       case 'like': return <Heart className="w-5 h-5 text-red-400" />;
       case 'program_assigned': return <Dumbbell className="w-5 h-5 text-emerald-400" />;
       case 'program_edited': return <Pencil className="w-5 h-5 text-orange-400" />;
+      // v18-D3: trainer-side end-of-cycle heads-up (3 days before end).
+      case 'program_ending_soon': return <Clock className="w-5 h-5 text-amber-400" />;
       default: return <Bell className="w-5 h-5 text-gray-400" />;
     }
   };
@@ -131,6 +134,8 @@ export default function NotificationsPage() {
       case 'like': return 'bg-red-500/20';
       case 'program_assigned': return 'bg-emerald-500/20';
       case 'program_edited': return 'bg-orange-500/20';
+      // v18-D3
+      case 'program_ending_soon': return 'bg-amber-500/20';
       default: return 'bg-gray-500/20';
     }
   };
