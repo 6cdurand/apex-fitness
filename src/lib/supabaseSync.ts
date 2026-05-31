@@ -525,11 +525,17 @@ function fromDbWorkout(dbWorkout: any): Workout {
 // the emitted keys and catch future schema drift at the same commit as
 // the interface change.
 export function toDbPersonalBest(pb: PersonalBest): DbPersonalBest {
+  // v18-D6: public.personal_bests.exercise_name is NOT NULL. Historical
+  // in-memory PBs created before the workoutStore fix may lack
+  // `exerciseName` — fall back to `exerciseId` (always non-null) so the
+  // upsert never 400s with 23502. We deliberately don't pull in the
+  // exercise catalog here to avoid a circular dep with workoutStore/exercises;
+  // creation-site fixes already populate a real display name.
   return {
     id: pb.id,
     user_id: pb.userId,
     exercise_id: pb.exerciseId,
-    exercise_name: pb.exerciseName,
+    exercise_name: pb.exerciseName || pb.exerciseId,
     weight: pb.bestWeight,
     reps: pb.bestReps,
     one_rm: pb.oneRepMax,
