@@ -1527,17 +1527,17 @@ export default function TodayPage() {
             return ownedByTrainer && e.status !== 'cancelled' && e.clientId !== user.id && e.type !== 'workout';
           });
           
-          // Merge all events: upcoming first, completed below, each sub-sorted by time
+          // Merge all events: upcoming first, completed below, each sub-sorted by time.
+          // v18-D9 (BUG-K): determine "done" per-event via isEventCompleted, mirroring
+          // the render's type-gated check at the map below. Previously this used a
+          // per-client-per-day workoutHistory.some(...) which incorrectly sank a NEW
+          // booking for a client who had already completed an earlier session today.
+          const isDone = (e: typeof trainerEvents[number]) =>
+            ((e.type || 'session') === 'session' ? isEventCompleted(e) : false);
           const allEvents = trainerEvents
             .sort((a, b) => {
-              const aDone = workoutHistory.some(w => 
-                w.userId === a.clientId && !w.deletedAt &&
-                format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
-              );
-              const bDone = workoutHistory.some(w => 
-                w.userId === b.clientId && !w.deletedAt &&
-                format(new Date(w.startTime), 'yyyy-MM-dd') === selectedDateStr
-              );
+              const aDone = isDone(a);
+              const bDone = isDone(b);
               // Upcoming first, completed below
               if (aDone !== bDone) return aDone ? 1 : -1;
               // Within same group, sort by time
