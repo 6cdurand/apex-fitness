@@ -54,6 +54,10 @@ export interface User {
   /** v14-D11: per-trainer ordering for block-library folder chips. NULL/empty = lexical default.
    *  Folders not in this array sort lexically AFTER ordered ones. */
   blockFolderOrder?: string[];
+  /** v18-D1: per-user notification delivery preferences. Persisted to
+   *  `users.notification_prefs JSONB` server-side; defaults to `{ email: true, push: true }`.
+   *  This stores the preference only — actual delivery gating is wired separately. */
+  notificationPrefs?: { email: boolean; push: boolean };
 }
 
 // Exercise Types

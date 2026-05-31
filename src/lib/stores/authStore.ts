@@ -104,6 +104,17 @@ interface AuthState {
    */
   updateBlockFolderOrder: (order: string[]) => Promise<void>;
   /**
+   * v18-D1: persist Settings → Notifications toggles to the user profile.
+   *
+   * Thin wrapper over `updateUser` that merges partial prefs onto the
+   * current user.notificationPrefs (defaults `{ email: true, push: true }`)
+   * and routes through the canonical profile sync. The `updateUser` flow
+   * also writes to localStorage + Supabase, so if the JSONB column or the
+   * network is unavailable the in-memory + cached copy still updates and
+   * resyncs next load.
+   */
+  setNotificationPrefs: (prefs: Partial<{ email: boolean; push: boolean }>) => void;
+  /**
    * Heal-on-mount identity normalization.
    *
    * Rewrites the in-memory user.id AND the corresponding `apex-users`
@@ -698,6 +709,24 @@ export const useAuthStore = create<AuthState>()(
           // Sync to Supabase
           updateUserInSupabase(currentUser.id, updates);
         }
+      },
+
+      /**
+       * v18-D1: persist notification toggles. Merges partial prefs over the
+       * current value (defaults `{ email: true, push: true }`) and delegates
+       * to `updateUser`, which handles local state, localStorage, and the
+       * Supabase sync via the canonical `updateUserInSupabase` mapping.
+       */
+      setNotificationPrefs: (prefs) => {
+        const currentUser = get().user;
+        if (!currentUser) return;
+        const next = {
+          email: true,
+          push: true,
+          ...(currentUser.notificationPrefs ?? {}),
+          ...prefs,
+        };
+        get().updateUser({ notificationPrefs: next });
       },
 
       switchMode: (mode) => {
