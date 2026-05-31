@@ -251,7 +251,7 @@ function ProgramBuilderContent() {
   const templateIdParam = searchParams.get('templateId');
   
   const { user, updateBlockFolderOrder } = useAuthStore();
-  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder, saveProgramAsTemplate, savedPrograms } = useTrainerStore();
+  const { clients, addClientProgram, updateClientProgram, addCalendarEvent, deleteCalendarEvent, calendarEvents, clientPrograms, savedBlocks, deleteBlock, updateBlock, getActiveProgram, renameBlockFolder, deleteBlockFolder, saveProgramAsTemplate, savedPrograms, refreshBlockLibrary } = useTrainerStore();
   const { workoutHistory } = useWorkoutStore();
   
   const isTrainerMode = user?.mode === 'trainer';
@@ -391,6 +391,10 @@ function ProgramBuilderContent() {
   const [showBlockLibrary, setShowBlockLibrary] = useState(false);
   const [blockLibraryFilter, setBlockLibraryFilter] = useState<BlockType | 'all'>('all');
   const [blockLibrarySearch, setBlockLibrarySearch] = useState('');
+  // v18-D2: real Sync state for the Block Library dialog. The button
+  // previously fired a fake success toast; now it refetches blocks +
+  // folders from Supabase and reflects loading + error states.
+  const [syncingBlockLibrary, setSyncingBlockLibrary] = useState(false);
   // v13-D3: folder filter chips + create-folder dialog wiring. activeFolder=null
   // means "All blocks"; any other value scopes the list to blocks whose
   // SavedBlock.folder matches exactly.
@@ -1686,10 +1690,23 @@ function ProgramBuilderContent() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-gray-400 hover:text-white text-xs gap-1"
-                onClick={() => { toast.success('Block library synced'); }}
+                disabled={syncingBlockLibrary}
+                className="text-gray-400 hover:text-white text-xs gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={async () => {
+                  if (syncingBlockLibrary) return;
+                  setSyncingBlockLibrary(true);
+                  try {
+                    await refreshBlockLibrary();
+                    toast.success('Block library synced');
+                  } catch (e) {
+                    console.error('[v18-D2] Block library sync failed:', e);
+                    toast.error('Sync failed — try again');
+                  } finally {
+                    setSyncingBlockLibrary(false);
+                  }
+                }}
               >
-                <RefreshCw className="w-3 h-3" /> Sync
+                <RefreshCw className={`w-3 h-3 ${syncingBlockLibrary ? 'animate-spin' : ''}`} /> {syncingBlockLibrary ? 'Syncing…' : 'Sync'}
               </Button>
             </div>
             
