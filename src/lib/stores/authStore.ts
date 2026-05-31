@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { safeLocalStorage } from '../safeStorage';
+import { nativeMirroredStorage } from '../capacitorStorage';
 import { clearAllScopedKeysForUser, USER_SCOPED_STORE_NAMES } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
@@ -796,7 +796,8 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'apex-auth',
-      storage: createJSONStorage(() => safeLocalStorage),
+      // v19-D1: write-through mirror of apex-auth to native Preferences.
+      storage: createJSONStorage(() => nativeMirroredStorage),
       onRehydrateStorage: () => (state) => {
         // identityNormalized is a transient per-session signal — if a
         // previous session persisted it as true, reset it so SupabaseSync
