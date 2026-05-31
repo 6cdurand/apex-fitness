@@ -375,6 +375,55 @@ interface TrainerState {
   checkAndAwardTrainerMedals: (trainerId: string) => void;
 }
 
+/**
+ * v18-D10 (BUG-L) — durable session writes.
+ *
+ * Wrap every `syncTrainerSessionToSupabase` call with one retry + loud failure
+ * log. Previously these calls were fire-and-forget (no `await`, no retry),
+ * which combined with the destructive `loadFromSupabase` hydrate to drop
+ * freshly-created sessions on page refresh: the optimistic local row was
+ * blown away by `sessions: supabaseSessions` before the unawaited write
+ * landed in Supabase.
+ *
+ * This helper:
+ *   1) awaits the initial sync,
+ *   2) on failure, waits ~400ms and retries once (handles transient network
+ *      drops + the schema-cache PGRST 5xx burst we sometimes get post-deploy),
+ *   3) on second failure, logs LOUDLY with the session id so the operator
+ *      can see the row in the local store that didn't make it to Supabase.
+ *      The F2 hydrate-merge will keep that row around and re-attempt
+ *      sync via this same helper.
+ *
+ * Returns a Promise<boolean> but every caller uses `void syncSessionWithRetry(...)`
+ * so the UI stays snappy (the optimistic `set(...)` has already updated state).
+ */
+async function syncSessionWithRetry(session: ClientSession): Promise<boolean> {
+  try {
+    const ok = await syncTrainerSessionToSupabase(session);
+    if (ok) return true;
+  } catch (err) {
+    console.warn('[TrainerStore] session sync threw on first attempt:', session.id, err);
+  }
+  // Single retry after a short backoff. Don't loop — keeps failure-mode latency
+  // bounded (~400ms) and lets F2 hydrate-merge handle anything that still drops.
+  await new Promise(resolve => setTimeout(resolve, 400));
+  try {
+    const ok = await syncTrainerSessionToSupabase(session);
+    if (ok) return true;
+    console.error(
+      '[TrainerStore] session sync FAILED after retry — row kept locally for next hydrate re-push:',
+      { sessionId: session.id, clientId: session.clientId, trainerId: session.trainerId, status: session.status, date: session.date },
+    );
+    return false;
+  } catch (err) {
+    console.error(
+      '[TrainerStore] session sync THREW after retry — row kept locally for next hydrate re-push:',
+      { sessionId: session.id, clientId: session.clientId, error: err },
+    );
+    return false;
+  }
+}
+
 export const useTrainerStore = create<TrainerState>()(
   persist(
     (set, get) => ({
@@ -979,8 +1028,12 @@ export const useTrainerStore = create<TrainerState>()(
         set(state => ({
           sessions: [...state.sessions, newSession],
         }));
-        // Sync to Supabase for cross-device access
-        syncTrainerSessionToSupabase(newSession);
+        // v18-D10: durable write. Optimistic local insert above keeps the UI
+        // snappy; the helper awaits the Supabase upsert internally with one
+        // retry. We `void` so we don't block the calling tick. Failures are
+        // logged loudly and the row stays in local state, where F2
+        // (loadFromSupabase merge) will keep it on reload and re-attempt.
+        void syncSessionWithRetry(newSession);
         // v16-D3: displayed total is derived live via getDisplayedSessionCount
         // (offset + count of completed sessions). No manual increment needed.
       },
@@ -991,9 +1044,9 @@ export const useTrainerStore = create<TrainerState>()(
             s.id === sessionId ? { ...s, ...updates } : s
           ),
         }));
-        // Sync updated session to Supabase
+        // v18-D10: durable write (see syncSessionWithRetry rationale).
         const updated = get().sessions.find(s => s.id === sessionId);
-        if (updated) syncTrainerSessionToSupabase(updated);
+        if (updated) void syncSessionWithRetry(updated);
       },
 
       getSessionsForClient: (clientId) => {
@@ -1015,7 +1068,8 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
-          syncTrainerSessionToSupabase(session);
+          // v18-D10: durable write (see syncSessionWithRetry rationale).
+          void syncSessionWithRetry(session);
           // totalSessions is now DERIVED from session records — no manual increment needed
           // Still update package internal counter if one exists (informational only)
           if (session.type === 'pt_session' && !wasAlreadyCompleted) {
@@ -1066,9 +1120,9 @@ export const useTrainerStore = create<TrainerState>()(
             s.id === sessionId ? { ...s, paid: true, paymentId } : s
           ),
         }));
-        // Sync to Supabase
+        // v18-D10: durable write (see syncSessionWithRetry rationale).
         const session = get().sessions.find(s => s.id === sessionId);
-        if (session) syncTrainerSessionToSupabase(session);
+        if (session) void syncSessionWithRetry(session);
       },
 
       markSessionNoShow: (sessionId) => {
@@ -1086,7 +1140,8 @@ export const useTrainerStore = create<TrainerState>()(
         // Sync to Supabase and still count no-show (no-show still uses a session)
         const session = get().sessions.find(s => s.id === sessionId);
         if (session) {
-          syncTrainerSessionToSupabase(session);
+          // v18-D10: durable write (see syncSessionWithRetry rationale).
+          void syncSessionWithRetry(session);
           // totalSessions is now DERIVED from session records — no manual increment needed
           // Still update package internal counter if one exists (informational only)
           if (session.type === 'pt_session' && !wasAlreadyCounted) {
@@ -1132,8 +1187,9 @@ export const useTrainerStore = create<TrainerState>()(
         }
         
         // Sync session to Supabase
+        // v18-D10: durable write (see syncSessionWithRetry rationale).
         const updatedSession = get().sessions.find(s => s.id === sessionId);
-        if (updatedSession) syncTrainerSessionToSupabase(updatedSession);
+        if (updatedSession) void syncSessionWithRetry(updatedSession);
       },
 
       // Payments
@@ -2622,10 +2678,55 @@ export const useTrainerStore = create<TrainerState>()(
         );
         localOnlyProfiles.forEach(p => syncClientProfileToSupabase(p));
         
+        // v18-D10 (BUG-L) — non-destructive sessions merge.
+        //
+        // Old behaviour: `sessions: supabaseSessions` blew away any locally-
+        // created ClientSession whose `addSession` write hadn't landed in
+        // Supabase yet. Combined with the fire-and-forget write, this dropped
+        // freshly-created PT sessions on page refresh and reset the displayed
+        // count back to offset-only.
+        //
+        // New behaviour: server rows are authoritative for ids the server
+        // knows about, and any local-only row keyed by id NOT present on the
+        // server is preserved AND re-synced (using the same helper as the
+        // create path, so it gets one retry and a loud failure log).
+        //
+        // Scope: sessions only. Other slices keep their existing merge logic
+        // (clients: existing preserve-local-counter; calendarEvents: existing
+        // workoutId preserve; etc.). Per brief, D10 does not touch the
+        // counting model — the displayed total is still derived by
+        // getDisplayedSessionCount over this merged sessions slice.
+        const currentSessions = get().sessions;
+        const serverSessionIds = new Set(supabaseSessions.map(s => s.id));
+        const localOnlySessions = currentSessions.filter(local => {
+          if (serverSessionIds.has(local.id)) return false;
+          // Only keep rows that look like a real local write for THIS trainer.
+          // Avoids re-attaching stale sessions left over from a previous
+          // trainer login (scoped clears already run; this is belt-and-braces).
+          if (local.trainerId !== trainerId) return false;
+          return true;
+        });
+        if (localOnlySessions.length > 0) {
+          console.warn(
+            '[Trainer Store] v18-D10 preserving',
+            localOnlySessions.length,
+            'local-only session row(s) not present on Supabase; re-attempting sync.',
+            localOnlySessions.map(s => s.id),
+          );
+          // Re-attempt sync for each local-only row. Fire-and-forget at this
+          // level is fine — syncSessionWithRetry handles await+retry+log
+          // internally, and the row is already retained in the merged set
+          // below regardless of whether this round succeeds.
+          for (const s of localOnlySessions) {
+            void syncSessionWithRetry(s);
+          }
+        }
+        const mergedSessions: ClientSession[] = [...supabaseSessions, ...localOnlySessions];
+
         // REPLACE localStorage with merged Supabase data
         set({
           clients: [...clients, ...localOnlyClients],
-          sessions: supabaseSessions,
+          sessions: mergedSessions,
           sessionPackages: supabasePackages,
           calendarEvents: mergedCalendarEvents,
           payments: supabasePayments,
