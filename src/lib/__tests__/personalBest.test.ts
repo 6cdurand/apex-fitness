@@ -321,6 +321,110 @@ function setsEqual(a: Set<string>, b: Set<string>): boolean {
     useAuthStore.setState({ user: null, isAuthenticated: false });
   }
 
+  // --- v18-D6: PB creation path populates exerciseName ---
+  //
+  // Regression for the Sev-1 bug where checkAndUpdatePB built a PB literal
+  // WITHOUT exerciseName, so toDbPersonalBest emitted exercise_name=null
+  // and every PB upsert 400'd with Postgres 23502. The existing tests above
+  // pass because they hand-build PB literals WITH exerciseName — they never
+  // exercise the real creation path. This block drives checkAndUpdatePB and
+  // asserts the resulting PB carries a non-empty exerciseName, then verifies
+  // the mapper emits a non-null exercise_name for both the new PB and a
+  // legacy in-memory PB lacking exerciseName.
+  console.log('\n--- v18-D6: checkAndUpdatePB populates exerciseName so PBs persist ---');
+  {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useWorkoutStore } = require('../stores/workoutStore');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useAuthStore } = require('../stores/authStore');
+
+    useAuthStore.setState({
+      user: {
+        id: 'user-pb-create',
+        email: 'pbcreate@test.com',
+        displayName: 'PB Create',
+        mode: 'user',
+        isTrainer: false,
+      } as unknown as never,
+      isAuthenticated: true,
+    });
+    useWorkoutStore.setState({ personalBests: [], currentClientId: null });
+
+    const checkAndUpdatePB = useWorkoutStore.getState().checkAndUpdatePB;
+
+    // Case A: caller passes exerciseName (the hot path — completeSet has it).
+    const createdA = checkAndUpdatePB('bench-press', 100, 5, 'workout-a', 'Bench Press');
+    assert(
+      'v18-D6 A: created PB carries the caller-supplied exerciseName',
+      createdA?.exerciseName === 'Bench Press',
+      `got ${JSON.stringify(createdA?.exerciseName)}`,
+    );
+    assert(
+      'v18-D6 A: toDbPersonalBest emits non-null exercise_name for the created PB',
+      createdA != null && toDbPersonalBest(createdA).exercise_name != null && toDbPersonalBest(createdA).exercise_name !== '',
+      `got ${createdA ? JSON.stringify(toDbPersonalBest(createdA).exercise_name) : 'no PB'}`,
+    );
+
+    // Case B: caller omits exerciseName — must still resolve via the catalog
+    // (bench-press is in the canonical library) so the upsert never sees null.
+    useWorkoutStore.setState({ personalBests: [], currentClientId: null });
+    const createdB = checkAndUpdatePB('bench-press', 110, 3, 'workout-b');
+    assert(
+      'v18-D6 B: created PB resolves exerciseName from the catalog when caller omits it',
+      typeof createdB?.exerciseName === 'string' && (createdB?.exerciseName?.length ?? 0) > 0,
+      `got ${JSON.stringify(createdB?.exerciseName)}`,
+    );
+    assert(
+      'v18-D6 B: toDbPersonalBest emits non-null exercise_name for catalog-resolved PB',
+      createdB != null && toDbPersonalBest(createdB).exercise_name != null && toDbPersonalBest(createdB).exercise_name !== '',
+    );
+
+    // Case C: unknown exerciseId — catalog miss must fall back to the id itself,
+    // never null/undefined. This guards the "last-resort non-null" promise.
+    useWorkoutStore.setState({ personalBests: [], currentClientId: null });
+    const createdC = checkAndUpdatePB('some-totally-unknown-exercise-xyz', 50, 5, 'workout-c');
+    assert(
+      'v18-D6 C: unknown exerciseId still yields a non-empty exerciseName (id fallback)',
+      typeof createdC?.exerciseName === 'string' && (createdC?.exerciseName?.length ?? 0) > 0,
+      `got ${JSON.stringify(createdC?.exerciseName)}`,
+    );
+    assert(
+      'v18-D6 C: toDbPersonalBest emits non-null exercise_name even for unknown id',
+      createdC != null && toDbPersonalBest(createdC).exercise_name != null && toDbPersonalBest(createdC).exercise_name !== '',
+    );
+
+    // Case D: defensive mapper fallback — a legacy in-memory PB built
+    // before this fix (no exerciseName) must still emit a non-null
+    // exercise_name through toDbPersonalBest (= exerciseId fallback).
+    const legacyPB: PersonalBest = {
+      id: 'pb-legacy-v18d6',
+      userId: 'user-pb-create',
+      exerciseId: 'deadlift',
+      // exerciseName intentionally omitted
+      oneRepMax: 220,
+      bestWeight: 200,
+      bestReps: 5,
+      bestVolume: 1000,
+      achievedAt: '2026-05-30T09:00:00.000Z',
+      workoutId: 'w-legacy',
+    };
+    const legacyRow = toDbPersonalBest(legacyPB);
+    assert(
+      'v18-D6 D: mapper fallback — legacy PB without exerciseName still emits non-null exercise_name',
+      legacyRow.exercise_name != null && legacyRow.exercise_name !== '',
+      `got ${JSON.stringify(legacyRow.exercise_name)}`,
+    );
+    assert(
+      'v18-D6 D: mapper fallback uses exerciseId when exerciseName is missing',
+      legacyRow.exercise_name === 'deadlift',
+      `got ${JSON.stringify(legacyRow.exercise_name)}`,
+    );
+
+    // Cleanup.
+    useWorkoutStore.setState({ personalBests: [], currentClientId: null });
+    useAuthStore.setState({ user: null, isAuthenticated: false });
+  }
+
   // --- Summary ---
   console.log(`\n--- Summary: ${passed} passed, ${failed} failed ---`);
   if (failed > 0) process.exit(1);

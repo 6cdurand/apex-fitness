@@ -6,7 +6,7 @@ import {
   PersonalBest, TimerState, Exercise,
 } from '@/types';
 import { useAuthStore } from './authStore';
-import { calculate1RM, exerciseLibraryMap, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
+import { calculate1RM, exerciseLibraryMap, getExerciseById, getSetVolume, getUserBodyweight, isAssistedExercise } from '../exercises';
 import { normalizeExerciseId } from '../exerciseStats';
 import { deriveAll, computeVolumeRollup, VolumeRollup } from '../deriveAll';
 import {
@@ -140,7 +140,7 @@ interface WorkoutState {
   deleteTemplate: (templateId: string) => void;
   
   // PB actions
-  checkAndUpdatePB: (exerciseId: string, weight: number, reps: number, workoutId: string) => PersonalBest | null;
+  checkAndUpdatePB: (exerciseId: string, weight: number, reps: number, workoutId: string, exerciseName?: string) => PersonalBest | null;
   getPBForExercise: (exerciseId: string) => PersonalBest | undefined;
   /**
    * v12-D4: PB lookup with explicit userId. Use this in trainer-mode flows
@@ -851,7 +851,15 @@ export const useWorkoutStore = create<WorkoutState>()(
         const setData = exercise?.sets.find(s => s.id === setId);
         
         if (setData?.weight && setData?.reps) {
-          checkAndUpdatePB(exercise!.exerciseId, setData.weight, setData.reps, activeWorkout.id);
+          // v18-D6: pass display name so the resulting PB carries exercise_name
+          // (NOT NULL in public.personal_bests; omitting it 400s with 23502).
+          checkAndUpdatePB(
+            exercise!.exerciseId,
+            setData.weight,
+            setData.reps,
+            activeWorkout.id,
+            exercise!.exercise?.name,
+          );
         }
 
         set({
@@ -1048,12 +1056,19 @@ export const useWorkoutStore = create<WorkoutState>()(
         deleteWorkoutTemplateFromSupabase(templateId);
       },
 
-      checkAndUpdatePB: (exerciseId, weight, reps, workoutId) => {
+      checkAndUpdatePB: (exerciseId, weight, reps, workoutId, exerciseName) => {
         const { personalBests, getActiveUserId } = get();
         const targetUserId = getActiveUserId();
         
         // Normalize exercise ID for consistent matching
         const normalizedId = normalizeExerciseId(exerciseId);
+        // v18-D6: resolve a display name so the PB upsert satisfies the
+        // exercise_name NOT NULL constraint on public.personal_bests.
+        // Prefer the caller-supplied name (exact, locale-correct), fall back
+        // to the catalog by normalized id, then the id itself as a last
+        // resort — exerciseId is always non-null, so we never emit null.
+        const resolvedName =
+          exerciseName || getExerciseById(normalizedId)?.name || normalizedId;
         
         // Check if this is an assisted exercise (lower weight = better)
         const isAssisted = isAssistedExercise(normalizedId, exerciseId);
@@ -1081,6 +1096,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           const newPB: PersonalBest = {
             id: existingPB?.id || uuidv4(),
             exerciseId: normalizedId, // Use normalized ID
+            exerciseName: existingPB?.exerciseName || resolvedName, // v18-D6: required by personal_bests.exercise_name (NOT NULL)
             userId: targetUserId,
             oneRepMax: isAssisted ? weight : calculatedRM, // For assisted, store weight directly (not 1RM)
             bestWeight: weight,
@@ -1691,6 +1707,10 @@ export const useWorkoutStore = create<WorkoutState>()(
           const updatedPB: PersonalBest = {
             id: existing?.id || uuidv4(),
             exerciseId,
+            // v18-D6: required by personal_bests.exercise_name (NOT NULL).
+            // Reuse the existing PB's label if we have one, else resolve via
+            // the exercise catalog, else fall back to the id.
+            exerciseName: existing?.exerciseName || getExerciseById(exerciseId)?.name || exerciseId,
             userId,
             oneRepMax: bestRM,
             bestWeight,
@@ -1745,6 +1765,11 @@ export const useWorkoutStore = create<WorkoutState>()(
                 newPBs[exerciseId] = {
                   id: existing?.id || uuidv4(),
                   exerciseId: exerciseId, // Use normalized ID
+                  // v18-D6: required by personal_bests.exercise_name (NOT NULL).
+                  // Prefer the per-workout exercise label (matches what the
+                  // user saw at the time), fall back to the catalog, then
+                  // the id.
+                  exerciseName: ex.exercise?.name || getExerciseById(exerciseId)?.name || exerciseId,
                   userId,
                   bestWeight: set.weight!,
                   bestReps: set.reps!,
