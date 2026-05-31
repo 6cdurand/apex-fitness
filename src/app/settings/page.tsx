@@ -63,7 +63,7 @@ export default function SettingsPage() {
 
 function SettingsPageContent() {
   const router = useRouter();
-  const { user, isAuthenticated, updateUser, deleteAccount } = useAuthStore();
+  const { user, isAuthenticated, updateUser, deleteAccount, setNotificationPrefs } = useAuthStore();
   const { 
     clearAllData, 
     bulkImportClients,
@@ -407,10 +407,12 @@ function SettingsPageContent() {
   const [exerciseUnit, setExerciseUnit] = useState<WeightUnit>('kg');
   const [isPublicProfile, setIsPublicProfile] = useState(true);
   const [notifications, setNotifications] = useState(true);
-  // TODO: notification_prefs JSONB column may not exist in users table yet.
-  // DEFAULT to { email: true, push: true } client-side until schema migration applied.
-  const [emailNotifications, setEmailNotifications] = useState((user as any)?.notification_prefs?.email ?? true);
-  const [pushNotifications, setPushNotifications] = useState((user as any)?.notification_prefs?.push ?? true);
+  // v18-D1: Settings → Notifications toggles persist via `setNotificationPrefs`.
+  // Source of truth is `user.notificationPrefs` from authStore; defaults `{ email: true, push: true }`.
+  // If the server-side JSONB column hasn't been applied yet, the value still round-trips through
+  // local state + the persisted authStore (apex-auth localStorage), so the toggle survives reload.
+  const [emailNotifications, setEmailNotifications] = useState(user?.notificationPrefs?.email ?? true);
+  const [pushNotifications, setPushNotifications] = useState(user?.notificationPrefs?.push ?? true);
   const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
   
   // Gym affiliation
@@ -484,6 +486,11 @@ function SettingsPageContent() {
       setIsPublicProfile(user.isPublicProfile !== false); // Default to true
       setGymName(user.gymName || '');
       setHealthConnections(user.healthConnections || {});
+      // v18-D1: rehydrate notification toggles from the persisted profile.
+      // Fires on initial mount + any profile refetch (e.g. login on a fresh
+      // device, or device-A change reflected on device-B after reload).
+      setEmailNotifications(user.notificationPrefs?.email ?? true);
+      setPushNotifications(user.notificationPrefs?.push ?? true);
     }
   }, [user]);
 
@@ -1025,7 +1032,7 @@ function SettingsPageContent() {
                 checked={emailNotifications}
                 onCheckedChange={(checked) => {
                   setEmailNotifications(checked);
-                  // TODO: Save to users.notification_prefs once column exists
+                  setNotificationPrefs({ email: checked });
                   toast.success(checked ? 'Email notifications enabled' : 'Email notifications disabled');
                 }}
                 className="data-[state=checked]:bg-sky-500"
@@ -1041,7 +1048,7 @@ function SettingsPageContent() {
                 checked={pushNotifications}
                 onCheckedChange={(checked) => {
                   setPushNotifications(checked);
-                  // TODO: Save to users.notification_prefs once column exists
+                  setNotificationPrefs({ push: checked });
                   toast.success(checked ? 'Push notifications enabled' : 'Push notifications disabled');
                 }}
                 className="data-[state=checked]:bg-sky-500"

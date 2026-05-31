@@ -241,6 +241,9 @@ function mapUserFromSupabase(u: any) {
     profilePhoto: u.avatar_url || u.profile_photo,
     trainerSpecializations: u.trainer_specializations,
     accountStatus: u.account_status || 'active',
+    // v18-D1: per-user notification delivery preferences. Column may not yet
+    // exist server-side; null/undefined falls back to client defaults.
+    notificationPrefs: u.notification_prefs ?? undefined,
   };
 }
 
@@ -348,6 +351,8 @@ export async function updateUserInSupabase(userId: string, updates: Partial<User
     if (updates.preferredUnit) dbUpdates.preferred_unit = updates.preferredUnit;
     if ((updates as any).trainerId !== undefined) dbUpdates.trainer_id = (updates as any).trainerId;
     if ((updates as any).accountStatus) dbUpdates.account_status = (updates as any).accountStatus;
+    // v18-D1: notification preferences. Stored as JSONB { email, push }.
+    if ((updates as any).notificationPrefs !== undefined) dbUpdates.notification_prefs = (updates as any).notificationPrefs;
     
     const { error } = await supabase
       .from('users')
