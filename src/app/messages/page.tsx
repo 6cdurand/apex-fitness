@@ -186,6 +186,26 @@ export default function MessagesPage() {
     }
   }, [user, selectedConversation, conversations, getOrCreateConversation]);
 
+  // v19-fix-01 hotfix (React #310): this useMemo MUST run before the auth
+  // early-return. It previously sat after `if (!isAuthenticated || !user)
+  // return null`; a trainer-store rehydrate (v19-fix-01 persisted
+  // sessions/clientGroups) re-renders this subscriber, and the render that
+  // took the early return had one fewer hook than the full render -> #310.
+  // Roster is inlined + null-safe so it no longer depends on the post-guard
+  // `clientUsers` const.
+  const pickerCandidates = useMemo(() => {
+    if (!user) return [] as any[];
+    const roster = user.isTrainer
+      ? allUsers.filter(u => clients.some(c => c.clientId === u.id))
+      : allUsers.filter(u => u.id !== user.id);
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return roster;
+    return roster.filter(u =>
+      u.displayName?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q)
+    );
+  }, [user, clients, allUsers, pickerSearch]);
+
   if (!isAuthenticated || !user) return null;
 
   // v16-D8 BUG-10: filter out conversations that have never had a message
@@ -251,21 +271,6 @@ export default function MessagesPage() {
   const clientUsers = user.isTrainer 
     ? allUsers.filter(u => clients.some(c => c.clientId === u.id))
     : [];
-
-  // v16-D8 BUG-10: picker roster for the "+ New message" dialog. Trainers
-  // see their client roster; non-trainers see any user they could already
-  // search for (i.e. the full hydrated directory minus self). The picker
-  // is the explicit "start a new conversation" path now that the vertical
-  // list only shows convos with real messages.
-  const pickerCandidates = useMemo(() => {
-    const base = user.isTrainer ? clientUsers : allUsers.filter(u => u.id !== user.id);
-    const q = pickerSearch.trim().toLowerCase();
-    if (!q) return base;
-    return base.filter(u =>
-      u.displayName?.toLowerCase().includes(q) ||
-      u.username?.toLowerCase().includes(q)
-    );
-  }, [user.isTrainer, user.id, clientUsers, allUsers, pickerSearch]);
 
   const handlePickRecipient = (otherUser: any) => {
     const conv = getOrCreateConversation(user.id, otherUser.id);

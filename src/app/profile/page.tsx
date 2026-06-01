@@ -224,28 +224,26 @@ export default function ProfilePage() {
     return [];
   }, [user]);
 
-  if (!isAuthenticated || !user) return null;
-
-  const isTrainerMode = user.mode === 'trainer';
+  const isTrainerMode = user?.mode === 'trainer';
   
   // For trainers: count sessions they've conducted (where assignedBy === their id)
   // For regular users: count their own workouts (userId === their id, no assignedBy)
-  const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user.id && !w.deletedAt);
-  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user.id && !w.deletedAt);
+  const trainerConductedWorkouts = workoutHistory.filter(w => w.assignedBy === user?.id && !w.deletedAt);
+  const userOwnWorkouts = workoutHistory.filter(w => w.userId === user?.id && !w.deletedAt);
   
   // Total workouts: trainer sees sessions conducted, user sees own workouts
   const userWorkouts = isTrainerMode ? trainerConductedWorkouts : userOwnWorkouts;
   const totalWorkouts = userWorkouts.length;
   const totalVolume = userWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
-  const userPosts = posts.filter(p => p.userId === user.id);
+  const userPosts = posts.filter(p => p.userId === user?.id);
   
   // Filter personal bests for current user only
-  const userPBs = personalBests.filter(pb => pb.userId === user.id);
+  const userPBs = personalBests.filter(pb => pb.userId === user?.id);
   
   // Filter medals for current user only - must be earned AND belong to user
   // Also filter by mode: trainer sees trainer medals, user sees workout/strength medals
   const userMedals = useMemo(() => {
-    const allUserMedals = medals.filter((m: any) => m.userId === user.id && m.earned === true);
+    const allUserMedals = medals.filter((m: any) => m.userId === user?.id && m.earned === true);
     // Get definitions to check category
     return allUserMedals.map((m: any) => {
       const def = getMedalDefinition(m.definitionId || m.id);
@@ -256,7 +254,7 @@ export default function ProfilePage() {
       }
       return m.category !== 'trainer';
     });
-  }, [medals, user.id, isTrainerMode]);
+  }, [medals, user?.id, isTrainerMode]);
   
   // Trainer stats calculation - uses payments array and sessionPackages for accurate data
   const trainerStats = useMemo(() => {
@@ -403,6 +401,16 @@ export default function ProfilePage() {
       revenuePerClient,
     };
   }, [user, sessions, sessionPackages, clients, payments]);
+
+  // v19-fix-01 hotfix (React #310): the auth early-return MUST sit below ALL
+  // hooks (incl. userMedals + trainerStats useMemo above). It previously sat
+  // above them; when v19-fix-01's partialize rehydrated persisted
+  // sessions/clientGroups, the trainer-store update re-rendered this component
+  // during the auth-settling window, and the render that took the early return
+  // had fewer hooks than the render that didn't -> "rendered more hooks than
+  // during the previous render". Interim derivations above are null-safe via
+  // `user?.` so they don't throw before this guard runs.
+  if (!isAuthenticated || !user) return null;
   
 
   const getTierColor = (tier?: string) => {

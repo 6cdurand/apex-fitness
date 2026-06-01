@@ -79,16 +79,22 @@ export default function CalendarPage() {
 
   const isTrainer = user?.mode === 'trainer';
 
-  if (!isAuthenticated || !user) return null;
-
   // v15-D5: scope filtering centralised in `src/lib/calendarScope.ts`.
   // Single source of truth — same fn powers the future booking surface.
-  const viewer: CalendarViewer = { userId: user.id, mode: isTrainer ? 'trainer' : 'user' };
+  const viewer: CalendarViewer = { userId: user?.id ?? '', mode: isTrainer ? 'trainer' : 'user' };
   const visibleEvents = useMemo<CalendarEvent[]>(
     () => getVisibleCalendarEvents(calendarEvents, viewer),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [calendarEvents, user?.id, isTrainer],
   );
+
+  // v19-fix-01 hotfix (React #310): the auth early-return MUST sit below the
+  // useMemo above. It previously sat above; a trainer-store rehydrate
+  // (v19-fix-01 persisted sessions/clientGroups) re-renders this whole-store
+  // subscriber, and the render that took the early return had one fewer hook
+  // than the full render -> "rendered more hooks than during the previous
+  // render". `viewer` is null-safe so it doesn't throw before this guard runs.
+  if (!isAuthenticated || !user) return null;
 
   // Centralized client name resolution
   const getClientName = (clientId?: string) => {
