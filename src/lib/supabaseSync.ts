@@ -2975,6 +2975,36 @@ export async function checkInvitationByToken(token: string): Promise<{
     return { valid: false };
   }
 
+  // v19-fix-04: prefer the SECURITY DEFINER RPC get_invitation_by_token, which
+  // returns ONLY the single matching row (no token/email enumeration) and works
+  // for UNAUTHENTICATED claim screens once RLS is hardened. We fall back to the
+  // legacy direct select if the RPC isn't deployed yet, so app + migration can
+  // ship in any order.
+  try {
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_invitation_by_token', {
+      p_token: token,
+    });
+    if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      const row = rpcData[0] as {
+        trainer_id: string;
+        client_id: string | null;
+        email: string;
+        status: string;
+        expires_at: string;
+      };
+      const isExpired = new Date(row.expires_at) < new Date();
+      if (isExpired) return { valid: false, expired: true };
+      return { valid: true, trainerId: row.trainer_id, clientId: row.client_id ?? undefined, email: row.email };
+    }
+    if (!rpcError && Array.isArray(rpcData)) {
+      // RPC resolved but returned no row -> token not found.
+      return { valid: false };
+    }
+    // rpcError -> RPC not available (pre-migration). Fall through to legacy path.
+  } catch {
+    // ignore and fall back
+  }
+
   try {
     const { data, error } = await supabase
       .from('client_invitations')
@@ -3005,6 +3035,21 @@ export async function checkInvitationByToken(token: string): Promise<{
 // Mark invitation as accepted
 export async function acceptInvitation(token: string, userId: string): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
+
+  // v19-fix-04: prefer the SECURITY DEFINER RPC accept_invitation, which sets
+  // client_id from canonical_user_id() server-side (the caller cannot accept on
+  // behalf of another user) and works under hardened RLS where the invited
+  // client has no direct UPDATE on client_invitations. Falls back to the legacy
+  // direct update if the RPC isn't deployed yet (order-independent rollout).
+  try {
+    const { data, error } = await supabase.rpc('accept_invitation', { p_token: token });
+    if (!error) {
+      return data === true;
+    }
+    // error -> RPC not available (pre-migration). Fall through to legacy path.
+  } catch {
+    // ignore and fall back
+  }
 
   try {
     const { error } = await supabase
