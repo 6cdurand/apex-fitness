@@ -510,12 +510,26 @@ export const useWorkoutStore = create<WorkoutState>()(
             return completedWorkout;
           }
           
-          // Check if a session already exists for this client today to avoid duplicates
-          const existingSession = trainerStore.sessions.find(
-            (s: any) => s.clientId === clientId && s.date === todayStr && s.status !== 'cancelled'
-          );
-          
-          if (!existingSession) {
+          // v18-D12 (F2): trainer-initiated model — a session only counts when the
+          // person finishing the workout IS the trainer. A client completing an
+          // assigned workout solo must NOT create a session/calendar row or move the
+          // count. We still run the deriveAll pipeline below so the client's
+          // PBs/medals/volume update normally.
+          const completerIsTrainer = useAuthStore.getState().user?.id === trainerId;
+          if (!completerIsTrainer) {
+            console.log('[WorkoutStore] v18-D12: completer is not the trainer; skipping session + calendar auto-create (client-solo completion).');
+            const workoutUserIdSolo = completedWorkout.userId;
+            setTimeout(() => {
+              get().runDeriveAll(workoutUserIdSolo, completedWorkout);
+            }, 100);
+            return completedWorkout;
+          }
+
+          // v18-D12 (F1): no same-day guard — every qualifying trainer completion adds
+          // a new session row, so a genuine 2nd same-day session correctly counts +1.
+          // StrictMode / double-fire protection already lives in addSession's
+          // 5s / calendarEventId dedupe (trainerStore.ts).
+          {
             // Create a new completed session record
             trainerStore.addSession({
               clientId,
@@ -566,9 +580,6 @@ export const useWorkoutStore = create<WorkoutState>()(
             });
 
             socialStore.addNotification(notificationPayload);
-          } else {
-            // Mark the existing session as completed
-            trainerStore.markSessionComplete(existingSession.id, completedWorkout.name);
           }
 
           // v14-D16: After workout completion, refetch trainer_clients to surface

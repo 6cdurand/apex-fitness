@@ -639,6 +639,9 @@ export const useTrainerStore = create<TrainerState>()(
           sessionPackages: [],
           clientPrograms: [],
           clientProfiles: [],
+          // v19-fix-01: now persisted via partialize (BUG-N2) — must be cleared
+          // on logout/account-switch so no stale groups leak across trainers.
+          clientGroups: [],
         });
         // Clear social data
         getSocialStore().setState({ posts: [], notifications: [] });
@@ -2524,7 +2527,8 @@ export const useTrainerStore = create<TrainerState>()(
         // error if the saved_programs table isn't applied yet (or RLS is
         // blocking the trainer). Without rollback, the local Zustand state
         // shows the row until the next reload, then it silently disappears
-        // because `partialize: () => ({})` means nothing persists locally
+        // because `partialize` does not persist the `savedPrograms` slice
+        // locally (only `sessions`/`clientGroups` are persisted; see v19-fix-01)
         // and `fetchSavedProgramsFromSupabase` returns [] for the
         // table-missing path. Roll back the optimistic insert + return
         // null so SaveProgramDialog's try/catch fires the failure toast.
@@ -3215,21 +3219,35 @@ export const useTrainerStore = create<TrainerState>()(
     }),
     {
       name: 'apex-trainer',
-      // v16-D2: per-user scoped key. Even though `partialize` returns
-      // {} (D13: trainer data is authoritative in Supabase, not
-      // persisted to localStorage), Zustand still reads/writes a tiny
-      // envelope at this key on hydrate. Scoping it per-user keeps the
-      // envelope from leaking across accounts and matches the pattern
-      // used by every other user-scoped store.
+      // v16-D2: per-user scoped key. `partialize` now persists a NARROW slice
+      // (see below), and Zustand reads/writes the envelope at this key on
+      // hydrate. Scoping it per-user keeps the envelope from leaking across
+      // accounts and matches the pattern used by every other user-scoped store.
       storage: createJSONStorage(() => scopedStorage('apex-trainer')),
-      // D13: do not persist trainer data to localStorage — all 15 state arrays
-      // (clients, clientPrograms, sessionWorkouts, etc.) are authoritative in
-      // Supabase and re-fetched on login via loadAllDataFromSupabase. Persisting
-      // here duplicates data and silently fails once the browser quota is hit,
-      // which can block Supabase writes from completing reliably (observed in
-      // prod: trainer at 894KB apex-trainer blob, QuotaExceededError storm,
-      // assigned programs not propagating to client devices).
-      partialize: () => ({}),
+      // D13 (the no-persist rule) was about the FULL ~894KB blob: persisting all
+      // 15 state arrays duplicated Supabase data and silently failed once the
+      // browser quota was hit (observed in prod: 894KB apex-trainer blob,
+      // QuotaExceededError storm, assigned programs not propagating to clients).
+      //
+      // v19-fix-01 (re-apply v18-D12 + BUG-N2): a DELIBERATE, NARROW exception.
+      // Persist ONLY two slices, by name:
+      //  - `sessions` (capped at the last 1000) so the derived count survives a
+      //    hard refresh (BUG-N1) and D10's merge-on-hydrate in loadFromSupabase
+      //    has real local rows to keep + re-sync. Cap bounds the blob (~≤250KB
+      //    worst case) so we never reopen the quota incident; Supabase stays
+      //    authoritative + complete for lifetime totals.
+      //  - `clientGroups` (incl. v18-D4 recurring class schedules) which have NO
+      //    Supabase mirror yet and are NOT re-fetched by loadFromSupabase, so
+      //    they would otherwise be lost on every refresh (BUG-N2). Local persist
+      //    is the Sev-1 close-out; a `client_groups` sync table is a follow-up.
+      // Everything else (clients/calendarEvents/payments/packages/programs) is
+      // intentionally NOT persisted — it re-fetches from Supabase on hydrate,
+      // avoiding the quota blob + cross-account stale-data risk. The per-user
+      // scoped key above also isolates these two slices per account.
+      partialize: (state) => ({
+        sessions: state.sessions.slice(-1000),
+        clientGroups: state.clientGroups,
+      }),
     }
   )
 );
