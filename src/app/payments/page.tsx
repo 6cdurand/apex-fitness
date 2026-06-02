@@ -478,10 +478,11 @@ export default function PaymentsPage() {
                 // master toggle's visible effect is "all 'follow default' cards' counters
                 // stay where they were" — no per-row UI tweaking needed.
                 await updateAutoCountDefault(checked);
+                // v19-fix-07: align toast copy with the on-card summary wording.
                 toast.success(
                   checked
-                    ? 'Auto-count default ON. Calendar sessions will tick each client’s total (unless they have a per-client override).'
-                    : 'Auto-count default OFF. Use the +1 button per client to count manually (unless they have a per-client override).',
+                    ? 'Auto-count default ON. Clients on this default will have their completed sessions auto-counted (clients with their own override are unaffected).'
+                    : 'Auto-count default OFF. Use +1 on each card to count manually (clients with their own override are unaffected).',
                   { duration: 4000 }
                 );
                 // v19-fix-02 (F3): refetch trainer_clients so each per-client card's
@@ -494,6 +495,35 @@ export default function PaymentsPage() {
               aria-label="Auto-count sessions by default"
             />
           </CardContent>
+          {/* v19-fix-07: visible-effect summary. Pure UI feedback derived live from the
+              reactive `clients` store slice + `user.autoCountSessionsDefault`. Flips the
+              instant the master toggle's optimistic set({ user }) lands — no refetch, no
+              count change, no per-client override mutation. N = clients on "Follow trainer
+              default" (autoCountSessions == null); M = clients with an explicit override. */}
+          {(() => {
+            const followCount = clients.filter(c => c.autoCountSessions == null).length;
+            const overrideCount = clients.filter(c => c.autoCountSessions != null).length;
+            const isOn = user?.autoCountSessionsDefault !== false;
+            return (
+              <div className="px-3 pb-3 pt-0 border-t border-gray-100">
+                <p className="text-xs text-gray-700 mt-2">
+                  <span className="font-medium">{followCount}</span>
+                  {followCount === 1 ? ' client follows this default' : ' clients follow this default'}
+                  {isOn
+                    ? ' — their completed sessions will auto-count.'
+                    : ' — use +1 on each card to count manually.'}
+                </p>
+                {overrideCount > 0 && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    <span className="font-medium">{overrideCount}</span>
+                    {overrideCount === 1
+                      ? ' client has their own override and is unaffected.'
+                      : ' clients have their own override and are unaffected.'}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
         </Card>
 
         {/* Summary Cards */}
