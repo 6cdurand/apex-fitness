@@ -476,9 +476,12 @@ export default function PaymentsPage() {
                     : 'Auto-count default OFF. Use the +1 button per client to count manually (unless they have a per-client override).',
                   { duration: 4000 }
                 );
-                // Refresh the trainer-clients fetch so the per-client tristates reflect the
-                // server-rebucket state without a hard refresh.
-                // Note: we'll use the existing client-reload pattern from the component
+                // v19-fix-02 (F3): refetch trainer_clients so each per-client card's
+                // tristate <Select> label + effective state reflect the master flip (and
+                // any server rebucket) immediately, without a hard refresh. The persisted
+                // override merge inside refetchTrainerClientsFromSupabase keeps any local
+                // manual offset edit intact across this refetch.
+                await useTrainerStore.getState().refetchTrainerClientsFromSupabase(user.id);
               }}
               aria-label="Auto-count sessions by default"
             />

@@ -44,8 +44,13 @@ export function getDisplayedSessionCount(
   const hasLegacyOffset = typeof client.historicalSessionsOffset === 'number';
   if (!hasNewOffset && !hasLegacyOffset) {
     // No offset metadata at all — trust the legacy stored count as best-effort.
+    // v19-fix-02: this branch is DEAD once 20260530 is applied (the new column is
+    // NOT NULL DEFAULT 0, so historicalOffsetSessions is always a number). It only
+    // survives for unmigrated environments (probe B1=false).
     return Math.max(0, client.totalSessions ?? 0);
   }
+  // v19-fix-02 (F1): historical_offset_sessions (NOT NULL DEFAULT 0) is authoritative
+  // whenever present. 0 is a real value — never fall through to the legacy column on 0.
   const offset = hasNewOffset
     ? (client.historicalOffsetSessions || 0)
     : (client.historicalSessionsOffset || 0);
@@ -204,6 +209,13 @@ interface TrainerState {
   // can surface a precise toast (RLS vs FK vs NOT-NULL vs table-missing)
   // rather than the canned "apply migrations" message. Cleared on success.
   lastSavedProgramError: { ok: false; reason: 'table_missing' | 'rls_denied' | 'fk_violation' | 'not_null_violation' | 'invalid_uuid' | 'unknown'; message: string } | null;
+  // v19-fix-02 (F2): a TINY, BOUNDED durability slice persisted via partialize.
+  // Holds ONLY the two manually-edited counter fields per client so an offset/flag
+  // edit survives a hard refresh even if its Supabase write hadn't landed yet. This
+  // is NOT the full `clients` array (that was the 894KB quota incident) — a few bytes
+  // per client. loadFromSupabase prefers this local override over the server value
+  // when they differ, then re-syncs.
+  clientCounterOverrides: { [clientId: string]: { historicalOffsetSessions?: number; autoCountSessions?: boolean | null } };
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -450,6 +462,68 @@ async function syncSessionWithRetry(session: ClientSession): Promise<boolean> {
   }
 }
 
+/**
+ * v19-fix-02 (F2) — durable trainer-client counter/flag writes.
+ *
+ * Mirrors {@link syncSessionWithRetry}: await + one retry after a short backoff +
+ * loud failure log. Previously `updateClient` fired `syncTrainerClientToSupabase`
+ * fire-and-forget (no await, no retry beyond the schema-drift column strip), so a
+ * transient network drop silently lost a manual offset edit — `loadFromSupabase`
+ * then REPLACE-mapped the client from the (un-updated) server row on next hydrate.
+ *
+ * The persisted `clientCounterOverrides` slice (partialize) is the second half of
+ * the durability story: even if BOTH attempts here fail, the override survives the
+ * refresh and `loadFromSupabase` re-applies + re-syncs it.
+ *
+ * Returns Promise<boolean>; callers use `void syncTrainerClientWithRetry(...)` so
+ * the optimistic local `set(...)` keeps the UI snappy.
+ */
+async function syncTrainerClientWithRetry(client: TrainerClient): Promise<boolean> {
+  const { syncTrainerClientToSupabase } = await import('../supabaseSync');
+  const payload = {
+    id: client.id,
+    trainerId: client.trainerId,
+    clientId: client.clientId,
+    status: client.status,
+    startDate: client.startDate,
+    onboardingComplete: client.onboardingComplete,
+    notes: client.notes,
+    goals: client.goals,
+    totalSessions: client.totalSessions,
+    totalPaid: client.totalPaid,
+    historicalSessionsOffset: client.historicalSessionsOffset,
+    // v16-D3 dedicated manual offset column (preferred source of truth).
+    historicalOffsetSessions: (client as any).historicalOffsetSessions,
+    totalSessionsOffset: client.totalSessionsOffset,
+    totalPaidOffset: client.totalPaidOffset,
+    autoCountSessions: client.autoCountSessions,
+  };
+  try {
+    const ok = await syncTrainerClientToSupabase(payload);
+    if (ok) return true;
+  } catch (err) {
+    console.warn('[TrainerStore] client sync threw on first attempt:', client.clientId, err);
+  }
+  // Single retry after a short backoff. Don't loop — bounded failure latency, and the
+  // persisted override slice keeps the edit recoverable on next hydrate either way.
+  await new Promise(resolve => setTimeout(resolve, 400));
+  try {
+    const ok = await syncTrainerClientToSupabase(payload);
+    if (ok) return true;
+    console.error(
+      '[TrainerStore] client sync FAILED after retry — override kept locally for next hydrate re-push:',
+      { clientId: client.clientId, trainerId: client.trainerId, historicalOffsetSessions: (client as any).historicalOffsetSessions, autoCountSessions: client.autoCountSessions },
+    );
+    return false;
+  } catch (err) {
+    console.error(
+      '[TrainerStore] client sync THREW after retry — override kept locally for next hydrate re-push:',
+      { clientId: client.clientId, error: err },
+    );
+    return false;
+  }
+}
+
 export const useTrainerStore = create<TrainerState>()(
   persist(
     (set, get) => ({
@@ -470,6 +544,7 @@ export const useTrainerStore = create<TrainerState>()(
       blockPerformances: [],
       savedPrograms: [], // v14-D3
       lastSavedProgramError: null, // v14-D32
+      clientCounterOverrides: {}, // v19-fix-02 (F2): persisted durable offset/flag overrides
 
       addClient: (clientId, onboardingData) => {
         const trainerId = useAuthStore.getState().user?.id;
@@ -590,36 +665,38 @@ export const useTrainerStore = create<TrainerState>()(
       },
 
       updateClient: (clientId, updates) => {
-        set(state => ({
-          clients: state.clients.map(c =>
+        set(state => {
+          const clients = state.clients.map(c =>
             c.clientId === clientId ? { ...c, ...updates } : c
-          ),
-        }));
+          );
+          // v19-fix-02 (F2): if this edit touched a durable counter/flag, record a
+          // TINY override so it survives a hard refresh even if the Supabase write
+          // below hasn't landed. Bounded to two scalar fields per client.
+          const touchesOffset = Object.prototype.hasOwnProperty.call(updates, 'historicalOffsetSessions');
+          const touchesAutoCount = Object.prototype.hasOwnProperty.call(updates, 'autoCountSessions');
+          if (!touchesOffset && !touchesAutoCount) {
+            return { clients };
+          }
+          const updated = clients.find(c => c.clientId === clientId);
+          const prev = state.clientCounterOverrides[clientId] || {};
+          return {
+            clients,
+            clientCounterOverrides: {
+              ...state.clientCounterOverrides,
+              [clientId]: {
+                ...prev,
+                ...(touchesOffset ? { historicalOffsetSessions: (updated as any)?.historicalOffsetSessions } : {}),
+                ...(touchesAutoCount ? { autoCountSessions: updated?.autoCountSessions ?? null } : {}),
+              },
+            },
+          };
+        });
         
-        // Sync to Supabase
+        // v19-fix-02 (F2): durable write (await + one retry + loud failure log).
+        // Replaces the prior fire-and-forget syncTrainerClientToSupabase call.
         const updatedClient = get().clients.find(c => c.clientId === clientId);
         if (updatedClient) {
-          import('../supabaseSync').then(({ syncTrainerClientToSupabase }) => {
-            syncTrainerClientToSupabase({
-              id: updatedClient.id,
-              trainerId: updatedClient.trainerId,
-              clientId: updatedClient.clientId,
-              status: updatedClient.status,
-              startDate: updatedClient.startDate,
-              onboardingComplete: updatedClient.onboardingComplete,
-              notes: updatedClient.notes,
-              goals: updatedClient.goals,
-              totalSessions: updatedClient.totalSessions,
-              totalPaid: updatedClient.totalPaid,
-              historicalSessionsOffset: updatedClient.historicalSessionsOffset,
-              // v16-D3: dedicated manual offset column (preferred source of truth
-              // for displayed totals). Legacy column kept above for back-compat.
-              historicalOffsetSessions: (updatedClient as any).historicalOffsetSessions,
-              totalSessionsOffset: updatedClient.totalSessionsOffset,
-              totalPaidOffset: updatedClient.totalPaidOffset,
-              autoCountSessions: updatedClient.autoCountSessions,
-            });
-          });
+          void syncTrainerClientWithRetry(updatedClient);
         }
       },
 
@@ -642,6 +719,9 @@ export const useTrainerStore = create<TrainerState>()(
           // v19-fix-01: now persisted via partialize (BUG-N2) — must be cleared
           // on logout/account-switch so no stale groups leak across trainers.
           clientGroups: [],
+          // v19-fix-02 (F2): persisted override slice — clear on logout/account-switch
+          // so one trainer's offset edits never leak into another account.
+          clientCounterOverrides: {},
         });
         // Clear social data
         getSocialStore().setState({ posts: [], notifications: [] });
@@ -1998,25 +2078,15 @@ export const useTrainerStore = create<TrainerState>()(
       setInitialClientStats: (clientId, sessionsDone, sessionsLeft, totalPaid) => {
         const trainerId = useAuthStore.getState().user?.id || '';
         
-        // Create completed sessions records
-        for (let i = 0; i < sessionsDone; i++) {
-          const session: ClientSession = {
-            id: uuidv4(),
-            clientId,
-            trainerId,
-            date: new Date().toISOString(),
-            startTime: new Date().toISOString(),
-            endTime: new Date().toISOString(),
-            duration: 60,
-            type: 'pt_session',
-            status: 'completed',
-            paid: true,
-            notes: 'Historical session (pre-app)',
-          };
-          set(state => ({
-            sessions: [...state.sessions, session],
-          }));
-        }
+        // v19-fix-02 (F4): DO NOT mint phantom `trainer_sessions` rows for imported
+        // history. Previously this loop created `sessionsDone` fake completed sessions
+        // via raw set() (no addSession dedupe, no retry) AND wrote legacy totalSessions
+        // but never the offset — so imported clients showed the legacy fallback and
+        // didn't count up, and any later offset edit double-counted the phantom rows.
+        // Imported history now lands in the OFFSET bucket below (durable via F2), so the
+        // COUNT half stays reserved for real logged/auto-counted sessions. The displayed
+        // total = imported number, and a NEW completed session ticks it +1. This converges
+        // all three offset writers (here, EditHistoricalOffsetModal, inline payments edit).
         
         // Create session package for remaining sessions
         if (sessionsLeft > 0) {
@@ -2040,8 +2110,12 @@ export const useTrainerStore = create<TrainerState>()(
           }));
         }
         
-        // Set stored counters directly on client record
+        // v19-fix-02 (F4): write imported history into the OFFSET bucket (durable via
+        // F2's syncTrainerClientWithRetry + persisted override). Mirror the legacy
+        // columns for any unmigrated reader, matching the inline payments-edit posture.
         get().updateClient(clientId, {
+          historicalOffsetSessions: sessionsDone,
+          historicalSessionsOffset: sessionsDone,
           totalSessions: sessionsDone,
           totalPaid: sessionsLeft > 0 ? sessionsLeft : 0, // sessionsLeft assumed already paid
         });
@@ -2754,6 +2828,33 @@ export const useTrainerStore = create<TrainerState>()(
         localOnlyClients.forEach(client => {
           syncTrainerClientToSupabase(client);
         });
+
+        // v19-fix-02 (F2): prefer persisted local counter/flag overrides over the
+        // server value when they differ, then re-sync. This bridges an offset/auto-count
+        // edit made just before a refresh whose Supabase write hadn't landed yet — the
+        // same preserve-local posture as the calendar workoutId merge (above) and the
+        // D10 sessions merge (below).
+        const counterOverrides = get().clientCounterOverrides || {};
+        const clientsWithOverrides: TrainerClient[] = clients.map(c => {
+          const ov = counterOverrides[c.clientId];
+          if (!ov) return c;
+          let next = c;
+          let changed = false;
+          if (typeof ov.historicalOffsetSessions === 'number'
+              && ov.historicalOffsetSessions !== (c as any).historicalOffsetSessions) {
+            next = { ...next, historicalOffsetSessions: ov.historicalOffsetSessions } as TrainerClient;
+            changed = true;
+          }
+          if (ov.autoCountSessions !== undefined && ov.autoCountSessions !== c.autoCountSessions) {
+            next = { ...next, autoCountSessions: ov.autoCountSessions };
+            changed = true;
+          }
+          if (changed) {
+            console.warn('[Trainer Store] v19-fix-02 preferring local counter override over server for client', c.clientId, ov);
+            void syncTrainerClientWithRetry(next);
+          }
+          return next;
+        });
         
         // Merge calendar events: preserve workoutId from local if Supabase doesn't have it
         // This prevents losing workout links during sync race conditions
@@ -2877,7 +2978,7 @@ export const useTrainerStore = create<TrainerState>()(
 
         // REPLACE localStorage with merged Supabase data
         set({
-          clients: [...clients, ...localOnlyClients],
+          clients: [...clientsWithOverrides, ...localOnlyClients],
           sessions: mergedSessions,
           sessionPackages: supabasePackages,
           calendarEvents: mergedCalendarEvents,
@@ -3077,7 +3178,28 @@ export const useTrainerStore = create<TrainerState>()(
                 client: sb.client || localClient?.client,
               };
             });
-            set({ clients });
+            // v19-fix-02 (F2): apply persisted local overrides here too, so a refetch
+            // (e.g. after the master auto-count toggle flip, or endWorkout) never
+            // clobbers a manual offset/flag edit whose write hadn't landed yet.
+            const counterOverrides = get().clientCounterOverrides || {};
+            const clientsWithOverrides: TrainerClient[] = clients.map(c => {
+              const ov = counterOverrides[c.clientId];
+              if (!ov) return c;
+              let next = c;
+              let changed = false;
+              if (typeof ov.historicalOffsetSessions === 'number'
+                  && ov.historicalOffsetSessions !== (c as any).historicalOffsetSessions) {
+                next = { ...next, historicalOffsetSessions: ov.historicalOffsetSessions } as TrainerClient;
+                changed = true;
+              }
+              if (ov.autoCountSessions !== undefined && ov.autoCountSessions !== c.autoCountSessions) {
+                next = { ...next, autoCountSessions: ov.autoCountSessions };
+                changed = true;
+              }
+              if (changed) void syncTrainerClientWithRetry(next);
+              return next;
+            });
+            set({ clients: clientsWithOverrides });
           }
         } catch (err) {
           console.warn('[v14-D16] refetchTrainerClientsFromSupabase error:', err);
@@ -3244,9 +3366,15 @@ export const useTrainerStore = create<TrainerState>()(
       // intentionally NOT persisted — it re-fetches from Supabase on hydrate,
       // avoiding the quota blob + cross-account stale-data risk. The per-user
       // scoped key above also isolates these two slices per account.
+      //  - `clientCounterOverrides` (v19-fix-02 F2): a TINY map of {historicalOffsetSessions,
+      //    autoCountSessions} keyed by clientId — a few bytes per client, NOT the full
+      //    clients array (that was the 894KB quota incident). Persisting it makes a manual
+      //    offset/auto-count edit durable across a hard refresh even when its Supabase write
+      //    hadn't landed; loadFromSupabase + refetchTrainerClientsFromSupabase re-apply it.
       partialize: (state) => ({
         sessions: state.sessions.slice(-1000),
         clientGroups: state.clientGroups,
+        clientCounterOverrides: state.clientCounterOverrides,
       }),
     }
   )
