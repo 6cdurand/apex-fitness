@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { SupabaseSync } from "@/components/SupabaseSync";
 import { DevTools } from "@/components/DevTools";
+import { NativeStorageGate } from "@/components/NativeStorageGate";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -36,8 +37,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans antialiased bg-gray-950 text-white`}
       >
-        {children}
-        <SupabaseSync />
+        <NativeStorageGate>
+          {children}
+          <SupabaseSync />
+        </NativeStorageGate>
         <DevTools />
         <Toaster richColors position="top-center" />
       </body>

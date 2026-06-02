@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { capacitorAsyncStorage } from './capacitorStorage';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -23,7 +24,17 @@ if (supabaseAnonKey && !supabaseAnonKey.startsWith('eyJ')) {
 // Use placeholder values if not configured — the app falls back to localStorage anyway
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder'
+  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder',
+  {
+    auth: {
+      // v19-D1: Preferences-backed on native so the Supabase session
+      // survives WKWebView localStorage eviction. Falls back to
+      // localStorage on web/PWA (identical to pre-v19 behaviour).
+      storage: capacitorAsyncStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  },
 );
 
 // Database types

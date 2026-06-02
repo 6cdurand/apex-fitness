@@ -27,7 +27,8 @@ export default function Home() {
     
     if (seedVersion !== 'v7') {
       // Clear old data and set new version
-      ['apex-seeded', 'apex-seed-version', 'apex-users', 'apex-workout', 'apex-medals', 'apex-auth', 'apex-social', 'apex-trainer', 'apex-messages'].forEach(k => localStorage.removeItem(k));
+      // v19-D1: 'apex-auth' removed — auth must never be cleared by a seed-version bump.
+      ['apex-seeded', 'apex-seed-version', 'apex-users', 'apex-workout', 'apex-medals', 'apex-social', 'apex-trainer', 'apex-messages'].forEach(k => localStorage.removeItem(k));
       localStorage.setItem('apex-seed-version', 'v7');
     }
     
