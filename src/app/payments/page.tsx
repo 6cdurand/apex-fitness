@@ -338,7 +338,15 @@ export default function PaymentsPage() {
           s.trainerId === target.trainerId &&
           s.status === 'completed'
         ).length;
-        const newOffset = Math.max(0, newValue - completedCount);
+        // v19-fix-05: do NOT clamp the offset to >= 0. The displayed lifetime is
+        // `offset + count(completed sessions)`, so to set a target BELOW the number
+        // of already-completed session rows (e.g. reset to 0 when 2 sessions are
+        // logged) the offset must be allowed to go negative. getDisplayedSessionCount
+        // still clamps the *displayed* result to >= 0, and each subsequent completion
+        // increments correctly from the target. Previously `Math.max(0, ...)` floored
+        // the editable lifetime at the completed-row count, making the 0..completed
+        // range uneditable. The column is INT (no CHECK >= 0) so negatives persist.
+        const newOffset = newValue - completedCount;
         updateClient(editingField.clientId, {
           historicalOffsetSessions: newOffset,
           // Keep the legacy column in sync for back-compat readers that
