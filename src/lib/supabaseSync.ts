@@ -1638,7 +1638,7 @@ export async function syncTrainerSessionToSupabase(session: ClientSession): Prom
       if (isMissingColumn) {
         console.warn(
           '[Session Sync] ⚠️ Schema drift detected on trainer_sessions; retrying with core columns only.',
-          'Apply migration 20260531_add_trainer_sessions_durable_columns.sql to enable optional persistence.',
+          'Apply migrations 20260531_add_trainer_sessions_durable_columns.sql and 20260602_add_trainer_sessions_notes_column.sql to enable optional persistence.',
           { code: errCode, message: error.message },
         );
         const coreSession: Record<string, unknown> = { ...dbSession };
@@ -1649,6 +1649,13 @@ export async function syncTrainerSessionToSupabase(session: ClientSession): Prom
         delete coreSession.feedback;
         delete coreSession.paid;
         delete coreSession.payment_id;
+        // v19-fix-04: `notes` was the orphan column that silently dropped every
+        // session insert (42703) because the table never declared it and this
+        // retry did not strip it. Strip it here too so a missing `notes` column
+        // can never again block the durable row write. The proper fix is the
+        // additive migration 20260602; this keeps the row safe on environments
+        // where that migration has not yet been applied.
+        delete coreSession.notes;
         const retry = await supabase
           .from('trainer_sessions')
           .upsert(coreSession, { onConflict: 'id' });
