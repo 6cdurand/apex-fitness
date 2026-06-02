@@ -2026,10 +2026,17 @@ export async function fetchTrainerClientsFromSupabase(trainerId: string): Promis
       // v12-D1: prefer the new column name; fall back to the legacy one for
       // installs that haven't applied 20260514_add_session_counter_consistency.sql yet.
       historicalSessionsOffset: c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
-      // v16-D3: dedicated manual offset column. Falls back to the v14 column
-      // (historicalSessionsOffset) when the migration hasn't been applied yet so
-      // existing installs keep working through the schema-drift retry pattern.
-      historicalOffsetSessions: c.historical_offset_sessions ?? c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined,
+      // v19-fix-02 (F1): historical_offset_sessions is the SINGLE offset source of
+      // truth. Read it DIRECTLY. The legacy historical_sessions_offset is consulted
+      // ONLY when the new column key is entirely ABSENT from the row (unmigrated env
+      // per probe B1=false) — NOT via a silent `??` chain. A `??` chain would pick up
+      // the trigger-mutated legacy value whenever the new column merely equals 0,
+      // reintroducing the dual-authority drift this fix retires. After 20260530 is
+      // applied the column is NOT NULL DEFAULT 0, so the key is always present and the
+      // legacy fallback branch below is dead.
+      historicalOffsetSessions: ('historical_offset_sessions' in c)
+        ? (c.historical_offset_sessions ?? 0)
+        : (c.historical_sessions_offset ?? c.total_sessions_offset ?? undefined),
       totalSessionsOffset: c.total_sessions_offset ?? undefined,
       totalPaidOffset: c.total_paid_offset ?? undefined,
       // v14-D10: preserve null so the UI can render "Use account default" instead of "Force ON".
