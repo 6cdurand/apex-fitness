@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { SupabaseSync } from "@/components/SupabaseSync";
 import { DevTools } from "@/components/DevTools";
 import { NativeStorageGate } from "@/components/NativeStorageGate";
+import { NativeAuthLifecycle } from "@/components/NativeAuthLifecycle";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -37,6 +38,10 @@ export default function RootLayout({
       <body
         className={`${inter.variable} font-sans antialiased bg-gray-950 text-white`}
       >
+        {/* v19-fix-08: native-only token-refresh lifecycle. Mounted outside the
+            storage gate so the appStateChange listener registers ASAP; internally
+            gated on Capacitor.isNativePlatform() (inert on web/PWA). */}
+        <NativeAuthLifecycle />
         <NativeStorageGate>
           {children}
           <SupabaseSync />
