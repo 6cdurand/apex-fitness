@@ -4116,11 +4116,38 @@ function mapPgErrorToReason(code: string | undefined): SaveProgramSyncReason {
 export async function syncSavedProgramToSupabase(program: any): Promise<SaveProgramSyncResult> {
   if (!isSupabaseConfigured()) return { ok: false, reason: 'unknown', message: 'Supabase not configured' };
   try {
+    // v19-fix-09: write the CANONICAL trainer id, not the (possibly stale)
+    // auth/store `user.id`. The prod `saved_programs` RLS policy is
+    // `trainer_id = canonical_user_id()` (= email-matched public.users.id).
+    // For diverged accounts `program.trainerId` (= user.id) can differ from
+    // that value, so the WITH CHECK 403s (code 42501). Resolving the id the
+    // SAME way the policy does — via resolveCanonicalUserByEmail(user.email)
+    // — guarantees the check passes. Falls back to the written id if the
+    // resolve fails (e.g. offline) so non-diverged trainers are unaffected.
+    // This is the single chokepoint for every saved_programs writer
+    // (saveProgramAsTemplate, updateSavedProgram, …) so they're all covered.
+    let trainerId = program.trainerId;
+    try {
+      const user = (await import('./store')).useAuthStore.getState().user;
+      if (user?.email) {
+        const canonical = await resolveCanonicalUserByEmail(user.email);
+        // F2 diagnostic (keep, removable later): capture user.id vs canonical
+        // at save time to confirm heal-timing vs a second-id theory.
+        console.warn('[saved_programs] trainer_id write', {
+          userId: user.id,
+          writtenTrainerId: program.trainerId,
+          canonical: canonical?.id,
+        });
+        if (canonical?.id) trainerId = canonical.id;
+      }
+    } catch (resolveErr) {
+      console.warn('[saved_programs] canonical resolve failed, using written trainer_id', resolveErr);
+    }
     const { error } = await supabase
       .from('saved_programs')
       .upsert({
         id: program.id,
-        trainer_id: program.trainerId,
+        trainer_id: trainerId,
         name: program.name,
         description: program.description || null,
         phase: program.phase || null,

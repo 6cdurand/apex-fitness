@@ -638,6 +638,10 @@ export default function ProgramPage() {
                       lockReasons={nextWorkout.lockReasons}
                       nextDayIndex={nextWorkout.dayIndex}
                       nextScheduledDay={nextWorkout.nextScheduledDay}
+                      /* v19-fix-10: suggested day for the resolved next
+                         workout (hint, not a binding) for the decoupled
+                         footer. */
+                      nextSuggestedDay={nextWorkout.nextSuggestedDay}
                       isScheduledToday={nextWorkout.isScheduledToday}
                       /* v16-D5 BUG-16: slot expansion so the strip renders N pills
                          when N (scheduled days) > weeklyPlan.length. Example:

@@ -202,13 +202,31 @@ function assertEqual<T>(label: string, actual: T, expected: T): void {
     }),
     true,
   );
+  // v19-fix-11: a sourceProgramId tag whose program is NOT in the store
+  // (not loaded on /workout/active, or client_id divergence) must NOT
+  // hard-return false. It now FALLS THROUGH to the legacy prefix /
+  // structural detection. The previous behaviour (return false) silently
+  // skipped the "Save changes to program?" modal. False positives here are
+  // benign (one dismissable prompt); false negatives break the trainer flow.
   assertEqual(
-    'sourceProgramId set + program deleted from clientPrograms → false',
+    "v19-fix-11: sourceProgramId set + program missing from store BUT 'program-' prefix present → true (fall-through, no longer hard-false)",
     detectIsProgramWorkout({
       sourceProgramId: 'prog-deleted',
       sourceDayIndex: 0,
       templateId: 'program-prog-deleted-0',
       workoutName: 'Push Day',
+      workoutUserId: 'u1',
+      clientPrograms: [u1ActiveProgram],
+    }),
+    true,
+  );
+  assertEqual(
+    'v19-fix-11: sourceProgramId set + program missing + NON-program templateId + no day match → false (no spurious positive)',
+    detectIsProgramWorkout({
+      sourceProgramId: 'prog-deleted',
+      sourceDayIndex: 0,
+      templateId: 'workout-123',
+      workoutName: 'Random Lift',
       workoutUserId: 'u1',
       clientPrograms: [u1ActiveProgram],
     }),
