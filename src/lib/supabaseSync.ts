@@ -151,6 +151,46 @@ export async function registerUserToSupabase(user: User, accountStatus: 'active'
 // different IDs, and programs ALWAYS reference public.users.id. When a client
 // signs in via OAuth (new auth.users.id) we must map them back to their
 // existing public.users.id so trainer-assigned programs remain visible.
+/**
+ * Resolve the authenticated user's CANONICAL public.users.id the SAME way the
+ * RLS policies do — by calling the server-side `canonical_user_id()` function
+ * over RPC. This is SECURITY DEFINER on the server, so it bypasses the
+ * `public.users` SELECT RLS that defeats `resolveCanonicalUserByEmail` for
+ * diverged accounts (auth.uid() ≠ public.users.id). Returns null on any error
+ * so callers can fall back to the legacy email-resolve path.
+ *
+ * Why this exists: for a diverged account the client could not previously learn
+ * its canonical id (the email lookup is blocked by users-RLS), so writes to
+ * canonical-scoped tables (saved_programs, …) used the wrong trainer_id and
+ * 403'd with code 42501 ("new row violates row-level security policy").
+ */
+let __canonicalIdCache: string | null = null;
+export async function getCanonicalUserId(): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  if (__canonicalIdCache) return __canonicalIdCache;
+  try {
+    const { data, error } = await supabase.rpc('canonical_user_id');
+    if (error) {
+      console.warn('[Canonical RPC] canonical_user_id() failed:', error.message);
+      return null;
+    }
+    const id = (data as unknown as string) || null;
+    if (id) {
+      __canonicalIdCache = id;
+      console.log('[Canonical RPC] ✅ canonical_user_id() →', id);
+    }
+    return id;
+  } catch (e) {
+    console.warn('[Canonical RPC] exception:', e);
+    return null;
+  }
+}
+
+/** Clear the cached canonical id (call on sign-out / account switch). */
+export function clearCanonicalUserIdCache(): void {
+  __canonicalIdCache = null;
+}
+
 export async function resolveCanonicalUserByEmail(
   email: string
 ): Promise<{ id: string; email: string; display_name: string | null; is_trainer: boolean; mode: string | null; trainer_id: string | null } | null> {
@@ -4129,17 +4169,24 @@ export async function syncSavedProgramToSupabase(program: any): Promise<SaveProg
     let trainerId = program.trainerId;
     try {
       const user = (await import('./store')).useAuthStore.getState().user;
-      if (user?.email) {
+      // PRIMARY: ask the server for the canonical id the EXACT way the RLS
+      // WITH CHECK does (canonical_user_id() over RPC). This works for diverged
+      // accounts where the client-side email lookup is blocked by users-RLS.
+      const canonicalId = await getCanonicalUserId();
+      if (canonicalId) {
+        trainerId = canonicalId;
+      } else if (user?.email) {
+        // FALLBACK (legacy): email-match resolve. Only succeeds for accounts
+        // whose users-row is readable (aligned ids); harmless otherwise.
         const canonical = await resolveCanonicalUserByEmail(user.email);
-        // F2 diagnostic (keep, removable later): capture user.id vs canonical
-        // at save time to confirm heal-timing vs a second-id theory.
-        console.warn('[saved_programs] trainer_id write', {
-          userId: user.id,
-          writtenTrainerId: program.trainerId,
-          canonical: canonical?.id,
-        });
         if (canonical?.id) trainerId = canonical.id;
       }
+      console.warn('[saved_programs] trainer_id write', {
+        userId: user?.id,
+        writtenTrainerId: program.trainerId,
+        resolvedTrainerId: trainerId,
+        viaRpc: !!canonicalId,
+      });
     } catch (resolveErr) {
       console.warn('[saved_programs] canonical resolve failed, using written trainer_id', resolveErr);
     }
@@ -4194,10 +4241,18 @@ export async function syncSavedProgramToSupabase(program: any): Promise<SaveProg
 export async function fetchSavedProgramsFromSupabase(trainerId: string): Promise<any[]> {
   if (!isSupabaseConfigured()) return [];
   try {
+    // Do NOT filter by the caller-supplied `trainerId` (= auth-store user.id).
+    // For diverged accounts that id ≠ the canonical public.users.id the rows
+    // are actually stored under, so the old `.eq('trainer_id', trainerId)`
+    // returned ZERO rows — that's why saved programs "disappeared". The RLS
+    // policy `USING (trainer_id = canonical_user_id())` already scopes the
+    // result set to exactly this trainer's rows, so relying on RLS both fixes
+    // the divergence AND cannot leak other trainers' programs. `trainerId` is
+    // kept in the signature for caller compatibility.
+    void trainerId;
     const { data, error } = await supabase
       .from('saved_programs')
       .select('*')
-      .eq('trainer_id', trainerId)
       .order('updated_at', { ascending: false });
     if (error) {
       const code = (error as any).code as string | undefined;
