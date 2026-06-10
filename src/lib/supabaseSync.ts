@@ -2965,9 +2965,18 @@ export async function sendClientInvitation(
     const inviteToken = generateInviteToken();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
 
+    // Resolve the CANONICAL trainer id the same way the client_invitations RLS
+    // does (WITH CHECK trainer_id = canonical_user_id(), migration
+    // 20260601_rls_hardening_phase1b). For diverged accounts the passed
+    // trainerId (= auth-store user.id) ≠ canonical_user_id(), so the INSERT
+    // 403s with code 42501. The RPC is SECURITY DEFINER and bypasses the
+    // users-RLS that defeats the client-side email resolve. Falls back to the
+    // passed id for aligned accounts / offline.
+    const canonicalTrainerId = (await getCanonicalUserId()) || trainerId;
+
     // Create invitation record in database
     const { error: dbError } = await supabase.from('client_invitations').upsert({
-      trainer_id: trainerId,
+      trainer_id: canonicalTrainerId,
       client_id: clientId,
       email: clientEmail,
       status: 'pending',
