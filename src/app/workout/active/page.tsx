@@ -1591,6 +1591,7 @@ export default function ActiveWorkoutPage() {
         removedCount: 0,
         changedCount: 0,
         hasChanges: false,
+        hasStructuralChanges: false,
       };
       if (isProgramWorkout) {
         // v19-fix-11: resolve the program for the diff robustly. Prefer an
@@ -1668,7 +1669,14 @@ export default function ActiveWorkoutPage() {
       // weeklyPlan back + notifies the trainer (D17 + D29 wiring intact),
       // the NO path discards. Identical-to-template runs skip the modal
       // entirely and go straight to summary.
-      if (isProgramWorkout && programDiff.hasChanges) {
+      //
+      // v19-fix-11b: gate on STRUCTURAL change only (added/removed), NOT
+      // `hasChanges` (which also counts `changed` = set/rep/weight diffs).
+      // A set/rep/weight-only edit is normal workout logging, not a program
+      // edit, so it must go straight to summary with NO prompt (fix-11
+      // acceptance #3). The modal body may still LIST changed exercises when
+      // it shows for a structural reason.
+      if (isProgramWorkout && programDiff.hasStructuralChanges) {
         setProgramDiffForPrompt(programDiff);
         setShowSaveProgramPrompt(true);
       } else {

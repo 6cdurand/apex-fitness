@@ -34,6 +34,14 @@ export interface ProgramDayDiff {
   changedCount: number;
   /** Convenience: `addedCount > 0 || removedCount > 0 || changedCount > 0`. */
   hasChanges: boolean;
+  /**
+   * v19-fix-11b: convenience — STRUCTURAL change only (`addedCount > 0 ||
+   * removedCount > 0`). A set/rep/weight edit on the SAME exercise is NOT
+   * structural (it lands in `changed`, not here). The finish-flow
+   * "Save changes to program?" modal gates on THIS, not `hasChanges`, so
+   * set/rep-only edits go straight to the summary (fix-11 acceptance #3).
+   */
+  hasStructuralChanges: boolean;
 }
 
 type CompletedExerciseShape = {
@@ -61,6 +69,7 @@ const EMPTY_DIFF: ProgramDayDiff = {
   removedCount: 0,
   changedCount: 0,
   hasChanges: false,
+  hasStructuralChanges: false,
 };
 
 export function computeProgramDayDiff(
@@ -154,5 +163,6 @@ export function computeProgramDayDiff(
     removedCount: removed.length,
     changedCount: changed.length,
     hasChanges: added.length > 0 || removed.length > 0 || changed.length > 0,
+    hasStructuralChanges: added.length > 0 || removed.length > 0,
   };
 }

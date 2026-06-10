@@ -425,8 +425,6 @@ function ProgramBuilderContent() {
   
   // ── Save dialog ──
   const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [saveToLibrary, setSaveToLibrary] = useState(false);
-  const [libraryName, setLibraryName] = useState('');
   
   // v14-D3: Save as template dialog
   const [showSaveProgramDialog, setShowSaveProgramDialog] = useState(false);
@@ -903,46 +901,10 @@ function ProgramBuilderContent() {
     // had to use the separate "Save as template" button on the builder
     // page to get a program into their library. Now the toggle does what
     // its label says — and works for trainer→client flows too.
-    if (saveToLibrary && libraryName.trim()) {
-      const templateResult = await saveProgramAsTemplate({
-        name: libraryName.trim(),
-        description: `${daysPerWeek}×/wk • ${actualWeeks} weeks • ${goal}`,
-        phase,
-        goals: [goal],
-        durationWeeks: actualWeeks,
-        daysPerWeek,
-        structure: scheduleMode === 'fixed' ? 'Fixed days' : 'Flexible',
-        scheduleMode,
-        autoRepeat,
-        days: weeklyPlan,
-        // The Activate dialog only runs for new programs (the isEditMode
-        // path early-returns above), so existingProgram is always null
-        // here. Use the URL templateId param instead to track lineage
-        // when the trainer started from a system or saved template.
-        sourceTemplateId: templateIdParam || undefined,
-      });
-      if (!templateResult) {
-        // v14-D32: pull the precise reason off the store and render a
-        // toast that points at the actual failure (RLS / FK / NOT-NULL /
-        // table-missing) instead of the canned "apply migrations" copy
-        // that masked the real RLS denial for weeks post-D28.
-        const lastError = useTrainerStore.getState().lastSavedProgramError;
-        const detail =
-          lastError?.reason === 'rls_denied'        ? 'Supabase rejected the save (RLS). Apply migration 20260526 to heal the policy for your account.' :
-          lastError?.reason === 'table_missing'     ? 'The saved_programs table is missing. Apply migration 20260522 in Supabase.' :
-          lastError?.reason === 'fk_violation'      ? "Your trainer profile isn't linked to a public.users row. Contact support — your account needs a one-time repair." :
-          lastError?.reason === 'not_null_violation' ? 'Missing a required field on the program. Try again with name, duration, and at least one day filled in.' :
-          lastError?.reason === 'invalid_uuid'      ? 'Internal: a UUID field was malformed. Please reload and try again.' :
-          (lastError?.message || 'Unknown error');
-        // Don't block the activation flow — the program is already
-        // assigned to the client at this point. Surface the precise
-        // reason so the trainer can act on it.
-        toast.error(`Saved program for client but couldn't add "${libraryName.trim()}" to My Templates. ${detail}`, { duration: 10000 });
-      } else {
-        toast.success(`Added "${libraryName.trim()}" to My Templates.`);
-      }
-    }
-    
+    // The in-dialog "Also save to library" toggle was removed (it duplicated
+    // the standalone "Save to library only" button and 403'd from this flow).
+    // Assigning a program no longer attempts a library save here.
+
     // NOTE: no direct addNotification call here — D12 (Part A) consolidated
     // the program_assigned writer into the `addClientProgram` store action
     // above. That writer derives the rich message (days / frequency /
@@ -1620,31 +1582,11 @@ function ProgramBuilderContent() {
               </div>
             )}
 
-            <div className="flex items-center justify-between p-3 bg-gray-800/50 rounded-lg">
-              <div>
-                {/* v14-D32: relabel to clarify this is the activate-AND-save
-                   path. The other save button on the builder page is
-                   library-only. Both call saveProgramAsTemplate. */}
-                <p className="font-medium text-white text-sm">Also save to library</p>
-                <p className="text-xs text-gray-500">So you can reuse it for other clients without rebuilding</p>
-              </div>
-              <Switch
-                checked={saveToLibrary}
-                onCheckedChange={setSaveToLibrary}
-                className="data-[state=checked]:bg-sky-500"
-              />
-            </div>
-            {saveToLibrary && (
-              <div className="space-y-2">
-                <Label className="text-gray-300">Library Name</Label>
-                <Input
-                  value={libraryName}
-                  onChange={e => setLibraryName(e.target.value)}
-                  placeholder={programName || 'Program name...'}
-                  className="bg-gray-800 border-gray-700 text-white"
-                />
-              </div>
-            )}
+            {/* The "Also save to library" toggle + name field were removed here:
+               they duplicated the standalone "Save to library only" button on
+               the builder page and had no working effect from the assign flow
+               (the save 403'd). Assigning now just assigns. To save a reusable
+               template, use the dedicated "Save to library only" button. */}
             <div className="flex gap-3">
               <Button
                 variant="outline"
