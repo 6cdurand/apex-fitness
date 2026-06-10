@@ -299,7 +299,7 @@ interface TrainerState {
    * it onto the trainer dashboard / clients list mount effect.
    */
   checkProgramsEndingSoon: () => void;
-  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null; weekSlots: number; slotDayIndices: number[]; slotScheduledDays: string[]; completedSlotCount: number; nextSlotIndex: number } | null;
+  getNextProgramWorkout: (userId: string) => { program: ClientProgram; dayIndex: number; day: any; remainingThisWeek: number; sessionType: 'pt' | 'personal'; completedDayIndices: number[]; lockedDayIndices: number[]; lockReasons: Record<number, ProgramDayLockReason>; isScheduledToday: boolean; nextScheduledDay: string | null; nextSuggestedDay: string | null; weekSlots: number; slotDayIndices: number[]; slotScheduledDays: string[]; completedSlotCount: number; nextSlotIndex: number } | null;
   rotateProgramDay: (clientId: string, dayIndex: number) => void;
   
   // Client Profiles (onboarding data)
@@ -1890,17 +1890,22 @@ export const useTrainerStore = create<TrainerState>()(
           });
         const lockedDayIndices: number[] = lockedEvents.map((e: any) => e.programDayIndex as number);
 
-        // v15-D4: pick the next-up suggestion by walking forward from the
-        // cycle position, skipping done and locked days. If every day is
-        // either done or locked, fall back to the cycle position so the
-        // caller can render an appropriate empty state.
-        const baseDayIndex = totalCompleted % program.weeklyPlan.length;
-        let nextDayIndex = baseDayIndex;
+        // v19-fix-10: SINGLE source of "next" = the first workout in PLAN
+        // ORDER not yet completed this week (skipping PT-locked days).
+        //
+        // DESIGN (Christo 2026-06-04): FLEXIBLE ORDER. A fixed Mon/Wed/Fri
+        // program means "N sessions/week, with SUGGESTED days" — weekday
+        // labels are hints, not bindings. We therefore no longer anchor
+        // "next" to the cycle-modulo weekday position (`totalCompleted %
+        // length`). That cycle clock disagreed with the calendar-based strip
+        // ("two clocks") and produced "<day> → <wrong workout>" pairings.
+        // Up Next (card), the highlighted strip pill, and Today's
+        // next-workout all consume this ONE resolved value.
+        let nextDayIndex = totalCompleted % program.weeklyPlan.length; // fallback only
         for (let i = 0; i < program.weeklyPlan.length; i++) {
-          const candidate = (baseDayIndex + i) % program.weeklyPlan.length;
-          if (completedDayIndices.includes(candidate)) continue;
-          if (lockedDayIndices.includes(candidate)) continue;
-          nextDayIndex = candidate;
+          if (completedDayIndices.includes(i)) continue;
+          if (lockedDayIndices.includes(i)) continue;
+          nextDayIndex = i;
           break;
         }
         const dayIndex = nextDayIndex;
@@ -1965,8 +1970,16 @@ export const useTrainerStore = create<TrainerState>()(
           }
         }
         // Flexible programs: always available (user picks which workout)
-        
-        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay, weekSlots, slotDayIndices, slotScheduledDays, completedSlotCount, nextSlotIndex };
+
+        // v19-fix-10: the SUGGESTED day for the resolved next workout (a hint,
+        // not a binding). Decoupled from `nextScheduledDay` (the next selected
+        // weekday on the calendar) so consumers can show "Up next: <workout> ·
+        // suggested <day>" without asserting a "<day> → <workout>" pairing.
+        const nextSuggestedDay = (program.scheduleMode === 'fixed')
+          ? ((program.weeklyPlan[dayIndex] as any)?.scheduledDay || null)
+          : null;
+
+        return { program, dayIndex, day, remainingThisWeek, sessionType, completedDayIndices, lockedDayIndices, lockReasons, isScheduledToday, nextScheduledDay, nextSuggestedDay, weekSlots, slotDayIndices, slotScheduledDays, completedSlotCount, nextSlotIndex };
       },
 
       rotateProgramDay: (clientId, dayIndex) => {

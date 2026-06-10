@@ -1593,11 +1593,18 @@ export default function ActiveWorkoutPage() {
         hasChanges: false,
       };
       if (isProgramWorkout) {
-        const activeProgram = trainerStoreSnap.clientPrograms.find((p: any) => (
-          completed.sourceProgramId
-            ? p.id === completed.sourceProgramId
-            : (p.clientId === completed.userId && p.status === 'active')
-        ));
+        // v19-fix-11: resolve the program for the diff robustly. Prefer an
+        // exact id match on the source tag, but if that misses (program not
+        // loaded under that id, or client_id divergence) fall back to the
+        // user's ACTIVE program so the structural diff — and therefore the
+        // "Save changes to program?" modal — still fires.
+        const activeProgram =
+          (completed.sourceProgramId
+            ? trainerStoreSnap.clientPrograms.find((p: any) => p.id === completed.sourceProgramId)
+            : undefined) ||
+          trainerStoreSnap.clientPrograms.find(
+            (p: any) => p.clientId === completed.userId && p.status === 'active',
+          );
         if (activeProgram?.weeklyPlan?.length) {
           const byIndex = completed.sourceDayIndex;
           const dayIdx = (

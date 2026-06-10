@@ -45,14 +45,25 @@ export interface ProgramDetectionInput {
 
 export function detectIsProgramWorkout(args: ProgramDetectionInput): boolean {
   // D17 fast path — explicit source tag written at start time.
-  // Definitive: the workout was launched from a known program day for
-  // this user. Returns false if the program has since been deleted or
-  // the tag points at another user's program (defensive — should never
-  // happen but keeps the contract tight).
+  // Definitive POSITIVE: the workout was launched from a known program day
+  // for this user.
+  //
+  // v19-fix-11: previously this branch HARD-RETURNED `some(...)` — i.e. it
+  // returned false whenever the store lookup missed. That is fail-unsafe:
+  // a `sourceProgramId` tag is strong evidence this WAS a program workout,
+  // but the program can legitimately be absent from `clientPrograms` at
+  // finish time (not loaded on /workout/active, or a `client_id`
+  // divergence — see v19-fix-09). When that happened, detection returned
+  // false and the "Save changes to program?" modal silently never fired,
+  // even though `templateId` still carried the `program-…` prefix. We now
+  // only SHORT-CIRCUIT on a positive match and otherwise fall through to
+  // the prefix + structural fallback below (false positives are benign —
+  // one dismissable prompt — false negatives break the trainer flow).
   if (args.sourceProgramId) {
-    return args.clientPrograms.some(
+    const matched = args.clientPrograms.some(
       (p) => p.id === args.sourceProgramId && p.clientId === args.workoutUserId,
     );
+    if (matched) return true;
   }
 
   const tplId = args.templateId || '';

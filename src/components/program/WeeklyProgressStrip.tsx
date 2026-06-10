@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Check, Target, Hourglass, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ProgramDayLockReason } from '@/lib/stores/trainerStore';
+import { resolveStripPills } from '@/lib/weeklyStripPills';
 
 interface WeeklyProgressStripProps {
   program: {
@@ -34,6 +35,15 @@ interface WeeklyProgressStripProps {
   slotScheduledDays?: string[];
   completedSlotCount?: number;
   nextSlotIndex?: number;
+  /** v19-fix-10: the suggested day for the resolved next workout (hint,
+   * not a binding). Rendered separately from any "<day> → <workout>"
+   * pairing in the footer. */
+  nextSuggestedDay?: string | null;
+}
+
+function lockTooltipFor(lockInfo: ProgramDayLockReason | undefined): string | undefined {
+  if (!lockInfo) return 'Booked with your trainer this week';
+  return `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`;
 }
 
 export function WeeklyProgressStrip({
@@ -47,11 +57,9 @@ export function WeeklyProgressStrip({
   weekSlots,
   slotDayIndices,
   slotScheduledDays,
-  completedSlotCount,
-  nextSlotIndex,
+  nextSuggestedDay,
 }: WeeklyProgressStripProps) {
   const totalSessions = program.trainingDaysPerWeek || weekSlots || program.weeklyPlan.length;
-  const completedCount = completedDayIndices.length;
 
   // v16-D5 BUG-16: if the slot-expansion props are present, render N
   // slot-anchored pills (one per scheduled session this week). Falls back
@@ -62,72 +70,44 @@ export function WeeklyProgressStrip({
     slotDayIndices &&
     slotDayIndices.length === weekSlots;
 
-  const pills = hasSlotExpansion
-    ? Array.from({ length: weekSlots! }, (_, slotIdx) => {
-        // Resolve which weeklyPlan entry this slot represents (modulo for
-        // cycling: Push/Pull on Mon/Wed/Fri → [0, 1, 0]).
-        const planIdx = slotDayIndices![slotIdx];
-        const day = program.weeklyPlan[planIdx] || { dayLabel: `Day ${String.fromCharCode(65 + planIdx)}` };
-        // Left-anchored progress: slot i is "done" if i < completedSlotCount.
-        // This avoids the previous bug where doing Push twice (Mon + Fri)
-        // would only mark one pill done because completedDayIndices kept
-        // returning [0, 0] and includes-checking treated them as the same.
-        const isDone = (completedSlotCount ?? completedCount) > slotIdx;
-        // Lock: any slot whose underlying workout is locked by a PT booking.
-        const isLocked = !isDone && lockedDayIndices.includes(planIdx);
-        // Today / next: highlight the slot the cycle is currently on.
-        const isToday = !isLocked && slotIdx === (nextSlotIndex ?? 0) && isScheduledToday;
-        const isNext = !isLocked && slotIdx === (nextSlotIndex ?? 0) && !isDone && !isScheduledToday;
-        const scheduledDayName = slotScheduledDays?.[slotIdx];
-        const label = scheduledDayName
-          ? scheduledDayName.slice(0, 3).toUpperCase()
-          : `Day ${String.fromCharCode(65 + slotIdx)}`;
+  // v19-fix-10 F1/F2: resolve done-by-identity + the single highlighted
+  // "next" slot via the shared pure helper (unit-tested). For the legacy
+  // (no slot-expansion) path the slots ARE the weeklyPlan indices.
+  const planSlotIndices = hasSlotExpansion
+    ? slotDayIndices!
+    : program.weeklyPlan.map((_, i) => i);
+  const resolved = resolveStripPills({
+    slotDayIndices: planSlotIndices,
+    completedDayIndices,
+    lockedDayIndices,
+    isScheduledToday,
+  });
 
-        const lockInfo = isLocked ? lockReasons?.[planIdx] : undefined;
-        const lockTooltip = isLocked
-          ? lockInfo
-            ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
-            : 'Booked with your trainer this week'
-          : undefined;
+  const pills = resolved.map(r => {
+    const day = program.weeklyPlan[r.planIdx] || { dayLabel: `Day ${String.fromCharCode(65 + r.planIdx)}` };
+    const scheduledDayName = hasSlotExpansion
+      ? slotScheduledDays?.[r.slotIdx]
+      : (program.scheduleMode === 'fixed' ? (day as any).scheduledDay : undefined);
+    const label = scheduledDayName
+      ? scheduledDayName.slice(0, 3).toUpperCase()
+      : `Day ${String.fromCharCode(65 + r.slotIdx)}`;
+    return {
+      idx: r.slotIdx,
+      label,
+      dayLabel: (day as any).dayLabel,
+      isDone: r.isDone,
+      isLocked: r.isLocked,
+      isToday: r.isToday,
+      isNext: r.isNext,
+      lockTooltip: r.isLocked ? lockTooltipFor(lockReasons?.[r.planIdx]) : undefined,
+      suggestedDay: scheduledDayName,
+    };
+  });
 
-        return {
-          idx: slotIdx,
-          label,
-          dayLabel: day.dayLabel,
-          isDone,
-          isLocked,
-          isToday,
-          isNext,
-          lockTooltip,
-        };
-      })
-    : program.weeklyPlan.map((day, idx) => {
-        const isDone = completedDayIndices.includes(idx);
-        const isLocked = !isDone && lockedDayIndices.includes(idx);
-        const isToday = !isLocked && idx === nextDayIndex && isScheduledToday;
-        const isNext = !isLocked && idx === nextDayIndex && !isDone && !isScheduledToday;
-        const label = program.scheduleMode === 'fixed' && day.scheduledDay
-          ? day.scheduledDay.slice(0, 3).toUpperCase()
-          : `Day ${String.fromCharCode(65 + idx)}`;
-
-        const lockInfo = isLocked ? lockReasons?.[idx] : undefined;
-        const lockTooltip = isLocked
-          ? lockInfo
-            ? `Booked with ${lockInfo.trainerName}${lockInfo.eventDate ? ` on ${lockInfo.eventDate}` : ''}${lockInfo.eventStartTime ? ` at ${lockInfo.eventStartTime}` : ''}`
-            : 'Booked with your trainer this week'
-          : undefined;
-
-        return {
-          idx,
-          label,
-          dayLabel: day.dayLabel,
-          isDone,
-          isLocked,
-          isToday,
-          isNext,
-          lockTooltip,
-        };
-      });
+  // Header N / M must equal the number of green pills (acceptance #4).
+  const completedCount = pills.filter(p => p.isDone).length;
+  const nextPill = pills.find(p => p.isToday || p.isNext);
+  const suggestedDay = nextSuggestedDay || nextPill?.suggestedDay || nextScheduledDay || null;
 
   return (
     <Card className="bg-white border-gray-200 shadow-sm">
@@ -141,9 +121,12 @@ export function WeeklyProgressStrip({
             {' done'}
           </p>
         </div>
-        <div className="flex items-center justify-between gap-1">
+        {/* v19-fix-10 F3: responsive — fixed-width pills that wrap to a
+            second row (3–7 sessions) instead of a single flex-1 row that
+            clipped/squashed >3 pills on phone widths. */}
+        <div className="flex flex-wrap items-start justify-center gap-x-2 gap-y-3">
           {pills.map(pill => (
-            <div key={pill.idx} className="flex flex-col items-center flex-1 min-w-0">
+            <div key={pill.idx} className="flex flex-col items-center w-[3.25rem] min-w-0">
               <div
                 className={cn(
                   'w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0',
@@ -180,9 +163,14 @@ export function WeeklyProgressStrip({
             </div>
           ))}
         </div>
-        {nextScheduledDay && !isScheduledToday && completedCount < totalSessions && (
+        {/* v19-fix-10 F1: decoupled footer — name the next WORKOUT and, only
+            as a hint, its suggested day. Never assert "<day> → <workout>". */}
+        {nextPill && completedCount < totalSessions && (
           <p className="text-[11px] text-gray-500 mt-3 text-center">
-            Next up: <span className="font-medium capitalize text-sky-600">{nextScheduledDay}</span>
+            Up next: <span className="font-medium text-sky-600">{nextPill.dayLabel}</span>
+            {suggestedDay && (
+              <span className="text-gray-400">{' · suggested '}<span className="capitalize">{suggestedDay}</span></span>
+            )}
           </p>
         )}
         {completedCount >= totalSessions && (
