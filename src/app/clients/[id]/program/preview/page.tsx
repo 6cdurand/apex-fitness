@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label';
 import { useTrainerStore } from '@/lib/store';
 import { programTemplates } from '@/lib/programTemplates';
 import { ClientProgram, ClientWorkoutDay, ClientWorkoutBlock, TrainingPhase, TrainingGoal } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
 import { 
   Dialog,
   DialogContent,
@@ -277,7 +278,7 @@ export default function WeeklyPlanPreviewPage() {
     if (!template || !client) return;
 
     const program: ClientProgram = {
-      id: `program-${Date.now()}`,
+      id: uuidv4(),
       clientId,
       trainerId: client.trainerId,
       templateId: template.id,
