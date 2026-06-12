@@ -27,6 +27,7 @@ import { filterExercisesBySearch, getExerciseUsageCounts } from '@/lib/exercises
 import { toast } from 'sonner';
 import { programTemplates } from '@/lib/programTemplates';
 import { BlockType, MovementPattern } from '@/types';
+import { v4 as uuidv4 } from 'uuid';
 import { 
   ArrowLeft, 
   Plus, 
@@ -332,7 +333,7 @@ export default function WorkoutBuilderPage() {
 
     const trainerId = client?.trainerId || '';
     addClientProgram({
-      id: `program-${Date.now()}`,
+      id: uuidv4(),
       clientId,
       trainerId,
       templateId: 'custom',
