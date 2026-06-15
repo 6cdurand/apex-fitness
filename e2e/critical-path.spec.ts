@@ -1,4 +1,4 @@
-import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 
 /**
  * Catalift critical-path smoke.
@@ -58,20 +58,54 @@ function escapeRegExp(input: string): string {
 }
 
 async function fillAndSubmitLogin(page: Page): Promise<void> {
-  await page.locator('#login-email').fill(TRAINER_EMAIL);
-  await page.locator('#login-password').fill(TRAINER_PASSWORD);
+  const email = page.locator('#login-email');
+  const password = page.locator('#login-password');
+  await email.fill(TRAINER_EMAIL);
+  await password.fill(TRAINER_PASSWORD);
+  // The login inputs are React-controlled. On a cold first paint Playwright
+  // can fill before hydration wires the onChange handlers, so verify the
+  // values actually stuck (the assertion re-polls, catching a hydration
+  // reconcile that clears the field) before we submit with them.
+  await expect(email).toHaveValue(TRAINER_EMAIL);
+  await expect(password).toHaveValue(TRAINER_PASSWORD);
   // Both the Tabs trigger ("Sign In" tab) and the form submit button
   // render the text "Sign In". Scoping to the <form> selects only the
   // submit button.
   await page.locator('form').getByRole('button', { name: /^Sign In$/ }).click();
 }
 
+/**
+ * Submit the login form and wait until we leave /auth, retrying the whole
+ * fill+submit on failure.
+ *
+ * The login inputs are React-controlled, so on a cold first load (e.g. the
+ * freshly-built CI server) Playwright can fill+submit before hydration
+ * wires the onChange handlers — the submit then fires with empty state and
+ * we stay on /auth. Waiting for the bundle to load (networkidle) before the
+ * first attempt and re-filling on retry absorbs that race. Condition-based
+ * waits only — no arbitrary sleeps.
+ */
+async function submitLoginUntilAuthenticated(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await fillAndSubmitLogin(page);
+      await expect(page).not.toHaveURL(/\/auth(\?|$|#)/, { timeout: 10_000 });
+      return;
+    } catch (err) {
+      // Still on /auth — typically a pre-hydration submit. The form is
+      // hydrated now, so loop to re-fill + re-submit. Re-throw on the last
+      // attempt so a genuinely broken login still fails the gate.
+      if (attempt === MAX_ATTEMPTS) throw err;
+    }
+  }
+}
+
 async function loginAsTrainer(page: Page): Promise<void> {
   await page.goto('/auth?mode=login');
-  await fillAndSubmitLogin(page);
-  // After login the app routes /workout → /today. We just need to be off
-  // /auth and the login form must be gone.
-  await expect(page).not.toHaveURL(/\/auth(\?|$|#)/);
+  await submitLoginUntilAuthenticated(page);
+  // After login the app routes /workout → /today; the login form is gone.
   await expect(page.locator('#login-email')).toBeHidden();
 }
 
@@ -81,8 +115,7 @@ async function loginAsTrainer(page: Page): Promise<void> {
  */
 async function ensureAuthenticated(page: Page): Promise<void> {
   if (!/\/auth(\?|$|#)/.test(page.url())) return;
-  await fillAndSubmitLogin(page);
-  await expect(page).not.toHaveURL(/\/auth(\?|$|#)/);
+  await submitLoginUntilAuthenticated(page);
 }
 
 async function gotoTodayAndEnterTrainerMode(page: Page): Promise<void> {
@@ -138,31 +171,36 @@ async function assertPaymentVisibleOnClientPaymentsTab(page: Page): Promise<void
 }
 
 /**
- * Re-open the client detail page using SOFT navigation only — that is,
- * Next.js client-side `router.push` triggered by clicking the bottom-nav
- * buttons + the client list Link. Soft navigation preserves React +
- * zustand state across route changes, so we avoid the hard-navigation
- * hydration race where /clients/[id]'s auth-gate `useEffect` can fire
- * with the default `isAuthenticated: false` before zustand-persist
- * rehydrates and bounce us to /auth.
+ * Re-open the client detail page using deterministic URL navigation.
+ *
+ * This previously clicked the bottom-nav buttons (soft nav) to preserve
+ * in-memory state, but right after `page.reload()` those buttons race a
+ * re-render + the `transition-all duration-300` nav animation, so
+ * Playwright flags them as detached/not-stable and the click times out.
+ * Hard `page.goto` navigation is stable. We re-assert auth after each hop
+ * because a hard nav can race the auth-gate `useEffect` against
+ * zustand-persist rehydration and bounce to /auth (`ensureAuthenticated`
+ * is a no-op once authenticated) — the same goto + ensureAuthenticated
+ * pattern steps 2/3/8 already rely on.
+ *
+ * The two-hop (/today -> /clients) guarantees the /clients/[id] route
+ * fully unmounts before we re-enter, so its `useMemo([clientId])`-keyed
+ * slices re-derive on the next mount.
  *
  * Pre-condition: the test has previously opened this clientPath at
  * least once (so we know the underlying clientId). Post-condition: page
- * is on `${clientPath}?tab=${tab}` with the client h1 visible, allowing
- * the page's `useMemo([clientId])`-keyed slices to re-derive from a
- * fresh route mount.
+ * is on `${clientPath}?tab=${tab}` with the client h1 visible.
  */
 async function reopenClientDetail(page: Page, _clientPath: string, tab: 'overview' | 'program' | 'payments' = 'overview'): Promise<void> {
-  const nav = page.locator('nav').last();
+  // Hard-nav /today -> /clients (deterministic vs. clicking the animated
+  // bottom-nav). The two-hop forces the /clients/[id] route to unmount.
+  await page.goto('/today');
+  await ensureAuthenticated(page);
 
-  // Soft-nav back to /today, then to /clients. The two-hop ensures the
-  // /clients/[id] route fully unmounts before we re-enter, so the
-  // useMemo([clientId])-keyed slices re-derive on the next mount.
-  await nav.getByRole('button', { name: 'Today', exact: true }).click();
-  await expect(page).toHaveURL(/\/today(\?|$|#)/);
-
-  await nav.getByRole('button', { name: 'Clients', exact: true }).click();
-  await expect(page).toHaveURL(/\/clients(\?|$|#)/);
+  await page.goto('/clients');
+  await ensureAuthenticated(page);
+  // Let the freshly-loaded client list settle before picking a card.
+  await page.waitForLoadState('networkidle');
 
   const firstClientLink = page
     .locator('a[href^="/clients/"]:not([href*="/group/"])')
@@ -348,10 +386,11 @@ test.describe('Catalift critical path', () => {
     await test.step('7. hard refresh — session count + payment survive (white-screen guard)', async () => {
       await page.reload({ waitUntil: 'load' });
       await ensureAuthenticated(page);
+      // Let the post-reload render + data refetch settle before navigating.
+      await page.waitForLoadState('networkidle');
 
-      // Re-enter the client detail via soft nav (avoids the hard-reload
-      // hydration race we saw on /clients/[id]). White-screen guard:
-      // the client h1 must render.
+      // Re-enter the client detail via deterministic URL navigation.
+      // White-screen guard: the client h1 must render.
       await reopenClientDetail(page, clientPath, 'overview');
 
       // Session count still shows the post-increment value.
