@@ -58,20 +58,54 @@ function escapeRegExp(input: string): string {
 }
 
 async function fillAndSubmitLogin(page: Page): Promise<void> {
-  await page.locator('#login-email').fill(TRAINER_EMAIL);
-  await page.locator('#login-password').fill(TRAINER_PASSWORD);
+  const email = page.locator('#login-email');
+  const password = page.locator('#login-password');
+  await email.fill(TRAINER_EMAIL);
+  await password.fill(TRAINER_PASSWORD);
+  // The login inputs are React-controlled. On a cold first paint Playwright
+  // can fill before hydration wires the onChange handlers, so verify the
+  // values actually stuck (the assertion re-polls, catching a hydration
+  // reconcile that clears the field) before we submit with them.
+  await expect(email).toHaveValue(TRAINER_EMAIL);
+  await expect(password).toHaveValue(TRAINER_PASSWORD);
   // Both the Tabs trigger ("Sign In" tab) and the form submit button
   // render the text "Sign In". Scoping to the <form> selects only the
   // submit button.
   await page.locator('form').getByRole('button', { name: /^Sign In$/ }).click();
 }
 
+/**
+ * Submit the login form and wait until we leave /auth, retrying the whole
+ * fill+submit on failure.
+ *
+ * The login inputs are React-controlled, so on a cold first load (e.g. the
+ * freshly-built CI server) Playwright can fill+submit before hydration
+ * wires the onChange handlers — the submit then fires with empty state and
+ * we stay on /auth. Waiting for the bundle to load (networkidle) before the
+ * first attempt and re-filling on retry absorbs that race. Condition-based
+ * waits only — no arbitrary sleeps.
+ */
+async function submitLoginUntilAuthenticated(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await fillAndSubmitLogin(page);
+      await expect(page).not.toHaveURL(/\/auth(\?|$|#)/, { timeout: 10_000 });
+      return;
+    } catch (err) {
+      // Still on /auth — typically a pre-hydration submit. The form is
+      // hydrated now, so loop to re-fill + re-submit. Re-throw on the last
+      // attempt so a genuinely broken login still fails the gate.
+      if (attempt === MAX_ATTEMPTS) throw err;
+    }
+  }
+}
+
 async function loginAsTrainer(page: Page): Promise<void> {
   await page.goto('/auth?mode=login');
-  await fillAndSubmitLogin(page);
-  // After login the app routes /workout → /today. We just need to be off
-  // /auth and the login form must be gone.
-  await expect(page).not.toHaveURL(/\/auth(\?|$|#)/);
+  await submitLoginUntilAuthenticated(page);
+  // After login the app routes /workout → /today; the login form is gone.
   await expect(page.locator('#login-email')).toBeHidden();
 }
 
@@ -81,8 +115,7 @@ async function loginAsTrainer(page: Page): Promise<void> {
  */
 async function ensureAuthenticated(page: Page): Promise<void> {
   if (!/\/auth(\?|$|#)/.test(page.url())) return;
-  await fillAndSubmitLogin(page);
-  await expect(page).not.toHaveURL(/\/auth(\?|$|#)/);
+  await submitLoginUntilAuthenticated(page);
 }
 
 async function gotoTodayAndEnterTrainerMode(page: Page): Promise<void> {
