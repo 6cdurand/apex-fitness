@@ -1,0 +1,56 @@
+name: e2e
+
+on:
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same PR so the gate always reflects the latest push.
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e # status-check name to add to the `main` branch-protection required list
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Public Supabase values — inlined into the client bundle at build time (NEXT_PUBLIC_*).
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+      # Drive the freshly built+served CI copy, not the Netlify preview (deterministic).
+      E2E_BASE_URL: http://localhost:3000
+      # Run-time creds for the dedicated TEST trainer account — never the live account.
+      E2E_TRAINER_EMAIL: ${{ secrets.E2E_TRAINER_EMAIL }}
+      E2E_TRAINER_PASSWORD: ${{ secrets.E2E_TRAINER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20 # Next 16 needs Node 20+; repo pins no version (no .nvmrc / netlify.toml entry)
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - run: npm run build
+
+      - name: Start app and wait for ready
+        run: |
+          npm run start &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3000 >/dev/null && exit 0
+            sleep 2
+          done
+          echo "App did not become ready on :3000" && exit 1
+
+      - run: npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
