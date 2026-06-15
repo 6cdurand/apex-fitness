@@ -1,4 +1,4 @@
-import { test, expect, type Page, type BrowserContext, type Locator } from '@playwright/test';
+import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 
 /**
  * Catalift critical-path smoke.
@@ -138,31 +138,36 @@ async function assertPaymentVisibleOnClientPaymentsTab(page: Page): Promise<void
 }
 
 /**
- * Re-open the client detail page using SOFT navigation only — that is,
- * Next.js client-side `router.push` triggered by clicking the bottom-nav
- * buttons + the client list Link. Soft navigation preserves React +
- * zustand state across route changes, so we avoid the hard-navigation
- * hydration race where /clients/[id]'s auth-gate `useEffect` can fire
- * with the default `isAuthenticated: false` before zustand-persist
- * rehydrates and bounce us to /auth.
+ * Re-open the client detail page using deterministic URL navigation.
+ *
+ * This previously clicked the bottom-nav buttons (soft nav) to preserve
+ * in-memory state, but right after `page.reload()` those buttons race a
+ * re-render + the `transition-all duration-300` nav animation, so
+ * Playwright flags them as detached/not-stable and the click times out.
+ * Hard `page.goto` navigation is stable. We re-assert auth after each hop
+ * because a hard nav can race the auth-gate `useEffect` against
+ * zustand-persist rehydration and bounce to /auth (`ensureAuthenticated`
+ * is a no-op once authenticated) — the same goto + ensureAuthenticated
+ * pattern steps 2/3/8 already rely on.
+ *
+ * The two-hop (/today -> /clients) guarantees the /clients/[id] route
+ * fully unmounts before we re-enter, so its `useMemo([clientId])`-keyed
+ * slices re-derive on the next mount.
  *
  * Pre-condition: the test has previously opened this clientPath at
  * least once (so we know the underlying clientId). Post-condition: page
- * is on `${clientPath}?tab=${tab}` with the client h1 visible, allowing
- * the page's `useMemo([clientId])`-keyed slices to re-derive from a
- * fresh route mount.
+ * is on `${clientPath}?tab=${tab}` with the client h1 visible.
  */
 async function reopenClientDetail(page: Page, _clientPath: string, tab: 'overview' | 'program' | 'payments' = 'overview'): Promise<void> {
-  const nav = page.locator('nav').last();
+  // Hard-nav /today -> /clients (deterministic vs. clicking the animated
+  // bottom-nav). The two-hop forces the /clients/[id] route to unmount.
+  await page.goto('/today');
+  await ensureAuthenticated(page);
 
-  // Soft-nav back to /today, then to /clients. The two-hop ensures the
-  // /clients/[id] route fully unmounts before we re-enter, so the
-  // useMemo([clientId])-keyed slices re-derive on the next mount.
-  await nav.getByRole('button', { name: 'Today', exact: true }).click();
-  await expect(page).toHaveURL(/\/today(\?|$|#)/);
-
-  await nav.getByRole('button', { name: 'Clients', exact: true }).click();
-  await expect(page).toHaveURL(/\/clients(\?|$|#)/);
+  await page.goto('/clients');
+  await ensureAuthenticated(page);
+  // Let the freshly-loaded client list settle before picking a card.
+  await page.waitForLoadState('networkidle');
 
   const firstClientLink = page
     .locator('a[href^="/clients/"]:not([href*="/group/"])')
@@ -348,10 +353,11 @@ test.describe('Catalift critical path', () => {
     await test.step('7. hard refresh — session count + payment survive (white-screen guard)', async () => {
       await page.reload({ waitUntil: 'load' });
       await ensureAuthenticated(page);
+      // Let the post-reload render + data refetch settle before navigating.
+      await page.waitForLoadState('networkidle');
 
-      // Re-enter the client detail via soft nav (avoids the hard-reload
-      // hydration race we saw on /clients/[id]). White-screen guard:
-      // the client h1 must render.
+      // Re-enter the client detail via deterministic URL navigation.
+      // White-screen guard: the client h1 must render.
       await reopenClientDetail(page, clientPath, 'overview');
 
       // Session count still shows the post-increment value.
