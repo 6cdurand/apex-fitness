@@ -13,6 +13,13 @@ jobs:
   e2e:
     name: e2e # status-check name to add to the `main` branch-protection required list
     runs-on: ubuntu-latest
+    # Run inside the official Playwright image (browsers + OS libs pre-baked) so
+    # we skip `--with-deps`, which runs `apt-get update` and intermittently 403s
+    # on the runner's packages.microsoft.com apt repo. The tag MUST match the
+    # @playwright/test version locked in package-lock.json (1.60.0) so the
+    # pre-baked browsers match the runner — bump it on every Playwright upgrade.
+    container:
+      image: mcr.microsoft.com/playwright:v1.60.0-noble
     timeout-minutes: 15
     env:
       # Public Supabase values — inlined into the client bundle at build time (NEXT_PUBLIC_*).
@@ -33,7 +40,7 @@ jobs:
 
       - run: npm ci
 
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install chromium
 
       - run: npm run build
 
