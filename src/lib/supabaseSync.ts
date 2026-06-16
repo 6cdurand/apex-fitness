@@ -233,14 +233,24 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
     console.log('[Supabase] Fetching all real users...');
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      // F0-A (PII hardening): explicit list excludes password_hash.
+      // Columns = exactly what mapUserFromSupabase consumes.
+      .select(
+        'id, email, username, display_name, gender, date_of_birth, height, weight, preferred_unit, is_trainer, is_verified_trainer, mode, trainer_id, profile_photo, account_status, notification_prefs',
+      )
       .neq('account_status', 'placeholder');
     
     if (error) {
       // Fallback if account_status column doesn't exist yet — filter by email pattern
       if (error.message?.includes('account_status')) {
         console.log('[Supabase] account_status column not found, fetching with email filter');
-        const fallback = await supabase.from('users').select('*');
+        // F0-A: this fallback runs only when account_status is absent, so it
+        // is omitted here (mapUserFromSupabase defaults it to 'active').
+        const fallback = await supabase
+          .from('users')
+          .select(
+            'id, email, username, display_name, gender, date_of_birth, height, weight, preferred_unit, is_trainer, is_verified_trainer, mode, trainer_id, profile_photo, notification_prefs',
+          );
         if (fallback.error) return [];
         const users = (fallback.data || [])
           .filter((u: any) => !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex'))
@@ -449,7 +459,11 @@ export async function fetchAllTrainersFromSupabase(): Promise<any[]> {
     console.log('[Supabase] Fetching all trainers...');
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      // F0-A (PII hardening): explicit list excludes password_hash.
+      // Columns = exactly what mapUserFromSupabase consumes.
+      .select(
+        'id, email, username, display_name, gender, date_of_birth, height, weight, preferred_unit, is_trainer, is_verified_trainer, mode, trainer_id, profile_photo, account_status, notification_prefs',
+      )
       .eq('is_trainer', true);
 
     if (error) {

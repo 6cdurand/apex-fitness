@@ -144,7 +144,11 @@ export const db = {
   async getUser(userId: string): Promise<DbUser | null> {
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      // F0-A (PII hardening): explicit column list excludes password_hash.
+      // Columns = the DbUser contract (the sole consumer of db.getUser).
+      .select(
+        'id, email, username, display_name, profile_photo, gender, height, weight, preferred_unit, is_trainer, trainer_id, created_at, updated_at',
+      )
       .eq('id', userId)
       .single();
     if (error) return null;
