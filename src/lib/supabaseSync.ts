@@ -199,28 +199,27 @@ export async function resolveCanonicalUserByEmail(
   if (!isSupabaseConfigured()) return null;
   const emailLower = email.toLowerCase().trim();
   try {
-    // F0-B: resolve via the SECURITY DEFINER user_directory() RPC (requires
-    // STAGE 1 applied to prod). Returns null on any error so the primary
-    // canonical_user_id() path stays the source of truth.
-    const { data, error } = await supabase.rpc('user_directory', { p_email: emailLower });
+    // F0: SELF-scoped read (the caller's own email), used at login to resolve
+    // the canonical public.users.id (authStore sets user.id from this). It is
+    // on the login critical path, so it must NOT route through user_directory()
+    // (that RPC is absent until STAGE 1 — a null here would wrongly fall back to
+    // the auth uid and break diverged accounts). Explicit columns (never
+    // password_hash); permitted by the STAGE-2 self-RLS (id = canonical_user_id()).
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email, display_name, is_trainer, mode, trainer_id, account_status')
+      .eq('email', emailLower)
+      .maybeSingle();
     if (error) {
-      console.error('[Canonical User] user_directory() error for', emailLower, ':', error.message);
+      console.error('[Canonical User] Lookup error for', emailLower, ':', error.message);
       return null;
     }
-    const row = (data || [])[0];
-    if (!row) {
+    if (!data) {
       console.log('[Canonical User] No public.users row for', emailLower);
       return null;
     }
-    console.log('[Canonical User] ✅ Resolved', emailLower, '→ public.users.id =', row.id, '(account_status:', row.account_status, ')');
-    return {
-      id: row.id,
-      email: row.email,
-      display_name: row.display_name,
-      is_trainer: row.is_trainer,
-      mode: row.mode,
-      trainer_id: row.trainer_id,
-    };
+    console.log('[Canonical User] ✅ Resolved', emailLower, '→ public.users.id =', data.id, '(account_status:', data.account_status, ')');
+    return data as any;
   } catch (e) {
     console.error('[Canonical User] Exception:', e);
     return null;
