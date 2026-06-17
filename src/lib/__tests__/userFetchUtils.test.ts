@@ -6,6 +6,7 @@
  */
 
 import { chunkArray, isValidUUID, resolveClientDisplayName } from '../userFetchUtils';
+import { readWithSessionGate } from '../supabase';
 
 // ============ Simple test runner ============
 let passed = 0;
@@ -127,6 +128,76 @@ assert('partial success: failed IDs tracked separately', (() => {
   return Object.keys(usersById).length === 95 && failedIds.length === 25;
 })());
 
-// ============ Summary ============
-console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
-if (failed > 0) process.exit(1);
+// ============ BUG-008: native cold-start auth race (readWithSessionGate) ============
+// On native the Supabase session restores from Preferences asynchronously, so an
+// authenticated read fired on mount can outrun the JWT -> PostgREST 401 -> client
+// names cached as "unknown" with no refetch. readWithSessionGate (A) awaits the
+// session-ready signal BEFORE the read, and (B) retries exactly once after
+// re-confirming the session. These drive the gate with injected fakes (no live
+// Supabase client) so the ordering + one-retry contract is deterministic.
+console.log('\n--- BUG-008: cold-start session gate ---');
+
+;(async () => {
+  // CONTROL — reproduces the bug: a read fired BEFORE the async session attaches
+  // comes back 401 (the source of the "unknown" names). No gate here.
+  {
+    let attached = false;
+    queueMicrotask(() => { attached = true; });
+    const racyRead = async () => (attached
+      ? { data: [{ id: 'u1', display_name: 'Karen' }], error: null }
+      : { data: null, error: { status: 401, message: 'no JWT' } });
+    const preFix = await racyRead(); // fires immediately, no gate
+    assert('control: read before session attaches -> 401 (reproduces "unknown")',
+      (preFix.error as { status?: number } | null)?.status === 401 && preFix.data === null);
+  }
+
+  // A — the gate makes the read WAIT for session-ready, so names resolve.
+  {
+    const order: string[] = [];
+    let sessionReady = false;
+    const ensureSession = async () => { await Promise.resolve(); sessionReady = true; order.push('session'); };
+    const gatedRead = async () => {
+      order.push('read');
+      return sessionReady
+        ? { data: [{ id: 'u1', display_name: 'Karen' }], error: null }
+        : { data: null, error: { status: 401, message: 'no JWT' } };
+    };
+    const res = await readWithSessionGate(ensureSession, gatedRead);
+    assert('A: read awaits session-ready -> names resolve, no 401',
+      res.error === null && (res.data as Array<{ display_name: string }> | null)?.[0]?.display_name === 'Karen');
+    assert('A: session attaches strictly before the read fires',
+      order[0] === 'session' && order[1] === 'read');
+  }
+
+  // B — a transient 401 on the first read self-heals with exactly one retry.
+  {
+    let ensureCalls = 0;
+    let readCalls = 0;
+    const ensureSession = async () => { ensureCalls++; };
+    const flakyRead = async () => {
+      readCalls++;
+      return readCalls === 1
+        ? { data: null, error: { status: 401, message: 'no JWT' } }
+        : { data: [{ id: 'u1', display_name: 'Karen' }], error: null };
+    };
+    const res = await readWithSessionGate(ensureSession, flakyRead);
+    assert('B: one retry after re-confirming session -> resolves (no "unknown")',
+      res.error === null && readCalls === 2 && ensureCalls === 2);
+  }
+
+  // B — the retry is bounded to one: a persistent error surfaces (no loop).
+  {
+    let reads = 0;
+    const persistentErr = async () => { reads++; return { data: null, error: { status: 401 } }; };
+    const res = await readWithSessionGate(async () => {}, persistentErr);
+    assert('B: retry bounded to one (persistent error -> 2 attempts, error surfaced)',
+      (res.error as { status?: number } | null)?.status === 401 && reads === 2);
+  }
+})().then(() => {
+  // ============ Summary ============
+  console.log(`\n--- Results: ${passed} passed, ${failed} failed ---`);
+  if (failed > 0) process.exit(1);
+}).catch((e) => {
+  console.error('Async regression block crashed:', e);
+  process.exit(1);
+});
