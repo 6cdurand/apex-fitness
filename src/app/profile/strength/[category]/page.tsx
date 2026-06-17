@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import React from 'react';
+import { useParams } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,18 +22,13 @@ import { ChevronRight, Dumbbell, TrendingUp, Info } from 'lucide-react';
 import { convertWeight } from '@/lib/unitConversion';
 
 export default function StrengthCategoryPage() {
-  const router = useRouter();
   const params = useParams();
   const categoryId = params.category as string;
   
   const { user, isAuthenticated } = useAuthStore();
   const { personalBests } = useWorkoutStore();
   
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   if (!isAuthenticated || !user) return null;
 

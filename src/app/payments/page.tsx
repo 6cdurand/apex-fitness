@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { getEffectiveAutoCount, getDisplayedSessionCount } from '@/lib/stores/trainerStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -72,11 +73,7 @@ export default function PaymentsPage() {
   const [confirmPaymentPrice, setConfirmPaymentPrice] = useState('');
   const [confirmPaymentSessions, setConfirmPaymentSessions] = useState('1');
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('apex-users') || '[]');

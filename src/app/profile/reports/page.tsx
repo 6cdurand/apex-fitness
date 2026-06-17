@@ -30,9 +30,9 @@
  *   - Empty week + brand-new-user states handled
  */
 
-import { useState, useMemo, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo } from 'react';
 import { useAuthStore, useWorkoutStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -180,21 +180,13 @@ function formatVolume(kg: number): string {
 // ---------------------------------------------------------------------------
 
 export default function ReportsPage() {
-  const router = useRouter();
-  const { user, isAuthenticated } = useAuthStore();
+  const { user } = useAuthStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
 
   // Hydration flag — Zustand persist rehydrates client-side. Render a
   // light skeleton until the first client paint to avoid SSR/CSR drift
   // and to avoid showing "no workouts" before the store is ready.
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-
-  useEffect(() => {
-    if (hydrated && !isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [hydrated, isAuthenticated, router]);
+  const { hydrated } = useRequireAuth();
 
   // Anchor = Monday of the currently viewed week. Starts on the current
   // week and is paged with ◀/▶. Bounded by the user's earliest workout

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -102,11 +103,7 @@ export default function GroupDetailPage() {
   const [editPrice, setEditPrice] = useState('');
   const [editColor, setEditColor] = useState('');
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Load users
   useEffect(() => {
@@ -228,6 +225,8 @@ export default function GroupDetailPage() {
   const handleDeleteGroup = () => {
     setShowDeleteGroupConfirm(true);
   };
+
+  if (!isAuthenticated || !user) return null;
 
   if (!group) {
     return (

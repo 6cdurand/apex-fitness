@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useMemo } from 'react';
 import { useAuthStore, useMedalStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { evolvingMedals, getEvolutionGlowClass, getEvolutionFrameClass, getEvolutionLabel, isCloseToEvolving, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,7 +11,6 @@ import { Badge } from '@/components/ui/badge';
 import { BadgeCheck, Lock, Trophy, Flame, Dumbbell, Users, Star, Sparkles } from 'lucide-react';
 
 export default function MedalsPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { medals, evolvingMedalProgress } = useMedalStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
@@ -21,11 +20,7 @@ export default function MedalsPage() {
   // Determine trainer mode from user
   const isTrainerMode = user?.mode === 'trainer';
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Calculate evolving medal progress - FILTERED BY CURRENT USER ID
   const evolvingMedalData = useMemo(() => {

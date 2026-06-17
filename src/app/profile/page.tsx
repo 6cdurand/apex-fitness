@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useSocialStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { sortMedalsByPriority, getMedalDefinition, milestoneMedals } from '@/lib/medals';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
@@ -61,11 +62,7 @@ export default function ProfilePage() {
   const [gymSearchText, setGymSearchText] = useState('');
   const [gyms, setGyms] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Run deriveAll pipeline when profile loads for full consistency
   useEffect(() => {

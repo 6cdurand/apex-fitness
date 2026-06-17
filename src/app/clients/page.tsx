@@ -3,6 +3,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { useMessageStore } from '@/lib/messageStore';
 import { calculateFullStrengthRating } from '@/lib/strengthRating';
@@ -130,13 +131,13 @@ function ClientsPageContent() {
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [groupToDelete, setGroupToDelete] = useState<any>(null);
 
+  const { hydrated } = useRequireAuth();
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    } else if (user?.mode !== 'trainer') {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
       router.replace('/workout');
     }
-  }, [isAuthenticated, user?.mode, router]);
+  }, [hydrated, isAuthenticated, user?.mode, router]);
 
   // v18-D3: pragmatic on-load 3-day end-of-cycle check. No global
   // interval. Idempotent per (programId, endDate) via localStorage so

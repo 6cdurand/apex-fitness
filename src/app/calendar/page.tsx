@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -62,11 +63,7 @@ export default function CalendarPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedProgramDay, setSelectedProgramDay] = useState<number>(-1); // -1 = no program day selected
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Auto-sync on mount
   useEffect(() => {

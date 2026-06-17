@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React from 'react';
 import { useAuthStore, useWorkoutStore, useReportStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,16 +26,11 @@ import {
 import { format, startOfWeek, endOfWeek } from 'date-fns';
 
 export default function ReportsPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { workoutHistory, personalBests } = useWorkoutStore();
   const { weeklyReports, generateWeeklyReport, getLatestReport } = useReportStore();
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   const latestReport = getLatestReport();
 

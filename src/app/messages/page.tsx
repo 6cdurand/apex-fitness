@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useMessageStore, Conversation } from '@/lib/messageStore';
 import {
   fetchUsersByIdsChunked,
@@ -38,7 +38,6 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 
 export default function MessagesPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { clients } = useTrainerStore();
   const { 
@@ -65,11 +64,7 @@ export default function MessagesPage() {
   const [pickerSearch, setPickerSearch] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // D11: hydrate allUsers from all available sources so conversation headers
   // and list entries render real names + avatars even on a fresh device (no

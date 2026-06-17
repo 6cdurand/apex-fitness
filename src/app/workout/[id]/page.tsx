@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { detectIsProgramWorkout } from '@/lib/programWorkoutDetection';
 import { fetchWorkoutByIdFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -72,9 +73,10 @@ export default function WorkoutDetailPage() {
   const [coachNoteDraft, setCoachNoteDraft] = useState('');
   const [releasing, setReleasing] = useState(false);
 
+  useRequireAuth();
+
   useEffect(() => {
     if (!isAuthenticated) {
-      router.replace('/auth');
       return;
     }
 

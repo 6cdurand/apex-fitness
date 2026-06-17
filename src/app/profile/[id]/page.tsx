@@ -23,6 +23,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuthStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useMessageStore } from '@/lib/messageStore';
 import {
   fetchUsersByIdsChunked,
@@ -75,9 +76,7 @@ export default function PublicProfilePage() {
   >('idle');
 
   // Auth gate (mirrors /profile and /community).
-  useEffect(() => {
-    if (!isAuthenticated) router.replace('/auth');
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Own-profile redirect: /profile/<self> -> /profile. Do this BEFORE the
   // fetch effect so we never waste a round-trip on the current user's row.
