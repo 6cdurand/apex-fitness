@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useMedalStore, checkAllMedalsRetroactive } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { milestoneMedals, evolvingMedals, isCloseToEvolving, getEvolutionGlowClass, getEvolutionFrameClass, getNextEvolutionThreshold, isTrainerMedal } from '@/lib/medals';
 import { calculateFullStrengthRating, getTierColor, getTierBgColor, getTierName } from '@/lib/strengthRating';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
@@ -100,11 +101,7 @@ export default function TodayPage() {
   const startingSessionRef = useRef<string | null>(null);
   const [startingEventId, setStartingEventId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // No longer auto-redirect to active workout — bottom bar handles re-entry
 

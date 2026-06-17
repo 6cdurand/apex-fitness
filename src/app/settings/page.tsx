@@ -3,6 +3,7 @@
 import React, { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -468,11 +469,7 @@ function SettingsPageContent() {
     handleOAuthCallback();
   }, [handleOAuthCallback]);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   useEffect(() => {
     if (user) {

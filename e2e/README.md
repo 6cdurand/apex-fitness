@@ -89,14 +89,18 @@ worthwhile follow-up for a future PR; none block the gate today:
    semantics fire, the local-only program is dropped. As a result, the
    spec verifies that the program tab renders without error post-reload
    but does not assert that the template name re-appears.
-2. **Hard navigations to `/payments`** can race the auth-gate
-   `useEffect` against zustand-persist rehydration and bounce to
-   `/auth`. The spec stays inside `/clients/[id]` (a single soft-nav
-   route) for both the session and payment flows.
-3. **The payment list on `/clients/[id]?tab=payments` is keyed only by
-   `clientId`** in `useMemo`, so a freshly-added payment doesn't
-   surface until the route re-mounts. The spec round-trips through
-   bottom-nav buttons after recording the payment so the list re-derives.
+2. **Hard navigations to `/payments`** previously raced the auth-gate
+   `useEffect` against zustand-persist rehydration and bounced to `/auth`
+   (BUG-005b). **Fixed** via the shared `useRequireAuth` hook, which gates
+   the redirect on persist hydration. The `regression:` spec hard-navigates
+   straight to `/payments` and asserts it stays authed. The main test keeps
+   `ensureAuthenticated` after hard navs as harmless belt-and-suspenders.
+3. **The payment list on `/clients/[id]?tab=payments`** was keyed only by
+   `clientId` in `useMemo`, so a freshly-added payment didn't surface until
+   the route re-mounted (BUG-005c). **Fixed** by keying the memo on the
+   trainer store's `payments` collection. The `regression:` spec records a
+   payment and asserts it appears without a re-mount; the main test's
+   round-trip remains valid.
 
 ## Why one spec, not many
 

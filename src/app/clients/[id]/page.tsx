@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { getDisplayedSessionCount } from '@/lib/stores/trainerStore';
 import { getClientName as getClientNameUtil } from '@/lib/clientUtils';
 import { convertProgramDayToTemplate } from '@/lib/programStartUtils';
@@ -89,6 +90,7 @@ export default function ClientDetailPage() {
     addCalendarEvent,
     deleteCalendarEvent,
     clientPrograms: storeClientPrograms,
+    payments: allPayments,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -239,13 +241,13 @@ export default function ClientDetailPage() {
     ? (parseFloat(paymentAmount) / parseInt(sessionsCovered)).toFixed(2)
     : null;
 
+  const { hydrated } = useRequireAuth();
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    } else if (user?.mode !== 'trainer') {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
       router.replace('/workout');
     }
-  }, [isAuthenticated, user?.mode, router]);
+  }, [hydrated, isAuthenticated, user?.mode, router]);
 
   // Get client data
   const clientRelation = useMemo(() => getClientById(clientId), [clientId, clients]);
@@ -276,7 +278,7 @@ export default function ClientDetailPage() {
   }, [clientUserRaw, clientRelation, clientId]);
   
   const sessions = useMemo(() => getSessionsForClient(clientId), [clientId]);
-  const payments = useMemo(() => getPaymentsForClient(clientId), [clientId]);
+  const payments = useMemo(() => getPaymentsForClient(clientId), [clientId, allPayments]);
   const packages = useMemo(() => getPackagesForClient(clientId), [clientId]);
   const calendarEvents = useMemo(() => getEventsForClient(clientId), [clientId]);
   const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId, storeClientPrograms]);

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { useAuthStore, useWorkoutStore, useTrainerStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { suggestedPrograms, SuggestedProgram } from '@/lib/suggestedPrograms';
 import { convertProgramDayToTemplate, normalizeSetCount } from '@/lib/programStartUtils';
 import { __shouldSkipClientFetch } from '@/lib/modeAwareFetchGate';
@@ -340,11 +341,7 @@ export default function ProgramPage() {
     setSavedToCalendar(true);
   };
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   if (!isAuthenticated || !user) return null;
 

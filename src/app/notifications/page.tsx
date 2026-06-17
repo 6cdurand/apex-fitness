@@ -3,6 +3,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useSocialStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -43,11 +44,7 @@ export default function NotificationsPage() {
     clearAllNotifications,
   } = useSocialStore();
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // v17-D2: clear the bell-badge by stamping `seen_at` on all currently
   // unseen notifications for this user. Optimistic local update fires

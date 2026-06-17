@@ -497,4 +497,100 @@ test.describe('Catalift critical path', () => {
       }
     });
   });
+
+  // ───────────────────────────────────────────────────────────────────
+  // BUG-005b + BUG-005c regression.
+  //
+  // This spec is engineered to be RED on the pre-fix build and GREEN
+  // after, by deliberately removing the two workarounds the main test
+  // leans on:
+  //   - BUG-005b: hard-navigate (`page.goto`) straight to /payments while
+  //     authenticated and assert we do NOT land on /auth. We intentionally
+  //     do NOT call `ensureAuthenticated()` after the goto — that helper
+  //     papers over the zustand-persist hydration race the fix removes.
+  //   - BUG-005c: record a payment on /clients/[id] and assert the row
+  //     appears WITHOUT the `reopenClientDetail` route re-mount the main
+  //     test uses, proving the payments `useMemo` now re-derives in place.
+  // ───────────────────────────────────────────────────────────────────
+  test('regression: hard-nav /payments stays authed + payment shows without re-mount', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+
+    const REG_TAG = `e2e-reg-${Date.now()}`;
+    const REG_AMOUNT = '40';
+    const REG_DESCRIPTION = `${REG_TAG} payment`;
+
+    await test.step('login + open the first test client', async () => {
+      await loginAsTrainer(page);
+      await gotoTodayAndEnterTrainerMode(page);
+
+      await page.goto('/clients');
+      await ensureAuthenticated(page);
+      const firstClientLink = page
+        .locator('a[href^="/clients/"]:not([href*="/group/"])')
+        .first();
+      await expect(firstClientLink).toBeVisible({ timeout: 15_000 });
+      await firstClientLink.click();
+      await expect(page).toHaveURL(/\/clients\/[^/?#]+(\?|#|$)/);
+      await expect(page.locator('h1').first()).toBeVisible({ timeout: 10_000 });
+    });
+
+    // ─── BUG-005c: new payment surfaces without a route re-mount ──────
+    await test.step('BUG-005c: recorded payment appears without re-mounting the route', async () => {
+      await clickClientTab(page, 'Payments');
+
+      await page.getByRole('button', { name: 'Record Payment' }).first().click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
+      await dialog.getByPlaceholder('0.00').fill(REG_AMOUNT);
+      await dialog
+        .getByPlaceholder(/PT Session, Package Payment/)
+        .fill(REG_DESCRIPTION);
+      await dialog.getByRole('button', { name: 'Record Payment' }).click();
+      await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+      // NO reopenClientDetail / reload: the Payment History list must
+      // re-derive in place. Pre-fix (useMemo keyed only on clientId) the
+      // row never surfaces here, so this is the red→green gate for 005c.
+      await expect(page.getByText(REG_DESCRIPTION)).toBeVisible({ timeout: 10_000 });
+    });
+
+    // ─── BUG-005b: hard nav to /payments must NOT bounce to /auth ─────
+    await test.step('BUG-005b: hard-navigate to /payments without bouncing to /auth', async () => {
+      await page.goto('/payments', { waitUntil: 'load' });
+      // Deliberately NO ensureAuthenticated() here.
+      await page.waitForLoadState('networkidle');
+      await expect(page).not.toHaveURL(/\/auth(\?|$|#)/);
+      await expect(
+        page.getByRole('heading', { name: 'Payments', exact: true }),
+      ).toBeVisible({ timeout: 10_000 });
+    });
+
+    // ─── Teardown — best-effort delete of the regression payment ──────
+    await test.step('teardown: delete the regression payment', async () => {
+      try {
+        await page.goto('/payments', { waitUntil: 'load' });
+        await ensureAuthenticated(page);
+        const historyTab = page.getByRole('tab', { name: /^History/ });
+        if ((await historyTab.count()) > 0) {
+          await historyTab.click();
+          const ourRow = page
+            .locator('[data-slot="card"]')
+            .filter({ hasText: REG_DESCRIPTION })
+            .last();
+          if ((await ourRow.count()) > 0) {
+            const deleteIcon = ourRow.locator('button:has(svg.lucide-x)').first();
+            if ((await deleteIcon.count()) > 0) {
+              await deleteIcon.click();
+              const confirmBtn = page.getByRole('button', { name: 'Delete Payment' });
+              if ((await confirmBtn.count()) > 0) await confirmBtn.click();
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[reg teardown] payment delete skipped:', err);
+      }
+    });
+  });
 });

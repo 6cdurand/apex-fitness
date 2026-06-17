@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -90,13 +91,13 @@ export default function BookClientPage() {
     }));
   }, [activeProgram]);
 
+  const { hydrated } = useRequireAuth();
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    } else if (user?.mode !== 'trainer') {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
       router.replace('/workout');
     }
-  }, [isAuthenticated, user?.mode, router]);
+  }, [hydrated, isAuthenticated, user?.mode, router]);
 
   // Load users from both localStorage AND Supabase for cross-device sync
   useEffect(() => {
