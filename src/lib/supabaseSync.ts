@@ -1,4 +1,4 @@
-import { supabase, db, type DbPersonalBest } from './supabase';
+import { supabase, db, ensureSupabaseSession, readWithSessionGate, type DbPersonalBest } from './supabase';
 import type { Workout, PersonalBest, Medal, User, ClientSession, SessionPackage } from '@/types';
 
 /**
@@ -31,7 +31,15 @@ export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
   
   try {
     // Check if user already exists (use maybeSingle to avoid 406 error when not found)
-    const { data: existing } = await supabase.from('users').select('id').eq('id', user.id).maybeSingle();
+    // BUG-008: gate on session-ready (+ one retry) so this on-mount existence
+    // check (the `GET /users?select=id&id=eq.<uid>` in the native logs) doesn't
+    // outrun the async session restore → 401. A 401 here reads as "user missing"
+    // and fires a spurious users INSERT (the `POST 401 /users` heal-write);
+    // gating the read makes the existing row resolve, so the insert never runs.
+    const { data: existing } = await readWithSessionGate(
+      ensureSupabaseSession,
+      () => supabase.from('users').select('id').eq('id', user.id).maybeSingle(),
+    );
     
     if (existing) {
       console.log('[Supabase] User already exists in DB:', user.id);
@@ -205,13 +213,19 @@ export async function resolveCanonicalUserByEmail(
     // (that RPC is absent until STAGE 1 — a null here would wrongly fall back to
     // the auth uid and break diverged accounts). Explicit columns (never
     // password_hash); permitted by the STAGE-2 self-RLS (id = canonical_user_id()).
-    const { data, error } = await supabase
-      .from('users')
-      .select('id, email, display_name, is_trainer, mode, trainer_id, account_status')
-      .eq('email', emailLower)
-      .maybeSingle();
+    // BUG-008: gate on session-ready (+ one retry) so this on-mount identity
+    // read doesn't outrun the native async session restore → 401.
+    const { data, error } = await readWithSessionGate(
+      ensureSupabaseSession,
+      () =>
+        supabase
+          .from('users')
+          .select('id, email, display_name, is_trainer, mode, trainer_id, account_status')
+          .eq('email', emailLower)
+          .maybeSingle(),
+    );
     if (error) {
-      console.error('[Canonical User] Lookup error for', emailLower, ':', error.message);
+      console.error('[Canonical User] Lookup error for', emailLower, ':', (error as { message?: string })?.message);
       return null;
     }
     if (!data) {
@@ -243,10 +257,15 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
     // Requires STAGE 1 applied to prod; returns [] on error (callers fall back
     // to the local cache).
     console.log('[Supabase] Fetching all real users via user_directory()...');
-    const { data, error } = await supabase.rpc('user_directory');
+    // BUG-008: gate on session-ready (+ one retry) so the on-mount directory
+    // read doesn't outrun the native async session restore → 401 → "unknown".
+    const { data, error } = await readWithSessionGate(
+      ensureSupabaseSession,
+      () => supabase.rpc('user_directory'),
+    );
 
     if (error) {
-      console.error('[Supabase] user_directory() error:', error.message);
+      console.error('[Supabase] user_directory() error:', (error as { message?: string })?.message);
       return [];
     }
 
@@ -437,10 +456,15 @@ export async function fetchAllTrainersFromSupabase(): Promise<any[]> {
     // excludes placeholders and never returns password_hash. Requires STAGE 1
     // applied to prod; returns [] on error.
     console.log('[Supabase] Fetching all trainers via user_directory()...');
-    const { data, error } = await supabase.rpc('user_directory', { p_trainers_only: true });
+    // BUG-008: gate on session-ready (+ one retry) so the on-mount directory
+    // read doesn't outrun the native async session restore → 401.
+    const { data, error } = await readWithSessionGate(
+      ensureSupabaseSession,
+      () => supabase.rpc('user_directory', { p_trainers_only: true }),
+    );
 
     if (error) {
-      console.error('[Supabase] user_directory() error fetching trainers:', error.message);
+      console.error('[Supabase] user_directory() error fetching trainers:', (error as { message?: string })?.message);
       return [];
     }
 

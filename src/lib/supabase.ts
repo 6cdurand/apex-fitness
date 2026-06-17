@@ -37,6 +37,56 @@ export const supabase = createClient(
   },
 );
 
+/**
+ * BUG-008 (native cold-start auth race) — session-ready gate.
+ *
+ * On native (Capacitor) the Supabase client restores its auth session from
+ * Preferences ASYNCHRONOUSLY (see `capacitorAsyncStorage`). Authenticated
+ * reads fired on mount — `user_directory()`, the `users` self-read, chunked
+ * client-name lookups — can outrun that restore and go out with NO JWT,
+ * which PostgREST answers with `401`. The clients page then caches every
+ * name as "unknown" and never refetches. On web the session restores
+ * synchronously from localStorage, so the same calls were already
+ * authenticated — which is why only native showed the bug.
+ *
+ * `getSession()` blocks on GoTrue's initialize/recovery promise, so awaiting
+ * it guarantees the in-memory session (and its `Authorization` header) is
+ * attached before the caller issues its PostgREST request. It is a cheap
+ * in-memory read once recovery has completed, so calling this at the top of
+ * each identity/name loader is effectively free after the first cold call.
+ */
+export async function ensureSupabaseSession(): Promise<void> {
+  try {
+    await supabase.auth.getSession();
+  } catch {
+    // Never block (or fail) a read on a session-probe error — the read will
+    // simply behave as it does today (401 → local-cache fallback).
+  }
+}
+
+/**
+ * BUG-008 — race-safe authenticated read.
+ *
+ * (A) awaits a session-ready signal BEFORE the read (removes the cold-start
+ * race at its root), and (B) — belt-and-braces, since the name path fires
+ * from many entry points — retries exactly ONCE, after re-confirming the
+ * session, if the first read still reports an error (e.g. a token that
+ * attached a tick late). Generic + dependency-injected so the ordering and
+ * one-retry contract is unit-testable without a live Supabase client
+ * (see `userFetchUtils.test.ts`).
+ */
+export async function readWithSessionGate<T>(
+  ensureSession: () => Promise<void>,
+  read: () => PromiseLike<{ data: T; error: unknown }>,
+): Promise<{ data: T; error: unknown }> {
+  await ensureSession();
+  const first = await read();
+  if (!first.error) return first;
+  // One self-healing retry after re-confirming the session is attached.
+  await ensureSession();
+  return read();
+}
+
 // Database types
 export interface DbUser {
   id: string;

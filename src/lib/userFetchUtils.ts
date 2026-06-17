@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, ensureSupabaseSession, readWithSessionGate } from './supabase';
 
 // ============================================================
 // Chunked user fetch + display name resolution utilities
@@ -55,13 +55,20 @@ export async function fetchUsersByIdsChunked(
   // Fetch each chunk independently
   const results = await Promise.allSettled(
     chunks.map(async (chunk, i) => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, display_name, username, profile_photo')
-        .in('id', chunk);
+      // BUG-008: gate the read on session-ready (+ one retry) so a native
+      // cold-start mount can't fire it before the JWT is attached → 401 →
+      // names resolve to "unknown" with no refetch.
+      const { data, error } = await readWithSessionGate(
+        ensureSupabaseSession,
+        () =>
+          supabase
+            .from('users')
+            .select('id, display_name, username, profile_photo')
+            .in('id', chunk),
+      );
 
       if (error) {
-        console.error(`[UserFetch] Chunk ${i + 1}/${chunks.length} failed (${chunk.length} ids):`, error.message);
+        console.error(`[UserFetch] Chunk ${i + 1}/${chunks.length} failed (${chunk.length} ids):`, (error as { message?: string })?.message);
         throw { chunk, error };
       }
 
