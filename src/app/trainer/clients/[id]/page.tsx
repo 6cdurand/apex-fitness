@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { useMessageStore } from '@/lib/messageStore';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -117,17 +118,13 @@ export default function TrainerClientDetailPage() {
     setImportForm({ totalSessions: 10, usedSessions: 0, priceTotal: 500, startDate: new Date().toISOString().split('T')[0] });
   };
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-      return;
-    }
+  const { hydrated } = useRequireAuth();
 
-    if (user?.mode !== 'trainer') {
+  useEffect(() => {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
       router.replace('/workout');
-      return;
     }
-  }, [isAuthenticated, router, user?.mode]);
+  }, [hydrated, isAuthenticated, router, user?.mode]);
 
   useEffect(() => {
     const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');

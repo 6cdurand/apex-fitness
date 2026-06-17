@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useSocialStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import Link from 'next/link';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -40,11 +41,7 @@ export default function FeedPage() {
   const [newPostContent, setNewPostContent] = useState('');
   const [selectedUser, setSelectedUser] = useState<any>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   const handleCreatePost = () => {
     if (newPostContent.trim()) {

@@ -144,7 +144,11 @@ export const db = {
   async getUser(userId: string): Promise<DbUser | null> {
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      // F0-A (PII hardening): explicit column list excludes password_hash.
+      // Columns = the DbUser contract (the sole consumer of db.getUser).
+      .select(
+        'id, email, username, display_name, profile_photo, gender, height, weight, preferred_unit, is_trainer, trainer_id, created_at, updated_at',
+      )
       .eq('id', userId)
       .single();
     if (error) return null;
@@ -152,10 +156,14 @@ export const db = {
   },
 
   async upsertUser(user: Partial<DbUser> & { id: string }): Promise<DbUser | null> {
+    // F0-B: explicit DbUser columns (never password_hash) so the STAGE 2 column
+    // GRANT does not break this RETURNING. (No callers today — kept for parity.)
     const { data, error } = await supabase
       .from('users')
       .upsert(user)
-      .select()
+      .select(
+        'id, email, username, display_name, profile_photo, gender, height, weight, preferred_unit, is_trainer, trainer_id, created_at, updated_at',
+      )
       .single();
     if (error) {
       console.error('Error upserting user:', error);

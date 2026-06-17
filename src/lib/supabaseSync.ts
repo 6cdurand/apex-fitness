@@ -125,7 +125,9 @@ export async function registerUserToSupabase(user: User, accountStatus: 'active'
     
     // Insert new user
     console.log('[Supabase Register] Inserting new user...');
-    const { data, error, status } = await supabase.from('users').insert(userData).select();
+    // F0-B: no .select() — the RETURNING row is unused, and SELECT * would
+    // require the password_hash column once the STAGE 2 GRANT lands.
+    const { error, status } = await supabase.from('users').insert(userData);
     
     console.log('[Supabase Register] Insert response - status:', status);
     
@@ -197,6 +199,12 @@ export async function resolveCanonicalUserByEmail(
   if (!isSupabaseConfigured()) return null;
   const emailLower = email.toLowerCase().trim();
   try {
+    // F0: SELF-scoped read (the caller's own email), used at login to resolve
+    // the canonical public.users.id (authStore sets user.id from this). It is
+    // on the login critical path, so it must NOT route through user_directory()
+    // (that RPC is absent until STAGE 1 — a null here would wrongly fall back to
+    // the auth uid and break diverged accounts). Explicit columns (never
+    // password_hash); permitted by the STAGE-2 self-RLS (id = canonical_user_id()).
     const { data, error } = await supabase
       .from('users')
       .select('id, email, display_name, is_trainer, mode, trainer_id, account_status')
@@ -230,28 +238,18 @@ export async function fetchAllUsersFromSupabase(): Promise<any[]> {
   }
   
   try {
-    console.log('[Supabase] Fetching all real users...');
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .neq('account_status', 'placeholder');
-    
+    // F0-B: real users come from the SECURITY DEFINER user_directory() RPC,
+    // which already excludes placeholders and never returns password_hash.
+    // Requires STAGE 1 applied to prod; returns [] on error (callers fall back
+    // to the local cache).
+    console.log('[Supabase] Fetching all real users via user_directory()...');
+    const { data, error } = await supabase.rpc('user_directory');
+
     if (error) {
-      // Fallback if account_status column doesn't exist yet — filter by email pattern
-      if (error.message?.includes('account_status')) {
-        console.log('[Supabase] account_status column not found, fetching with email filter');
-        const fallback = await supabase.from('users').select('*');
-        if (fallback.error) return [];
-        const users = (fallback.data || [])
-          .filter((u: any) => !u.email?.endsWith('@placeholder.local') && !u.email?.endsWith('@client.apex'))
-          .map(mapUserFromSupabase);
-        console.log(`[Supabase] Found ${users.length} users (email-filtered fallback)`);
-        return users;
-      }
-      console.error('[Supabase] Error fetching users:', error.message);
+      console.error('[Supabase] user_directory() error:', error.message);
       return [];
     }
-    
+
     const users = (data || []).map(mapUserFromSupabase);
     console.log(`[Supabase] Found ${users.length} real users`);
     return users;
@@ -294,16 +292,18 @@ export async function getValidUserIdsFromSupabase(): Promise<Set<string>> {
   }
   
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('id');
+    // F0-B: ids come from user_directory() (placeholder-excluded). Placeholder
+    // clients are still covered by the trainer_clients check in
+    // cleanupDeletedClients, so dropping placeholder ids here is safe.
+    const { data, error } = await supabase.rpc('user_directory');
     
     if (error) {
-      console.error('[Supabase] Error fetching user IDs:', error.message);
+      console.error('[Supabase] user_directory() error fetching user IDs:', error.message);
       return new Set();
     }
     
-    const ids = new Set((data || []).map(u => u.id));
+    const rows = (data ?? []) as Array<{ id: string }>;
+    const ids = new Set<string>(rows.map((u) => u.id));
     console.log(`[Supabase] Found ${ids.size} valid user IDs`);
     return ids;
   } catch (e) {
@@ -358,22 +358,9 @@ export async function cleanupDeletedClients(
   return removedCount;
 }
 
-// Check if email exists in Supabase
-export async function checkEmailExistsInSupabase(email: string): Promise<boolean> {
-  if (!isSupabaseConfigured()) return false;
-  
-  try {
-    const { data } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    
-    return !!data;
-  } catch {
-    return false;
-  }
-}
+// F0-B: checkEmailExistsInSupabase removed — dead code (no callers) and
+// Supabase Auth signUp already enforces email uniqueness. The drafted
+// email_exists() RPC in PR #43 can be dropped accordingly.
 
 // Update user in Supabase
 export async function updateUserInSupabase(userId: string, updates: Partial<User>): Promise<boolean> {
@@ -446,14 +433,14 @@ export async function fetchAllTrainersFromSupabase(): Promise<any[]> {
   }
 
   try {
-    console.log('[Supabase] Fetching all trainers...');
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('is_trainer', true);
+    // F0-B: trainers come from user_directory(p_trainers_only => true), which
+    // excludes placeholders and never returns password_hash. Requires STAGE 1
+    // applied to prod; returns [] on error.
+    console.log('[Supabase] Fetching all trainers via user_directory()...');
+    const { data, error } = await supabase.rpc('user_directory', { p_trainers_only: true });
 
     if (error) {
-      console.error('[Supabase] Error fetching trainers:', error.message);
+      console.error('[Supabase] user_directory() error fetching trainers:', error.message);
       return [];
     }
 

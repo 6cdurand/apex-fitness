@@ -55,6 +55,7 @@ import Link from 'next/link';
 import { Key, Database, Download, FileText, ChevronLeft, Mail, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import {
@@ -112,11 +113,7 @@ function PrivacySettingsContent() {
 
   // Auth gate: mirror `/settings` — null-guard + soft redirect. Avoids
   // flashing the page content to unauthenticated visitors.
-  React.useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   React.useEffect(() => {
     return () => {

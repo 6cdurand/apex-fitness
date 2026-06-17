@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore, useWorkoutStore, useMedalStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { getClientName } from '@/lib/clientUtils';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -36,11 +37,7 @@ function WorkoutHistoryPageContent() {
   const [filterMode, setFilterMode] = useState<'all' | 'week' | 'month' | 'programs' | 'solo'>('all');
   const [visibleCount, setVisibleCount] = useState(20);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   if (!isAuthenticated) return null;
 

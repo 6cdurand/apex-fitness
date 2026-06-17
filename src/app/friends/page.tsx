@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useSocialStore, useTrainerStore, useWorkoutStore, useMedalStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
@@ -37,11 +38,7 @@ export default function FriendsPage() {
   const [consultationNotes, setConsultationNotes] = useState('');
   const [isBooking, setIsBooking] = useState(false);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   useEffect(() => {
     const isPlaceholder = (u: any) =>

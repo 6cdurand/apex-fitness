@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -38,13 +39,13 @@ export default function BuilderPage() {
   const { workoutLibrary, savedBlocks, circuitLibrary, clients, clientPrograms, deleteClientProgram } = useTrainerStore();
   const [programToDelete, setProgramToDelete] = useState<{ id: string; name: string; clientName: string } | null>(null);
 
+  const { hydrated } = useRequireAuth();
+
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    } else if (user?.mode !== 'trainer') {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
       router.replace('/program');
     }
-  }, [isAuthenticated, user?.mode, router]);
+  }, [hydrated, isAuthenticated, user?.mode, router]);
 
   if (!isAuthenticated || user?.mode !== 'trainer') return null;
 

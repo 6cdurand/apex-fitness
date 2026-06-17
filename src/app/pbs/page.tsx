@@ -20,9 +20,9 @@
  *   - Empty state when there are no PBs / no matches
  */
 
-import { useEffect, useState, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useMemo } from 'react';
 import { useAuthStore, useWorkoutStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -66,7 +66,6 @@ function getExerciseDisplayName(exerciseId: string, fallbackName?: string): stri
 type SortMode = 'e1rm' | 'recent' | 'alphabetical';
 
 export default function PBsPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { personalBests, workoutHistory } = useWorkoutStore();
 
@@ -74,11 +73,7 @@ export default function PBsPage() {
   const [sortBy, setSortBy] = useState<SortMode>('e1rm');
   const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   // Index of exerciseId -> display name from history (used as fallback when
   // the catalog lookup misses, e.g. for ad-hoc / template-only exercises).

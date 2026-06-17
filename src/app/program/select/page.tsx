@@ -19,7 +19,7 @@
  *   whichever template was picked.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { programTemplates } from '@/lib/programTemplates';
 import {
   Plus,
@@ -44,8 +45,15 @@ export default function ProgramSelectPage() {
   const [mode, setMode] = useState<'choose' | 'templates'>('choose');
   const [tab, setTab] = useState<'system' | 'mine'>('system');
 
+  const { hydrated } = useRequireAuth();
+
+  useEffect(() => {
+    if (hydrated && isAuthenticated && user?.mode !== 'trainer') {
+      router.replace('/auth');
+    }
+  }, [hydrated, isAuthenticated, user?.mode, router]);
+
   if (!isAuthenticated || user?.mode !== 'trainer') {
-    if (typeof window !== 'undefined') router.replace('/auth');
     return null;
   }
 

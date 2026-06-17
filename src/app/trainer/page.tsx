@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore, useWorkoutStore } from '@/lib/store';
+import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +30,6 @@ import { fetchAllTrainersFromSupabase, linkClientToTrainer } from '@/lib/supabas
 import { Loader2 } from 'lucide-react';
 
 export default function MyTrainerPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const { assignedWorkouts } = useTrainerStore();
   const [myTrainer, setMyTrainer] = useState<any>(null);
@@ -40,11 +39,7 @@ export default function MyTrainerPage() {
   const [trainerSearchQuery, setTrainerSearchQuery] = useState('');
   const [selectedTrainer, setSelectedTrainer] = useState<any>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.replace('/auth');
-    }
-  }, [isAuthenticated, router]);
+  useRequireAuth();
 
   useEffect(() => {
     if (user?.trainerId) {
