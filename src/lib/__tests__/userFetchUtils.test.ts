@@ -169,7 +169,8 @@ console.log('\n--- BUG-008: cold-start session gate ---');
       order[0] === 'session' && order[1] === 'read');
   }
 
-  // B — a transient 401 on the first read self-heals with exactly one retry.
+  // B — a transient 401 on the first read self-heals on the next retry.
+  // (no-op sleep so the bounded backoff doesn't slow the test down.)
   {
     let ensureCalls = 0;
     let readCalls = 0;
@@ -180,18 +181,41 @@ console.log('\n--- BUG-008: cold-start session gate ---');
         ? { data: null, error: { status: 401, message: 'no JWT' } }
         : { data: [{ id: 'u1', display_name: 'Karen' }], error: null };
     };
-    const res = await readWithSessionGate(ensureSession, flakyRead);
-    assert('B: one retry after re-confirming session -> resolves (no "unknown")',
+    const res = await readWithSessionGate(ensureSession, flakyRead, { sleep: async () => {} });
+    assert('B: retry after re-confirming session -> resolves (no "unknown")',
       res.error === null && readCalls === 2 && ensureCalls === 2);
   }
 
-  // B — the retry is bounded to one: a persistent error surfaces (no loop).
+  // B — the retry is bounded: a persistent error surfaces after 1 initial +
+  // `retries` attempts (default 2 retries => 3 reads), never looping forever.
   {
     let reads = 0;
     const persistentErr = async () => { reads++; return { data: null, error: { status: 401 } }; };
-    const res = await readWithSessionGate(async () => {}, persistentErr);
-    assert('B: retry bounded to one (persistent error -> 2 attempts, error surfaced)',
-      (res.error as { status?: number } | null)?.status === 401 && reads === 2);
+    const res = await readWithSessionGate(async () => {}, persistentErr, { sleep: async () => {} });
+    assert('B: retry bounded (persistent error -> 3 attempts, error surfaced)',
+      (res.error as { status?: number } | null)?.status === 401 && reads === 3);
+  }
+
+  // ============ Regression A (iPadOS 18): late-attaching token self-heals ====
+  // PR #49's single getSession()/one-retry lost the race on iPadOS 18's slower
+  // restore. The hardened gate retries with bounded backoff: a token that only
+  // attaches by the THIRD read still resolves names — no 401-driven "unknown".
+  {
+    let attached = 0;
+    let reads = 0;
+    // Session attaches on the 3rd ensureSession call (initial + 2 retries).
+    const ensureSession = async () => { attached++; };
+    const lateRead = async () => {
+      reads++;
+      return attached >= 3
+        ? { data: [{ id: 'u1', display_name: 'Karen' }], error: null }
+        : { data: null, error: { status: 401, message: 'no JWT' } };
+    };
+    const res = await readWithSessionGate(ensureSession, lateRead, { sleep: async () => {} });
+    assert('Regression A: token attaches after first render -> names resolve (no "unknown")',
+      res.error === null
+      && (res.data as Array<{ display_name: string }> | null)?.[0]?.display_name === 'Karen'
+      && reads === 3);
   }
 })().then(() => {
   // ============ Summary ============
