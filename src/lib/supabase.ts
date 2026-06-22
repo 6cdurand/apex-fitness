@@ -54,10 +54,46 @@ export const supabase = createClient(
  * attached before the caller issues its PostgREST request. It is a cheap
  * in-memory read once recovery has completed, so calling this at the top of
  * each identity/name loader is effectively free after the first cold call.
+ *
+ * BUG-008 hardening (iPadOS 18 regression). PR #49 awaited `getSession()`,
+ * which RESOLVES IMMEDIATELY with `session: null` if the async Preferences
+ * restore hasn't landed yet — so on iPadOS 18's slower restore the read still
+ * fired with no JWT and raced to a 401 ("unknown" names). We now treat a null
+ * session as "not ready yet" and wait for the FIRST session-bearing auth event
+ * (`INITIAL_SESSION` / `SIGNED_IN` / `TOKEN_REFRESHED`) from
+ * `onAuthStateChange`, bounded by a timeout so an unauthenticated app never
+ * blocks. supabase-js emits the current auth state on subscribe, so a session
+ * that attaches between the `getSession()` probe and the subscribe is not
+ * missed. On web (and warm native) `getSession()` returns a session
+ * synchronously and we return on the fast path — behaviour is unchanged.
  */
-export async function ensureSupabaseSession(): Promise<void> {
+export async function ensureSupabaseSession(timeoutMs = 3000): Promise<void> {
   try {
-    await supabase.auth.getSession();
+    const { data } = await supabase.auth.getSession();
+    // Fast path: web restores synchronously; warm native is already attached.
+    if (data?.session) return;
+
+    // Native cold start: the session may still be restoring asynchronously.
+    // Wait for the first auth event that actually carries a session, bounded
+    // by `timeoutMs` so an unauthenticated user never hangs the read.
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          sub.subscription.unsubscribe();
+        } catch {
+          // ignore — already torn down.
+        }
+        resolve();
+      };
+      const timer = setTimeout(finish, timeoutMs);
+      const sub = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) finish();
+      }).data;
+    });
   } catch {
     // Never block (or fail) a read on a session-probe error — the read will
     // simply behave as it does today (401 → local-cache fallback).
@@ -69,22 +105,36 @@ export async function ensureSupabaseSession(): Promise<void> {
  *
  * (A) awaits a session-ready signal BEFORE the read (removes the cold-start
  * race at its root), and (B) — belt-and-braces, since the name path fires
- * from many entry points — retries exactly ONCE, after re-confirming the
- * session, if the first read still reports an error (e.g. a token that
- * attached a tick late). Generic + dependency-injected so the ordering and
- * one-retry contract is unit-testable without a live Supabase client
- * (see `userFetchUtils.test.ts`).
+ * from many entry points — retries with a small bounded backoff, re-confirming
+ * the session before each retry, if the read still reports an error (e.g. a
+ * token that attaches a few ticks late on iPadOS 18). A single retry was not
+ * enough on the slower iPad restore, so the default is up to 2 retries (3
+ * attempts total) with linear backoff. Generic + dependency-injected (incl. an
+ * injectable `sleep`) so the ordering / bounded-retry contract is unit-testable
+ * without a live Supabase client or real timers (see `userFetchUtils.test.ts`).
  */
 export async function readWithSessionGate<T>(
   ensureSession: () => Promise<void>,
   read: () => PromiseLike<{ data: T; error: unknown }>,
+  opts?: { retries?: number; backoffMs?: number; sleep?: (ms: number) => Promise<void> },
 ): Promise<{ data: T; error: unknown }> {
+  const retries = opts?.retries ?? 2;
+  const backoffMs = opts?.backoffMs ?? 150;
+  const sleep = opts?.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+
   await ensureSession();
-  const first = await read();
-  if (!first.error) return first;
-  // One self-healing retry after re-confirming the session is attached.
-  await ensureSession();
-  return read();
+  let result = await read();
+  let attempt = 0;
+  // Self-healing retries: a late-attaching token (iPadOS 18) makes the early
+  // read 401; re-confirm the session and retry, bounded so a genuine error
+  // surfaces instead of looping forever.
+  while (result.error && attempt < retries) {
+    attempt++;
+    await sleep(backoffMs * attempt);
+    await ensureSession();
+    result = await read();
+  }
+  return result;
 }
 
 // Database types

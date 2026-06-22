@@ -91,6 +91,12 @@ export default function ClientDetailPage() {
     deleteCalendarEvent,
     clientPrograms: storeClientPrograms,
     payments: allPayments,
+    // BACKLOG #10 / BUG-007: subscribe to the raw collections so the memos
+    // below recompute (and the component re-renders) when a refetch-on-resume
+    // mutates them — without a remount. Mirrors PR #45's `allPayments` fix.
+    sessions: storeSessions,
+    sessionPackages: storeSessionPackages,
+    calendarEvents: storeCalendarEvents,
   } = useTrainerStore();
   const [allUsers, setAllUsers] = useState<UserType[]>([]);
   
@@ -277,10 +283,13 @@ export default function ClientDetailPage() {
     } as UserType;
   }, [clientUserRaw, clientRelation, clientId]);
   
-  const sessions = useMemo(() => getSessionsForClient(clientId), [clientId]);
+  // BACKLOG #10: key each memo on its underlying store collection (not just
+  // clientId) so a refetch-on-resume that replaces the collection re-renders
+  // the screen without a remount. Mirrors PR #45's payments fix.
+  const sessions = useMemo(() => getSessionsForClient(clientId), [clientId, storeSessions]);
   const payments = useMemo(() => getPaymentsForClient(clientId), [clientId, allPayments]);
-  const packages = useMemo(() => getPackagesForClient(clientId), [clientId]);
-  const calendarEvents = useMemo(() => getEventsForClient(clientId), [clientId]);
+  const packages = useMemo(() => getPackagesForClient(clientId), [clientId, storeSessionPackages]);
+  const calendarEvents = useMemo(() => getEventsForClient(clientId), [clientId, storeCalendarEvents]);
   const activeProgram = useMemo(() => getActiveProgram(clientId), [clientId, storeClientPrograms]);
   const allClientPrograms = useMemo(() => getClientPrograms(clientId), [clientId, storeClientPrograms]);
   

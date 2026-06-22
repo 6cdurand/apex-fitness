@@ -11,6 +11,7 @@ import {
   type Conversation,
 } from '@/lib/messageStore';
 import { supabase } from '@/lib/supabase';
+import { useRefetchOnResume } from '@/lib/hooks/useRefetchOnResume';
 import { 
   fetchAllUserDataFromSupabase, 
   isSupabaseConfigured, 
@@ -524,23 +525,41 @@ export function SupabaseSync() {
       });
     }, 400);
 
-    // Foreground refetch — re-hydrate when the tab becomes visible so a
-    // freshly-assigned program shows up without a manual reload. Mirrors
-    // the listener already in /program/page.tsx but applies app-wide.
-    const refetch = () => {
-      if (document.visibilityState === 'visible' && user?.id) {
-        useTrainerStore.getState().loadClientDataFromSupabase(user.id);
-      }
-    };
-    window.addEventListener('focus', refetch);
-    document.addEventListener('visibilitychange', refetch);
-
+    // Foreground refetch is now handled by the single shared
+    // `useRefetchOnResume` hook below (BUG-007), which also covers native
+    // Capacitor resume — the prior web-only visibilitychange/focus listener
+    // here was removed to avoid two competing refetch mechanisms.
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('focus', refetch);
-      document.removeEventListener('visibilitychange', refetch);
     };
   }, [isAuthenticated, user?.id, isIdentityNormalized]);
+
+  // ==========================================================================
+  // BUG-007: SINGLE SHARED REFETCH-ON-RESUME
+  // ==========================================================================
+  //
+  // A warm WebView previously showed whatever it loaded at cold start until
+  // force-quit (no native resume listener; web visibilitychange was scattered
+  // per-screen). This one hook re-pulls Supabase when the app returns to the
+  // foreground:
+  //   - loadFromSupabase(uid)         → clients + names, sessions, packages,
+  //                                     calendar events, payments, programs,
+  //                                     trainer notifications.
+  //   - loadClientDataFromSupabase(uid) → this user's client-scoped programs,
+  //                                     calendar events, client notifications.
+  // Native fires on Capacitor App resume; web on visibilitychange/focus (a
+  // harmless extra read — web already restored its data synchronously). It
+  // also backstops the cold-start name race (BUG-008): a resume refetch
+  // re-resolves any client name that lost the boot race.
+  useRefetchOnResume(
+    () => {
+      const uid = useAuthStore.getState().user?.id;
+      if (!uid || !isSupabaseConfigured()) return;
+      void useTrainerStore.getState().loadFromSupabase(uid);
+      void useTrainerStore.getState().loadClientDataFromSupabase(uid);
+    },
+    { enabled: isAuthenticated && !!user?.id && isIdentityNormalized },
+  );
 
   // ==========================================================================
   // M1 + M2: REALTIME MESSAGES + CONVERSATIONS SUBSCRIPTION
