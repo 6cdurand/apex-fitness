@@ -4,7 +4,7 @@ import { nativeMirroredStorage } from '../capacitorStorage';
 import { clearAllScopedKeysForUser, USER_SCOPED_STORE_NAMES } from './scopedStorage';
 import { v4 as uuidv4 } from 'uuid';
 import { User, UserMode } from '@/types';
-import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail } from '../supabaseSync';
+import { registerUserToSupabase, updateUserInSupabase, resolveCanonicalUserByEmail, ensureSelfIdentity } from '../supabaseSync';
 import { supabase } from '../supabase';
 
 /**
@@ -225,11 +225,13 @@ export const useAuthStore = create<AuthState>()(
 
         console.log('[Auth] ✅ Supabase Auth success | auth.users.id:', data.user.id);
 
-        // Resolve canonical public.users.id (may differ from auth.users.id
-        // for accounts created via trainer placeholder before client signup
-        // — same posture as loginWithSupabaseUser).
+        // group7 forward-fix: align identity (public.users.id = auth.uid())
+        // and ADOPT any placeholder/legacy row matched by email BEFORE we read
+        // the profile, so a placeholder client's first sign-in is re-keyed onto
+        // the auth id (and every later read/write keys correctly). The RPC
+        // returns auth.uid(); fall back to it if the RPC errors (fails open).
+        const canonicalId = (await ensureSelfIdentity(data.user.email)) || data.user.id;
         const canonical = await resolveCanonicalUserByEmail(email);
-        const canonicalId = canonical?.id || data.user.id;
 
         const c = canonical as any;
         const user: User = {
@@ -283,17 +285,14 @@ export const useAuthStore = create<AuthState>()(
 
         console.log('[Auth] loginWithSupabaseUser:', supabaseUser.email, 'auth.id=', supabaseUser.id);
 
-        // STEP 1: resolve canonical public.users.id by email.
-        // auth.users.id and public.users.id are different; programs reference
-        // public.users.id. If a trainer created a placeholder for this email,
-        // we MUST reuse that canonical id or the client won't see their program.
+        // group7 forward-fix: enforce public.users.id = auth.uid() up front on
+        // the OAuth first-login path too. ensure_self_identity ADOPTS a
+        // trainer-created placeholder (or legacy row) matched by email — re-
+        // keying it onto auth.uid() so pre-assigned programs carry over — else
+        // creates a fresh aligned row. Returns auth.uid(); fall back to it.
+        const canonicalId = (await ensureSelfIdentity(supabaseUser.email)) || supabaseUser.id;
         const canonical = await resolveCanonicalUserByEmail(supabaseUser.email);
-        const canonicalId = canonical?.id || supabaseUser.id;
-        if (canonical) {
-          console.log('[Auth] ✅ Canonical public.users.id:', canonical.id, '(differs from auth id:', canonical.id !== supabaseUser.id, ')');
-        } else {
-          console.log('[Auth] No canonical public.users row yet; will create one with auth.id');
-        }
+        console.log('[Auth] loginWithSupabaseUser aligned id:', canonicalId, '(auth id:', supabaseUser.id, ')');
 
         const storedUsers = JSON.parse(localStorage.getItem('apex-users') || '[]');
 
@@ -355,14 +354,10 @@ export const useAuthStore = create<AuthState>()(
         storedUsers.push({ ...newUser, password: hashPassword(`oauth_${supabaseUser.id}`) });
         localStorage.setItem('apex-users', JSON.stringify(storedUsers));
 
-        // Only register to Supabase if there's no canonical row yet — don't overwrite
-        if (!canonical) {
-          try {
-            await registerUserToSupabase(newUser);
-          } catch (e) {
-            console.error('[Auth] Supabase sync error:', e);
-          }
-        }
+        // group7 forward-fix: the aligned row is created/adopted by
+        // ensure_self_identity above (id = auth.uid()). No client-side INSERT
+        // here — that path could mint a row keyed off a non-auth id. Profile
+        // fields land via the handle_new_auth_user trigger + later updateUser.
 
         set({ user: newUser, isAuthenticated: true, isLoading: false });
         // v16-D1: hydrate per-user Supabase data so trainer-linked rows
@@ -429,8 +424,17 @@ export const useAuthStore = create<AuthState>()(
 
         console.log('[Auth] ✅ Supabase Auth signUp succeeded | auth.users.id:', authData.user.id);
 
+        // group7 forward-fix: enforce public.users.id = auth.uid(). The RPC
+        // ADOPTS a trainer-created placeholder / legacy row matched by email
+        // (re-keying it onto the auth id so pre-assigned programs carry over)
+        // else creates a fresh aligned row. We NEVER persist userData.id or a
+        // local placeholder id — those diverge from auth.uid() and are exactly
+        // what re-created the bug class. Returns auth.uid(); fall back to it.
+        const canonicalId =
+          (await ensureSelfIdentity(authData.user.email ?? userData.email)) || authData.user.id;
+
         const newUser: User = {
-          id: userData.id || existingPlaceholder?.id || authData.user.id,
+          id: canonicalId,
           email: userData.email || '',
           username: userData.username || '',
           displayName: userData.displayName || userData.username || '',
