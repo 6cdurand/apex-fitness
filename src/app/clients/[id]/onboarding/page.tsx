@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useTrainerStore, useAuthStore, useSocialStore, useWorkoutStore, hashPassword } from '@/lib/store';
-import { registerUserToSupabase, fetchAllUsersFromSupabase } from '@/lib/supabaseSync';
+import { registerUserToSupabase, fetchAllUsersFromSupabase, completeClientOnboarding, syncWorkoutToSupabase } from '@/lib/supabaseSync';
 import { exerciseLibrary, searchExercises, getExerciseUsageCounts, getExerciseById } from '@/lib/exercises';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
@@ -81,7 +81,7 @@ export default function ClientOnboardingPage() {
   const clientId = params.id as string;
   
   const { user } = useAuthStore();
-  const { clients, updateClient, saveClientProfile, addCalendarEvent, addSession } = useTrainerStore();
+  const { clients, addCalendarEvent, addSession } = useTrainerStore();
   const { addNotification } = useSocialStore();
   const client = clients.find(c => c.clientId === clientId);
   
@@ -252,16 +252,24 @@ export default function ClientOnboardingPage() {
     router.push('/clients');
   };
 
-  const handleFinish = () => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleFinish = async () => {
     const actualClientId = createdClientId || clientId;
     const trainerId = user?.id || '';
-    
+    // Observability (RC-9): correlate the whole completion attempt.
+    const requestId = `onb-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const logEvent = (event: string, extra: Record<string, unknown> = {}) =>
+      console.log(`[Onboarding] ${event}`, { requestId, trainerId, clientId: actualClientId, source: 'trainer-onboarding', ...extra });
+
     if (!accountCreated) {
       toast.error('Please create a client first');
       return;
     }
-    
-    // Save programming profile
+    if (isSubmitting) return;
+    logEvent('onboarding_started');
+
+    // Build the canonical programming profile.
     const profile: ClientProgrammingProfile = {
       id: `profile-${actualClientId}`,
       clientId: actualClientId,
@@ -288,15 +296,46 @@ export default function ClientOnboardingPage() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    saveClientProfile(profile);
 
-    // Update client record
-    updateClient(actualClientId, {
-      goals: primaryGoal ? [primaryGoal, secondaryGoal].filter(Boolean) as string[] : [],
-      injuryHistory: injuryFlags.filter(i => i !== 'none').join(', ') + (injuryNotes ? ` - ${injuryNotes}` : ''),
-      notes: goalNotes,
-      onboardingComplete: true,
-    });
+    // RC-1/RC-2: atomic server write via the RPC (profile + completion flag in
+    // ONE transaction). This is the SOLE server-write authority for completion —
+    // we no longer fire the old independent saveClientProfile/updateClient
+    // Supabase writes, which could leave the flag set with no profile row.
+    setIsSubmitting(true);
+    const result = await completeClientOnboarding(trainerId, actualClientId, profile);
+    if (!result.ok) {
+      // Fail loudly: keep the form, do NOT mark complete, do NOT navigate.
+      setIsSubmitting(false);
+      logEvent('onboarding_failed', { reason: result.error, code: result.code });
+      toast.error(
+        result.code === '42501'
+          ? 'Not authorized to complete onboarding for this client.'
+          : `Couldn't save onboarding — ${result.error || 'please try again'}.`,
+      );
+      return;
+    }
+    logEvent('onboarding_saved');
+
+    // Mirror the successful server state into the local store WITHOUT triggering
+    // a second Supabase write (the RPC is the authority). This keeps the trainer
+    // UI instant and consistent with what the server now holds.
+    useTrainerStore.setState(state => ({
+      clientProfiles: [
+        ...state.clientProfiles.filter(p => p.clientId !== profile.clientId),
+        profile,
+      ],
+      clients: state.clients.map(c =>
+        c.clientId === actualClientId
+          ? {
+              ...c,
+              goals: primaryGoal ? [primaryGoal, secondaryGoal].filter(Boolean) as string[] : [],
+              injuryHistory: injuryFlags.filter(i => i !== 'none').join(', ') + (injuryNotes ? ` - ${injuryNotes}` : ''),
+              notes: goalNotes,
+              onboardingComplete: true,
+            }
+          : c,
+      ),
+    }));
 
     // Book first session if date selected
     if (firstSessionDate) {
@@ -317,6 +356,10 @@ export default function ClientOnboardingPage() {
         clientId: actualClientId,
         trainerId,
         status: 'scheduled',
+        // RC-6: carry the onboarding-entered name so the event renders it even
+        // if the users lookup misses (resolveClientDisplayName priority 4),
+        // instead of showing "unknown".
+        contactName: accountName || undefined,
       });
       
       addSession({
@@ -370,9 +413,18 @@ export default function ClientOnboardingPage() {
         notes: 'Exercises performed during consultation',
         trainerNotes: `Consultation onboarding session for ${accountName}`,
       };
+      // RC-4: persist to Supabase FIRST (was local-only, so it vanished on the
+      // next loadWorkoutHistoryFromSupabase and never counted in
+      // getExerciseUsageCounts). Mirror the endWorkout W1 pattern: keep it in
+      // local history regardless, but log loudly if the server write fails.
+      const workoutSynced = await syncWorkoutToSupabase(consultWorkout as any);
+      if (!workoutSynced) {
+        console.error('[Onboarding] consultation workout sync failed; kept locally for retry:', consultWorkout.id);
+      }
       useWorkoutStore.setState({ workoutHistory: [...workoutHistory, consultWorkout] });
     }
 
+    logEvent('onboarding_completed');
     setIsComplete(true);
     toast.success(firstSessionDate ? 'Onboarding complete! First session booked.' : 'Onboarding complete!');
     
@@ -488,10 +540,10 @@ export default function ClientOnboardingPage() {
                 <Button
                   size="sm"
                   onClick={handleFinish}
-                  disabled={!primaryGoal}
+                  disabled={!primaryGoal || isSubmitting}
                   className="bg-white text-sky-600 hover:bg-gray-100 font-semibold"
                 >
-                  <Check className="w-4 h-4 mr-1" /> Finish
+                  {isSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Check className="w-4 h-4 mr-1" />} Finish
                 </Button>
               </div>
             </div>
@@ -919,11 +971,11 @@ export default function ClientOnboardingPage() {
             {/* Finish Button */}
             <Button
               onClick={handleFinish}
-              disabled={!primaryGoal}
+              disabled={!primaryGoal || isSubmitting}
               className="w-full py-6 bg-gradient-to-r from-sky-500 to-emerald-500 hover:from-sky-400 hover:to-emerald-400 text-white font-bold text-base rounded-xl shadow-lg"
             >
-              <Check className="w-5 h-5 mr-2" />
-              {firstSessionDate ? 'Finish & Book Session' : 'Finish Onboarding'}
+              {isSubmitting ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Check className="w-5 h-5 mr-2" />}
+              {isSubmitting ? 'Saving…' : firstSessionDate ? 'Finish & Book Session' : 'Finish Onboarding'}
             </Button>
           </div>
         </>
