@@ -25,55 +25,64 @@ export function simpleHash(str: string): string {
   return 'hash_' + Math.abs(hash).toString(36) + '_' + str.length;
 }
 
-// Ensure user exists in Supabase users table (for foreign key relationships)
+/**
+ * group7 — identity forward-fix.
+ *
+ * Enforce the invariant public.users.id = auth.uid() by calling the
+ * SECURITY DEFINER RPC ensure_self_identity(p_email) once the Supabase
+ * session is established. The RPC:
+ *   - no-ops when the caller's row is already aligned,
+ *   - else ADOPTS a row matched by email (re-keying a trainer-created
+ *     bulk-import placeholder, or a legacy diverged row, onto auth.uid()
+ *     via reconcile_user_identity so pre-assigned programs/notes carry over),
+ *   - else INSERTs a fresh aligned row.
+ *
+ * This is the ONE creation path for a signed-up user's identity row. It is
+ * idempotent and FAILS OPEN: any error returns null so callers fall back to
+ * auth.uid() for local state and retry on the next sign-in.
+ *
+ * `rpc` is injectable for unit tests (mirrors readWithSessionGate's DI style).
+ */
+export async function ensureSelfIdentity(
+  email?: string | null,
+  rpc: (
+    fn: 'ensure_self_identity',
+    args: { p_email: string | null },
+  ) => PromiseLike<{ data: unknown; error: unknown }> = (fn, args) => supabase.rpc(fn, args),
+): Promise<string | null> {
+  if (!isSupabaseConfigured()) return null;
+  try {
+    // Session-ready gate (BUG-008): on native cold start the auth session
+    // restores asynchronously; without this the RPC can fire with no JWT and
+    // RAISE 'no auth context'. getSession() is a cheap in-memory read once
+    // recovery has completed.
+    await ensureSupabaseSession();
+    const { data, error } = await rpc('ensure_self_identity', { p_email: email ?? null });
+    if (error) {
+      console.error('[ensure_self_identity] RPC failed:', (error as { message?: string })?.message);
+      return null;
+    }
+    const id = (data as unknown as string) || null;
+    if (id) console.log('[ensure_self_identity] ✅ aligned id =', id);
+    return id;
+  } catch (e) {
+    console.error('[ensure_self_identity] exception:', e);
+    return null;
+  }
+}
+
+// Ensure the CURRENT user's public.users row exists for foreign-key
+// relationships (trainer_clients, etc.). group7: this now routes through
+// ensure_self_identity so the row is ALWAYS aligned (id = auth.uid()). The
+// legacy existence-check + INSERT minted id = user.id, which — for any
+// persisted canonical-but-non-auth id — re-created the divergence this fix
+// exists to prevent. `user` is accepted for call-site compatibility; the RPC
+// keys off auth.uid() server-side, so only the email (for placeholder
+// adoption) is forwarded.
 export async function ensureUserExistsInSupabase(user: User): Promise<boolean> {
   if (!isSupabaseConfigured()) return false;
-  
-  try {
-    // Check if user already exists (use maybeSingle to avoid 406 error when not found)
-    // BUG-008: gate on session-ready (+ one retry) so this on-mount existence
-    // check (the `GET /users?select=id&id=eq.<uid>` in the native logs) doesn't
-    // outrun the async session restore → 401. A 401 here reads as "user missing"
-    // and fires a spurious users INSERT (the `POST 401 /users` heal-write);
-    // gating the read makes the existing row resolve, so the insert never runs.
-    const { data: existing } = await readWithSessionGate(
-      ensureSupabaseSession,
-      () => supabase.from('users').select('id').eq('id', user.id).maybeSingle(),
-    );
-    
-    if (existing) {
-      console.log('[Supabase] User already exists in DB:', user.id);
-      return true;
-    }
-    
-    // User doesn't exist - create them
-    console.log('[Supabase] Creating user in DB:', user.id, user.email);
-    const { error } = await supabase.from('users').insert({
-      id: user.id,
-      email: user.email,
-      username: user.username || user.displayName,
-      display_name: user.displayName || user.username,
-      gender: user.gender,
-      date_of_birth: user.dateOfBirth,
-      height: user.height,
-      weight: user.weight,
-      preferred_unit: user.preferredUnit || 'kg',
-      is_trainer: user.isTrainer || false,
-      is_verified_trainer: user.isVerifiedTrainer || false,
-      mode: user.mode || 'user',
-    });
-    
-    if (error) {
-      console.error('[Supabase] Error creating user:', error.message);
-      return false;
-    }
-    
-    console.log('[Supabase] ✅ User created in DB:', user.email);
-    return true;
-  } catch (e) {
-    console.error('[Supabase] Exception ensuring user exists:', e);
-    return false;
-  }
+  const alignedId = await ensureSelfIdentity(user.email);
+  return alignedId != null;
 }
 
 // Register user to Supabase for cross-device login.
