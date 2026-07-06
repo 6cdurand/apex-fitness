@@ -61,6 +61,30 @@ export function getDisplayedSessionCount(
   ).length;
   return Math.max(0, offset + completed);
 }
+
+/**
+ * BUG-016: compute the displayed lifetime PAID session count for a client.
+ *
+ * Mirrors getDisplayedSessionCount: the durable source is the client_payments
+ * history (rows with status='paid'), and manual edits write a `totalPaidOffset`
+ * rather than a raw `total_paid` counter. This kills the denormalized-counter
+ * drift where the counter reverted on a session where its write hadn't landed
+ * while the history rows persisted.
+ *
+ * Formula:  totalPaidOffset  +  SUM(client_payments.sessionsIncluded WHERE status='paid')
+ * Payments missing sessionsIncluded count as 1. Displayed result clamps to >= 0
+ * (the offset itself is allowed to be negative — same reasoning as v19-fix-05).
+ */
+export function getDisplayedPaidCount(
+  client: { clientId?: string; totalPaidOffset?: number } | null | undefined,
+  payments: Array<{ clientId?: string; status?: string; sessionsIncluded?: number }>
+): number {
+  const sum = (payments || [])
+    .filter(p => p.clientId === client?.clientId && p.status === 'paid')
+    .reduce((s, p) => s + (p.sessionsIncluded ?? 1), 0);
+  const offset = client?.totalPaidOffset ?? 0;
+  return Math.max(0, offset + sum);
+}
 import {
   TrainerClient, ClientGroup, GroupScheduleSlot, CalendarEvent, ClientSession, ClientPayment,
   SessionPackage, BookingRequest, ClientProgram, ClientProgrammingProfile,
@@ -215,7 +239,7 @@ interface TrainerState {
   // is NOT the full `clients` array (that was the 894KB quota incident) — a few bytes
   // per client. loadFromSupabase prefers this local override over the server value
   // when they differ, then re-syncs.
-  clientCounterOverrides: { [clientId: string]: { historicalOffsetSessions?: number; autoCountSessions?: boolean | null } };
+  clientCounterOverrides: { [clientId: string]: { historicalOffsetSessions?: number; autoCountSessions?: boolean | null; totalPaidOffset?: number } };
   
   // Client management
   addClient: (clientId: string, onboardingData?: Partial<TrainerClient>) => void;
@@ -674,7 +698,10 @@ export const useTrainerStore = create<TrainerState>()(
           // below hasn't landed. Bounded to two scalar fields per client.
           const touchesOffset = Object.prototype.hasOwnProperty.call(updates, 'historicalOffsetSessions');
           const touchesAutoCount = Object.prototype.hasOwnProperty.call(updates, 'autoCountSessions');
-          if (!touchesOffset && !touchesAutoCount) {
+          // BUG-016: totalPaidOffset is the paid-count equivalent of historicalOffsetSessions
+          // — a manual Paid edit must survive a hard refresh identically to a sessions edit.
+          const touchesPaidOffset = Object.prototype.hasOwnProperty.call(updates, 'totalPaidOffset');
+          if (!touchesOffset && !touchesAutoCount && !touchesPaidOffset) {
             return { clients };
           }
           const updated = clients.find(c => c.clientId === clientId);
@@ -687,6 +714,7 @@ export const useTrainerStore = create<TrainerState>()(
                 ...prev,
                 ...(touchesOffset ? { historicalOffsetSessions: (updated as any)?.historicalOffsetSessions } : {}),
                 ...(touchesAutoCount ? { autoCountSessions: updated?.autoCountSessions ?? null } : {}),
+                ...(touchesPaidOffset ? { totalPaidOffset: updated?.totalPaidOffset } : {}),
               },
             },
           };
@@ -2862,6 +2890,11 @@ export const useTrainerStore = create<TrainerState>()(
             next = { ...next, autoCountSessions: ov.autoCountSessions };
             changed = true;
           }
+          // BUG-016: prefer the locally-edited paid offset if its Supabase write hadn't landed.
+          if (typeof ov.totalPaidOffset === 'number' && ov.totalPaidOffset !== c.totalPaidOffset) {
+            next = { ...next, totalPaidOffset: ov.totalPaidOffset };
+            changed = true;
+          }
           if (changed) {
             console.warn('[Trainer Store] v19-fix-02 preferring local counter override over server for client', c.clientId, ov);
             void syncTrainerClientWithRetry(next);
@@ -3207,6 +3240,11 @@ export const useTrainerStore = create<TrainerState>()(
               }
               if (ov.autoCountSessions !== undefined && ov.autoCountSessions !== c.autoCountSessions) {
                 next = { ...next, autoCountSessions: ov.autoCountSessions };
+                changed = true;
+              }
+              // BUG-016: prefer the locally-edited paid offset if its Supabase write hadn't landed.
+              if (typeof ov.totalPaidOffset === 'number' && ov.totalPaidOffset !== c.totalPaidOffset) {
+                next = { ...next, totalPaidOffset: ov.totalPaidOffset };
                 changed = true;
               }
               if (changed) void syncTrainerClientWithRetry(next);
