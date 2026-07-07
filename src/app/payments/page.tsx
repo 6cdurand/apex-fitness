@@ -4,7 +4,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useTrainerStore } from '@/lib/store';
 import { useRequireAuth } from '@/lib/hooks/useRequireAuth';
-import { getEffectiveAutoCount, getDisplayedSessionCount } from '@/lib/stores/trainerStore';
+import { getEffectiveAutoCount, getDisplayedSessionCount, getDisplayedPaidCount } from '@/lib/stores/trainerStore';
 import { MainLayout, PageHeader } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -132,8 +132,11 @@ export default function PaymentsPage() {
     // the row predates the v16-D3 migration (see getDisplayedSessionCount).
     const totalSessionsEver = getDisplayedSessionCount(client, sessions);
     
-    // PAID — stored counter. Only changes on explicit user action.
-    const totalPaidSessions = client?.totalPaid ?? 0;
+    // PAID — BUG-016: derived at read time as totalPaidOffset + SUM(client_payments
+    // WHERE status='paid'), mirroring getDisplayedSessionCount. The old raw
+    // `client.totalPaid` counter drifted when its write didn't land while the
+    // durable history rows persisted; deriving from history self-heals.
+    const totalPaidSessions = getDisplayedPaidCount(client, payments);
     
     const outstandingSessions = Math.max(0, totalSessionsEver - totalPaidSessions);
     const outstandingAmount = outstandingSessions * pricePerSession;
@@ -205,9 +208,8 @@ export default function PaymentsPage() {
       paidAt: paymentDate + 'T12:00:00.000Z',
     });
     
-    // Increment totalPaid directly on client record
-    const client = clients.find(c => c.clientId === selectedClient);
-    updateClient(selectedClient, { totalPaid: (client?.totalPaid ?? 0) + sessionsToConfirm });
+    // BUG-016: the durable client_payments row added by addPayment above now
+    // drives the derived Paid count — no raw totalPaid counter write needed.
     
     // Save the price per session to settings for next time
     const currentSettings = paymentSettings[selectedClient] || { clientId: selectedClient, method: 'cash' as PaymentMethod, frequency: 'per_session' as PaymentFrequency, sessionsPerWeek: 1, pricePerSession: 0 };
@@ -268,9 +270,8 @@ export default function PaymentsPage() {
       sessionsIncluded: sessionsCount,
     });
     
-    // Increment totalPaid directly on client record
-    const client = clients.find(c => c.clientId === editingSettings.clientId);
-    updateClient(editingSettings.clientId, { totalPaid: (client?.totalPaid ?? 0) + sessionsCount });
+    // BUG-016: the durable client_payments row added by addPayment above now
+    // drives the derived Paid count — no raw totalPaid counter write needed.
     
     // Also update package's own internal counter if one exists
     const clientPackages = sessionPackages.filter(p => p.clientId === editingSettings.clientId && p.trainerId === user?.id);
@@ -358,8 +359,19 @@ export default function PaymentsPage() {
         updateClient(editingField.clientId, { totalSessions: newValue });
       }
     } else {
-      // Paid: direct stored value — set exactly what the user typed
-      updateClient(editingField.clientId, { totalPaid: newValue });
+      // Paid: BUG-016 — mirror the sessions branch. The displayed Paid count is
+      // `totalPaidOffset + SUM(paid client_payments)`, so to set a target we write
+      // the OFFSET (newValue - history sum), not the raw counter. Do NOT clamp the
+      // offset >= 0 (same reasoning as v19-fix-05 for sessions); the display clamps.
+      const target = clients.find(c => c.clientId === editingField.clientId);
+      if (target) {
+        const paidFromHistory = payments
+          .filter(p => p.clientId === target.clientId && p.status === 'paid')
+          .reduce((s, p) => s + (p.sessionsIncluded ?? 1), 0);
+        updateClient(editingField.clientId, { totalPaidOffset: newValue - paidFromHistory });
+      } else {
+        updateClient(editingField.clientId, { totalPaidOffset: newValue });
+      }
     }
     setEditingField(null);
     setEditValue('');
@@ -1244,11 +1256,8 @@ export default function PaymentsPage() {
         onConfirm={() => {
           if (paymentToDelete) {
             const sessionsToRemove = paymentToDelete.sessionsIncluded || 1;
-            // Decrement totalPaid stored counter on client record
-            const client = clients.find(c => c.clientId === paymentToDelete.clientId);
-            if (client) {
-              updateClient(paymentToDelete.clientId, { totalPaid: Math.max(0, (client.totalPaid ?? 0) - sessionsToRemove) });
-            }
+            // BUG-016: deletePayment below removes the durable history row, which
+            // lowers the derived Paid count automatically — no counter write needed.
             // Also update package's internal counter if exists
             const clientPackages = sessionPackages.filter(p => p.clientId === paymentToDelete.clientId && p.trainerId === user?.id);
             const activePackage = clientPackages.find(p => p.status === 'active') || clientPackages[0];
