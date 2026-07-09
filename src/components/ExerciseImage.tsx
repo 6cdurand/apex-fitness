@@ -25,9 +25,16 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // RC-5: remember the animation URL that failed to load (e.g. the
+  // exercisedb.dev CDN going dark). A dead primary source must degrade to the
+  // AI-image / empty state instead of a permanently-broken <img>. Keying on the
+  // URL (not a boolean) means it auto-resets when the exercise changes — no
+  // extra effect needed.
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   const exercise = exerciseLibraryMap.get(exerciseId);
-  const animationUrl = getExerciseAnimationUrl(exerciseId);
+  const rawAnimationUrl = getExerciseAnimationUrl(exerciseId);
+  const animationUrl = rawAnimationUrl && rawAnimationUrl !== failedUrl ? rawAnimationUrl : undefined;
 
   // Use animation GIF as primary source, then try cached AI image
   useEffect(() => {
@@ -107,6 +114,13 @@ export function ExerciseImage({ exerciseId, size = 'md', className = '', showGen
         alt={exercise?.name || exerciseId}
         className="w-full h-full object-cover"
         loading="lazy"
+        onError={() => {
+          // RC-5: the source (usually the animation CDN) is dead. Record it so
+          // we fall through to the AI-image fetch / empty state, and clear the
+          // broken image so we don't render a broken icon.
+          if (src && src === rawAnimationUrl) setFailedUrl(rawAnimationUrl);
+          if (imageUrl === src) setImageUrl(null);
+        }}
       />
 
       {/* Loading state */}

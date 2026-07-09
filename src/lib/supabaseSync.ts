@@ -3555,6 +3555,103 @@ export async function fetchClientProfilesFromSupabase(trainerId: string): Promis
   }
 }
 
+// ---------------------------------------------------------------------------
+// Atomic onboarding completion (RC-1/RC-2).
+//
+// Routes the profile write + the trainer_clients.onboarding_complete flag
+// through the SECURITY DEFINER RPC complete_client_onboarding so both land in
+// ONE transaction (or neither does). This REPLACES the prior pattern of two
+// independent fire-and-forget writes (saveClientProfile + updateClient) that
+// could leave onboarding_complete=true with no profile row.
+//
+// Returns { ok, profile?, error? }. On ok=false the caller MUST NOT mark the
+// client complete locally and MUST keep the form so the trainer can retry.
+// `rpc` is injectable for unit tests.
+// ---------------------------------------------------------------------------
+export interface CompleteOnboardingResult {
+  ok: boolean;
+  profile?: any;
+  error?: string;
+  code?: string;
+}
+
+function buildOnboardingPayload(profile: any): Record<string, unknown> {
+  // Mirror the exact snake_case / stringified shape the RPC extracts
+  // (kept in sync with syncClientProfileToSupabase's dbProfile).
+  return {
+    id: profile.id,
+    primary_goal: profile.primaryGoal,
+    secondary_goal: profile.secondaryGoal ?? null,
+    custom_goal_text: profile.customGoalText ?? null,
+    training_preference: profile.trainingPreference,
+    experience_level: profile.experienceLevel,
+    injury_flags: JSON.stringify(profile.injuryFlags || []),
+    injury_notes: profile.injuryNotes ?? null,
+    days_per_week: profile.daysPerWeek != null ? String(profile.daysPerWeek) : '',
+    available_days: JSON.stringify(profile.availableDays || []),
+    schedule_notes: profile.scheduleNotes ?? null,
+    session_length: profile.sessionLength != null ? String(profile.sessionLength) : '',
+    train_alone_outside_pt: profile.trainAloneOutsidePT ?? null,
+    movement_confidence: JSON.stringify(profile.movementConfidence || {}),
+    wants_classes: profile.wantsClasses ?? null,
+    class_ready: profile.classReady ? 'true' : 'false',
+    sleep_quality: profile.sleepQuality != null ? String(profile.sleepQuality) : '',
+    stress_level: profile.stressLevel != null ? String(profile.stressLevel) : '',
+    job_activity: profile.jobActivity ?? null,
+    current_phase: profile.currentPhase ?? null,
+    progression_plan: profile.progressionPlan ? JSON.stringify(profile.progressionPlan) : null,
+    created_at: profile.createdAt ?? null,
+  };
+}
+
+export async function completeClientOnboarding(
+  trainerId: string,
+  clientId: string,
+  profile: any,
+  rpc: (
+    fn: 'complete_client_onboarding',
+    args: { p_trainer_id: string; p_client_id: string; p_profile: Record<string, unknown> },
+  ) => PromiseLike<{ data: unknown; error: { message?: string; code?: string } | null }> =
+    (fn, args) => supabase.rpc(fn, args),
+): Promise<CompleteOnboardingResult> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: 'Supabase not configured' };
+  }
+
+  const p_profile = buildOnboardingPayload(profile);
+  const args = { p_trainer_id: trainerId, p_client_id: clientId, p_profile };
+
+  // Permanent errors we must NOT retry (auth + missing relationship).
+  const NO_RETRY = new Set(['42501', 'P0002']);
+  const MAX_ATTEMPTS = 3;
+
+  let lastError: { message?: string; code?: string } | null = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const { data, error } = await rpc('complete_client_onboarding', args);
+      if (!error) {
+        const result = data as { onboarding_complete?: boolean; profile?: any } | null;
+        console.log('[Onboarding RPC] ✅ complete for', clientId);
+        return { ok: true, profile: result?.profile };
+      }
+      lastError = error;
+      if (error.code && NO_RETRY.has(error.code)) {
+        console.error('[Onboarding RPC] permanent error, no retry:', error.code, error.message);
+        return { ok: false, error: error.message, code: error.code };
+      }
+      console.warn(`[Onboarding RPC] attempt ${attempt}/${MAX_ATTEMPTS} failed:`, error.message);
+    } catch (e) {
+      lastError = { message: e instanceof Error ? e.message : String(e) };
+      console.warn(`[Onboarding RPC] attempt ${attempt}/${MAX_ATTEMPTS} threw:`, lastError.message);
+    }
+    if (attempt < MAX_ATTEMPTS) {
+      await new Promise(r => setTimeout(r, 300 * 2 ** (attempt - 1))); // 300ms, 600ms
+    }
+  }
+  console.error('[Onboarding RPC] ❌ all attempts failed for', clientId, lastError?.message);
+  return { ok: false, error: lastError?.message || 'Onboarding failed', code: lastError?.code };
+}
+
 // ============ WORKOUT TEMPLATES SYNC ============
 
 export async function syncWorkoutTemplateToSupabase(template: any): Promise<boolean> {
